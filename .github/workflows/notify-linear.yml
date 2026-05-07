@@ -1,0 +1,28 @@
+name: Notify Linear
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop, main]
+
+jobs:
+  update-linear:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract Linear issue ID from PR title
+        id: extract
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          ISSUE_ID=$(echo "$TITLE" | grep -oP 'BRAND-\d+' | head -1)
+          echo "issue_id=$ISSUE_ID" >> $GITHUB_OUTPUT
+
+      - name: Update Linear issue to Done
+        if: steps.extract.outputs.issue_id != ''
+        run: |
+          curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: ${{ secrets.LINEAR_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "query": "mutation { issueUpdate(id: \"${{ steps.extract.outputs.issue_id }}\", input: { stateId: \"done\" }) { success } }"
+            }'
