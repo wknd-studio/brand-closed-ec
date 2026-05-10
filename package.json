@@ -13,14 +13,14 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "prepare": "husky"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.2",
     "@sanity/client": "^7.22.0",
     "@sentry/nextjs": "^10.52.0",
     "@supabase/supabase-js": "^2.105.3",
-    "drizzle-orm": "^0.45.2",
     "next": "16.2.5",
     "next-sanity": "^12.4.3",
     "react": "19.2.4",
@@ -34,11 +34,20 @@
     "@types/node": "^20.19.39",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.88.0"
+  },
+  "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0",
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --max-warnings 0",
+      "prettier --check"
+    ],
+    "*.{js,cjs,mjs,json,md,yml,yaml,css}": "prettier --check"
   }
 }
