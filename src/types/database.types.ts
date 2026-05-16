@@ -34,37 +34,125 @@ export type Database = {
   };
   public: {
     Tables: {
-      inventory: {
+      addresses: {
         Row: {
+          address_line1: string;
+          address_line2: string | null;
+          city: string;
+          created_at: string;
           id: string;
-          product_id: string;
-          quantity: number;
-          reserved: number;
-          sku: string;
+          is_default: boolean;
+          phone_number: string;
+          postal_code: string;
+          prefecture: string;
+          recipient_first_name: string;
+          recipient_last_name: string;
+          type: Database["public"]["Enums"]["address_type"];
           updated_at: string;
+          user_id: string;
         };
         Insert: {
+          address_line1: string;
+          address_line2?: string | null;
+          city: string;
+          created_at?: string;
           id?: string;
-          product_id: string;
-          quantity?: number;
-          reserved?: number;
-          sku: string;
+          is_default?: boolean;
+          phone_number: string;
+          postal_code: string;
+          prefecture: string;
+          recipient_first_name: string;
+          recipient_last_name: string;
+          type: Database["public"]["Enums"]["address_type"];
           updated_at?: string;
+          user_id: string;
         };
         Update: {
+          address_line1?: string;
+          address_line2?: string | null;
+          city?: string;
+          created_at?: string;
           id?: string;
-          product_id?: string;
-          quantity?: number;
-          reserved?: number;
-          sku?: string;
+          is_default?: boolean;
+          phone_number?: string;
+          postal_code?: string;
+          prefecture?: string;
+          recipient_first_name?: string;
+          recipient_last_name?: string;
+          type?: Database["public"]["Enums"]["address_type"];
           updated_at?: string;
+          user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_product_id_fkey";
-            columns: ["product_id"];
+            foreignKeyName: "addresses_user_id_fkey";
+            columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "products";
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      cart_items: {
+        Row: {
+          created_at: string;
+          id: string;
+          quantity: number;
+          sanity_product_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          quantity?: number;
+          sanity_product_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          quantity?: number;
+          sanity_product_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "cart_items_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      favorites: {
+        Row: {
+          created_at: string;
+          id: string;
+          sanity_product_id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          sanity_product_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          sanity_product_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "favorites_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
         ];
@@ -73,44 +161,73 @@ export type Database = {
         Row: {
           code: string;
           created_at: string;
-          expires_at: string;
+          expires_at: string | null;
           id: string;
-          issued_by: string | null;
-          max_uses: number;
-          used_by: string | null;
+          is_active: boolean;
+          issued_by_user_id: string | null;
+          max_uses: number | null;
           used_count: number;
         };
         Insert: {
           code: string;
           created_at?: string;
-          expires_at: string;
+          expires_at?: string | null;
           id?: string;
-          issued_by?: string | null;
-          max_uses?: number;
-          used_by?: string | null;
+          is_active?: boolean;
+          issued_by_user_id?: string | null;
+          max_uses?: number | null;
           used_count?: number;
         };
         Update: {
           code?: string;
           created_at?: string;
-          expires_at?: string;
+          expires_at?: string | null;
           id?: string;
-          issued_by?: string | null;
-          max_uses?: number;
-          used_by?: string | null;
+          is_active?: boolean;
+          issued_by_user_id?: string | null;
+          max_uses?: number | null;
           used_count?: number;
         };
         Relationships: [
           {
-            foreignKeyName: "invitation_codes_issued_by_fkey";
-            columns: ["issued_by"];
+            foreignKeyName: "invitation_codes_issued_by_user_id_fkey";
+            columns: ["issued_by_user_id"];
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
           },
+        ];
+      };
+      invitation_uses: {
+        Row: {
+          id: string;
+          invitation_code_id: string;
+          used_at: string;
+          used_by_user_id: string;
+        };
+        Insert: {
+          id?: string;
+          invitation_code_id: string;
+          used_at?: string;
+          used_by_user_id: string;
+        };
+        Update: {
+          id?: string;
+          invitation_code_id?: string;
+          used_at?: string;
+          used_by_user_id?: string;
+        };
+        Relationships: [
           {
-            foreignKeyName: "invitation_codes_used_by_fkey";
-            columns: ["used_by"];
+            foreignKeyName: "invitation_uses_invitation_code_id_fkey";
+            columns: ["invitation_code_id"];
+            isOneToOne: false;
+            referencedRelation: "invitation_codes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invitation_uses_used_by_user_id_fkey";
+            columns: ["used_by_user_id"];
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
@@ -119,25 +236,37 @@ export type Database = {
       };
       order_items: {
         Row: {
+          created_at: string;
           id: string;
+          is_negotiable: boolean;
+          negotiated_unit_price: number | null;
           order_id: string;
-          product_id: string;
+          product_name_snapshot: string;
           quantity: number;
-          unit_price: number;
+          sanity_product_id: string;
+          unit_price_snapshot: number | null;
         };
         Insert: {
+          created_at?: string;
           id?: string;
+          is_negotiable?: boolean;
+          negotiated_unit_price?: number | null;
           order_id: string;
-          product_id: string;
+          product_name_snapshot: string;
           quantity: number;
-          unit_price: number;
+          sanity_product_id: string;
+          unit_price_snapshot?: number | null;
         };
         Update: {
+          created_at?: string;
           id?: string;
+          is_negotiable?: boolean;
+          negotiated_unit_price?: number | null;
           order_id?: string;
-          product_id?: string;
+          product_name_snapshot?: string;
           quantity?: number;
-          unit_price?: number;
+          sanity_product_id?: string;
+          unit_price_snapshot?: number | null;
         };
         Relationships: [
           {
@@ -147,38 +276,49 @@ export type Database = {
             referencedRelation: "orders";
             referencedColumns: ["id"];
           },
-          {
-            foreignKeyName: "order_items_product_id_fkey";
-            columns: ["product_id"];
-            isOneToOne: false;
-            referencedRelation: "products";
-            referencedColumns: ["id"];
-          },
         ];
       };
       orders: {
         Row: {
+          billing_address_snapshot: Json;
           created_at: string;
           id: string;
-          status: string;
-          stripe_session_id: string | null;
-          total_amount: number;
+          monthly_limit_at_order: number;
+          payment_flow: Database["public"]["Enums"]["order_payment_flow"];
+          rank_at_order: Database["public"]["Enums"]["member_rank"];
+          shipping_address_snapshot: Json;
+          status: Database["public"]["Enums"]["order_status"];
+          stripe_checkout_session_id: string | null;
+          stripe_invoice_id: string | null;
+          updated_at: string;
           user_id: string;
         };
         Insert: {
+          billing_address_snapshot: Json;
           created_at?: string;
           id?: string;
-          status?: string;
-          stripe_session_id?: string | null;
-          total_amount: number;
+          monthly_limit_at_order: number;
+          payment_flow: Database["public"]["Enums"]["order_payment_flow"];
+          rank_at_order: Database["public"]["Enums"]["member_rank"];
+          shipping_address_snapshot: Json;
+          status?: Database["public"]["Enums"]["order_status"];
+          stripe_checkout_session_id?: string | null;
+          stripe_invoice_id?: string | null;
+          updated_at?: string;
           user_id: string;
         };
         Update: {
+          billing_address_snapshot?: Json;
           created_at?: string;
           id?: string;
-          status?: string;
-          stripe_session_id?: string | null;
-          total_amount?: number;
+          monthly_limit_at_order?: number;
+          payment_flow?: Database["public"]["Enums"]["order_payment_flow"];
+          rank_at_order?: Database["public"]["Enums"]["member_rank"];
+          shipping_address_snapshot?: Json;
+          status?: Database["public"]["Enums"]["order_status"];
+          stripe_checkout_session_id?: string | null;
+          stripe_invoice_id?: string | null;
+          updated_at?: string;
           user_id?: string;
         };
         Relationships: [
@@ -191,77 +331,88 @@ export type Database = {
           },
         ];
       };
-      products: {
-        Row: {
-          created_at: string;
-          description: string | null;
-          id: string;
-          min_rank: string;
-          name: string;
-          price: number;
-          sanity_id: string | null;
-        };
-        Insert: {
-          created_at?: string;
-          description?: string | null;
-          id?: string;
-          min_rank?: string;
-          name: string;
-          price: number;
-          sanity_id?: string | null;
-        };
-        Update: {
-          created_at?: string;
-          description?: string | null;
-          id?: string;
-          min_rank?: string;
-          name?: string;
-          price?: number;
-          sanity_id?: string | null;
-        };
-        Relationships: [];
-      };
       users: {
         Row: {
+          can_invite: boolean;
+          clerk_user_id: string;
           created_at: string;
+          deleted_at: string | null;
           email: string;
+          first_name: string;
           id: string;
-          invited_by: string | null;
-          rank: string;
+          invite_limit: number;
+          last_name: string;
+          onboarding_completed: boolean;
+          rank: Database["public"]["Enums"]["member_rank"];
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          subscribed_at: string | null;
+          terms_agreed_at: string | null;
+          terms_version: string | null;
+          updated_at: string;
         };
         Insert: {
+          can_invite?: boolean;
+          clerk_user_id: string;
           created_at?: string;
+          deleted_at?: string | null;
           email: string;
-          id: string;
-          invited_by?: string | null;
-          rank?: string;
+          first_name?: string;
+          id?: string;
+          invite_limit?: number;
+          last_name?: string;
+          onboarding_completed?: boolean;
+          rank?: Database["public"]["Enums"]["member_rank"];
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          subscribed_at?: string | null;
+          terms_agreed_at?: string | null;
+          terms_version?: string | null;
+          updated_at?: string;
         };
         Update: {
+          can_invite?: boolean;
+          clerk_user_id?: string;
           created_at?: string;
+          deleted_at?: string | null;
           email?: string;
+          first_name?: string;
           id?: string;
-          invited_by?: string | null;
-          rank?: string;
+          invite_limit?: number;
+          last_name?: string;
+          onboarding_completed?: boolean;
+          rank?: Database["public"]["Enums"]["member_rank"];
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          subscribed_at?: string | null;
+          terms_agreed_at?: string | null;
+          terms_version?: string | null;
+          updated_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "users_invited_by_fkey";
-            columns: ["invited_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      get_current_user_id: { Args: never; Returns: string };
     };
     Enums: {
-      [_ in never]: never;
+      address_type: "billing" | "shipping";
+      member_rank: "free" | "entry" | "standard" | "pro" | "enterprise";
+      order_payment_flow: "checkout" | "invoice";
+      order_status:
+        | "pending_payment"
+        | "confirming"
+        | "invoice_sent"
+        | "paid"
+        | "sourcing"
+        | "ordered"
+        | "preparing"
+        | "shipping"
+        | "delivered"
+        | "cancelled";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -394,6 +545,22 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      address_type: ["billing", "shipping"],
+      member_rank: ["free", "entry", "standard", "pro", "enterprise"],
+      order_payment_flow: ["checkout", "invoice"],
+      order_status: [
+        "pending_payment",
+        "confirming",
+        "invoice_sent",
+        "paid",
+        "sourcing",
+        "ordered",
+        "preparing",
+        "shipping",
+        "delivered",
+        "cancelled",
+      ],
+    },
   },
 } as const;
