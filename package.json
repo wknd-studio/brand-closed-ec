@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:cloudflare": "opennextjs-cloudflare build",
-    "deploy": "opennextjs-cloudflare build && wrangler pages deploy",
+    "deploy": "opennextjs-cloudflare build && cp .open-next/worker.js .open-next/assets/_worker.js && wrangler pages deploy",
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
