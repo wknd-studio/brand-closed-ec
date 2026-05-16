@@ -24,6 +24,31 @@ sanity deploy                   # Sanity Studio デプロイ
 
 Next.js 16 App Router + TypeScript strict / Cloudflare Pages + Workers (`@cloudflare/next-on-pages`) / Supabase PostgreSQL + RLS + supabase-js / Clerk (RBAC) / Stripe Checkout (SAQ A) / Sanity v3 / Playwright E2E / GitHub Actions CI / Linear (BRAND プロジェクト)
 
+## Gitブランチ戦略（厳守）
+
+**CRITICAL: 以下のルールを絶対に破ってはならない。**
+
+```
+main      →  本番（prod）自動デプロイ
+develop   →  ステージング（stg）自動デプロイ
+feature/* →  Cloudflare Pages Preview URL
+```
+
+**PR のターゲットブランチ**:
+
+- `feature/*` → **`develop`**（通常の開発作業は常にここ）
+- `develop` → `main`（stg での QA 完了後のみ）
+- `hotfix/*` → `main`（緊急修正のみ。直後に `develop` へバックマージ必須）
+
+**禁止事項**:
+
+- `feature/*` から `main` への直接 PR・マージ（絶対禁止）
+- `main` への直接 push（絶対禁止）
+
+詳細は `requirements.md` の「4. Gitブランチ戦略」を参照。
+
+---
+
 ## 行動ルール
 
 **理解度チェック**: 以下のタイミングで必ず実施する。(1) 技術説明・意思決定・実装提案の後、(2) **実装を開始する前**（コード作成・コマンド実行の前に理解を確認してから着手する）。Q1（定義）Q2（理由）Q3（応用）の最大3問。ユーザーが答えられなかった場合は平易な言葉と例え話で再説明し、同じ質問を1問だけ再提示する。理解が確認できてから実装に進む。ユーザーが正答した後も確認の追加質問を1問添える。
