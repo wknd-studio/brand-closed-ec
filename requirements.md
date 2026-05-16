@@ -38,7 +38,7 @@
 招待コード受領 → 会員登録 → 商品閲覧 → カート → 購入完了
 ```
 
-この一本道のフローを14週で完成させる。会員ランク（Bronze / Silver / Gold）による閲覧権限の差異化をフェーズ2で実装する。
+この一本道のフローを14週で完成させる。会員ランク（Free / Entry / Standard / Pro / Enterprise）による閲覧権限の差異化をフェーズ2で実装する。
 
 ### 1-3. 対象ユーザー
 
@@ -54,7 +54,7 @@
 
 | レイヤー           | 採用技術                   | バージョン | 採用理由                                                                           |
 | ------------------ | -------------------------- | ---------- | ---------------------------------------------------------------------------------- |
-| **フロントエンド** | Next.js (App Router)       | 16.x       | `proxy.ts`による境界防御、RSCによる高速描画                                        |
+| **フロントエンド** | Next.js (App Router)       | 16.x       | `middleware.ts`による境界防御、RSCによる高速描画                                   |
 | **言語**           | TypeScript                 | 5.x        | strict モードで型安全性を最大化                                                    |
 | **認証・認可**     | Clerk                      | 最新安定版 | Next.jsとの深い統合、RBAC標準搭載、招待ロジック拡張が容易                          |
 | **データベース**   | Supabase (PostgreSQL)      | —          | RLSによるデータレベル認可、ACIDトランザクション                                    |
@@ -362,89 +362,25 @@ jobs:
 | 列名・型の変更     | アプリコードと同時に変更。stgで動作確認後にprodへ適用 |
 | 列・テーブルの削除 | データ消失リスクあり。バックアップ確認後に実施        |
 
-### 7-1. 主要テーブル（概念設計）
+### 7-1. データモデル
 
-```sql
--- 会員
-users
-  id            uuid PRIMARY KEY  -- Clerk user_id と紐付け
-  email         text UNIQUE NOT NULL
-  rank          text NOT NULL DEFAULT 'bronze'  -- bronze | silver | gold
-  invited_by    uuid REFERENCES users(id)
-  created_at    timestamptz DEFAULT now()
+> **参照先**: エンティティ定義・ER図・スナップショット設計・月次上限算出ロジックは **`docs/data-model.md`** を唯一の設計根拠とすること。ここでは概要のみを記載する。
 
--- 招待コード
-invitation_codes
-  id            uuid PRIMARY KEY
-  code          text UNIQUE NOT NULL
-  issued_by     uuid REFERENCES users(id)  -- 運営または招待元会員
-  used_by       uuid REFERENCES users(id)
-  expires_at    timestamptz NOT NULL
-  max_uses      int NOT NULL DEFAULT 1
-  used_count    int NOT NULL DEFAULT 0
-  created_at    timestamptz DEFAULT now()
+**会員ランク**: `free` / `entry` / `standard` / `pro` / `enterprise`（旧: bronze/silver/gold から変更）
 
--- 商品
-products
-  id            uuid PRIMARY KEY
-  name          text NOT NULL
-  description   text
-  price         int NOT NULL  -- 円（税抜）
-  min_rank      text NOT NULL DEFAULT 'bronze'  -- 閲覧可能な最低ランク
-  sanity_id     text  -- Sanity CMS のドキュメントID
-  created_at    timestamptz DEFAULT now()
+**Supabase 管理エンティティ**: User, Address, InvitationCode, InvitationUse, Order, OrderItem, CartItem, Favorite
 
--- 在庫
-inventory
-  id            uuid PRIMARY KEY
-  product_id    uuid REFERENCES products(id)
-  sku           text NOT NULL
-  quantity      int NOT NULL DEFAULT 0
-  reserved      int NOT NULL DEFAULT 0  -- ソフト予約数
-  updated_at    timestamptz DEFAULT now()
+**Sanity 管理エンティティ**: Product（ランク別価格・ファイル含む）, Announcement
 
--- 注文
-orders
-  id            uuid PRIMARY KEY
-  user_id       uuid REFERENCES users(id)
-  status        text NOT NULL DEFAULT 'pending'  -- pending | paid | shipped | cancelled
-  stripe_session_id text UNIQUE
-  total_amount  int NOT NULL
-  created_at    timestamptz DEFAULT now()
-
--- 注文明細
-order_items
-  id            uuid PRIMARY KEY
-  order_id      uuid REFERENCES orders(id)
-  product_id    uuid REFERENCES products(id)
-  quantity      int NOT NULL
-  unit_price    int NOT NULL
-```
+**Stripe 管理**: Customer, Subscription, Invoice（Supabase からは ID のみ保持）
 
 ### 7-2. Row Level Security（RLS）方針
 
-```sql
--- 会員は自分のデータのみ参照可能
-CREATE POLICY "users: self only"
-  ON users FOR SELECT
-  USING (auth.uid() = id);
+RLS の詳細なポリシー定義はマイグレーションファイルで管理する。基本方針:
 
--- 商品は自分のランク以上のもののみ参照可能
-CREATE POLICY "products: rank filter"
-  ON products FOR SELECT
-  USING (
-    CASE min_rank
-      WHEN 'bronze' THEN true
-      WHEN 'silver' THEN (SELECT rank FROM users WHERE id = auth.uid()) IN ('silver', 'gold')
-      WHEN 'gold'   THEN (SELECT rank FROM users WHERE id = auth.uid()) = 'gold'
-    END
-  );
-
--- 注文は自分の注文のみ参照可能
-CREATE POLICY "orders: self only"
-  ON orders FOR SELECT
-  USING (auth.uid() = user_id);
-```
+- 会員は自分のデータ（注文・カート・住所・お気に入り）のみ参照・更新可能
+- 商品は `min_rank` と会員の `rank` を比較し、閲覧可否をデータベース層で強制する
+- 運営者ロール（Clerk Organization）はすべての会員データを参照可能
 
 > **重要**: RLSはデータベースレベルの強制であり、アプリケーションコードのバグによるデータ漏洩をゼロにする。クローズドECの「情報の秘匿」という最大要件を構造的に担保する。
 
@@ -494,8 +430,8 @@ Clerkとアプリコード・Supabaseの役割を明確に分離する：
 | 機能                                         | 実装場所                | 例                                   |
 | -------------------------------------------- | ----------------------- | ------------------------------------ |
 | 「誰がログインしているか」の管理             | Clerk                   | ログイン・ログアウト・パスワード管理 |
-| 「このユーザーは何ランクか」の保持           | Clerk（メタデータ）     | rank: "gold"                         |
-| 「どのデータを見せるか」の制御               | Supabase RLS            | Goldのみ限定商品を返す               |
+| 「このユーザーは何ランクか」の保持           | Clerk（メタデータ）     | rank: "pro"                          |
+| 「どのデータを見せるか」の制御               | Supabase RLS            | Pro以上のみ限定商品を返す            |
 | 「月の注文上限チェック」などのビジネスルール | アプリコード + Supabase | 今月の合計金額をDBから取得して判定   |
 
 ランク条件の変更（上限金額・対象商品の切り替えなど）はアプリコードの設定値を変えるだけで対応可能。ランク段階の追加はClerkメタデータの値とRLSポリシーの両方を更新する（エンジニア作業：数時間程度）。
@@ -507,27 +443,31 @@ ClerkのユーザーメタデータにランクをカスタムClaimとして付�
 ```typescript
 // Clerk publicMetadata の構造
 {
-  "rank": "bronze" | "silver" | "gold",
+  "rank": "free" | "entry" | "standard" | "pro" | "enterprise",
   "invitedBy": "<user_id>",
   "invitationCode": "<code>"
 }
 ```
 
-`proxy.ts`（Next.js Middleware相当）でセッションのClaimを参照し、ページ・APIエンドポイントへのアクセスを制御する。
+`middleware.ts`（Next.js Middleware）でセッションのClaimを参照し、ページ・APIエンドポイントへのアクセスを制御する。
 
 ### 8-4. 認証フロー
 
 ```
 1. 未認証アクセス
-   → proxy.ts が検知 → 404 を返却（ログインページへも誘導しない）
+   → middleware.ts が検知 → 未認証リクエストをブロック
 
-2. 招待コード入力ページ（唯一の公開ページ）
-   → コード検証 → 有効 → Clerk 会員登録フォームへ
-   → 登録完了 → Clerk PublicMetadata に rank: "bronze" を付与
+2. 新規登録フロー（招待コードあり）
+   → /invite で招待コード検証 → 有効
+   → 利用規約ページを表示（同意しないと次へ進めない）
+   → 同意 → Clerk 会員登録フォームへ
+   → 登録完了 → Clerk PublicMetadata に rank: "free" を付与
    → Supabase users テーブルにレコード挿入（Server Action）
+     ・terms_agreed_at: 同意日時
+     ・terms_version: 規約バージョン文字列（例: "2026-05-16"）
 
 3. ログイン済みアクセス
-   → proxy.ts が Clerk JWT を検証 → 通過
+   → middleware.ts が Clerk JWT を検証 → 通過
    → Supabase クライアントに Clerk JWT を渡して RLS を適用
 ```
 
@@ -539,7 +479,7 @@ ClerkのユーザーメタデータにランクをカスタムClaimとして付�
 
 | 層                     | 実装箇所                        | 内容                                                                  |
 | ---------------------- | ------------------------------- | --------------------------------------------------------------------- |
-| **エッジ層（最重要）** | `proxy.ts`                      | 未認証リクエストに対してHTMLコンテンツを一切返さない。404を返却。     |
+| **エッジ層（最重要）** | `middleware.ts`                 | 未認証リクエストに対してHTMLコンテンツを一切返さない。                |
 | **HTTPヘッダー層**     | `next.config.ts` の `headers()` | `X-Robots-Tag: noindex, nofollow` を全レスポンスに付与。              |
 | **HTML層**             | `app/layout.tsx`                | `<meta name="robots" content="noindex, nofollow">` を全ページに配置。 |
 
@@ -548,7 +488,7 @@ ClerkのユーザーメタデータにランクをカスタムClaimとして付�
 ### 9-2. スクレイピング対策
 
 - **Cloudflare WAF**: IP Reputationフィルタリング・Bot管理を有効化（Pages利用時に組み込み済み。Vercel WAFより高機能）
-- **Rate Limiting**: Cloudflare Workers（`proxy.ts`相当）で実装。会員ランク別のAPIリクエスト上限を設定。
+- **Rate Limiting**: Cloudflare Workers（`middleware.ts` / Edge Runtime）で実装。会員ランク別のAPIリクエスト上限を設定。
 - **異常検知**: 不自然に高速なページ遷移やAPIの連続呼び出しを検知した場合、Clerkセッションを即時無効化。
 
 ### 9-3. PCI DSS v4.0への対応
@@ -571,18 +511,41 @@ ClerkのユーザーメタデータにランクをカスタムClaimとして付�
 
 ## 10. 決済設計
 
-### 10-1. Stripe Checkout フロー
+### 10-1. 決済フローの概要
+
+注文内容によって2つのフローに自動分岐する。詳細は `docs/order-flow.md` を参照。
+
+| フロー              | 条件                    | 決済方法                      | 運営者の決済作業   |
+| ------------------- | ----------------------- | ----------------------------- | ------------------ |
+| **Checkout フロー** | 全商品が固定価格        | Stripe Checkout（即時・自動） | ゼロ               |
+| **Invoice フロー**  | 要相談商品を1つでも含む | Stripe Invoice（手動発行）    | Invoice を毎回作成 |
+
+### 10-2. Checkout フロー
 
 ```
-1. 会員がカートを確定 → 「購入する」ボタンをクリック
-2. Server Action が Stripe Checkout Session を作成
-3. 会員を Stripe のホスト型決済ページへリダイレクト
-4. 決済完了 → Stripe が Webhook を自社サーバーへ送信
-5. Webhook ハンドラが注文ステータスを "paid" に更新
-6. 会員を注文完了ページへリダイレクト
+1. 会員がカートを確定 → 「注文する」ボタンをクリック
+2. システムが月次仕入れ上限チェック（全額）
+3. Server Action が Stripe Checkout Session を作成
+4. 注文を "pending_payment" ステータスで記録
+5. 会員を Stripe のホスト型決済ページへリダイレクト
+6. 決済完了 → Stripe が checkout.session.completed Webhook を送信
+7. Webhook ハンドラが注文ステータスを "paid" に更新・完了メール送信
 ```
 
-### 10-2. MVP段階の決済手段
+### 10-3. Invoice フロー
+
+```
+1. 会員がカートを確定 → 「注文する」ボタンをクリック
+2. システムが月次仕入れ上限チェック（固定価格分のみ）
+3. 注文を "confirming" ステータスで記録・運営者に通知
+4. （要相談商品があれば）運営者が仕入れ先と価格交渉
+5. 運営者が管理画面で請求金額を入力
+6. システムが月次仕入れ上限チェック（全額）
+7. 運営者が Stripe Invoice を発行・会員にメール送信
+8. 会員が Invoice を支払い → invoice.paid Webhook → "paid" に更新
+```
+
+### 10-4. MVP段階の決済手段
 
 | 決済手段                             | 対応状況                             |
 | ------------------------------------ | ------------------------------------ |
@@ -591,7 +554,7 @@ ClerkのユーザーメタデータにランクをカスタムClaimとして付�
 | コンビニ払い                         | フェーズ2以降                        |
 | BNPL（Paidy等）                      | フェーズ4以降                        |
 
-### 10-3. Webhook検証（必須）
+### 10-5. Webhook検証（必須）
 
 ```typescript
 // app/api/stripe/webhook/route.ts
@@ -600,6 +563,10 @@ const event = stripe.webhooks.constructEvent(
   sig,
   process.env.STRIPE_WEBHOOK_SECRET // 署名検証を必ず行う
 );
+
+// 処理するイベント
+// checkout.session.completed → Checkout フローの決済完了
+// invoice.paid              → Invoice フローの決済完了
 ```
 
 ---
@@ -615,7 +582,7 @@ Sanity Content Lake
   │   ├─ slug: slug
   │   ├─ description: portableText
   │   ├─ images: image[]
-  │   ├─ minRank: string（bronze | silver | gold）
+  │   ├─ minRank: string（free | entry | standard | pro | enterprise）
   │   └─ category: reference → category
   │
   ├─ category（カテゴリ）
@@ -653,16 +620,16 @@ Sanity Content Lake
 
 **スプレッドシートのテンプレート仕様（列構成）**:
 
-| 列名               | 型                 | 必須 | 例                            |
-| ------------------ | ------------------ | ---- | ----------------------------- |
-| `name`             | text               | ✅   | プレミアムTシャツ             |
-| `slug`             | text               | ✅   | premium-tshirt（URL用の英字） |
-| `price`            | number             | ✅   | 15000                         |
-| `sku`              | text               | ✅   | SKU-001                       |
-| `min_rank`         | bronze/silver/gold | ✅   | bronze                        |
-| `category`         | text               | ✅   | tops                          |
-| `description`      | text               | —    | 長文テキスト                  |
-| `initial_quantity` | number             | ✅   | 50                            |
+| 列名               | 型                                 | 必須 | 例                            |
+| ------------------ | ---------------------------------- | ---- | ----------------------------- |
+| `name`             | text                               | ✅   | プレミアムTシャツ             |
+| `slug`             | text                               | ✅   | premium-tshirt（URL用の英字） |
+| `price`            | number                             | ✅   | 15000                         |
+| `sku`              | text                               | ✅   | SKU-001                       |
+| `min_rank`         | free/entry/standard/pro/enterprise | ✅   | free                          |
+| `category`         | text                               | ✅   | tops                          |
+| `description`      | text                               | —    | 長文テキスト                  |
+| `initial_quantity` | number                             | ✅   | 50                            |
 
 **インポートフロー**:
 
@@ -828,9 +795,33 @@ NEXT_PUBLIC_*   クライアントサイドで参照可能（公開情報のみ�
 
 ### 13-3. 管理方法
 
-- **Cloudflare Pages UI**: 環境ごと（Preview / Production）に設定。`wrangler pages secret put` コマンドでもCLI設定可能。
-- **ローカル開発**: `.env.local`（`.gitignore`に必ず追加）
-- **CI（GitHub Actions）**: `secrets.*` として GitHub Secrets に登録
+#### ローカル参照ファイル（すべて `.gitignore` 対象）
+
+| ファイル     | 用途                                                    |
+| ------------ | ------------------------------------------------------- |
+| `.env.local` | ローカル開発。`pnpm dev` 時に自動読み込み               |
+| `.env.stg`   | stg 環境の値を記録する参照ファイル（自動読み込みなし）  |
+| `.env.prod`  | prod 環境の値を記録する参照ファイル（自動読み込みなし） |
+
+#### `NEXT_PUBLIC_*` 変数（ビルド時に JS バンドルへ埋め込まれる）
+
+GitHub Secrets に登録し、`deploy.yml` の各ビルドステップで `env:` として渡す。stg と prod で別シークレット名を使う：
+
+| GitHub Secret 名                                             | stg           | prod          |
+| ------------------------------------------------------------ | ------------- | ------------- |
+| `CLERK_PUBLISHABLE_KEY_STG` / `CLERK_PUBLISHABLE_KEY_PROD`   | `pk_test_...` | `pk_live_...` |
+| `SUPABASE_URL_STG` / `SUPABASE_URL_PROD`                     | stg URL       | prod URL      |
+| `SUPABASE_ANON_KEY_STG` / `SUPABASE_ANON_KEY_PROD`           | stg anon key  | prod anon key |
+| `STRIPE_PUBLISHABLE_KEY_STG` / `STRIPE_PUBLISHABLE_KEY_PROD` | `pk_test_...` | `pk_live_...` |
+| `SANITY_PROJECT_ID`                                          | 共通          | 共通          |
+| `SENTRY_DSN`                                                 | 共通          | 共通          |
+
+#### ランタイム変数（サーバー・エッジで参照、Cloudflare Pages に設定）
+
+stg（`brand-closed-ec-stg`）と prod（`brand-closed-ec-prod`）は別プロジェクトのため、それぞれのダッシュボードで個別設定可能：
+
+`CLERK_SECRET_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `SANITY_API_TOKEN`
+
 - **`NEXT_PUBLIC_*` 以外をクライアントコンポーネントで参照しない**ことをESLintルールで強制する
 
 ---
@@ -839,32 +830,32 @@ NEXT_PUBLIC_*   クライアントサイドで参照可能（公開情報のみ�
 
 ### フェーズ1：セキュリティ基盤（第1〜4週）
 
-| タスク                                          | 担当         | 備考                                                                  |
-| ----------------------------------------------- | ------------ | --------------------------------------------------------------------- |
-| GitHubリポジトリ作成・ブランチ保護ルール設定    | インフラ     | main/developブランチの保護を最初に設定                                |
-| Cloudflare Pagesプロジェクト作成（prod/stg）    | インフラ     | GitHub連携・カスタムドメイン設定・`@cloudflare/next-on-pages`設定含む |
-| Linear プロジェクト・GitHub連携設定             | PM           | Conventional Commitsのルール周知                                      |
-| GitHub Actions CI設定（型チェック・Lint）       | インフラ     | e2e.ymlはフェーズ2末に追加                                            |
-| Next.js 16 + TypeScript プロジェクト初期化      | フロント     | strictモード、ESLint、Prettier設定                                    |
-| Clerk統合・`proxy.ts`による未認証シャットアウト | フロント     | 最優先。これがなければクローズドが成立しない                          |
-| Supabaseセットアップ（3環境分）                 | バックエンド | RLS有効化、基本スキーマ定義                                           |
-| 招待コード発行・検証APIの実装                   | バックエンド | invitations テーブル＋API Route                                       |
-| 招待コード入力ページ（唯一の公開ページ）実装    | フロント     | —                                                                     |
-| Sentry統合（全環境）                            | インフラ     | エラー監視を初期から有効化                                            |
-| `X-Robots-Tag` / `noindex` の設定               | フロント     | —                                                                     |
+| タスク                                               | 担当         | 備考                                                                  |
+| ---------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
+| GitHubリポジトリ作成・ブランチ保護ルール設定         | インフラ     | main/developブランチの保護を最初に設定                                |
+| Cloudflare Pagesプロジェクト作成（prod/stg）         | インフラ     | GitHub連携・カスタムドメイン設定・`@cloudflare/next-on-pages`設定含む |
+| Linear プロジェクト・GitHub連携設定                  | PM           | Conventional Commitsのルール周知                                      |
+| GitHub Actions CI設定（型チェック・Lint）            | インフラ     | e2e.ymlはフェーズ2末に追加                                            |
+| Next.js 16 + TypeScript プロジェクト初期化           | フロント     | strictモード、ESLint、Prettier設定                                    |
+| Clerk統合・`middleware.ts`による未認証シャットアウト | フロント     | 最優先。これがなければクローズドが成立しない                          |
+| Supabaseセットアップ（3環境分）                      | バックエンド | RLS有効化、基本スキーマ定義                                           |
+| 招待コード発行・検証APIの実装                        | バックエンド | invitations テーブル＋API Route                                       |
+| 招待コード入力ページ（唯一の公開ページ）実装         | フロント     | —                                                                     |
+| Sentry統合（全環境）                                 | インフラ     | エラー監視を初期から有効化                                            |
+| `X-Robots-Tag` / `noindex` の設定                    | フロント     | —                                                                     |
 
 ### フェーズ2：コアEC機能（第5〜10週）
 
-| タスク                                   | 担当                  | 備考                                  |
-| ---------------------------------------- | --------------------- | ------------------------------------- |
-| Sanity CMSセットアップ・商品スキーマ定義 | フロント/バックエンド | Sanity Studioの運営者向けデプロイ含む |
-| 商品カタログページ（ランク別表示切替）   | フロント              | RLSで担保されているが表示でも制御     |
-| 在庫管理APIの実装                        | バックエンド          | ソフト予約ロジック含む                |
-| カート機能（セッション/DB）              | フロント/バックエンド | —                                     |
-| Stripe Checkout決済フロー実装            | バックエンド          | Webhookハンドラ・署名検証必須         |
-| 注文履歴・マイページ                     | フロント              | —                                     |
-| 会員ランク（Bronze/Silver/Gold）管理     | バックエンド          | Clerk Metadata連携                    |
-| Playwright E2Eテスト実装・CI組み込み     | テスト                | クリティカルパス全件                  |
+| タスク                                               | 担当                  | 備考                                                                        |
+| ---------------------------------------------------- | --------------------- | --------------------------------------------------------------------------- |
+| Sanity CMSセットアップ・商品スキーマ定義             | フロント/バックエンド | Sanity Studioの運営者向けデプロイ含む                                       |
+| 商品カタログページ（ランク別表示切替）               | フロント              | RLSで担保されているが表示でも制御                                           |
+| 在庫管理APIの実装                                    | バックエンド          | ソフト予約ロジック含む                                                      |
+| カート機能（セッション/DB）                          | フロント/バックエンド | —                                                                           |
+| Stripe Checkout / Invoice 決済フロー実装             | バックエンド          | Webhookハンドラ・署名検証必須。固定価格は Checkout、要相談は Invoice フロー |
+| 注文履歴・マイページ                                 | フロント              | —                                                                           |
+| 会員ランク（Free/Entry/Standard/Pro/Enterprise）管理 | バックエンド          | Clerk Metadata連携                                                          |
+| Playwright E2Eテスト実装・CI組み込み                 | テスト                | クリティカルパス全件                                                        |
 
 ### フェーズ3：運用・コンプライアンス（第11〜14週）
 

@@ -10,7 +10,7 @@ Accepted
 
 ## 決定
 
-コンテンツ管理に **Sanity CMS v3** を採用する。商品の「見た目に関する情報」（画像・説明・カテゴリ）は Sanity で管理し、「取引に関する情報」（価格・在庫・ランク制限）は Supabase で管理する。
+コンテンツ管理に **Sanity CMS v3** を採用する。商品情報（画像・説明・カテゴリ・ランク別価格・最低閲覧ランク・在庫状況）はすべて Sanity で管理する。Supabase の CartItem / Favorite は `sanity_product_id` で Sanity のドキュメントを参照するのみで、商品データを複製しない。
 
 ## 代替案
 
@@ -30,6 +30,7 @@ Accepted
 
 ### 制約・注意点
 
-- **商品データが Sanity（コンテンツ）と Supabase（EC データ）に分散する**。`sanity_id` をキーに両者を紐付ける
-- 商品の登録は Sanity Studio と Supabase 管理画面の両方で作業が必要になる
+- 商品の登録・編集は Sanity Studio のみで行う。Supabase 側には商品テーブルを持たない
+- 注文確定時に `product_name_snapshot` / `unit_price_snapshot` を OrderItem に記録する（価格・商品名が後から変わっても注文履歴が変わらないようにするため）
 - Sanity Studio は `sanity deploy` コマンドで別途デプロイが必要
+- 大量商品の一括登録は Google スプレッドシート → CLI スクリプト（`scripts/import-products.ts`）→ Sanity API の流れで行う（初期段階）
