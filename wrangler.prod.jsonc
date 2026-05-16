@@ -1,6 +1,5 @@
 {
-  // ローカル開発用（pnpm exec wrangler dev）
-  "name": "brand-closed-ec",
+  "name": "brand-closed-ec-prod",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],

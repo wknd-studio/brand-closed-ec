@@ -68,18 +68,14 @@ jobs:
 
       - name: Deploy to stg
         if: github.ref == 'refs/heads/develop'
-        run: |
-          cp .open-next/worker.js .open-next/assets/_worker.js
-          pnpm exec wrangler pages deploy .open-next/assets --project-name brand-closed-ec-stg --branch develop
+        run: pnpm exec wrangler deploy --config wrangler.stg.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy to prod
         if: github.ref == 'refs/heads/main'
-        run: |
-          cp .open-next/worker.js .open-next/assets/_worker.js
-          pnpm exec wrangler pages deploy .open-next/assets --project-name brand-closed-ec-prod --branch main
+        run: pnpm exec wrangler deploy --config wrangler.prod.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
