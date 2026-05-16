@@ -48,6 +48,9 @@ next-env.d.ts
 # Cloudflare build output
 .open-next/
 
+# Sanity Studio build output
+/dist/
+
 # Playwright
 playwright-report/
 test-results/

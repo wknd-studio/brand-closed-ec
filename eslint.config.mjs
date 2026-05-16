@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Cloudflare opennext build output:
     ".open-next/**",
+    // Sanity Studio build output:
+    "dist/**",
+    // Sanity CLI runtime:
+    ".sanity/**",
   ]),
 ]);
 
