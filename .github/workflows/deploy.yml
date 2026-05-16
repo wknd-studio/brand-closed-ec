@@ -38,7 +38,21 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build:cloudflare
+      - name: Build (stg)
+        if: github.ref == 'refs/heads/develop'
+        run: pnpm build:cloudflare
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: stg
+
+      - name: Build (prod)
+        if: github.ref == 'refs/heads/main'
+        run: pnpm build:cloudflare
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: prod
 
       - name: Deploy to stg
         if: github.ref == 'refs/heads/develop'
