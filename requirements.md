@@ -83,25 +83,29 @@
 
 ### 3-1. 環境一覧
 
-| 環境     | 対応ブランチ | URL                                         | 主な用途                                           |
-| -------- | ------------ | ------------------------------------------- | -------------------------------------------------- |
-| **dev**  | `feature/*`  | `https://<branch-name>.<project>.pages.dev` | 開発中機能の単体確認。ブランチpushごとに自動生成。 |
-| **stg**  | `develop`    | `https://stg.<ドメイン>.com`                | 顧客・QAによるリリース前統合検証。                 |
-| **prod** | `main`       | `https://<ドメイン>.com`                    | 本番サービス。                                     |
+| 環境     | 対応ブランチ | アクセス先                   | 利用者       | 主な用途                                             |
+| -------- | ------------ | ---------------------------- | ------------ | ---------------------------------------------------- |
+| **dev**  | `feature/*`  | `http://localhost:3000`      | 開発者のみ   | ローカルで `npm run dev` を起動して機能を単体確認。  |
+| **stg**  | `develop`    | `https://stg.<ドメイン>.com` | 開発者・顧客 | テストデータで本番同等の操作を検証。顧客の最終確認。 |
+| **prod** | `main`       | `https://<ドメイン>.com`     | 会員・運営者 | 実際のビジネスデータで稼働する本番サービス。         |
 
-> **顧客の動作確認フロー**: feature ブランチへのpush → Cloudflare Pages Preview URLがPRコメントに自動投稿 → URLをSlack等でクライアントに共有するだけで確認可能。帯域幅無制限・追加コスト不要。
+> **顧客の動作確認フロー**: develop へのマージ → stg に自動デプロイ → stg URL を共有して確認。feature ブランチ単位での共有は行わない。
 
 ### 3-2. 環境ごとのサービス分離
 
 認証・DB・決済を環境ごとに独立させることで、stgでのテスト操作がprodデータを汚染するリスクをゼロにする。
 
-| サービス     | dev                          | stg                          | prod                         |
-| ------------ | ---------------------------- | ---------------------------- | ---------------------------- |
-| **Supabase** | 共有 `dev` プロジェクト      | 専用 `stg` プロジェクト      | 専用 `prod` プロジェクト     |
-| **Clerk**    | Development インスタンス     | Staging インスタンス         | Production インスタンス      |
-| **Stripe**   | テストモード (`sk_test_...`) | テストモード (`sk_test_...`) | ライブモード (`sk_live_...`) |
-| **Sanity**   | `dev` データセット           | `staging` データセット       | `production` データセット    |
-| **Sentry**   | `dev` 環境タグ               | `stg` 環境タグ               | `prod` 環境タグ              |
+| サービス     | dev（ローカル）                                      | stg                          | prod                         |
+| ------------ | ---------------------------------------------------- | ---------------------------- | ---------------------------- |
+| **Supabase** | ローカル Docker（`127.0.0.1:54321`）                 | 専用 `stg` プロジェクト      | 専用 `prod` プロジェクト     |
+| **Clerk**    | Development インスタンス（stg と共用）               | Development インスタンス     | Production インスタンス      |
+| **Stripe**   | テストモード (`sk_test_...`)                         | テストモード (`sk_test_...`) | ライブモード (`sk_live_...`) |
+| **Sanity**   | `staging` データセット（stg と共用・無料プラン制限） | `staging` データセット       | `production` データセット    |
+| **Sentry**   | `dev` 環境タグ                                       | `stg` 環境タグ               | `prod` 環境タグ              |
+
+> **Clerk の共用について**: Clerk の無料プランおよび小規模構成では dev と stg で同一の Development インスタンスを使用する。prod のみ独立した Production インスタンスで完全分離する。
+
+> **Sanity の共用について**: Sanity 無料プランはデータセット2つまでのため、`staging`（dev/stg 共用）と `production` の2つで運用する。ローカルでの開発作業で作成したコンテンツが stg に反映される点に注意する。
 
 ### 3-3. Cloudflare Pagesプロジェクト構成
 
@@ -109,16 +113,28 @@
 GitHub リポジトリ: brand-closed-ec
   │
   ├─ CF Pages Project: brand-closed-ec-prod
-  │   ├─ Production Branch: main → https://<ドメイン>.com
-  │   └─ Preview: 全ブランチ → https://<branch>.brand-closed-ec-prod.pages.dev
+  │   └─ Production Branch: main → https://<ドメイン>.com
   │
   └─ CF Pages Project: brand-closed-ec-stg
       └─ Production Branch: develop → https://stg.<ドメイン>.com
 ```
 
-> **なぜ2プロジェクト構成か**: Cloudflare Pagesの「Production Branch」はプロジェクトにつき1本のため、prodとstgに独立したカスタムドメインを割り当てるには2プロジェクトが必要。feature/\*のPreview URLはprodプロジェクト側のものを使用する。
+> **なぜ2プロジェクト構成か**: Cloudflare Pagesの「Production Branch」はプロジェクトにつき1本のため、prodとstgに独立したカスタムドメインを割り当てるには2プロジェクトが必要。
 
 > **Next.jsとCloudflareの互換性**: `@cloudflare/next-on-pages` パッケージを使用してNext.jsアプリをCloudflare Pages Functions形式に変換する。**Edge Runtimeのみ対応**（Node.jsランタイムは使用不可）。ただし使用するサービス（Clerk、Supabase JS Client、Stripe）はすべてEdge Runtime対応済み。
+
+### 3-4. stg環境の運用注意事項
+
+stg は開発者とクライアント（顧客）が同じデータを共用する環境のため、以下の操作は事前に顧客へ確認・告知してから実施する。
+
+| 操作                                      | stg への影響                                 | 対応                           |
+| ----------------------------------------- | -------------------------------------------- | ------------------------------ |
+| `develop` へのコードマージ                | アプリが再デプロイされるのみ                 | 通知不要                       |
+| Supabase マイグレーションを stg に適用    | スキーマ変更（既存データに影響する場合あり） | 顧客が使っていない時間帯に実施 |
+| stg のシードデータをリセット              | テストデータが上書きされる                   | 事前に顧客へ告知必須           |
+| Sanity でコンテンツを編集（ローカルでも） | `staging` データセットに即反映 → stg に反映  | 大きな変更は告知推奨           |
+
+> **基本方針**: コードの変更はいつでも deploy して問題ない。データそのものを操作する場合だけ顧客と調整する。
 
 ---
 
@@ -131,7 +147,7 @@ main         ──────────────────────�
                ↑ PR (develop → main)
 develop      ────────────────────────────────────────────▶  stg（自動デプロイ）
                ↑ PR (feature → develop)
-feature/*    ────────────────────────────────────────────▶  CF Pages Preview URL
+feature/*    ────────────────────────────────────────────▶  ローカル（localhost）で動作確認
 hotfix/*     ──▶ main（緊急修正後、developへバックマージ必須）
 ```
 
@@ -172,11 +188,9 @@ security(proxy): 未認証アクセスのシャットアウト実装
 ### 5-1. 全体フロー
 
 ```
-開発者が feature/* ブランチへ push
+開発者が feature/* ブランチへ push → ローカルで動作確認
   │
-  ├─ [Cloudflare Pages] Preview URL を自動生成 → PRコメントに投稿
-  │
-  └─ [GitHub Actions] CI起動
+  └─ [GitHub Actions] CI起動（pull_request 時）
       │
       ├─ [並列実行]
       │   ├─ TypeScript型チェック (tsc --noEmit)
@@ -277,11 +291,10 @@ jobs:
 
 ### 5-4. デプロイ所要時間の目標
 
-| イベント        | デプロイ先         | 目標時間 |
-| --------------- | ------------------ | -------- |
-| feature/\* push | Preview URL（dev） | 〜2分    |
-| develop push    | stg.domain.com     | 〜3分    |
-| main push       | domain.com         | 〜3分    |
+| イベント     | デプロイ先     | 目標時間 |
+| ------------ | -------------- | -------- |
+| develop push | stg.domain.com | 〜3分    |
+| main push    | domain.com     | 〜3分    |
 
 ---
 
@@ -310,11 +323,7 @@ jobs:
    → Linear チケットに PR リンクが自動付与
    → ステータスが "In Progress" → "In Review" へ自動遷移
 
-4. Cloudflare Pages Preview URL が PR コメントに自動投稿
-   → Linear チケットの PR リンクから 1クリックで動作確認可能
-   → クライアントへの共有は URL をコピーするだけ
-
-5. PR マージ（notify-linear.yml が実行）
+4. PR マージ（notify-linear.yml が実行）
    → Linear チケットのステータスが "Done" へ自動遷移
 ```
 
@@ -620,13 +629,13 @@ Sanity Content Lake
 
 ### 11-2. Sanityデータセット
 
-| 環境 | データセット |
-| ---- | ------------ |
-| dev  | `dev`        |
-| stg  | `staging`    |
-| prod | `production` |
+| 環境            | データセット            |
+| --------------- | ----------------------- |
+| dev（ローカル） | `staging`（stg と共用） |
+| stg             | `staging`               |
+| prod            | `production`            |
 
-> **注意**: Sanityのデータセットはプロジェクト内で管理するため、Supabaseのように別プロジェクトにする必要はない。
+> **注意**: Sanityのデータセットはプロジェクト内で管理するため、Supabaseのように別プロジェクトにする必要はない。無料プランはデータセット2つまでのため `staging`（dev/stg 共用）と `production` の2つで運用する。ローカルで作成・編集したコンテンツは stg にも即反映される点に注意。
 
 ### 11-3. コンテンツ更新権限
 
@@ -800,21 +809,22 @@ NEXT_PUBLIC_*   クライアントサイドで参照可能（公開情報のみ�
 
 ### 13-2. 主要な環境変数一覧
 
-| 変数名                               | dev                     | stg                     | prod                     |
-| ------------------------------------ | ----------------------- | ----------------------- | ------------------------ |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`  | dev キー                | stg キー                | prod キー                |
-| `CLERK_SECRET_KEY`                   | dev シークレット        | stg シークレット        | prod シークレット        |
-| `NEXT_PUBLIC_SUPABASE_URL`           | devプロジェクトURL      | stgプロジェクトURL      | prodプロジェクトURL      |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`      | dev anonキー            | stg anonキー            | prod anonキー            |
-| `SUPABASE_SERVICE_ROLE_KEY`          | dev service roleキー    | stg service roleキー    | prod service roleキー    |
-| `STRIPE_SECRET_KEY`                  | `sk_test_...`           | `sk_test_...`           | `sk_live_...`            |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_test_...`           | `pk_test_...`           | `pk_live_...`            |
-| `STRIPE_WEBHOOK_SECRET`              | dev webhookシークレット | stg webhookシークレット | prod webhookシークレット |
-| `NEXT_PUBLIC_SANITY_PROJECT_ID`      | 共通                    | 共通                    | 共通                     |
-| `NEXT_PUBLIC_SANITY_DATASET`         | `dev`                   | `staging`               | `production`             |
-| `SANITY_API_TOKEN`                   | read/write トークン     | read/write トークン     | read only トークン       |
-| `SENTRY_DSN`                         | dev DSN                 | stg DSN                 | prod DSN                 |
-| `SENTRY_AUTH_TOKEN`                  | —                       | —                       | リリース用トークン       |
+| 変数名                               | dev                              | stg                      | prod                     |
+| ------------------------------------ | -------------------------------- | ------------------------ | ------------------------ |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`  | dev キー                         | stg キー                 | prod キー                |
+| `CLERK_SECRET_KEY`                   | dev シークレット                 | stg シークレット         | prod シークレット        |
+| `NEXT_PUBLIC_SUPABASE_URL`           | devプロジェクトURL               | stgプロジェクトURL       | prodプロジェクトURL      |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`      | dev anonキー                     | stg anonキー             | prod anonキー            |
+| `SUPABASE_SERVICE_ROLE_KEY`          | dev service roleキー             | stg service roleキー     | prod service roleキー    |
+| `STRIPE_SECRET_KEY`                  | `sk_test_...`                    | `sk_test_...`            | `sk_live_...`            |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_test_...`                    | `pk_test_...`            | `pk_live_...`            |
+| `STRIPE_WEBHOOK_SECRET`              | dev webhookシークレット          | stg webhookシークレット  | prod webhookシークレット |
+| `NEXT_PUBLIC_SANITY_PROJECT_ID`      | 共通                             | 共通                     | 共通                     |
+| `NEXT_PUBLIC_SANITY_DATASET`         | `staging`（stg と共用）          | `staging`                | `production`             |
+| `SANITY_API_TOKEN`                   | read/write トークン              | read/write トークン      | read only トークン       |
+| `NEXT_PUBLIC_SENTRY_DSN`             | 共通（同一プロジェクト）         | 共通（同一プロジェクト） | 共通（同一プロジェクト） |
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT`     | `dev`                            | `stg`                    | `prod`                   |
+| `SENTRY_AUTH_TOKEN`                  | ビルド時のみ（ソースマップ送信） | ビルド時のみ             | ビルド時のみ             |
 
 ### 13-3. 管理方法
 
@@ -829,19 +839,19 @@ NEXT_PUBLIC_*   クライアントサイドで参照可能（公開情報のみ�
 
 ### フェーズ1：セキュリティ基盤（第1〜4週）
 
-| タスク                                               | 担当         | 備考                                                                  |
-| ---------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
-| GitHubリポジトリ作成・ブランチ保護ルール設定         | インフラ     | main/developブランチの保護を最初に設定                                |
-| Cloudflare Pagesプロジェクト作成（prod/stg/preview） | インフラ     | GitHub連携・カスタムドメイン設定・`@cloudflare/next-on-pages`設定含む |
-| Linear プロジェクト・GitHub連携設定                  | PM           | Conventional Commitsのルール周知                                      |
-| GitHub Actions CI設定（型チェック・Lint）            | インフラ     | e2e.ymlはフェーズ2末に追加                                            |
-| Next.js 16 + TypeScript プロジェクト初期化           | フロント     | strictモード、ESLint、Prettier設定                                    |
-| Clerk統合・`proxy.ts`による未認証シャットアウト      | フロント     | 最優先。これがなければクローズドが成立しない                          |
-| Supabaseセットアップ（3環境分）                      | バックエンド | RLS有効化、基本スキーマ定義                                           |
-| 招待コード発行・検証APIの実装                        | バックエンド | invitations テーブル＋API Route                                       |
-| 招待コード入力ページ（唯一の公開ページ）実装         | フロント     | —                                                                     |
-| Sentry統合（全環境）                                 | インフラ     | エラー監視を初期から有効化                                            |
-| `X-Robots-Tag` / `noindex` の設定                    | フロント     | —                                                                     |
+| タスク                                          | 担当         | 備考                                                                  |
+| ----------------------------------------------- | ------------ | --------------------------------------------------------------------- |
+| GitHubリポジトリ作成・ブランチ保護ルール設定    | インフラ     | main/developブランチの保護を最初に設定                                |
+| Cloudflare Pagesプロジェクト作成（prod/stg）    | インフラ     | GitHub連携・カスタムドメイン設定・`@cloudflare/next-on-pages`設定含む |
+| Linear プロジェクト・GitHub連携設定             | PM           | Conventional Commitsのルール周知                                      |
+| GitHub Actions CI設定（型チェック・Lint）       | インフラ     | e2e.ymlはフェーズ2末に追加                                            |
+| Next.js 16 + TypeScript プロジェクト初期化      | フロント     | strictモード、ESLint、Prettier設定                                    |
+| Clerk統合・`proxy.ts`による未認証シャットアウト | フロント     | 最優先。これがなければクローズドが成立しない                          |
+| Supabaseセットアップ（3環境分）                 | バックエンド | RLS有効化、基本スキーマ定義                                           |
+| 招待コード発行・検証APIの実装                   | バックエンド | invitations テーブル＋API Route                                       |
+| 招待コード入力ページ（唯一の公開ページ）実装    | フロント     | —                                                                     |
+| Sentry統合（全環境）                            | インフラ     | エラー監視を初期から有効化                                            |
+| `X-Robots-Tag` / `noindex` の設定               | フロント     | —                                                                     |
 
 ### フェーズ2：コアEC機能（第5〜10週）
 
