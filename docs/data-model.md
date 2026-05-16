@@ -40,6 +40,8 @@ SQL ではなく概念レベルの定義。エンティティの責務・関係�
 | rank                   | enum               | `free` / `entry` / `standard` / `pro` / `enterprise` |
 | subscribed_at          | timestamp          | サブスク登録日。月次リセット日の起点                 |
 | onboarding_completed   | boolean            | false の間は `/onboarding` にリダイレクト            |
+| terms_agreed_at        | timestamp nullable | 利用規約同意日時。null の間は登録完了不可            |
+| terms_version          | string nullable    | 同意時の規約バージョン（例: `"2026-05-16"`）         |
 | can_invite             | boolean            | 招待権限の有無                                       |
 | invite_limit           | integer            | 最大招待可能数                                       |
 | deleted_at             | timestamp nullable | 論理削除。退会後もデータは保持                       |
@@ -84,19 +86,23 @@ SQL ではなく概念レベルの定義。エンティティの責務・関係�
 
 ### Order（注文）
 
-| 属性                      | 型              | 説明                                                                                                                   |
-| ------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| id                        | UUID PK         |                                                                                                                        |
-| user_id                   | UUID FK → User  |                                                                                                                        |
-| status                    | enum            | `confirming` / `invoice_sent` / `paid` / `sourcing` / `ordered` / `preparing` / `shipping` / `delivered` / `cancelled` |
-| shipping_address_snapshot | JSON            | 注文時点のお届け先住所（Address の値コピー）                                                                           |
-| billing_address_snapshot  | JSON            | 注文時点の請求先住所（Address の値コピー）                                                                             |
-| rank_at_order             | enum            | 注文時点の会員ランク                                                                                                   |
-| monthly_limit_at_order    | bigint          | 注文時点のプランの月次上限額（円）。請求書発行時の上限チェックに使用                                                   |
-| stripe_invoice_id         | string nullable | Stripe Invoice ID。請求書発行後に記録                                                                                  |
-| created_at                | timestamp       |                                                                                                                        |
+| 属性                       | 型              | 説明                                                                                                                                       |
+| -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| id                         | UUID PK         |                                                                                                                                            |
+| user_id                    | UUID FK → User  |                                                                                                                                            |
+| payment_flow               | enum            | `checkout` / `invoice`。注文確定時に決定し変更不可                                                                                         |
+| status                     | enum            | `pending_payment` / `confirming` / `invoice_sent` / `paid` / `sourcing` / `ordered` / `preparing` / `shipping` / `delivered` / `cancelled` |
+| shipping_address_snapshot  | JSON            | 注文時点のお届け先住所（Address の値コピー）                                                                                               |
+| billing_address_snapshot   | JSON            | 注文時点の請求先住所（Address の値コピー）                                                                                                 |
+| rank_at_order              | enum            | 注文時点の会員ランク                                                                                                                       |
+| monthly_limit_at_order     | bigint          | 注文時点のプランの月次上限額（円）。上限チェックに使用                                                                                     |
+| stripe_checkout_session_id | string nullable | Stripe Checkout Session ID。Checkout フローのみ記録                                                                                        |
+| stripe_invoice_id          | string nullable | Stripe Invoice ID。Invoice フローのみ記録                                                                                                  |
+| created_at                 | timestamp       |                                                                                                                                            |
 
 > `shipping_address_snapshot` / `billing_address_snapshot` は JSON スナップショット。住所が後から変更・削除されても注文時の情報が保持される。
+
+> `stripe_checkout_session_id` と `stripe_invoice_id` はどちらか一方のみ設定される。`payment_flow` で判別する。
 
 ### OrderItem（注文明細）
 
@@ -184,6 +190,8 @@ erDiagram
         enum rank
         timestamp subscribed_at
         boolean onboarding_completed
+        timestamp terms_agreed_at
+        string terms_version
         boolean can_invite
         int invite_limit
         timestamp deleted_at
@@ -223,11 +231,13 @@ erDiagram
     Order {
         uuid id PK
         uuid user_id FK
+        enum payment_flow
         enum status
         json shipping_address_snapshot
         json billing_address_snapshot
         enum rank_at_order
         bigint monthly_limit_at_order
+        string stripe_checkout_session_id
         string stripe_invoice_id
         timestamp created_at
     }
@@ -284,7 +294,18 @@ erDiagram
 例: subscribed_at = 2025-01-15 → 当月期間 = 2026-05-15 〜 2026-06-14
 ```
 
-### 注文時チェック（固定価格商品分のみ）
+### 注文時チェック
+
+**Checkout フロー**（全商品が固定価格）:
+
+```
+使用済み額 = 当期間内のキャンセルされていない注文の
+             全 OrderItem の unit_price_snapshot × quantity の合計
+```
+
+合計が `User.rank の月次上限` を超える場合は Checkout Session の作成をブロックする。
+
+**Invoice フロー**（要相談商品を含む）:
 
 ```
 使用済み額 = 当期間内のキャンセルされていない注文の
@@ -294,7 +315,7 @@ erDiagram
 
 固定価格商品の合計が `User.rank の月次上限` を超える場合は注文をブロックする。
 
-### 請求書発行時チェック（全商品）
+### 請求書発行時チェック（Invoice フロー・全商品）
 
 ```
 使用済み額 = 当期間内のキャンセルされていない注文の

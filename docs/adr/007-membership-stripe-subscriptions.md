@@ -36,4 +36,4 @@ Accepted
 - **ランクの状態が Stripe と Supabase の2箇所に存在する**。Webhook 受信後に `users.rank` を更新し、常に同期を保つ必要がある
 - Webhook の処理は冪等性を担保する（同じイベントを2回処理しても結果が変わらないようにする）
 - Enterprise の月額は要相談のため、Stripe の Custom Pricing または手動請求で対応する
-- ランク変更の即時反映 vs 翌月反映は今後決定する（TBD）
+- ランク変更は**即時反映**とする。Stripe Webhook 受信後に `users.rank` を更新し、残り仕入れ枠も即時再計算する
