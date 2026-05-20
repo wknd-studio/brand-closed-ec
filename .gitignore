@@ -50,6 +50,7 @@ next-env.d.ts
 
 # Sanity Studio build output
 /dist/
+.sanity/
 
 # Playwright
 playwright-report/
