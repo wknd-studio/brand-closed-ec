@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 
@@ -9,11 +9,10 @@ function generateCode(): string {
 }
 
 async function requireAdmin() {
-  const { sessionClaims } = await auth();
-  const role = (sessionClaims?.publicMetadata as { role?: string } | undefined)
-    ?.role;
+  const user = await currentUser();
+  const role = (user?.publicMetadata as { role?: string } | undefined)?.role;
   if (role !== "admin") return null;
-  return sessionClaims;
+  return user;
 }
 
 export async function GET() {

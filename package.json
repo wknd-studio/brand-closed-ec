@@ -28,6 +28,7 @@
     "stripe": "^22.1.1"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.0.33",
     "@opennextjs/cloudflare": "^1.19.8",
     "@playwright/test": "^1.59.1",
     "@sanity/vision": "^5.25.1",
@@ -35,6 +36,7 @@
     "@types/node": "^20.19.39",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
     "husky": "^9.1.7",
