@@ -24,6 +24,10 @@ sanity deploy                   # Sanity Studio デプロイ
 
 Next.js 16 App Router + TypeScript strict / Cloudflare Pages + Workers (`@cloudflare/next-on-pages`) / Supabase PostgreSQL + RLS + supabase-js / Clerk (RBAC) / Stripe Checkout (SAQ A) / Sanity v3 / Playwright E2E / GitHub Actions CI / Linear (BRAND プロジェクト)
 
+## ライブラリ別実装ガイド
+
+- **Clerk**: `docs/ai-prompts/clerk.md` を必ず参照すること（非推奨APIの使用禁止・`<Show>` コンポーネントの使用など重要なルールあり）
+
 ## Gitブランチ戦略（厳守）
 
 **CRITICAL: 以下のルールを絶対に破ってはならない。**
