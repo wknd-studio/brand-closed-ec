@@ -46,7 +46,7 @@
 4. チケットをクリックすると詳細・コメント・開発メモが確認できる
 
 > チームへの招待は Linear の Settings > Members から行ってください。
-> プロジェクトの URL: https://linear.app/wknd-studio/team/BRAND/issues
+> プロジェクトの URL: https://linear.app/wknd-studio/team/BRAND/all
 
 ---
 
