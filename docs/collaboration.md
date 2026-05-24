@@ -14,6 +14,15 @@
 
 ---
 
+## 商品・お知らせ管理（Sanity Studio）
+
+商品登録・編集およびお知らせ投稿は Sanity Studio から行います。
+
+- Studio URL: https://brand-closed-ec.sanity.studio/
+- アクセスには Sanity プロジェクトへの招待が必要です。アクセスが必要な方はお知らせください。
+
+---
+
 ## 進捗確認（Linear）
 
 タスク管理には **Linear**（`https://linear.app/`）を使用しています。
@@ -37,7 +46,7 @@
 4. チケットをクリックすると詳細・コメント・開発メモが確認できる
 
 > チームへの招待は Linear の Settings > Members から行ってください。
-> プロジェクトの URL: https://linear.app/wknd-studio/team/BRAND/issues
+> プロジェクトの URL: https://linear.app/wknd-studio/team/BRAND/all
 
 ---
 
