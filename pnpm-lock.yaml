@@ -35,6 +35,9 @@ importers:
       stripe:
         specifier: ^22.1.1
         version: 22.1.1(@types/node@20.19.39)
+      svix:
+        specifier: ^1.94.0
+        version: 1.94.0
     devDependencies:
       '@clerk/testing':
         specifier: ^2.0.33
@@ -7467,6 +7470,9 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
+
+  svix@1.94.0:
+    resolution: {integrity: sha512-FuP5nJez1P/SeK+4zOBI8RrNhtrzMTBSvwuD4yGGsn+Af2yQazid6OwPu3fpZpMifOJxrJua0su/dYB5fe4v9Q==}
 
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
@@ -17026,6 +17032,10 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  svix@1.94.0:
+    dependencies:
+      standardwebhooks: 1.0.0
 
   symbol-tree@3.2.4: {}
 
