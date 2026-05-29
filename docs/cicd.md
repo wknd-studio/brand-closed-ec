@@ -3,19 +3,22 @@
 ## パイプライン概要
 
 ```
-push / PR (develop・main)
+PR (develop・main)
   ├─ TypeScript チェック
   ├─ Lint / Format チェック
   └─ Unit Tests
-       └─ [push のみ] Deploy (stg / prod)
-                          └─ [develop のみ] E2E Tests (stg)
+
+push (develop・main)
+  └─ Deploy
+       ├─ [develop] DB マイグレーション (stg) → ビルド → デプロイ → E2E
+       └─ [main]    DB マイグレーション (prod) → ビルド → デプロイ
 ```
 
-| トリガー            | 実行されるジョブ      |
-| ------------------- | --------------------- |
-| PR → develop / main | typecheck・lint・test |
-| push → develop      | deploy stg → E2E      |
-| push → main         | deploy prod           |
+| トリガー            | 実行されるジョブ               |
+| ------------------- | ------------------------------ |
+| PR → develop / main | typecheck・lint・test          |
+| push → develop      | migrate stg → deploy stg → E2E |
+| push → main         | migrate prod → deploy prod     |
 
 > GitHub 無料プランの private リポジトリは branch protection が使えないため、PR なし直接 push のリスクは運用でカバーする。チェックは PR 時のみ実行し、push 時はデプロイのみ行う。
 
@@ -57,15 +60,24 @@ GitHub リポジトリの Settings → Secrets and variables → Actions に設�
 | `CLOUDFLARE_API_TOKEN`        | Wrangler デプロイ用                  |
 | `CLOUDFLARE_ACCOUNT_ID`       | Cloudflare アカウント ID             |
 
-### 要追加
+### 設定済み（追加済み）
 
 | Secret                          | 用途                                                                 |
 | ------------------------------- | -------------------------------------------------------------------- |
-| `APP_URL_STG`                   | stg の公開 URL（例: `https://stg.example.com`）                      |
-| `APP_URL_PROD`                  | prod の公開 URL（例: `https://example.com`）                         |
+| `APP_URL_STG`                   | stg の公開 URL                                                       |
 | `CLERK_SECRET_KEY_STG`          | stg Clerk Secret Key（E2E テスト用）                                 |
 | `SUPABASE_SERVICE_ROLE_KEY_STG` | stg Supabase service_role キー（E2E テストのデータクリーンアップ用） |
+| `SUPABASE_ACCESS_TOKEN`         | Supabase CLI 認証トークン（DB マイグレーション用）                   |
+| `SUPABASE_PROJECT_REF_STG`      | stg Supabase プロジェクト参照 ID                                     |
 | `E2E_USER_EMAIL`                | E2E テスト用アカウントのメールアドレス                               |
+
+### 要追加（prod 準備時）
+
+| Secret                        | 用途                              |
+| ----------------------------- | --------------------------------- |
+| `APP_URL_PROD`                | prod の公開 URL                   |
+| `STRIPE_PUBLISHABLE_KEY_PROD` | prod Stripe 公開鍵                |
+| `SUPABASE_PROJECT_REF_PROD`   | prod Supabase プロジェクト参照 ID |
 
 ---
 
