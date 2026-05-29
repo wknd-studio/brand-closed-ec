@@ -27,6 +27,7 @@ Next.js 16 App Router + TypeScript strict / Cloudflare Pages + Workers (`@cloudf
 
 ## ライブラリ別実装ガイド
 
+- **Next.js**: `docs/ai-prompts/nextjs.md`を必ず参照すること
 - **Clerk**: `docs/ai-prompts/clerk.md` を必ず参照すること（非推奨APIの使用禁止・`<Show>` コンポーネントの使用など重要なルールあり）
 
 ## Gitブランチ戦略（厳守）
