@@ -14,12 +14,15 @@ export default defineConfig({
     baseURL: process.env.BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
   },
-  webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
+  // BASE_URL が外部 URL（stg など）を指している場合はローカルサーバーを起動しない
+  ...(!process.env.BASE_URL && {
+    webServer: {
+      command: "pnpm dev",
+      url: "http://localhost:3000",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120000,
+    },
+  }),
   projects: [
     {
       name: "setup",
