@@ -1,7 +1,7 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
 
 const TERMS_VERSION = "2026-05-25";
 
@@ -10,10 +10,10 @@ const TERMS_TEXT = `
 本規約は、当サービス（以下「本サービス」）の利用条件を定めるものです。
 
 第2条（会員資格）
-本サービスは招待制であり、招待コードを持つ方のみご利用いただけます。
+本サービスは招待制であり、招待を受けた方のみご利用いただけます。
 
 第3条（禁止事項）
-・招待コードの第三者への無断譲渡
+・招待の第三者への無断譲渡
 ・本サービスの不正利用
 ・その他当社が不適切と判断する行為
 
@@ -27,24 +27,17 @@ const TERMS_TEXT = `
 当社は、必要に応じて本規約を変更することができます。変更後の規約は本サービス上に掲示した時点で効力を生じます。
 `.trim();
 
-export default function InviteTermsPage() {
-  const searchParams = useSearchParams();
+function WelcomeContent() {
   const router = useRouter();
-  const code = searchParams.get("code");
+  const searchParams = useSearchParams();
+  const ticket = searchParams.get("__clerk_ticket");
   const [agreed, setAgreed] = useState(false);
 
-  useEffect(() => {
-    if (!code) {
-      router.replace("/invite");
-    }
-  }, [code, router]);
-
-  if (!code) return null;
-
   function handleAgree() {
-    document.cookie = `invite_code=${encodeURIComponent(code!)}; path=/; max-age=3600; SameSite=Lax`;
-    document.cookie = `terms_version=${TERMS_VERSION}; path=/; max-age=3600; SameSite=Lax`;
-    router.push("/sign-up");
+    const dest = new URL("/sign-up", window.location.origin);
+    if (ticket) dest.searchParams.set("__clerk_ticket", ticket);
+    dest.searchParams.set("terms_version", TERMS_VERSION);
+    router.push(dest.toString());
   }
 
   return (
@@ -69,9 +62,17 @@ export default function InviteTermsPage() {
           disabled={!agreed}
           className="w-full rounded bg-black py-2 text-white disabled:opacity-50"
         >
-          同意して登録へ進む
+          同意してアカウントを作成
         </button>
       </div>
     </main>
+  );
+}
+
+export default function WelcomePage() {
+  return (
+    <Suspense>
+      <WelcomeContent />
+    </Suspense>
   );
 }
