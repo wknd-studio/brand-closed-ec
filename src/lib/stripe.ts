@@ -1,10 +1,18 @@
 import Stripe from "stripe";
 
+let _stripe: Stripe | null = null;
+
 // Cloudflare Workers (Edge) では Node.js の http モジュールが使えないため
-// Fetch API ベースの HTTP クライアントを明示する
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  httpClient: Stripe.createFetchHttpClient(),
-});
+// Fetch API ベースの HTTP クライアントを明示する。
+// ビルド時に STRIPE_SECRET_KEY が存在しないため遅延初期化する。
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      httpClient: Stripe.createFetchHttpClient(),
+    });
+  }
+  return _stripe;
+}
 
 export type PaidRank = "entry" | "standard" | "pro";
 

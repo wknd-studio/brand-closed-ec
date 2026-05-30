@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { stripe, STRIPE_PRICE_IDS, type PaidRank } from "@/lib/stripe";
+import { getStripe, STRIPE_PRICE_IDS, type PaidRank } from "@/lib/stripe";
 import Link from "next/link";
 
 const VALID_PLANS: PaidRank[] = ["entry", "standard", "pro"];
@@ -26,7 +26,7 @@ export default async function OnboardingPaymentPage({
 
   let session;
   try {
-    session = await stripe.checkout.sessions.create({
+    session = await getStripe().checkout.sessions.create({
       mode: "subscription",
       line_items: [
         { price: STRIPE_PRICE_IDS[paidRank].monthly, quantity: 1 },
