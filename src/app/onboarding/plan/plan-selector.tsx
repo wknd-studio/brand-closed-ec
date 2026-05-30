@@ -1,6 +1,9 @@
 "use client";
 
-import { selectPlan } from "./actions";
+import { useActionState, useEffect } from "react";
+import { useClerk } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { selectPlan, type SelectPlanResult } from "./actions";
 
 const PLANS = [
   {
@@ -14,8 +17,23 @@ const PLANS = [
 ] as const;
 
 export default function PlanSelector() {
+  const { session } = useClerk();
+  const router = useRouter();
+  const [state, action, isPending] = useActionState<
+    SelectPlanResult | null,
+    FormData
+  >(selectPlan, null);
+
+  useEffect(() => {
+    if (state && "redirectTo" in state) {
+      session?.reload().then(() => {
+        router.push(state.redirectTo);
+      });
+    }
+  }, [state, session, router]);
+
   return (
-    <form action={selectPlan} className="space-y-4">
+    <form action={action} className="space-y-4">
       <div className="grid gap-3">
         {PLANS.map((plan) => (
           <label
@@ -36,9 +54,16 @@ export default function PlanSelector() {
           </label>
         ))}
       </div>
-      <button type="submit" className="w-full rounded bg-black py-2 text-white">
-        このプランで始める
+      <button
+        type="submit"
+        disabled={isPending}
+        className="w-full rounded bg-black py-2 text-white disabled:opacity-50"
+      >
+        {isPending ? "処理中..." : "このプランで始める"}
       </button>
+      {state && "error" in state && (
+        <p className="text-sm text-red-600">{state.error}</p>
+      )}
     </form>
   );
 }

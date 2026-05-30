@@ -8,12 +8,17 @@ const TERMS_VERSION = "2026-05-25";
 
 type MemberRank = "free" | "entry" | "standard" | "pro";
 
-export async function selectPlan(formData: FormData) {
+export type SelectPlanResult = { redirectTo: string } | { error: string };
+
+export async function selectPlan(
+  _: SelectPlanResult | null,
+  formData: FormData
+): Promise<SelectPlanResult> {
   const plan = formData.get("plan") as MemberRank;
 
   const validPlans: MemberRank[] = ["free", "entry", "standard", "pro"];
   if (!validPlans.includes(plan)) {
-    throw new Error("invalid plan");
+    return { error: "無効なプランです" };
   }
 
   const { userId } = await auth();
@@ -46,7 +51,7 @@ export async function selectPlan(formData: FormData) {
     .single();
 
   if (userError || !userRecord) {
-    throw new Error("ユーザーレコードの作成に失敗しました");
+    return { error: "ユーザーレコードの作成に失敗しました" };
   }
 
   const clerk = await clerkClient();
@@ -54,9 +59,7 @@ export async function selectPlan(formData: FormData) {
     publicMetadata: { onboarding_completed: isFree },
   });
 
-  if (isFree) {
-    redirect("/shop");
-  } else {
-    redirect(`/onboarding/payment?plan=${plan}`);
-  }
+  return {
+    redirectTo: isFree ? "/shop" : `/onboarding/payment?plan=${plan}`,
+  };
 }
