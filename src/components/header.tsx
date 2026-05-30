@@ -8,7 +8,15 @@ export default function Header() {
         Members
       </Link>
       <Show when="signed-in">
-        <UserButton />
+        <div className="flex items-center gap-4">
+          <Link
+            href="/settings"
+            className="text-sm text-gray-500 hover:text-gray-900"
+          >
+            設定
+          </Link>
+          <UserButton />
+        </div>
       </Show>
     </header>
   );
