@@ -1,0 +1,7 @@
+version: "3"
+
+tunnels:
+  default:
+    proto: http
+    addr: 3000
+    domain: buffing-flaccid-nutty.ngrok-free.dev
