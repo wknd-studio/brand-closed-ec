@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 const isPublic = createRouteMatcher([
@@ -10,6 +11,14 @@ const isPublic = createRouteMatcher([
 ]);
 
 const isOnboarding = createRouteMatcher(["/onboarding(.*)"]);
+
+function supabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export default clerkMiddleware(async (auth, req) => {
   if (isPublic(req)) return;
@@ -25,16 +34,26 @@ export default clerkMiddleware(async (auth, req) => {
 
   await auth.protect();
 
-  const { sessionClaims } = await auth();
+  const { userId, sessionClaims } = await auth();
   const meta = sessionClaims?.metadata as
     | { onboarding_completed?: boolean; role?: string }
     | undefined;
 
   // admin はオンボーディング不要
   if (meta?.role === "admin") return;
+  if (isOnboarding(req)) return;
 
-  // オンボーディング未完了の一般ユーザーを /onboarding/plan へ誘導
-  if (!isOnboarding(req) && meta?.onboarding_completed !== true) {
+  // JWT 高速パス: トークンが最新であれば DB クエリ不要
+  if (meta?.onboarding_completed === true) return;
+
+  // JWT が古いか未更新の場合は DB を正とする
+  const { data } = await supabaseAdmin()
+    .from("users")
+    .select("onboarding_completed")
+    .eq("clerk_user_id", userId!)
+    .single();
+
+  if (!data?.onboarding_completed) {
     return NextResponse.redirect(new URL("/onboarding/plan", req.url));
   }
 });
