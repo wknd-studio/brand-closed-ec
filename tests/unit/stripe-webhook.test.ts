@@ -1,0 +1,160 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("@/lib/stripe", () => ({
+  getStripe: vi.fn(),
+}));
+
+vi.mock("@clerk/nextjs/server", () => ({
+  clerkClient: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/server-admin", () => ({
+  createAdminClient: vi.fn(),
+}));
+
+import { getStripe } from "@/lib/stripe";
+import { clerkClient } from "@clerk/nextjs/server";
+import { createAdminClient } from "@/lib/supabase/server-admin";
+import { POST } from "@/app/api/webhooks/stripe/route";
+
+function makeRequest(body = "{}", signature = "valid-sig") {
+  return new Request("http://localhost/api/webhooks/stripe", {
+    method: "POST",
+    body,
+    headers: { "stripe-signature": signature },
+  });
+}
+
+function setupStripe(constructEvent: () => unknown) {
+  vi.mocked(getStripe).mockReturnValue({
+    webhooks: {
+      constructEvent: vi.fn().mockImplementation(constructEvent),
+    },
+  } as never);
+}
+
+function setupSupabase(error: unknown = null) {
+  const mockUpdate = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ error }),
+  });
+  vi.mocked(createAdminClient).mockReturnValue({
+    from: vi.fn().mockReturnValue({ update: mockUpdate }),
+  } as never);
+  return mockUpdate;
+}
+
+function setupClerk() {
+  const mockUpdateUserMetadata = vi.fn().mockResolvedValue({});
+  vi.mocked(clerkClient).mockResolvedValue({
+    users: { updateUserMetadata: mockUpdateUserMetadata },
+  } as never);
+  return mockUpdateUserMetadata;
+}
+
+describe("POST /api/webhooks/stripe", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+  });
+
+  describe("署名検証", () => {
+    it("stripe-signature ヘッダーがない場合は 400 を返す", async () => {
+      const req = new Request("http://localhost/api/webhooks/stripe", {
+        method: "POST",
+        body: "{}",
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+    });
+
+    it("署名が不正な場合は 400 を返す", async () => {
+      setupStripe(() => {
+        throw new Error("invalid signature");
+      });
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("checkout.session.completed イベント", () => {
+    const validSession = {
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          customer: "cus_test123",
+          subscription: "sub_test123",
+          metadata: { clerk_user_id: "user_abc", plan: "entry" },
+        },
+      },
+    };
+
+    it("Supabase と Clerk を更新して 200 を返す", async () => {
+      setupStripe(() => validSession);
+      const mockUpdate = setupSupabase();
+      const mockUpdateUserMetadata = setupClerk();
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rank: "entry",
+          stripe_customer_id: "cus_test123",
+          stripe_subscription_id: "sub_test123",
+          onboarding_completed: true,
+        })
+      );
+      expect(mockUpdateUserMetadata).toHaveBeenCalledWith("user_abc", {
+        publicMetadata: { onboarding_completed: true },
+      });
+    });
+
+    it("metadata に clerk_user_id がない場合は 400 を返す", async () => {
+      setupStripe(() => ({
+        ...validSession,
+        data: {
+          object: {
+            ...validSession.data.object,
+            metadata: { plan: "entry" },
+          },
+        },
+      }));
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(400);
+    });
+
+    it("metadata に plan がない場合は 400 を返す", async () => {
+      setupStripe(() => ({
+        ...validSession,
+        data: {
+          object: {
+            ...validSession.data.object,
+            metadata: { clerk_user_id: "user_abc" },
+          },
+        },
+      }));
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(400);
+    });
+
+    it("Supabase 更新が失敗した場合は 500 を返す", async () => {
+      setupStripe(() => validSession);
+      setupSupabase({ message: "DB error" });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(500);
+    });
+  });
+
+  describe("その他のイベント", () => {
+    it("checkout.session.completed 以外は DB 操作なしで 200 を返す", async () => {
+      setupStripe(() => ({ type: "customer.subscription.updated", data: {} }));
+      const mockFrom = vi.fn();
+      vi.mocked(createAdminClient).mockReturnValue({ from: mockFrom } as never);
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+      expect(mockFrom).not.toHaveBeenCalled();
+    });
+  });
+});
