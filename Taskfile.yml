@@ -1,0 +1,35 @@
+version: "3"
+
+tasks:
+  dev:
+    desc: 全サービスを起動（Supabase → Next.js / Stripe / ngrok 並列）
+    cmds:
+      - task: supabase:start
+      - task: dev:services
+
+  supabase:start:
+    desc: Supabase ローカルDBを起動
+    cmds:
+      - supabase start
+
+  dev:services:
+    desc: Next.js・Stripe・ngrok を並列起動
+    deps:
+      - dev:next
+      - dev:stripe
+      - dev:ngrok
+
+  dev:next:
+    desc: Next.js 開発サーバー
+    cmds:
+      - pnpm next dev
+
+  dev:stripe:
+    desc: Stripe Webhook を localhost:3000 へ転送
+    cmds:
+      - stripe listen --forward-to localhost:3000/api/webhooks/stripe
+
+  dev:ngrok:
+    desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost:3000）
+    cmds:
+      - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
