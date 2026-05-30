@@ -114,15 +114,32 @@ describe("deleteAccount", () => {
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
-  it("Stripe解約失敗時もClerk削除は実行する", async () => {
+  it("Stripe解約失敗時はSupabaseをロールバックしてerrorを返す", async () => {
     setupAuth();
-    setupSupabase();
-    const { mockDeleteUser } = setupClerk();
+    const { mockUpdate } = setupSupabase();
+    setupClerk();
     setupStripe(new Error("Stripe error"));
 
     const result = await deleteAccount();
 
+    expect(result).toEqual({
+      error: expect.stringContaining("サブスクリプション"),
+    });
+    // deleted_at をnullに戻すロールバックが呼ばれる
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: null })
+    );
+  });
+
+  it("Clerk削除失敗時もsuccessを返す（deleted_atでアクセス遮断済み）", async () => {
+    setupAuth();
+    setupSupabase();
+    const { mockDeleteUser } = setupClerk();
+    mockDeleteUser.mockRejectedValueOnce(new Error("Clerk error"));
+    setupStripe();
+
+    const result = await deleteAccount();
+
     expect(result).toEqual({ success: true });
-    expect(mockDeleteUser).toHaveBeenCalledWith("user_abc");
   });
 });
