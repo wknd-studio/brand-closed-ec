@@ -26,9 +26,10 @@ export default function PlanSelector() {
 
   useEffect(() => {
     if (state && "redirectTo" in state) {
-      session?.reload().then(() => {
-        router.push(state.redirectTo);
-      });
+      // DB が正なので即遷移。session.reload() はバックグラウンドで JWT を更新し
+      // 以降のリクエストで DB クエリをスキップする高速パスを有効化する。
+      router.push(state.redirectTo);
+      session?.reload();
     }
   }, [state, session, router]);
 
