@@ -50,8 +50,8 @@ export type ProductDetail = {
   prices: Partial<Record<MemberRank, number>> | null;
   min_rank: string;
   availability: string;
-  images: string[];
-  files: { label: string | null; url: string }[];
+  images: string[] | null;
+  files: { label: string | null; url: string }[] | null;
 };
 
 export async function fetchProductById(

@@ -39,7 +39,7 @@ export default async function ProductDetailPage({
     <main className="mx-auto max-w-5xl px-6 py-10">
       <div className="grid gap-10 md:grid-cols-2">
         {/* 画像ギャラリー */}
-        <ImageGallery images={product.images.filter(Boolean)} />
+        <ImageGallery images={(product.images ?? []).filter(Boolean)} />
 
         {/* 商品情報 */}
         <div className="space-y-6">
@@ -95,11 +95,11 @@ export default async function ProductDetailPage({
           </button>
 
           {/* ファイルダウンロード */}
-          {product.files.length > 0 && (
+          {(product.files?.length ?? 0) > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-700">添付ファイル</p>
               <ul className="space-y-1">
-                {product.files.map((file, i) => (
+                {product.files!.map((file, i) => (
                   <li key={i}>
                     <a
                       href={file.url}
