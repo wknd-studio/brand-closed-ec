@@ -1,7 +1,8 @@
+import Image from "next/image";
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase/server-admin";
-import { fetchProducts, getAllowedRanks } from "@/lib/sanity/products";
-import ProductGrid from "./product-grid";
+import { fetchBrands, getAllowedRanks } from "@/lib/sanity/products";
 
 export default async function ShopPage() {
   const { userId } = await auth();
@@ -15,21 +16,43 @@ export default async function ShopPage() {
 
   const userRank = user?.rank ?? "free";
   const allowedRanks = getAllowedRanks(userRank);
-  const { products, total } = await fetchProducts({ allowedRanks });
+  const brands = await fetchBrands(allowedRanks);
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <h1 className="mb-8 text-xl font-semibold">商品一覧</h1>
-      {products.length === 0 ? (
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <h1 className="mb-8 text-xl font-semibold">ブランドから探す</h1>
+      {brands.length === 0 ? (
         <p className="text-center text-sm text-gray-400">
-          表示できる商品がありません
+          表示できるブランドがありません
         </p>
       ) : (
-        <ProductGrid
-          initialProducts={products}
-          total={total}
-          userRank={userRank}
-        />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+          {brands.map(({ brand, count, thumbnail }) => (
+            <Link
+              key={brand}
+              href={`/shop/${encodeURIComponent(brand)}`}
+              className="group overflow-hidden rounded-lg border bg-white transition hover:shadow-md"
+            >
+              <div className="relative aspect-video bg-gray-100">
+                {thumbnail ? (
+                  <Image
+                    src={thumbnail}
+                    alt={brand}
+                    fill
+                    className="object-cover transition group-hover:scale-105"
+                    sizes="(max-width: 768px) 50vw, 33vw"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gray-100" />
+                )}
+              </div>
+              <div className="p-4">
+                <p className="font-medium">{brand}</p>
+                <p className="mt-0.5 text-sm text-gray-400">{count}点</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       )}
     </main>
   );

@@ -13,9 +13,10 @@ import ImageGallery from "./image-gallery";
 export default async function ProductDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ brand: string; id: string }>;
 }) {
-  const { id } = await params;
+  const { brand: encodedBrand, id } = await params;
+  const brand = decodeURIComponent(encodedBrand);
   const { userId } = await auth();
 
   const supabase = createAdminClient();
@@ -36,19 +37,18 @@ export default async function ProductDetailPage({
     ? null
     : (product.prices?.[userRank as MemberRank] ?? null);
   const isOutOfStock = product.availability === "out_of_stock";
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
       <Link
-        href="/shop"
+        href={`/shop/${encodeURIComponent(brand)}`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
       >
-        ← 商品一覧に戻る
+        ← {brand} の商品一覧に戻る
       </Link>
       <div className="grid gap-10 md:grid-cols-2">
-        {/* 画像ギャラリー */}
         <ImageGallery images={(product.images ?? []).filter(Boolean)} />
 
-        {/* 商品情報 */}
         <div className="space-y-6">
           <div className="space-y-1">
             <p className="text-sm text-gray-500">{product.brand}</p>
@@ -67,7 +67,6 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          {/* 価格 */}
           <div className="space-y-1 rounded-lg bg-gray-50 p-4">
             <p className="text-xs text-gray-400">
               参考小売価格 ¥{product.retail_price.toLocaleString()}
@@ -84,7 +83,6 @@ export default async function ProductDetailPage({
             ) : null}
           </div>
 
-          {/* 在庫状況 */}
           <div>
             {isOutOfStock ? (
               <p className="text-sm font-medium text-red-500">在庫切れ</p>
@@ -101,7 +99,6 @@ export default async function ProductDetailPage({
             {isOutOfStock ? "在庫切れ" : "カートに追加（準備中）"}
           </button>
 
-          {/* ファイルダウンロード */}
           {(product.files?.length ?? 0) > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-700">添付ファイル</p>
@@ -124,7 +121,6 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      {/* 商品説明 */}
       {product.description && product.description.length > 0 && (
         <div className="mt-10 border-t pt-8">
           <h2 className="mb-4 text-lg font-semibold">商品説明</h2>

@@ -27,6 +27,12 @@ export function isProductAccessible(
 
 export const PAGE_SIZE = 12;
 
+export type BrandSummary = {
+  brand: string;
+  count: number;
+  thumbnail: string | null;
+};
+
 export type Product = {
   _id: string;
   name: string;
@@ -54,6 +60,38 @@ export type ProductDetail = {
   files: { label: string | null; url: string }[] | null;
 };
 
+export async function fetchBrands(
+  allowedRanks: string[]
+): Promise<BrandSummary[]> {
+  const rows = await sanityClient.fetch<
+    { brand: string; thumbnail: string | null }[]
+  >(
+    `*[
+      _type == "product" &&
+      min_rank in $allowedRanks &&
+      availability != "discontinued"
+    ] | order(brand asc) {
+      brand,
+      "thumbnail": images[0].asset->url
+    }`,
+    { allowedRanks }
+  );
+
+  const brandMap = new Map<string, { count: number; thumbnail: string | null }>(
+    []
+  );
+  for (const row of rows) {
+    if (!brandMap.has(row.brand)) {
+      brandMap.set(row.brand, { count: 0, thumbnail: row.thumbnail });
+    }
+    brandMap.get(row.brand)!.count++;
+  }
+
+  return Array.from(brandMap.entries())
+    .map(([brand, { count, thumbnail }]) => ({ brand, count, thumbnail }))
+    .sort((a, b) => a.brand.localeCompare(b.brand, "ja"));
+}
+
 export async function fetchProductById(
   id: string
 ): Promise<ProductDetail | null> {
@@ -70,9 +108,11 @@ export async function fetchProductById(
 
 export async function fetchProducts({
   allowedRanks,
+  brand,
   offset = 0,
 }: {
   allowedRanks: string[];
+  brand: string;
   offset?: number;
 }): Promise<{ products: Product[]; total: number }> {
   const [products, total] = await Promise.all([
@@ -80,20 +120,22 @@ export async function fetchProducts({
       `*[
         _type == "product" &&
         min_rank in $allowedRanks &&
-        availability != "discontinued"
+        availability != "discontinued" &&
+        brand == $brand
       ] | order(_createdAt desc) [$start...$end] {
         _id, name, brand, retail_price, is_negotiable, prices, min_rank, availability,
         "thumbnail": images[0].asset->url
       }`,
-      { allowedRanks, start: offset, end: offset + PAGE_SIZE - 1 }
+      { allowedRanks, brand, start: offset, end: offset + PAGE_SIZE - 1 }
     ),
     sanityClient.fetch<number>(
       `count(*[
         _type == "product" &&
         min_rank in $allowedRanks &&
-        availability != "discontinued"
+        availability != "discontinued" &&
+        brand == $brand
       ])`,
-      { allowedRanks }
+      { allowedRanks, brand }
     ),
   ]);
 

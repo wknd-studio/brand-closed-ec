@@ -10,10 +10,12 @@ export default function ProductGrid({
   initialProducts,
   total,
   userRank,
+  brand,
 }: {
   initialProducts: Product[];
   total: number;
   userRank: string;
+  brand: string;
 }) {
   const [products, setProducts] = useState(initialProducts);
   const [isLoading, setIsLoading] = useState(false);
@@ -23,10 +25,10 @@ export default function ProductGrid({
   const loadMore = useCallback(async () => {
     if (isLoading || !hasMore) return;
     setIsLoading(true);
-    const next = await fetchMoreProducts(products.length);
+    const next = await fetchMoreProducts(products.length, brand);
     setProducts((prev) => [...prev, ...next]);
     setIsLoading(false);
-  }, [isLoading, hasMore, products.length]);
+  }, [isLoading, hasMore, products.length, brand]);
 
   useEffect(() => {
     const el = sentinelRef.current;

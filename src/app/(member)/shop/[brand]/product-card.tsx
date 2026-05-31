@@ -15,7 +15,7 @@ export default function ProductCard({
 
   return (
     <Link
-      href={`/shop/${product._id}`}
+      href={`/shop/${encodeURIComponent(product.brand)}/${product._id}`}
       className="block overflow-hidden rounded-lg border bg-white transition hover:shadow-md"
     >
       <div className="relative aspect-square bg-gray-100">

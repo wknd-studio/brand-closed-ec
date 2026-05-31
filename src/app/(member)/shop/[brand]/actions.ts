@@ -8,7 +8,10 @@ import {
   type Product,
 } from "@/lib/sanity/products";
 
-export async function fetchMoreProducts(offset: number): Promise<Product[]> {
+export async function fetchMoreProducts(
+  offset: number,
+  brand: string
+): Promise<Product[]> {
   const { userId } = await auth();
   if (!userId) return [];
 
@@ -20,6 +23,6 @@ export async function fetchMoreProducts(offset: number): Promise<Product[]> {
     .single();
 
   const allowedRanks = getAllowedRanks(user?.rank ?? "free");
-  const { products } = await fetchProducts({ allowedRanks, offset });
+  const { products } = await fetchProducts({ allowedRanks, brand, offset });
   return products;
 }
