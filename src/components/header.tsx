@@ -1,5 +1,6 @@
 import { UserButton, Show } from "@clerk/nextjs";
 import Link from "next/link";
+import CartHeaderControls from "./cart-header-controls";
 
 export default function Header() {
   return (
@@ -9,6 +10,7 @@ export default function Header() {
       </Link>
       <Show when="signed-in">
         <div className="flex items-center gap-4">
+          <CartHeaderControls />
           <Link
             href="/settings"
             className="text-sm text-gray-500 hover:text-gray-900"
