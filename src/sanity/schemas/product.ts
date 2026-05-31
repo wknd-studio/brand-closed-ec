@@ -66,8 +66,24 @@ export const product = defineType({
       ],
     }),
     defineField({
+      name: "retail_price",
+      title: "参考小売価格（円）",
+      description: "一般小売店での参考価格。商品カードに表示されます",
+      type: "number",
+      validation: (r) => r.required().min(0),
+    }),
+    defineField({
+      name: "is_negotiable",
+      title: "要相談商品",
+      description:
+        "ONの場合、価格は個別見積もりとなりInvoiceフローで処理されます",
+      type: "boolean",
+      initialValue: false,
+    }),
+    defineField({
       name: "prices",
-      title: "ランク別価格（円）",
+      title: "ランク別仕入れ価格（円）",
+      description: "要相談商品の場合は空欄で構いません",
       type: "object",
       fields: [
         defineField({ name: "free", title: "Free", type: "number" }),
@@ -80,7 +96,13 @@ export const product = defineType({
           type: "number",
         }),
       ],
-      validation: (r) => r.required(),
+      validation: (r) =>
+        r.custom((prices, { document }) => {
+          if (!document?.is_negotiable && !prices) {
+            return "固定価格商品にはランク別価格の設定が必要です";
+          }
+          return true;
+        }),
     }),
     defineField({
       name: "min_rank",
