@@ -16,11 +16,17 @@ type FileRef = {
   asset: { _type: "reference"; _ref: string };
 };
 
+type BrandDoc = {
+  _id: string;
+  _type: "brand";
+  name: string;
+};
+
 type ProductDoc = {
   _id: string;
   _type: "product";
   name: string;
-  brand: string;
+  brand: { _type: "reference"; _ref: string };
   categories?: string[];
   description?: Block[];
   retail_price: number;
@@ -62,9 +68,15 @@ function makeBlock(key: string, text: string): Block {
   };
 }
 
+// ブランドドキュメント定義
+const brandDefs: BrandDoc[] = [
+  { _id: "seed-brand-a", _type: "brand", name: "ブランドA" },
+  { _id: "seed-brand-b", _type: "brand", name: "ブランドB" },
+  { _id: "seed-brand-c", _type: "brand", name: "ブランドC" },
+];
+
 const IMAGE_SEEDS = ["handbag", "scarf", "coat", "wallet", "knit", "luxury"];
 
-// ファイルを持たせる商品とそのラベル（prod-003 と prod-005）
 const FILE_DEFS: Record<string, { label: string; filename: string }> = {
   "seed-prod-003": {
     label: "素材スペックシート（PDF）",
@@ -76,9 +88,7 @@ const FILE_DEFS: Record<string, { label: string; filename: string }> = {
   },
 };
 
-// 最小限の有効なPDFをメモリ上で生成（外部URLに依存しない）
 function createMinimalPdf(title: string): Buffer {
-  // 各オブジェクトの開始バイトオフセットを事前計算して xref を正確に構築する
   const header = "%PDF-1.4\n";
   const obj1 = "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n\n";
   const obj2 = "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n\n";
@@ -149,6 +159,9 @@ async function uploadFile(filename: string, title: string): Promise<string> {
   });
   return asset._id;
 }
+
+// ブランド名 → ドキュメントID のマッピング
+const brandIdByName = Object.fromEntries(brandDefs.map((b) => [b.name, b._id]));
 
 const productDefs = [
   {
@@ -279,19 +292,31 @@ const productDefs = [
 ];
 
 async function seed() {
-  console.log(`Sanity ダミー商品を登録します（${productDefs.length}件）`);
   console.log(`プロジェクト: ${process.env.NEXT_PUBLIC_SANITY_PROJECT_ID}`);
   console.log(`データセット: ${process.env.NEXT_PUBLIC_SANITY_DATASET}\n`);
 
+  // ブランドドキュメントを先に登録
+  console.log(`ブランドを登録します（${brandDefs.length}件）`);
+  for (const brand of brandDefs) {
+    await client.createOrReplace(brand);
+    console.log(`  登録完了: ${brand.name} (${brand._id})`);
+  }
+
+  // 商品ドキュメントを登録
+  console.log(`\n商品を登録します（${productDefs.length}件）`);
   for (let i = 0; i < productDefs.length; i++) {
     const def = productDefs[i];
     process.stdout.write(`  [${i + 1}/${productDefs.length}] ${def.name}...`);
 
     const assetId = await uploadImage(IMAGE_SEEDS[i]);
+    const { brand: brandName, ...productProps } = def;
+    const brandId = brandIdByName[brandName];
+    if (!brandId) throw new Error(`ブランドIDが見つかりません: ${brandName}`);
 
     const doc: ProductDoc = {
-      ...def,
+      ...productProps,
       _type: "product",
+      brand: { _type: "reference", _ref: brandId },
       images: [
         {
           _type: "image",
@@ -320,7 +345,9 @@ async function seed() {
       ? "[要相談]"
       : `¥${def.retail_price.toLocaleString()}`;
     const fileNote = fileDef ? " +ファイル" : "";
-    console.log(` 完了 (min_rank: ${def.min_rank}, ${label}${fileNote})`);
+    console.log(
+      ` 完了 (${def.brand}, min_rank: ${def.min_rank}, ${label}${fileNote})`
+    );
   }
 
   console.log("\n完了しました。Sanity Studio で確認してください。");

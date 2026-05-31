@@ -32,7 +32,6 @@ export type BrandSummary = {
   count: number;
   thumbnail: string | null;
 };
-
 export type Product = {
   _id: string;
   name: string;
@@ -44,7 +43,6 @@ export type Product = {
   availability: string;
   thumbnail: string | null;
 };
-
 export type ProductDetail = {
   _id: string;
   name: string;
@@ -66,27 +64,17 @@ export async function fetchBrands(
   const rows = await sanityClient.fetch<
     { brand: string; thumbnail: string | null }[]
   >(
-    `*[
-      _type == "product" &&
-      min_rank in $allowedRanks &&
-      availability != "discontinued"
-    ] | order(brand asc) {
-      brand,
-      "thumbnail": images[0].asset->url
-    }`,
+    `*[_type=="product"&&min_rank in $allowedRanks&&availability!="discontinued"]|order(brand->name asc){"brand":brand->name,"thumbnail":images[0].asset->url}`,
     { allowedRanks }
   );
-
   const brandMap = new Map<string, { count: number; thumbnail: string | null }>(
     []
   );
   for (const row of rows) {
-    if (!brandMap.has(row.brand)) {
+    if (!brandMap.has(row.brand))
       brandMap.set(row.brand, { count: 0, thumbnail: row.thumbnail });
-    }
     brandMap.get(row.brand)!.count++;
   }
-
   return Array.from(brandMap.entries())
     .map(([brand, { count, thumbnail }]) => ({ brand, count, thumbnail }))
     .sort((a, b) => a.brand.localeCompare(b.brand, "ja"));
@@ -96,12 +84,7 @@ export async function fetchProductById(
   id: string
 ): Promise<ProductDetail | null> {
   return sanityClient.fetch<ProductDetail | null>(
-    `*[_type == "product" && _id == $id][0] {
-      _id, name, brand, categories, description,
-      retail_price, is_negotiable, prices, min_rank, availability,
-      "images": images[].asset->url,
-      "files": files[]{ label, "url": asset->url }
-    }`,
+    `*[_type=="product"&&_id==$id][0]{_id,name,"brand":brand->name,categories,description,retail_price,is_negotiable,prices,min_rank,availability,"images":images[].asset->url,"files":files[]{label,"url":asset->url}}`,
     { id }
   );
 }
@@ -117,27 +100,13 @@ export async function fetchProducts({
 }): Promise<{ products: Product[]; total: number }> {
   const [products, total] = await Promise.all([
     sanityClient.fetch<Product[]>(
-      `*[
-        _type == "product" &&
-        min_rank in $allowedRanks &&
-        availability != "discontinued" &&
-        brand == $brand
-      ] | order(_createdAt desc) [$start...$end] {
-        _id, name, brand, retail_price, is_negotiable, prices, min_rank, availability,
-        "thumbnail": images[0].asset->url
-      }`,
+      `*[_type=="product"&&min_rank in $allowedRanks&&availability!="discontinued"&&brand->name==$brand]|order(_createdAt desc)[$start...$end]{_id,name,"brand":brand->name,retail_price,is_negotiable,prices,min_rank,availability,"thumbnail":images[0].asset->url}`,
       { allowedRanks, brand, start: offset, end: offset + PAGE_SIZE - 1 }
     ),
     sanityClient.fetch<number>(
-      `count(*[
-        _type == "product" &&
-        min_rank in $allowedRanks &&
-        availability != "discontinued" &&
-        brand == $brand
-      ])`,
+      `count(*[_type=="product"&&min_rank in $allowedRanks&&availability!="discontinued"&&brand->name==$brand])`,
       { allowedRanks, brand }
     ),
   ]);
-
   return { products, total };
 }
