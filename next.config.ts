@@ -2,6 +2,14 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "cdn.sanity.io",
+      },
+    ],
+  },
   // Cloudflare Pages (@opennextjs/cloudflare) ではNode.jsランタイムは使わない
   // Clerk・Supabase・StripeはEdge Runtime対応済み
   headers: async () => [
