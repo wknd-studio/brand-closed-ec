@@ -7,6 +7,7 @@ const isPublic = createRouteMatcher([
   "/welcome(.*)",
   "/sign-up(.*)",
   "/sign-in(.*)",
+  "/withdrawn",
   "/api/webhooks/(.*)",
 ]);
 
@@ -49,9 +50,13 @@ export default clerkMiddleware(async (auth, req) => {
   // JWT が古いか未更新の場合は DB を正とする
   const { data } = await supabaseAdmin()
     .from("users")
-    .select("onboarding_completed")
+    .select("onboarding_completed, deleted_at")
     .eq("clerk_user_id", userId!)
     .single();
+
+  if (data?.deleted_at) {
+    return NextResponse.redirect(new URL("/withdrawn", req.url));
+  }
 
   if (!data?.onboarding_completed) {
     return NextResponse.redirect(new URL("/onboarding/plan", req.url));
