@@ -22,12 +22,18 @@ type BrandDoc = {
   name: string;
 };
 
+type CategoryDoc = {
+  _id: string;
+  _type: "category";
+  name: string;
+};
+
 type ProductDoc = {
   _id: string;
   _type: "product";
   name: string;
   brand: { _type: "reference"; _ref: string };
-  categories?: string[];
+  categories?: { _type: "reference"; _key: string; _ref: string }[];
   description?: Block[];
   retail_price: number;
   is_negotiable: boolean;
@@ -74,6 +80,25 @@ const brandDefs: BrandDoc[] = [
   { _id: "seed-brand-b", _type: "brand", name: "ブランドB" },
   { _id: "seed-brand-c", _type: "brand", name: "ブランドC" },
 ];
+
+// カテゴリドキュメント定義
+const categoryDefs: CategoryDoc[] = [
+  { _id: "seed-cat-bag", _type: "category", name: "バッグ" },
+  { _id: "seed-cat-leather", _type: "category", name: "レザー" },
+  { _id: "seed-cat-scarf", _type: "category", name: "スカーフ" },
+  { _id: "seed-cat-silk", _type: "category", name: "シルク" },
+  { _id: "seed-cat-outer", _type: "category", name: "アウター" },
+  { _id: "seed-cat-wool", _type: "category", name: "ウール" },
+  { _id: "seed-cat-wallet", _type: "category", name: "財布" },
+  { _id: "seed-cat-tops", _type: "category", name: "トップス" },
+  { _id: "seed-cat-cashmere", _type: "category", name: "カシミヤ" },
+  { _id: "seed-cat-limited", _type: "category", name: "限定品" },
+];
+
+// カテゴリ名 → ドキュメントID のマッピング
+const categoryIdByName = Object.fromEntries(
+  categoryDefs.map((c) => [c.name, c._id])
+);
 
 const IMAGE_SEEDS = ["handbag", "scarf", "coat", "wallet", "knit", "luxury"];
 
@@ -302,6 +327,13 @@ async function seed() {
     console.log(`  登録完了: ${brand.name} (${brand._id})`);
   }
 
+  // カテゴリドキュメントを登録
+  console.log(`\nカテゴリを登録します（${categoryDefs.length}件）`);
+  for (const cat of categoryDefs) {
+    await client.createOrReplace(cat);
+    console.log(`  登録完了: ${cat.name} (${cat._id})`);
+  }
+
   // 商品ドキュメントを登録
   console.log(`\n商品を登録します（${productDefs.length}件）`);
   for (let i = 0; i < productDefs.length; i++) {
@@ -309,7 +341,11 @@ async function seed() {
     process.stdout.write(`  [${i + 1}/${productDefs.length}] ${def.name}...`);
 
     const assetId = await uploadImage(IMAGE_SEEDS[i]);
-    const { brand: brandName, ...productProps } = def;
+    const {
+      brand: brandName,
+      categories: categoryNames,
+      ...productProps
+    } = def;
     const brandId = brandIdByName[brandName];
     if (!brandId) throw new Error(`ブランドIDが見つかりません: ${brandName}`);
 
@@ -317,6 +353,15 @@ async function seed() {
       ...productProps,
       _type: "product",
       brand: { _type: "reference", _ref: brandId },
+      categories: categoryNames?.map((name, ci) => {
+        const ref = categoryIdByName[name];
+        if (!ref) throw new Error(`カテゴリIDが見つかりません: ${name}`);
+        return {
+          _type: "reference" as const,
+          _key: `cat-${def._id}-${ci}`,
+          _ref: ref,
+        };
+      }),
       images: [
         {
           _type: "image",

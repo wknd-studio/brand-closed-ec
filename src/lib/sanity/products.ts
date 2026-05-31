@@ -84,7 +84,7 @@ export async function fetchProductById(
   id: string
 ): Promise<ProductDetail | null> {
   return sanityClient.fetch<ProductDetail | null>(
-    `*[_type=="product"&&_id==$id][0]{_id,name,"brand":brand->name,categories,description,retail_price,is_negotiable,prices,min_rank,availability,"images":images[].asset->url,"files":files[]{label,"url":asset->url}}`,
+    `*[_type=="product"&&_id==$id][0]{_id,name,"brand":brand->name,"categories":categories[]->name,description,retail_price,is_negotiable,prices,min_rank,availability,"images":images[].asset->url,"files":files[]{label,"url":asset->url}}`,
     { id }
   );
 }

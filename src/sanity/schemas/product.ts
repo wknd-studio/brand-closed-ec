@@ -30,7 +30,7 @@ export const product = defineType({
       name: "categories",
       title: "カテゴリ",
       type: "array",
-      of: [{ type: "string" }],
+      of: [{ type: "reference", to: [{ type: "category" }] }],
     }),
     defineField({
       name: "description",
