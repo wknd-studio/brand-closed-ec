@@ -4,16 +4,27 @@ import { structureTool } from "sanity/structure";
 
 import { schemaTypes } from "./src/sanity/schemas";
 
-export default defineConfig({
-  name: "brand-studio",
-  title: "BRAND Studio",
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ?? "0syeievd",
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET ?? "staging",
-  plugins: [
-    structureTool(),
-    visionTool(), // GROQ クエリをStudio上で試せる開発ツール
-  ],
-  schema: {
-    types: schemaTypes,
+const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ?? "0syeievd";
+const plugins = [structureTool(), visionTool()];
+const schema = { types: schemaTypes };
+
+export default defineConfig([
+  {
+    name: "staging",
+    title: "BRAND Studio (Staging)",
+    basePath: "/staging",
+    projectId,
+    dataset: "staging",
+    plugins,
+    schema,
   },
-});
+  {
+    name: "production",
+    title: "BRAND Studio (Production)",
+    basePath: "/production",
+    projectId,
+    dataset: "production",
+    plugins,
+    schema,
+  },
+]);

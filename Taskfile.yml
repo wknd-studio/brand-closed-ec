@@ -33,3 +33,13 @@ tasks:
     desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost:3000）
     cmds:
       - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
+
+  sanity:seed:
+    desc: Sanity にダミー商品を登録する（開発用・べき等）
+    cmds:
+      - pnpm tsx scripts/seed-products.ts
+
+  sanity:deploy:
+    desc: Sanity Studio をホスティングサービスにデプロイする
+    cmds:
+      - pnpm sanity deploy
