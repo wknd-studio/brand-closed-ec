@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import type { MemberRank, Product } from "@/lib/sanity/products";
 
 export default function ProductCard({
@@ -13,7 +14,10 @@ export default function ProductCard({
     : (product.prices?.[userRank as MemberRank] ?? null);
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-white">
+    <Link
+      href={`/shop/${encodeURIComponent(product.brand)}/${product._id}`}
+      className="block overflow-hidden rounded-lg border bg-white transition hover:shadow-md"
+    >
       <div className="relative aspect-square bg-gray-100">
         {product.thumbnail ? (
           <Image
@@ -47,6 +51,6 @@ export default function ProductCard({
           <p className="text-sm font-semibold">¥{rankPrice.toLocaleString()}</p>
         ) : null}
       </div>
-    </div>
+    </Link>
   );
 }

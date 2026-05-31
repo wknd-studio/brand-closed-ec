@@ -21,15 +21,16 @@ export const product = defineType({
     }),
     defineField({
       name: "brand",
-      title: "ブランド名",
-      type: "string",
+      title: "ブランド",
+      type: "reference",
+      to: [{ type: "brand" }],
       validation: (r) => r.required(),
     }),
     defineField({
       name: "categories",
       title: "カテゴリ",
       type: "array",
-      of: [{ type: "string" }],
+      of: [{ type: "reference", to: [{ type: "category" }] }],
     }),
     defineField({
       name: "description",
@@ -131,7 +132,7 @@ export const product = defineType({
   preview: {
     select: {
       title: "name",
-      subtitle: "brand",
+      subtitle: "brand.name",
       media: "images.0",
     },
   },

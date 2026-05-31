@@ -2,7 +2,7 @@ version: "3"
 
 tasks:
   dev:
-    desc: 全サービスを起動（Supabase → Next.js / Stripe / ngrok 並列）
+    desc: 開発サーバーを起動（Supabase → Next.js + Stripe 並列）※ ngrok は task dev:ngrok で別途起動
     cmds:
       - task: supabase:start
       - task: dev:services
@@ -13,11 +13,10 @@ tasks:
       - supabase start
 
   dev:services:
-    desc: Next.js・Stripe・ngrok を並列起動
+    desc: Next.js・Stripe を並列起動
     deps:
       - dev:next
       - dev:stripe
-      - dev:ngrok
 
   dev:next:
     desc: Next.js 開発サーバー
