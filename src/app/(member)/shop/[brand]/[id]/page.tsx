@@ -9,6 +9,7 @@ import {
   type MemberRank,
 } from "@/lib/sanity/products";
 import ImageGallery from "./image-gallery";
+import AddToCartButton from "./add-to-cart-button";
 
 export default async function ProductDetailPage({
   params,
@@ -91,13 +92,14 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          {/* カートに追加（CART-01 実装後に有効化） */}
-          <button
-            disabled
-            className="w-full rounded-lg bg-gray-900 px-6 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {isOutOfStock ? "在庫切れ" : "カートに追加（準備中）"}
-          </button>
+          <AddToCartButton
+            item={{
+              productId: id,
+              productName: product.name,
+              unitPrice: rankPrice,
+            }}
+            isOutOfStock={isOutOfStock}
+          />
 
           {(product.files?.length ?? 0) > 0 && (
             <div className="space-y-2">
