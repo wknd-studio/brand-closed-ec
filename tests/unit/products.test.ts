@@ -1,4 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("next-sanity", () => ({
+  createClient: vi.fn(() => ({ fetch: vi.fn() })),
+}));
+
 import { getAllowedRanks } from "@/lib/sanity/products";
 
 describe("getAllowedRanks", () => {
