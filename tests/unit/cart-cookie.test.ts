@@ -14,8 +14,20 @@ const empty: Cart = { items: [] };
 
 const withItems: Cart = {
   items: [
-    { productId: "p1", productName: "商品A", quantity: 2, unitPrice: 10_000 },
-    { productId: "p2", productName: "商品B", quantity: 1, unitPrice: null },
+    {
+      productId: "p1",
+      productName: "商品A",
+      thumbnail: null,
+      quantity: 2,
+      unitPrice: 10_000,
+    },
+    {
+      productId: "p2",
+      productName: "商品B",
+      thumbnail: null,
+      quantity: 1,
+      unitPrice: null,
+    },
   ],
 };
 
@@ -40,12 +52,14 @@ describe("addItem", () => {
     const result = addItem(empty, {
       productId: "p1",
       productName: "商品A",
+      thumbnail: null,
       unitPrice: 10_000,
     });
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual({
       productId: "p1",
       productName: "商品A",
+      thumbnail: null,
       quantity: 1,
       unitPrice: 10_000,
     });
@@ -55,6 +69,7 @@ describe("addItem", () => {
     const result = addItem(withItems, {
       productId: "p1",
       productName: "商品A",
+      thumbnail: null,
       unitPrice: 10_000,
     });
     expect(result.items.find((i) => i.productId === "p1")?.quantity).toBe(3);
@@ -64,7 +79,12 @@ describe("addItem", () => {
   it("quantity を指定すると既存アイテムにその分が加算される", () => {
     const result = addItem(
       withItems,
-      { productId: "p1", productName: "商品A", unitPrice: 10_000 },
+      {
+        productId: "p1",
+        productName: "商品A",
+        thumbnail: null,
+        unitPrice: 10_000,
+      },
       3
     );
     expect(result.items.find((i) => i.productId === "p1")?.quantity).toBe(5);
@@ -73,7 +93,12 @@ describe("addItem", () => {
   it("quantity を指定すると新規アイテムにその quantity で追加される", () => {
     const result = addItem(
       empty,
-      { productId: "p3", productName: "商品C", unitPrice: 5_000 },
+      {
+        productId: "p3",
+        productName: "商品C",
+        thumbnail: null,
+        unitPrice: 5_000,
+      },
       4
     );
     expect(result.items[0].quantity).toBe(4);
@@ -83,6 +108,7 @@ describe("addItem", () => {
     const result = addItem(empty, {
       productId: "p3",
       productName: "要相談商品",
+      thumbnail: null,
       unitPrice: null,
     });
     expect(result.items[0].unitPrice).toBeNull();
@@ -138,7 +164,13 @@ describe("calcCartFixedTotal", () => {
   it("全商品が要相談の場合は0を返す", () => {
     const cart: Cart = {
       items: [
-        { productId: "p1", productName: "A", quantity: 3, unitPrice: null },
+        {
+          productId: "p1",
+          productName: "A",
+          thumbnail: null,
+          quantity: 3,
+          unitPrice: null,
+        },
       ],
     };
     expect(calcCartFixedTotal(cart)).toBe(0);

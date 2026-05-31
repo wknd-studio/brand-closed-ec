@@ -22,6 +22,9 @@ type CartContextValue = {
   confirmedAmount: number;
   monthlyLimit: number;
   totalUsed: number;
+  isOpen: boolean;
+  openCart: () => void;
+  closeCart: () => void;
   addToCart: (
     item: Omit<CartItem, "quantity">,
     quantity?: number
@@ -47,6 +50,10 @@ export function CartProvider({
   initialCart,
 }: Props) {
   const [cart, setCart] = useState<Cart>(initialCart);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const openCart = useCallback(() => setIsOpen(true), []);
+  const closeCart = useCallback(() => setIsOpen(false), []);
 
   const updateCart = useCallback((next: Cart) => {
     setCart(next);
@@ -99,6 +106,9 @@ export function CartProvider({
         confirmedAmount,
         monthlyLimit,
         totalUsed,
+        isOpen,
+        openCart,
+        closeCart,
         addToCart,
         updateItemQuantity,
         removeFromCart,
