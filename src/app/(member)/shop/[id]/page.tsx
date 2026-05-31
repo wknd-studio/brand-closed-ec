@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { PortableText } from "@portabletext/react";
 import { createAdminClient } from "@/lib/supabase/server-admin";
@@ -37,6 +38,12 @@ export default async function ProductDetailPage({
   const isOutOfStock = product.availability === "out_of_stock";
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
+      <Link
+        href="/shop"
+        className="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
+      >
+        ← 商品一覧に戻る
+      </Link>
       <div className="grid gap-10 md:grid-cols-2">
         {/* 画像ギャラリー */}
         <ImageGallery images={(product.images ?? []).filter(Boolean)} />
