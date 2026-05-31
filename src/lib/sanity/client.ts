@@ -5,4 +5,5 @@ export const sanityClient = createClient({
   dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
   apiVersion: "2026-05-17",
   useCdn: false, // サーバーサイドから最新データを取得するため CDN を使わない
+  token: process.env.SANITY_API_TOKEN, // 非公開データセットへの読み取りアクセス用（サーバーサイドのみ）
 });
