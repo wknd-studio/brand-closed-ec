@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCart } from "@/lib/cart/context";
 
 export default function CartHeaderControls() {
-  const { cart, totalUsed, monthlyLimit } = useCart();
+  const { cart, totalUsed, monthlyLimit, openCart } = useCart();
   const cartCount = cart.items.length;
   const usageRate =
     monthlyLimit > 0 ? Math.min(totalUsed / monthlyLimit, 1) : 0;
@@ -36,10 +35,10 @@ export default function CartHeaderControls() {
       </div>
 
       {/* カートアイコン */}
-      <Link
-        href="/cart"
+      <button
+        onClick={openCart}
         className="relative text-gray-500 hover:text-gray-900"
-        aria-label="カート"
+        aria-label="カートを開く"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -60,7 +59,7 @@ export default function CartHeaderControls() {
             {cartCount > 99 ? "99+" : cartCount}
           </span>
         )}
-      </Link>
+      </button>
     </div>
   );
 }

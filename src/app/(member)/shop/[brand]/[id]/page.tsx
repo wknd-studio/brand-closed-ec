@@ -96,6 +96,7 @@ export default async function ProductDetailPage({
             item={{
               productId: id,
               productName: product.name,
+              thumbnail: product.images?.[0] ?? null,
               unitPrice: rankPrice,
             }}
             isOutOfStock={isOutOfStock}
