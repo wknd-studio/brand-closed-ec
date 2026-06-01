@@ -57,9 +57,19 @@ export async function createAddress(formData: FormData): Promise<ActionResult> {
     .single();
   if (!user) return { error: "ユーザーが見つかりません" };
 
+  const type = formData.get("type") as AddressType;
+
+  const { count } = await supabase
+    .from("addresses")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("type", type);
+
+  const isFirst = (count ?? 0) === 0;
+
   const { error } = await supabase.from("addresses").insert({
     user_id: user.id,
-    type: formData.get("type") as AddressType,
+    type,
     recipient_last_name: String(formData.get("recipient_last_name") ?? ""),
     recipient_first_name: String(formData.get("recipient_first_name") ?? ""),
     postal_code: String(formData.get("postal_code") ?? ""),
@@ -68,6 +78,7 @@ export async function createAddress(formData: FormData): Promise<ActionResult> {
     address_line1: String(formData.get("address_line1") ?? ""),
     address_line2: (formData.get("address_line2") as string) || null,
     phone_number: String(formData.get("phone_number") ?? ""),
+    is_default: isFirst,
   });
 
   if (error) return { error: "住所の登録に失敗しました" };

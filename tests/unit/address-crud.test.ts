@@ -28,16 +28,37 @@ function setupAuth(userId: string | null = "clerk_user_1") {
 // createAddress
 // -----------------------------------------------
 
-function setupSupabaseForCreate(error: unknown = null) {
-  const mockInsert = vi.fn().mockResolvedValue({ error });
+function setupSupabaseForCreate({
+  insertError = null,
+  existingCount = 0,
+}: { insertError?: unknown; existingCount?: number } = {}) {
+  const mockInsert = vi.fn().mockResolvedValue({ error: insertError });
+
+  // count用: .select().eq().eq() → { count }
+  const mockCountEq2 = vi.fn().mockResolvedValue({ count: existingCount });
+  const mockCountEq1 = vi.fn().mockReturnValue({ eq: mockCountEq2 });
+  const mockCountSelect = vi.fn().mockReturnValue({ eq: mockCountEq1 });
+
+  let fromCallCount = 0;
   vi.mocked(createAdminClient).mockReturnValue({
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { id: "db_user_1" } }),
-        }),
-      }),
-      insert: mockInsert,
+    from: vi.fn().mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        // users取得
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: "db_user_1" } }),
+            }),
+          }),
+        };
+      }
+      if (fromCallCount === 2) {
+        // 件数チェック
+        return { select: mockCountSelect };
+      }
+      // insert
+      return { insert: mockInsert };
     }),
   } as never);
   return { mockInsert };
@@ -167,9 +188,45 @@ describe("createAddress", () => {
     expect(mockInsert).toHaveBeenCalledOnce();
   });
 
+  it("同タイプの住所が0件の場合はis_default=trueで登録される", async () => {
+    setupAuth();
+    const { mockInsert } = setupSupabaseForCreate({ existingCount: 0 });
+    const fd = new FormData();
+    fd.set("type", "shipping");
+    fd.set("recipient_last_name", "山田");
+    fd.set("recipient_first_name", "太郎");
+    fd.set("postal_code", "1500001");
+    fd.set("prefecture", "東京都");
+    fd.set("city", "渋谷区");
+    fd.set("address_line1", "神南1-1-1");
+    fd.set("phone_number", "09012345678");
+    await createAddress(fd);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ is_default: true })
+    );
+  });
+
+  it("同タイプの住所が既存の場合はis_default=falseで登録される", async () => {
+    setupAuth();
+    const { mockInsert } = setupSupabaseForCreate({ existingCount: 1 });
+    const fd = new FormData();
+    fd.set("type", "shipping");
+    fd.set("recipient_last_name", "鈴木");
+    fd.set("recipient_first_name", "花子");
+    fd.set("postal_code", "1600022");
+    fd.set("prefecture", "東京都");
+    fd.set("city", "新宿区");
+    fd.set("address_line1", "新宿1-1-1");
+    fd.set("phone_number", "09087654321");
+    await createAddress(fd);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ is_default: false })
+    );
+  });
+
   it("DB挿入に失敗した場合はエラーを返す", async () => {
     setupAuth();
-    setupSupabaseForCreate({ message: "DB error" });
+    setupSupabaseForCreate({ insertError: { message: "DB error" } });
     const result = await createAddress(new FormData());
     expect(result).toEqual({ error: "住所の登録に失敗しました" });
   });
