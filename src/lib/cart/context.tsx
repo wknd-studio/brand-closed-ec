@@ -14,6 +14,7 @@ import {
   removeItem,
   clearCart,
   calcCartFixedTotal,
+  calcItemUpdateError,
 } from "./cookie";
 import type { Cart, CartItem } from "./types";
 
@@ -29,7 +30,10 @@ type CartContextValue = {
     item: Omit<CartItem, "quantity">,
     quantity?: number
   ) => { error?: string };
-  updateItemQuantity: (productId: string, quantity: number) => void;
+  updateItemQuantity: (
+    productId: string,
+    quantity: number
+  ) => { error?: string };
   removeFromCart: (productId: string) => void;
   emptyCart: () => void;
 };
@@ -80,10 +84,19 @@ export function CartProvider({
   );
 
   const updateItemQuantity = useCallback(
-    (productId: string, quantity: number) => {
+    (productId: string, quantity: number): { error?: string } => {
+      const error = calcItemUpdateError({
+        cart,
+        productId,
+        newQuantity: quantity,
+        confirmedAmount,
+        monthlyLimit,
+      });
+      if (error) return { error };
       updateCart(updateQuantity(cart, productId, quantity));
+      return {};
     },
-    [cart, updateCart]
+    [cart, confirmedAmount, monthlyLimit, updateCart]
   );
 
   const removeFromCart = useCallback(
