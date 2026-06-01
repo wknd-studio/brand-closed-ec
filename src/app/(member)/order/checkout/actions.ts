@@ -143,7 +143,7 @@ export async function placeOrder(
 
   if (orderError || !order) return { error: "注文の記録に失敗しました" };
 
-  await supabase.from("order_items").insert(
+  const { error: itemsError } = await supabase.from("order_items").insert(
     lineItems.map((i) => ({
       order_id: order.id,
       sanity_product_id: i.productId,
@@ -154,26 +154,55 @@ export async function placeOrder(
     }))
   );
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const session = await getStripe().checkout.sessions.create({
-    mode: "payment",
-    line_items: lineItems.map((i) => ({
-      price_data: {
-        currency: "jpy",
-        unit_amount: i.unitPrice!,
-        product_data: { name: i.productName },
-      },
-      quantity: i.quantity,
-    })),
-    success_url: `${baseUrl}/order/complete?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/order/checkout`,
-    metadata: { order_id: order.id },
-  });
+  if (itemsError) {
+    console.error("[注文] order_items INSERT失敗:", itemsError);
+    await supabase.from("orders").delete().eq("id", order.id);
+    return { error: "注文明細の記録に失敗しました" };
+  }
 
-  await supabase
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  let sessionId: string;
+  let sessionUrl: string;
+  try {
+    const session = await getStripe().checkout.sessions.create({
+      mode: "payment",
+      line_items: lineItems.map((i) => ({
+        price_data: {
+          currency: "jpy",
+          unit_amount: i.unitPrice!,
+          product_data: { name: i.productName },
+        },
+        quantity: i.quantity,
+      })),
+      success_url: `${baseUrl}/order/complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/order/checkout`,
+      metadata: { order_id: order.id },
+    });
+    sessionId = session.id;
+    sessionUrl = session.url!;
+  } catch (err) {
+    console.error("[注文] Stripe Session作成失敗:", err);
+    await supabase.from("order_items").delete().eq("order_id", order.id);
+    await supabase.from("orders").delete().eq("id", order.id);
+    return {
+      error:
+        "決済ページの作成に失敗しました。しばらく経ってから再度お試しください。",
+    };
+  }
+
+  const { error: updateError } = await supabase
     .from("orders")
-    .update({ stripe_checkout_session_id: session.id })
+    .update({ stripe_checkout_session_id: sessionId })
     .eq("id", order.id);
 
-  redirect(session.url!);
+  if (updateError) {
+    console.error("[注文] stripe_checkout_session_id更新失敗:", updateError);
+    await supabase.from("order_items").delete().eq("order_id", order.id);
+    await supabase.from("orders").delete().eq("id", order.id);
+    return {
+      error: "注文の記録に失敗しました。しばらく経ってから再度お試しください。",
+    };
+  }
+
+  redirect(sessionUrl);
 }
