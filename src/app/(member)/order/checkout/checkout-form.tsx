@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import AddressSelector from "./address-selector";
+import { placeOrder } from "./actions";
 import type { Database } from "@/types/database.types";
 
 type Address = Database["public"]["Tables"]["addresses"]["Row"];
@@ -26,9 +27,19 @@ export default function CheckoutForm({
 }: Props) {
   const [shippingId, setShippingId] = useState(defaultId(shippingAddresses));
   const [billingId, setBillingId] = useState(defaultId(billingAddresses));
+  const [isPending, setIsPending] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const canOrder =
     !hasOutOfStock && shippingId !== "" && billingId !== "" && fixedTotal >= 0;
+
+  async function handleOrder() {
+    setOrderError(null);
+    setIsPending(true);
+    const result = await placeOrder(shippingId, billingId);
+    setIsPending(false);
+    if (result && "error" in result) setOrderError(result.error);
+  }
 
   return (
     <div className="space-y-8">
@@ -55,12 +66,19 @@ export default function CheckoutForm({
         </p>
       )}
 
+      {orderError && (
+        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+          {orderError}
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
         <button
-          disabled={!canOrder}
+          onClick={handleOrder}
+          disabled={!canOrder || isPending}
           className="w-full rounded-lg bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          注文を確定する
+          {isPending ? "処理中..." : "注文を確定する"}
         </button>
         <Link
           href="/shop"
