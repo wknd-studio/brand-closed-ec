@@ -21,16 +21,6 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "キャンセル",
 };
 
-const PAID_OR_LATER = new Set([
-  "paid",
-  "sourcing",
-  "ordered",
-  "preparing",
-  "shipping",
-  "delivered",
-  "cancelled",
-]);
-
 export default async function AdminOrderDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = createAdminClient();
@@ -39,7 +29,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
     supabase
       .from("orders")
       .select(
-        "id, created_at, status, users(first_name, last_name, email, stripe_customer_id)"
+        "id, created_at, status, payment_flow, users(first_name, last_name, email, stripe_customer_id)"
       )
       .eq("id", id)
       .single(),
@@ -61,8 +51,6 @@ export default async function AdminOrderDetailPage({ params }: Props) {
     0
   );
 
-  const isPaidOrLater = PAID_OR_LATER.has(order.status);
-
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
       <div className="mb-6 flex items-center gap-4">
@@ -81,19 +69,17 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       </div>
 
       <div className="space-y-6">
-        {/* ステータスステッパー（paid以降） */}
-        {isPaidOrLater && (
-          <section className="rounded-lg border p-5">
-            <h2 className="mb-4 text-sm font-medium text-gray-700">
-              注文ステータス
-            </h2>
-            <StatusStepper
-              orderId={order.id}
-              currentStatus={order.status}
-              isPaidOrLater={isPaidOrLater}
-            />
-          </section>
-        )}
+        {/* ステータスステッパー */}
+        <section className="rounded-lg border p-5">
+          <h2 className="mb-4 text-sm font-medium text-gray-700">
+            注文ステータス
+          </h2>
+          <StatusStepper
+            orderId={order.id}
+            currentStatus={order.status}
+            paymentFlow={order.payment_flow}
+          />
+        </section>
 
         {/* 会員情報 */}
         <section className="rounded-lg border p-5">
