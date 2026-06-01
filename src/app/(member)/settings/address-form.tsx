@@ -61,10 +61,49 @@ const PREFECTURES = [
   "沖縄県",
 ];
 
+async function fetchAddressByZipcode(zipcode: string): Promise<{
+  prefecture: string;
+  city: string;
+  address_line1: string;
+} | null> {
+  try {
+    const res = await fetch(
+      `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${zipcode}`
+    );
+    const data = await res.json();
+    const result = data?.results?.[0];
+    if (!result) return null;
+    return {
+      prefecture: result.address1,
+      city: result.address2,
+      address_line1: result.address3,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function AddressForm(props: Props) {
   const addr = props.mode === "edit" ? props.address : null;
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [prefecture, setPrefecture] = useState(addr?.prefecture ?? "");
+  const [city, setCity] = useState(addr?.city ?? "");
+  const [addressLine1, setAddressLine1] = useState(addr?.address_line1 ?? "");
+  const [zipcodeLoading, setZipcodeLoading] = useState(false);
+
+  async function handleZipcodeChange(value: string) {
+    const digits = value.replace(/\D/g, "");
+    if (digits.length !== 7) return;
+    setZipcodeLoading(true);
+    const result = await fetchAddressByZipcode(digits);
+    setZipcodeLoading(false);
+    if (result) {
+      setPrefecture(result.prefecture);
+      setCity(result.city);
+      setAddressLine1(result.address_line1);
+    }
+  }
 
   async function handleSubmit(formData: FormData) {
     setError(null);
@@ -116,20 +155,29 @@ export default function AddressForm(props: Props) {
 
           <div>
             <label className="mb-1 block text-xs text-gray-500">郵便番号</label>
-            <input
-              name="postal_code"
-              defaultValue={addr?.postal_code ?? ""}
-              required
-              placeholder="1500001"
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-            />
+            <div className="relative">
+              <input
+                name="postal_code"
+                defaultValue={addr?.postal_code ?? ""}
+                required
+                placeholder="1500001"
+                onChange={(e) => handleZipcodeChange(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+              />
+              {zipcodeLoading && (
+                <span className="absolute right-3 top-2 text-xs text-gray-400">
+                  検索中…
+                </span>
+              )}
+            </div>
           </div>
 
           <div>
             <label className="mb-1 block text-xs text-gray-500">都道府県</label>
             <select
               name="prefecture"
-              defaultValue={addr?.prefecture ?? ""}
+              value={prefecture}
+              onChange={(e) => setPrefecture(e.target.value)}
               required
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
             >
@@ -146,7 +194,8 @@ export default function AddressForm(props: Props) {
             <label className="mb-1 block text-xs text-gray-500">市区町村</label>
             <input
               name="city"
-              defaultValue={addr?.city ?? ""}
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
               required
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
@@ -158,7 +207,8 @@ export default function AddressForm(props: Props) {
             </label>
             <input
               name="address_line1"
-              defaultValue={addr?.address_line1 ?? ""}
+              value={addressLine1}
+              onChange={(e) => setAddressLine1(e.target.value)}
               required
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
