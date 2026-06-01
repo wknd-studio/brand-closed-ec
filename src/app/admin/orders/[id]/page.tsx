@@ -2,10 +2,34 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import InvoiceForm from "./invoice-form";
+import StatusStepper from "./status-stepper";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_payment: "決済待ち",
+  confirming: "注文確認中",
+  invoice_sent: "請求書送付済み",
+  paid: "入金確認済み",
+  sourcing: "手配中",
+  ordered: "発注完了",
+  preparing: "発送準備中",
+  shipping: "配送中",
+  delivered: "配送完了",
+  cancelled: "キャンセル",
+};
+
+const PAID_OR_LATER = new Set([
+  "paid",
+  "sourcing",
+  "ordered",
+  "preparing",
+  "shipping",
+  "delivered",
+  "cancelled",
+]);
 
 export default async function AdminOrderDetailPage({ params }: Props) {
   const { id } = await params;
@@ -18,7 +42,6 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         "id, created_at, status, users(first_name, last_name, email, stripe_customer_id)"
       )
       .eq("id", id)
-      .eq("status", "confirming")
       .single(),
     supabase
       .from("order_items")
@@ -31,13 +54,14 @@ export default async function AdminOrderDetailPage({ params }: Props) {
   if (!order) notFound();
 
   const user = Array.isArray(order.users) ? order.users[0] : order.users;
-
   const fixedItems = (items ?? []).filter((i) => !i.is_negotiable);
   const negotiableItems = (items ?? []).filter((i) => i.is_negotiable);
   const fixedTotal = fixedItems.reduce(
     (sum, i) => sum + (i.unit_price_snapshot ?? 0) * i.quantity,
     0
   );
+
+  const isPaidOrLater = PAID_OR_LATER.has(order.status);
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -51,9 +75,26 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         <h1 className="text-xl font-semibold">
           注文 {order.id.slice(0, 8).toUpperCase()}
         </h1>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+          {STATUS_LABEL[order.status] ?? order.status}
+        </span>
       </div>
 
       <div className="space-y-6">
+        {/* ステータスステッパー（paid以降） */}
+        {isPaidOrLater && (
+          <section className="rounded-lg border p-5">
+            <h2 className="mb-4 text-sm font-medium text-gray-700">
+              注文ステータス
+            </h2>
+            <StatusStepper
+              orderId={order.id}
+              currentStatus={order.status}
+              isPaidOrLater={isPaidOrLater}
+            />
+          </section>
+        )}
+
         {/* 会員情報 */}
         <section className="rounded-lg border p-5">
           <h2 className="mb-3 text-sm font-medium text-gray-700">会員情報</h2>
@@ -111,7 +152,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         {negotiableItems.length > 0 && (
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
             <h2 className="mb-3 text-sm font-medium text-amber-800">
-              要相談商品（Invoice発行時に価格を入力）
+              要相談商品
             </h2>
             <ul className="divide-y divide-amber-200">
               {negotiableItems.map((item) => (
@@ -119,6 +160,8 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                   <p className="font-medium">{item.product_name_snapshot}</p>
                   <p className="text-xs text-amber-700">
                     数量：{item.quantity}
+                    {item.unit_price_snapshot !== null &&
+                      ` / ¥${item.unit_price_snapshot.toLocaleString()}`}
                   </p>
                 </li>
               ))}
@@ -126,8 +169,8 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </section>
         )}
 
-        {/* Invoice発行フォーム */}
-        {negotiableItems.length > 0 && (
+        {/* Invoice発行フォーム（confirming かつ要相談商品ありの場合のみ） */}
+        {order.status === "confirming" && negotiableItems.length > 0 && (
           <section className="rounded-lg border p-5">
             <InvoiceForm orderId={order.id} negotiableItems={negotiableItems} />
           </section>

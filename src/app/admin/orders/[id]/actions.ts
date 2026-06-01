@@ -228,3 +228,96 @@ export async function issueInvoice(
 
   redirect("/admin/orders");
 }
+
+// ステータス遷移マップ（線形・前進のみ）
+const NEXT_STATUS: Record<string, string> = {
+  paid: "sourcing",
+  sourcing: "ordered",
+  ordered: "preparing",
+  preparing: "shipping",
+  shipping: "delivered",
+};
+
+type StatusActionResult = { error: string };
+
+export async function advanceOrderStatus(
+  orderId: string,
+  formData: FormData
+): Promise<StatusActionResult | never> {
+  const { sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
+  if (role !== "admin") return { error: "権限がありません" };
+
+  const supabase = createAdminClient();
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, status")
+    .eq("id", orderId)
+    .single();
+
+  if (!order) return { error: "注文が見つかりません" };
+
+  const nextStatus = NEXT_STATUS[order.status];
+  if (!nextStatus) return { error: "これ以上ステータスを進められません" };
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({
+      status: nextStatus as
+        | "sourcing"
+        | "ordered"
+        | "preparing"
+        | "shipping"
+        | "delivered",
+    })
+    .eq("id", orderId);
+
+  if (updateError) {
+    console.error("[ステータス更新] 失敗:", updateError);
+    return { error: "ステータスの更新に失敗しました" };
+  }
+
+  if (nextStatus === "shipping") {
+    const trackingNumber = formData.get("tracking_number") as string | null;
+    // 追跡番号は DB マイグレーション後に保存予定
+    console.log(
+      `[発送] 注文ID: ${orderId} 追跡番号: ${trackingNumber ?? "未入力"}`
+    );
+    // 発送通知メール（BRAND-69）
+    console.log(`[発送通知メール予定] 注文ID: ${orderId}`);
+  }
+
+  if (nextStatus === "delivered") {
+    // 配達完了通知メール（BRAND-69）
+    console.log(`[配達完了通知メール予定] 注文ID: ${orderId}`);
+  }
+
+  redirect(`/admin/orders/${orderId}`);
+}
+
+export async function cancelOrder(
+  orderId: string,
+  reason: string
+): Promise<StatusActionResult | void> {
+  const { sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
+  if (role !== "admin") return { error: "権限がありません" };
+
+  const supabase = createAdminClient();
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({ status: "cancelled" })
+    .eq("id", orderId);
+
+  if (updateError) {
+    console.error("[キャンセル] 失敗:", updateError);
+    return { error: "キャンセルに失敗しました" };
+  }
+
+  // キャンセル理由は DB マイグレーション後に保存予定
+  console.log(`[キャンセル] 注文ID: ${orderId} 理由: ${reason}`);
+
+  redirect("/admin/orders");
+}
