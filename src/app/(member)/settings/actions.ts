@@ -1,8 +1,49 @@
 "use server";
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { getStripe } from "@/lib/stripe";
+import type { Database } from "@/types/database.types";
+
+type AddressType = Database["public"]["Enums"]["address_type"];
+type SetDefaultResult = { success: true } | { error: string };
+
+export async function setDefaultAddress(
+  addressId: string,
+  type: AddressType
+): Promise<SetDefaultResult> {
+  const { userId } = await auth();
+  if (!userId) return { error: "認証されていません" };
+
+  const supabase = createAdminClient();
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_user_id", userId)
+    .single();
+
+  if (!user) return { error: "ユーザーが見つかりません" };
+
+  const { error: resetError } = await supabase
+    .from("addresses")
+    .update({ is_default: false })
+    .eq("user_id", user.id)
+    .eq("type", type);
+
+  if (resetError) return { error: "デフォルト住所の更新に失敗しました" };
+
+  const { error: setError } = await supabase
+    .from("addresses")
+    .update({ is_default: true })
+    .eq("id", addressId);
+
+  if (setError) return { error: "デフォルト住所の更新に失敗しました" };
+
+  revalidatePath("/settings");
+  return { success: true };
+}
 
 type DeleteAccountResult = { success: true } | { error: string };
 
