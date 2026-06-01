@@ -2,11 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { useCart } from "@/lib/cart/context";
 import { calcCartFixedTotal } from "@/lib/cart/cookie";
 
 export default function CartSidebar() {
-  const { cart, isOpen, closeCart, monthlyLimit, totalUsed } = useCart();
+  const {
+    cart,
+    isOpen,
+    closeCart,
+    monthlyLimit,
+    totalUsed,
+    updateItemQuantity,
+  } = useCart();
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const items = cart.items;
   const cartFixedTotal = calcCartFixedTotal(cart);
   const remaining = monthlyLimit - totalUsed;
@@ -125,9 +134,49 @@ export default function CartSidebar() {
                       {item.unitPrice !== null
                         ? `¥${item.unitPrice.toLocaleString()}`
                         : "価格要相談"}
-                      <span className="mx-1">×</span>
-                      {item.quantity}
                     </p>
+                    {/* 数量変更 */}
+                    <div className="flex items-center gap-1 pt-1">
+                      <button
+                        onClick={() => {
+                          setErrors((prev) => ({
+                            ...prev,
+                            [item.productId]: "",
+                          }));
+                          updateItemQuantity(item.productId, item.quantity - 1);
+                        }}
+                        disabled={item.quantity <= 1}
+                        className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
+                        aria-label="数量を減らす"
+                      >
+                        −
+                      </button>
+                      <span className="w-7 text-center text-sm tabular-nums">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const result = updateItemQuantity(
+                            item.productId,
+                            item.quantity + 1
+                          );
+                          setErrors((prev) => ({
+                            ...prev,
+                            [item.productId]: result.error ?? "",
+                          }));
+                        }}
+                        disabled={item.availability === "out_of_stock"}
+                        className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
+                        aria-label="数量を増やす"
+                      >
+                        ＋
+                      </button>
+                    </div>
+                    {errors[item.productId] && (
+                      <p className="text-xs text-red-600">
+                        {errors[item.productId]}
+                      </p>
+                    )}
                   </div>
 
                   {/* 小計 */}
@@ -149,11 +198,15 @@ export default function CartSidebar() {
                 <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between text-gray-500">
                     <span>月間仕入れ残量</span>
-                    <span
-                      className={`font-medium tabular-nums ${remaining < 0 ? "text-red-600" : "text-gray-900"}`}
-                    >
-                      ¥{remaining.toLocaleString()}
-                    </span>
+                    {monthlyLimit === Number.MAX_SAFE_INTEGER ? (
+                      <span className="font-medium text-gray-900">無制限</span>
+                    ) : (
+                      <span
+                        className={`font-medium tabular-nums ${remaining < 0 ? "text-red-600" : "text-gray-900"}`}
+                      >
+                        ¥{remaining.toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

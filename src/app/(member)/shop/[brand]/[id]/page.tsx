@@ -98,6 +98,10 @@ export default async function ProductDetailPage({
               productName: product.name,
               thumbnail: product.images?.[0] ?? null,
               unitPrice: rankPrice,
+              availability: product.availability as
+                | "available"
+                | "out_of_stock"
+                | "discontinued",
             }}
             isOutOfStock={isOutOfStock}
           />

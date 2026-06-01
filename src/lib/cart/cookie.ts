@@ -76,3 +76,33 @@ export function calcCartFixedTotal(cart: Cart): number {
     return sum + item.unitPrice * item.quantity;
   }, 0);
 }
+
+export function calcItemUpdateError({
+  cart,
+  productId,
+  newQuantity,
+  confirmedAmount,
+  monthlyLimit,
+}: {
+  cart: Cart;
+  productId: string;
+  newQuantity: number;
+  confirmedAmount: number;
+  monthlyLimit: number;
+}): string | undefined {
+  if (monthlyLimit === 0) return undefined;
+  const item = cart.items.find((i) => i.productId === productId);
+  if (!item || item.unitPrice === null) return undefined;
+  if (newQuantity <= item.quantity) return undefined;
+  const othersTotal = cart.items.reduce((sum, i) => {
+    if (i.productId === productId || i.unitPrice === null) return sum;
+    return sum + i.unitPrice * i.quantity;
+  }, 0);
+  if (
+    confirmedAmount + othersTotal + item.unitPrice * newQuantity >
+    monthlyLimit
+  ) {
+    return `月間仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため変更できません`;
+  }
+  return undefined;
+}

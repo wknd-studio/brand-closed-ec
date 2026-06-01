@@ -5,8 +5,11 @@ import { useCart } from "@/lib/cart/context";
 export default function CartHeaderControls() {
   const { cart, totalUsed, monthlyLimit, openCart } = useCart();
   const cartCount = cart.items.length;
+  const isUnlimited = monthlyLimit === Number.MAX_SAFE_INTEGER;
   const usageRate =
-    monthlyLimit > 0 ? Math.min(totalUsed / monthlyLimit, 1) : 0;
+    monthlyLimit > 0 && !isUnlimited
+      ? Math.min(totalUsed / monthlyLimit, 1)
+      : 0;
 
   const barColor =
     usageRate >= 0.9
@@ -19,17 +22,19 @@ export default function CartHeaderControls() {
     <div className="flex items-center gap-3">
       {/* 月次使用率バー */}
       <div className="flex items-center gap-1.5">
-        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-200">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-            style={{ width: `${usageRate * 100}%` }}
-          />
-        </div>
+        {!isUnlimited && (
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-200">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+              style={{ width: `${usageRate * 100}%` }}
+            />
+          </div>
+        )}
         <span className="text-xs tabular-nums text-gray-500">
           ¥{totalUsed.toLocaleString()}
           <span className="text-gray-400">
             {" "}
-            / ¥{monthlyLimit.toLocaleString()}
+            / {isUnlimited ? "無制限" : `¥${monthlyLimit.toLocaleString()}`}
           </span>
         </span>
       </div>

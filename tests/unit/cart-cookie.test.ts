@@ -20,6 +20,7 @@ const withItems: Cart = {
       thumbnail: null,
       quantity: 2,
       unitPrice: 10_000,
+      availability: "available",
     },
     {
       productId: "p2",
@@ -27,6 +28,7 @@ const withItems: Cart = {
       thumbnail: null,
       quantity: 1,
       unitPrice: null,
+      availability: "available",
     },
   ],
 };
@@ -54,6 +56,7 @@ describe("addItem", () => {
       productName: "商品A",
       thumbnail: null,
       unitPrice: 10_000,
+      availability: "available",
     });
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual({
@@ -62,6 +65,7 @@ describe("addItem", () => {
       thumbnail: null,
       quantity: 1,
       unitPrice: 10_000,
+      availability: "available",
     });
   });
 
@@ -71,6 +75,7 @@ describe("addItem", () => {
       productName: "商品A",
       thumbnail: null,
       unitPrice: 10_000,
+      availability: "available",
     });
     expect(result.items.find((i) => i.productId === "p1")?.quantity).toBe(3);
     expect(result.items).toHaveLength(2);
@@ -84,6 +89,7 @@ describe("addItem", () => {
         productName: "商品A",
         thumbnail: null,
         unitPrice: 10_000,
+        availability: "available",
       },
       3
     );
@@ -98,6 +104,7 @@ describe("addItem", () => {
         productName: "商品C",
         thumbnail: null,
         unitPrice: 5_000,
+        availability: "available",
       },
       4
     );
@@ -110,6 +117,7 @@ describe("addItem", () => {
       productName: "要相談商品",
       thumbnail: null,
       unitPrice: null,
+      availability: "available",
     });
     expect(result.items[0].unitPrice).toBeNull();
   });
@@ -170,6 +178,7 @@ describe("calcCartFixedTotal", () => {
           thumbnail: null,
           quantity: 3,
           unitPrice: null,
+          availability: "available",
         },
       ],
     };
