@@ -35,12 +35,8 @@ export default function AddressSelector({
   const [shippingId, setShippingId] = useState(defaultId(shippingAddresses));
   const [billingId, setBillingId] = useState(defaultId(billingAddresses));
   const [sameAsShipping, setSameAsShipping] = useState(false);
-  const [showShippingForm, setShowShippingForm] = useState(
-    shippingAddresses.length === 0
-  );
-  const [showBillingForm, setShowBillingForm] = useState(
-    billingAddresses.length === 0 && !sameAsShipping
-  );
+  const [showShippingForm, setShowShippingForm] = useState(false);
+  const [showBillingForm, setShowBillingForm] = useState(false);
 
   function handleShippingChange(id: string) {
     setShippingId(id);
