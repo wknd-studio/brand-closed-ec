@@ -64,6 +64,17 @@ const PRODUCTS = [
   },
 ];
 
+const NEGOTIABLE_PRODUCTS = [
+  {
+    _id: "prod_neg",
+    name: "要相談商品A",
+    is_negotiable: true,
+    prices: {},
+    availability: "available",
+    thumbnail: null,
+  },
+];
+
 const CART_COOKIE = encodeURIComponent(
   JSON.stringify({
     items: [
@@ -72,6 +83,21 @@ const CART_COOKIE = encodeURIComponent(
         productName: "商品A",
         quantity: 2,
         unitPrice: 10_000,
+        availability: "available",
+        thumbnail: null,
+      },
+    ],
+  })
+);
+
+const NEGOTIABLE_CART_COOKIE = encodeURIComponent(
+  JSON.stringify({
+    items: [
+      {
+        productId: "prod_neg",
+        productName: "要相談商品A",
+        quantity: 1,
+        unitPrice: null,
         availability: "available",
         thumbnail: null,
       },
@@ -116,6 +142,17 @@ function buildSupabaseMock({
 } = {}) {
   const orderDeleteEq = vi.fn().mockResolvedValue({ error: null });
   const orderItemsDeleteEq = vi.fn().mockResolvedValue({ error: null });
+  const orderInsertFn = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: { id: "order_1" },
+        error: null,
+      }),
+    }),
+  });
+  const orderItemsInsertFn = vi
+    .fn()
+    .mockResolvedValue({ error: orderItemsInsertError });
 
   vi.mocked(createAdminClient).mockReturnValue({
     from: vi.fn().mockImplementation((table: string) => {
@@ -140,14 +177,7 @@ function buildSupabaseMock({
               }),
             }),
           }),
-          insert: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: "order_1" },
-                error: null,
-              }),
-            }),
-          }),
+          insert: orderInsertFn,
           update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: orderUpdateError }),
           }),
@@ -160,7 +190,7 @@ function buildSupabaseMock({
               not: vi.fn().mockResolvedValue({ data: [] }),
             }),
           }),
-          insert: vi.fn().mockResolvedValue({ error: orderItemsInsertError }),
+          insert: orderItemsInsertFn,
           delete: vi.fn().mockReturnValue({ eq: orderItemsDeleteEq }),
         };
       if (table === "addresses")
@@ -175,7 +205,12 @@ function buildSupabaseMock({
     }),
   } as never);
 
-  return { orderDeleteEq, orderItemsDeleteEq };
+  return {
+    orderDeleteEq,
+    orderItemsDeleteEq,
+    orderInsertFn,
+    orderItemsInsertFn,
+  };
 }
 
 function setupSupabaseForCheckout() {
@@ -291,6 +326,67 @@ describe("placeOrder - エラーハンドリング（ロールバック）", () 
       error: "注文の記録に失敗しました。しばらく経ってから再度お試しください。",
     });
     expect(orderItemsDeleteEq).toHaveBeenCalledWith("order_id", "order_1");
+    expect(orderDeleteEq).toHaveBeenCalledWith("id", "order_1");
+  });
+});
+
+describe("placeOrder - Invoice フロー", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("要相談商品を含む注文を confirming で記録し invoice-complete へリダイレクト", async () => {
+    setupAuth();
+    setupCookies(NEGOTIABLE_CART_COOKIE);
+    vi.mocked(fetchProductsByIds).mockResolvedValue(
+      NEGOTIABLE_PRODUCTS as never
+    );
+    const { orderInsertFn } = buildSupabaseMock();
+
+    await placeOrder("addr_ship", "addr_bill");
+
+    expect(orderInsertFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payment_flow: "invoice",
+        status: "confirming",
+      })
+    );
+    expect(redirect).toHaveBeenCalledWith(
+      "/order/invoice-complete?order_id=order_1"
+    );
+  });
+
+  it("要相談商品の unit_price_snapshot は NULL で記録される", async () => {
+    setupAuth();
+    setupCookies(NEGOTIABLE_CART_COOKIE);
+    vi.mocked(fetchProductsByIds).mockResolvedValue(
+      NEGOTIABLE_PRODUCTS as never
+    );
+    const mocks = buildSupabaseMock();
+
+    await placeOrder("addr_ship", "addr_bill");
+
+    expect(mocks.orderItemsInsertFn).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          is_negotiable: true,
+          unit_price_snapshot: null,
+        }),
+      ])
+    );
+  });
+
+  it("order_items INSERT失敗時はorderを削除してエラーを返す", async () => {
+    setupAuth();
+    setupCookies(NEGOTIABLE_CART_COOKIE);
+    vi.mocked(fetchProductsByIds).mockResolvedValue(
+      NEGOTIABLE_PRODUCTS as never
+    );
+    const { orderDeleteEq } = buildSupabaseMock({
+      orderItemsInsertError: { message: "DB error" },
+    });
+
+    const result = await placeOrder("addr_ship", "addr_bill");
+
+    expect(result).toEqual({ error: "注文明細の記録に失敗しました" });
     expect(orderDeleteEq).toHaveBeenCalledWith("id", "order_1");
   });
 });

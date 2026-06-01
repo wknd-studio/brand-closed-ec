@@ -122,8 +122,44 @@ export async function placeOrder(
   if (!shippingAddr || !billingAddr) return { error: "住所が見つかりません" };
 
   if (hasNegotiable) {
-    // Invoice フロー（BRAND-63で実装）
-    return { error: "Invoiceフローは準備中です" };
+    // Invoice フロー
+    const { data: invoiceOrder, error: invoiceOrderError } = await supabase
+      .from("orders")
+      .insert({
+        user_id: user.id,
+        payment_flow: "invoice",
+        status: "confirming",
+        rank_at_order: userRank,
+        monthly_limit_at_order: monthlyLimit,
+        shipping_address_snapshot: shippingAddr,
+        billing_address_snapshot: billingAddr,
+      })
+      .select()
+      .single();
+
+    if (invoiceOrderError || !invoiceOrder)
+      return { error: "注文の記録に失敗しました" };
+
+    const { error: invoiceItemsError } = await supabase
+      .from("order_items")
+      .insert(
+        lineItems.map((i) => ({
+          order_id: invoiceOrder.id,
+          sanity_product_id: i.productId,
+          product_name_snapshot: i.productName,
+          quantity: i.quantity,
+          unit_price_snapshot: i.isNegotiable ? null : i.unitPrice,
+          is_negotiable: i.isNegotiable,
+        }))
+      );
+
+    if (invoiceItemsError) {
+      console.error("[Invoice注文] order_items INSERT失敗:", invoiceItemsError);
+      await supabase.from("orders").delete().eq("id", invoiceOrder.id);
+      return { error: "注文明細の記録に失敗しました" };
+    }
+
+    redirect(`/order/invoice-complete?order_id=${invoiceOrder.id}`);
   }
 
   // Checkout フロー
