@@ -139,7 +139,7 @@ export default function AddressForm(props: Props) {
                 name="recipient_last_name"
                 defaultValue={addr?.recipient_last_name ?? ""}
                 required
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
               />
             </div>
             <div>
@@ -148,7 +148,7 @@ export default function AddressForm(props: Props) {
                 name="recipient_first_name"
                 defaultValue={addr?.recipient_first_name ?? ""}
                 required
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
               />
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function AddressForm(props: Props) {
                 required
                 placeholder="1500001"
                 onChange={(e) => handleZipcodeChange(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
               />
               {zipcodeLoading && (
                 <span className="absolute right-3 top-2 text-xs text-gray-400">
@@ -179,7 +179,7 @@ export default function AddressForm(props: Props) {
               value={prefecture}
               onChange={(e) => setPrefecture(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
             >
               <option value="">選択してください</option>
               {PREFECTURES.map((p) => (
@@ -197,7 +197,7 @@ export default function AddressForm(props: Props) {
               value={city}
               onChange={(e) => setCity(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
 
@@ -210,7 +210,7 @@ export default function AddressForm(props: Props) {
               value={addressLine1}
               onChange={(e) => setAddressLine1(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
 
@@ -221,7 +221,7 @@ export default function AddressForm(props: Props) {
             <input
               name="address_line2"
               defaultValue={addr?.address_line2 ?? ""}
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
 
@@ -232,7 +232,7 @@ export default function AddressForm(props: Props) {
               defaultValue={addr?.phone_number ?? ""}
               required
               placeholder="09012345678"
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
 
