@@ -110,7 +110,13 @@ function setupCookies(cartValue?: string) {
   } as never);
 }
 
-function setupSupabaseForCheckout() {
+function buildSupabaseMock({
+  orderItemsInsertError = null as unknown,
+  orderUpdateError = null as unknown,
+} = {}) {
+  const orderDeleteEq = vi.fn().mockResolvedValue({ error: null });
+  const orderItemsDeleteEq = vi.fn().mockResolvedValue({ error: null });
+
   vi.mocked(createAdminClient).mockReturnValue({
     from: vi.fn().mockImplementation((table: string) => {
       if (table === "users")
@@ -143,8 +149,9 @@ function setupSupabaseForCheckout() {
             }),
           }),
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
+            eq: vi.fn().mockResolvedValue({ error: orderUpdateError }),
           }),
+          delete: vi.fn().mockReturnValue({ eq: orderDeleteEq }),
         };
       if (table === "order_items")
         return {
@@ -153,7 +160,8 @@ function setupSupabaseForCheckout() {
               not: vi.fn().mockResolvedValue({ data: [] }),
             }),
           }),
-          insert: vi.fn().mockResolvedValue({ error: null }),
+          insert: vi.fn().mockResolvedValue({ error: orderItemsInsertError }),
+          delete: vi.fn().mockReturnValue({ eq: orderItemsDeleteEq }),
         };
       if (table === "addresses")
         return {
@@ -166,6 +174,12 @@ function setupSupabaseForCheckout() {
       return {};
     }),
   } as never);
+
+  return { orderDeleteEq, orderItemsDeleteEq };
+}
+
+function setupSupabaseForCheckout() {
+  buildSupabaseMock();
 }
 
 describe("placeOrder", () => {
@@ -206,5 +220,77 @@ describe("placeOrder", () => {
     expect(redirect).toHaveBeenCalledWith(
       "https://checkout.stripe.com/session_1"
     );
+  });
+});
+
+describe("placeOrder - エラーハンドリング（ロールバック）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function setupStripeSuccess() {
+    vi.mocked(getStripe).mockReturnValue({
+      checkout: {
+        sessions: {
+          create: vi.fn().mockResolvedValue({
+            id: "cs_1",
+            url: "https://checkout.stripe.com/session_1",
+          }),
+        },
+      },
+    } as never);
+  }
+
+  it("order_items INSERT失敗時はorderを削除してエラーを返す", async () => {
+    setupAuth();
+    setupCookies(CART_COOKIE);
+    vi.mocked(fetchProductsByIds).mockResolvedValue(PRODUCTS as never);
+    const { orderDeleteEq } = buildSupabaseMock({
+      orderItemsInsertError: { message: "DB error" },
+    });
+
+    const result = await placeOrder("addr_ship", "addr_bill");
+
+    expect(result).toEqual({ error: "注文明細の記録に失敗しました" });
+    expect(orderDeleteEq).toHaveBeenCalledWith("id", "order_1");
+  });
+
+  it("Stripe Session作成失敗時はorder・order_itemsを削除してエラーを返す", async () => {
+    setupAuth();
+    setupCookies(CART_COOKIE);
+    vi.mocked(fetchProductsByIds).mockResolvedValue(PRODUCTS as never);
+    const { orderDeleteEq, orderItemsDeleteEq } = buildSupabaseMock();
+    vi.mocked(getStripe).mockReturnValue({
+      checkout: {
+        sessions: {
+          create: vi.fn().mockRejectedValue(new Error("Stripe error")),
+        },
+      },
+    } as never);
+
+    const result = await placeOrder("addr_ship", "addr_bill");
+
+    expect(result).toEqual({
+      error:
+        "決済ページの作成に失敗しました。しばらく経ってから再度お試しください。",
+    });
+    expect(orderItemsDeleteEq).toHaveBeenCalledWith("order_id", "order_1");
+    expect(orderDeleteEq).toHaveBeenCalledWith("id", "order_1");
+  });
+
+  it("stripe_checkout_session_id UPDATE失敗時はorder・order_itemsを削除してエラーを返す", async () => {
+    setupAuth();
+    setupCookies(CART_COOKIE);
+    vi.mocked(fetchProductsByIds).mockResolvedValue(PRODUCTS as never);
+    const { orderDeleteEq, orderItemsDeleteEq } = buildSupabaseMock({
+      orderUpdateError: { message: "DB error" },
+    });
+    setupStripeSuccess();
+
+    const result = await placeOrder("addr_ship", "addr_bill");
+
+    expect(result).toEqual({
+      error: "注文の記録に失敗しました。しばらく経ってから再度お試しください。",
+    });
+    expect(orderItemsDeleteEq).toHaveBeenCalledWith("order_id", "order_1");
+    expect(orderDeleteEq).toHaveBeenCalledWith("id", "order_1");
   });
 });
