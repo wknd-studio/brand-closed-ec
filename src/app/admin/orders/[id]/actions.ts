@@ -141,6 +141,11 @@ export async function issueInvoice(
         metadata: { supabase_user_id: (user as { id: string }).id },
       });
       stripeCustomerId = customer.id;
+      // 新規作成した Customer ID を users テーブルに保存
+      await supabase
+        .from("users")
+        .update({ stripe_customer_id: stripeCustomerId })
+        .eq("id", (user as { id: string }).id);
     } catch (err) {
       console.error("[Invoice発行] Stripe Customer作成失敗:", err);
       return { error: "Stripe顧客の作成に失敗しました" };

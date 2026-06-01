@@ -105,6 +105,12 @@ function buildSupabaseMock({
           }),
           update: vi.fn().mockReturnValue({ eq: updateItemEq }),
         };
+      if (table === "users")
+        return {
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
       return {};
     }),
   } as never);
