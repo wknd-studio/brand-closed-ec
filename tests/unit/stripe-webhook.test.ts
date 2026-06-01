@@ -33,12 +33,42 @@ function setupStripe(constructEvent: () => unknown) {
   } as never);
 }
 
-function setupSupabase(error: unknown = null) {
+function setupSupabaseForOnboarding(error: unknown = null) {
   const mockUpdate = vi.fn().mockReturnValue({
     eq: vi.fn().mockResolvedValue({ error }),
   });
   vi.mocked(createAdminClient).mockReturnValue({
     from: vi.fn().mockReturnValue({ update: mockUpdate }),
+  } as never);
+  return mockUpdate;
+}
+
+function setupSupabaseForOrderPayment({
+  orderStatus = "pending_payment",
+  orderFound = true,
+  updateError = null as unknown,
+} = {}) {
+  const mockUpdate = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ error: updateError }),
+  });
+  vi.mocked(createAdminClient).mockReturnValue({
+    from: vi.fn().mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: orderFound
+                  ? { id: "order_1", status: orderStatus }
+                  : null,
+              }),
+            }),
+          }),
+          update: mockUpdate,
+        };
+      }
+      return {};
+    }),
   } as never);
   return mockUpdate;
 }
@@ -76,11 +106,12 @@ describe("POST /api/webhooks/stripe", () => {
     });
   });
 
-  describe("checkout.session.completed イベント", () => {
+  describe("checkout.session.completed - subscription mode（オンボーディング）", () => {
     const validSession = {
       type: "checkout.session.completed",
       data: {
         object: {
+          mode: "subscription",
           customer: "cus_test123",
           subscription: "sub_test123",
           metadata: { clerk_user_id: "user_abc", plan: "entry" },
@@ -90,7 +121,7 @@ describe("POST /api/webhooks/stripe", () => {
 
     it("Supabase と Clerk を更新して 200 を返す", async () => {
       setupStripe(() => validSession);
-      const mockUpdate = setupSupabase();
+      const mockUpdate = setupSupabaseForOnboarding();
       const mockUpdateUserMetadata = setupClerk();
 
       const res = await POST(makeRequest());
@@ -113,10 +144,7 @@ describe("POST /api/webhooks/stripe", () => {
       setupStripe(() => ({
         ...validSession,
         data: {
-          object: {
-            ...validSession.data.object,
-            metadata: { plan: "entry" },
-          },
+          object: { ...validSession.data.object, metadata: { plan: "entry" } },
         },
       }));
       const res = await POST(makeRequest());
@@ -139,7 +167,65 @@ describe("POST /api/webhooks/stripe", () => {
 
     it("Supabase 更新が失敗した場合は 500 を返す", async () => {
       setupStripe(() => validSession);
-      setupSupabase({ message: "DB error" });
+      setupSupabaseForOnboarding({ message: "DB error" });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(500);
+    });
+  });
+
+  describe("checkout.session.completed - payment mode（注文フロー）", () => {
+    const makeEvent = (overrides: Record<string, unknown> = {}) => ({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_order_1",
+          mode: "payment",
+          metadata: { order_id: "order_1" },
+          ...overrides,
+        },
+      },
+    });
+
+    it("pending_payment の注文を paid に更新して 200 を返す", async () => {
+      setupStripe(() => makeEvent());
+      const mockUpdate = setupSupabaseForOrderPayment({
+        orderStatus: "pending_payment",
+      });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+      expect(mockUpdate).toHaveBeenCalledWith({ status: "paid" });
+    });
+
+    it("すでに paid の注文はスキップして 200 を返す（冪等性）", async () => {
+      setupStripe(() => makeEvent());
+      const mockUpdate = setupSupabaseForOrderPayment({ orderStatus: "paid" });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it("metadata に order_id がない場合は 400 を返す", async () => {
+      setupStripe(() => makeEvent({ metadata: {} }));
+      setupSupabaseForOrderPayment();
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(400);
+    });
+
+    it("注文が見つからない場合は 400 を返す", async () => {
+      setupStripe(() => makeEvent());
+      setupSupabaseForOrderPayment({ orderFound: false });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(400);
+    });
+
+    it("DB 更新が失敗した場合は 500 を返す", async () => {
+      setupStripe(() => makeEvent());
+      setupSupabaseForOrderPayment({ updateError: { message: "DB error" } });
 
       const res = await POST(makeRequest());
       expect(res.status).toBe(500);
