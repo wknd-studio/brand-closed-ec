@@ -14,8 +14,11 @@ export default function CartSidebar() {
     monthlyLimit,
     totalUsed,
     updateItemQuantity,
+    removeFromCart,
+    emptyCart,
   } = useCart();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const items = cart.items;
   const cartFixedTotal = calcCartFixedTotal(cart);
   const remaining = monthlyLimit - totalUsed;
@@ -29,6 +32,35 @@ export default function CartSidebar() {
           onClick={closeCart}
           aria-hidden="true"
         />
+      )}
+
+      {/* すべて削除 確認モーダル */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <p className="text-sm font-medium">カートをすべて削除しますか？</p>
+            <p className="mt-1 text-xs text-gray-500">
+              この操作は元に戻せません。
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  emptyCart();
+                  setShowClearConfirm(false);
+                }}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ドロワー */}
@@ -179,13 +211,20 @@ export default function CartSidebar() {
                     )}
                   </div>
 
-                  {/* 小計 */}
-                  <div className="flex-shrink-0 text-right">
+                  {/* 小計＋削除 */}
+                  <div className="flex flex-shrink-0 flex-col items-end gap-1">
                     <p className="text-sm font-medium tabular-nums">
                       {item.unitPrice !== null
                         ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
                         : "—"}
                     </p>
+                    <button
+                      onClick={() => removeFromCart(item.productId)}
+                      className="text-xs text-gray-400 hover:text-red-500"
+                      aria-label={`${item.productName}を削除`}
+                    >
+                      削除
+                    </button>
                   </div>
                 </li>
               ))}
@@ -224,14 +263,22 @@ export default function CartSidebar() {
                 </p>
               )}
 
-              {/* 発注ボタン */}
-              <Link
-                href="/order/checkout"
-                onClick={closeCart}
-                className="block w-full rounded-lg bg-gray-900 px-6 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-gray-700"
-              >
-                注文手続きへ
-              </Link>
+              {/* ボタン群 */}
+              <div className="flex flex-col gap-2">
+                <Link
+                  href="/order/checkout"
+                  onClick={closeCart}
+                  className="block w-full rounded-lg bg-gray-900 px-6 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-gray-700"
+                >
+                  注文手続きへ
+                </Link>
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="w-full rounded-lg border px-6 py-2.5 text-sm text-gray-500 transition-colors hover:border-red-300 hover:text-red-500"
+                >
+                  すべて削除
+                </button>
+              </div>
             </div>
           </>
         )}
