@@ -21,7 +21,7 @@ tasks:
   dev:next:
     desc: Next.js 開発サーバー
     cmds:
-      - pnpm next dev
+      - pnpm next dev --turbo
 
   dev:stripe:
     desc: Stripe Webhook を localhost:3000 へ転送
