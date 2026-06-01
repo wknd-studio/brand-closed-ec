@@ -29,40 +29,88 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const clerkUserId = session.metadata?.clerk_user_id;
-    const plan = session.metadata?.plan as MemberRank | undefined;
 
-    if (!clerkUserId || !plan) {
-      return NextResponse.json(
-        { error: "メタデータが不足しています" },
-        { status: 400 }
-      );
+    if (session.mode === "payment") {
+      // 注文 Checkout フロー (BRAND-61)
+      const orderId = session.metadata?.order_id;
+      if (!orderId) {
+        return NextResponse.json(
+          { error: "order_id がありません" },
+          { status: 400 }
+        );
+      }
+
+      const supabase = createAdminClient();
+      const { data: order } = await supabase
+        .from("orders")
+        .select("id, status")
+        .eq("id", orderId)
+        .single();
+
+      if (!order) {
+        return NextResponse.json(
+          { error: "注文が見つかりません" },
+          { status: 400 }
+        );
+      }
+
+      // 冪等性チェック：処理済みならスキップして 200 を返す
+      if (order.status === "paid") {
+        return NextResponse.json({ received: true });
+      }
+
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({ status: "paid" })
+        .eq("id", order.id);
+
+      if (updateError) {
+        console.error("[注文Webhook] ステータス更新失敗:", updateError);
+        return NextResponse.json(
+          { error: "DB更新に失敗しました" },
+          { status: 500 }
+        );
+      }
+
+      // 運営者通知（メール実装は BRAND-64/66）
+      console.log(`[注文確定] 注文ID: ${order.id} の入金確認`);
+    } else if (session.mode === "subscription") {
+      // オンボーディング Checkout フロー（既存）
+      const clerkUserId = session.metadata?.clerk_user_id;
+      const plan = session.metadata?.plan as MemberRank | undefined;
+
+      if (!clerkUserId || !plan) {
+        return NextResponse.json(
+          { error: "メタデータが不足しています" },
+          { status: 400 }
+        );
+      }
+
+      const supabase = createAdminClient();
+      const { error } = await supabase
+        .from("users")
+        .update({
+          rank: plan,
+          stripe_customer_id: session.customer as string | null,
+          stripe_subscription_id: session.subscription as string | null,
+          subscribed_at: new Date().toISOString(),
+          onboarding_completed: true,
+        })
+        .eq("clerk_user_id", clerkUserId);
+
+      if (error) {
+        console.error("[Stripe Webhook] Supabase 更新失敗:", error);
+        return NextResponse.json(
+          { error: "DB更新に失敗しました" },
+          { status: 500 }
+        );
+      }
+
+      const clerk = await clerkClient();
+      await clerk.users.updateUserMetadata(clerkUserId, {
+        publicMetadata: { onboarding_completed: true },
+      });
     }
-
-    const supabase = createAdminClient();
-    const { error } = await supabase
-      .from("users")
-      .update({
-        rank: plan,
-        stripe_customer_id: session.customer as string | null,
-        stripe_subscription_id: session.subscription as string | null,
-        subscribed_at: new Date().toISOString(),
-        onboarding_completed: true,
-      })
-      .eq("clerk_user_id", clerkUserId);
-
-    if (error) {
-      console.error("[Stripe Webhook] Supabase 更新失敗:", error);
-      return NextResponse.json(
-        { error: "DB更新に失敗しました" },
-        { status: 500 }
-      );
-    }
-
-    const clerk = await clerkClient();
-    await clerk.users.updateUserMetadata(clerkUserId, {
-      publicMetadata: { onboarding_completed: true },
-    });
   }
 
   return NextResponse.json({ received: true });
