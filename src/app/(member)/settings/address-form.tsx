@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { createAddress, updateAddress } from "./actions";
 import type { Database } from "@/types/database.types";
 
@@ -86,7 +86,7 @@ async function fetchAddressByZipcode(zipcode: string): Promise<{
 export default function AddressForm(props: Props) {
   const addr = props.mode === "edit" ? props.address : null;
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [prefecture, setPrefecture] = useState(addr?.prefecture ?? "");
   const [city, setCity] = useState(addr?.city ?? "");
   const [addressLine1, setAddressLine1] = useState(addr?.address_line1 ?? "");
@@ -107,17 +107,17 @@ export default function AddressForm(props: Props) {
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    startTransition(async () => {
-      const result =
-        props.mode === "create"
-          ? await createAddress(formData)
-          : await updateAddress(props.address.id, formData);
-      if ("error" in result) {
-        setError(result.error);
-      } else {
-        props.onClose();
-      }
-    });
+    setIsPending(true);
+    const result =
+      props.mode === "create"
+        ? await createAddress(formData)
+        : await updateAddress(props.address.id, formData);
+    setIsPending(false);
+    if ("error" in result) {
+      setError(result.error);
+    } else {
+      props.onClose();
+    }
   }
 
   return (
