@@ -13,10 +13,8 @@ import { getStripe } from "@/lib/stripe";
 import { fetchProductsByIds } from "@/lib/sanity/products";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  placeOrder,
-  checkMonthlyLimit,
-} from "@/app/(member)/order/checkout/actions";
+import { placeOrder } from "@/app/(member)/order/checkout/actions";
+import { checkMonthlyLimit } from "@/app/(member)/order/checkout/monthly-limit";
 
 // -----------------------------------------------
 // checkMonthlyLimit ユニットテスト

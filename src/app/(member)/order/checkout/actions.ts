@@ -9,19 +9,9 @@ import { fetchProductsByIds, type MemberRank } from "@/lib/sanity/products";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { MONTHLY_LIMITS } from "@/lib/constants/membership";
 
-type PlaceOrderResult = { error: string };
+import { checkMonthlyLimit } from "./monthly-limit";
 
-export function checkMonthlyLimit(
-  confirmedAmount: number,
-  fixedTotal: number,
-  monthlyLimit: number
-): string | undefined {
-  if (monthlyLimit === 0 || monthlyLimit === Number.MAX_SAFE_INTEGER)
-    return undefined;
-  if (confirmedAmount + fixedTotal > monthlyLimit)
-    return `月次仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため注文できません`;
-  return undefined;
-}
+type PlaceOrderResult = { error: string };
 
 function getCurrentMonthRange(subscribedAt: string | null): {
   start: string;
