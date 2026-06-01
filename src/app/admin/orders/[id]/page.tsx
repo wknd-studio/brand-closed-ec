@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server-admin";
+import InvoiceForm from "./invoice-form";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -125,10 +126,12 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </section>
         )}
 
-        {/* Invoice発行ボタン（PR-2で実装） */}
-        <div className="rounded-lg border border-dashed p-5 text-center text-sm text-gray-400">
-          Invoice発行フォームはPR-2で実装予定
-        </div>
+        {/* Invoice発行フォーム */}
+        {negotiableItems.length > 0 && (
+          <section className="rounded-lg border p-5">
+            <InvoiceForm orderId={order.id} negotiableItems={negotiableItems} />
+          </section>
+        )}
       </div>
     </div>
   );

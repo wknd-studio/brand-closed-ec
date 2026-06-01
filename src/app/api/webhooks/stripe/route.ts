@@ -113,5 +113,43 @@ export async function POST(req: Request) {
     }
   }
 
+  if (event.type === "invoice.paid") {
+    // Invoice フロー (BRAND-65)
+    const invoice = event.data.object;
+    const supabase = createAdminClient();
+
+    const { data: order } = await supabase
+      .from("orders")
+      .select("id, status")
+      .eq("stripe_invoice_id", invoice.id)
+      .single();
+
+    // 私たちが発行していない Invoice（サブスクリプション更新など）は無視
+    if (!order) {
+      return NextResponse.json({ received: true });
+    }
+
+    // 冪等性チェック：処理済みならスキップ
+    if (order.status === "paid") {
+      return NextResponse.json({ received: true });
+    }
+
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({ status: "paid" })
+      .eq("id", order.id);
+
+    if (updateError) {
+      console.error("[Invoice Webhook] ステータス更新失敗:", updateError);
+      return NextResponse.json(
+        { error: "DB更新に失敗しました" },
+        { status: 500 }
+      );
+    }
+
+    // 運営者通知（メール実装は BRAND-64）
+    console.log(`[Invoice入金確認] 注文ID: ${order.id} の入金確認`);
+  }
+
   return NextResponse.json({ received: true });
 }

@@ -232,8 +232,81 @@ describe("POST /api/webhooks/stripe", () => {
     });
   });
 
+  describe("invoice.paid イベント（Invoice フロー）", () => {
+    function setupSupabaseForInvoicePaid({
+      orderStatus = "invoice_sent",
+      orderFound = true,
+      updateError = null as unknown,
+    } = {}) {
+      const mockUpdate = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: updateError }),
+      });
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockImplementation((table: string) => {
+          if (table === "orders") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: orderFound
+                      ? { id: "order_1", status: orderStatus }
+                      : null,
+                  }),
+                }),
+              }),
+              update: mockUpdate,
+            };
+          }
+          return {};
+        }),
+      } as never);
+      return mockUpdate;
+    }
+
+    const makeInvoiceEvent = () => ({
+      type: "invoice.paid",
+      data: { object: { id: "inv_1" } },
+    });
+
+    it("invoice_sent の注文を paid に更新して 200 を返す", async () => {
+      setupStripe(() => makeInvoiceEvent());
+      const mockUpdate = setupSupabaseForInvoicePaid({
+        orderStatus: "invoice_sent",
+      });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+      expect(mockUpdate).toHaveBeenCalledWith({ status: "paid" });
+    });
+
+    it("すでに paid の注文はスキップして 200 を返す（冪等性）", async () => {
+      setupStripe(() => makeInvoiceEvent());
+      const mockUpdate = setupSupabaseForInvoicePaid({ orderStatus: "paid" });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it("stripe_invoice_id が DB に存在しない場合は 200 を返す（他システムの Invoice）", async () => {
+      setupStripe(() => makeInvoiceEvent());
+      setupSupabaseForInvoicePaid({ orderFound: false });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(200);
+    });
+
+    it("DB 更新が失敗した場合は 500 を返す", async () => {
+      setupStripe(() => makeInvoiceEvent());
+      setupSupabaseForInvoicePaid({ updateError: { message: "DB error" } });
+
+      const res = await POST(makeRequest());
+      expect(res.status).toBe(500);
+    });
+  });
+
   describe("その他のイベント", () => {
-    it("checkout.session.completed 以外は DB 操作なしで 200 を返す", async () => {
+    it("未処理イベントは DB 操作なしで 200 を返す", async () => {
       setupStripe(() => ({ type: "customer.subscription.updated", data: {} }));
       const mockFrom = vi.fn();
       vi.mocked(createAdminClient).mockReturnValue({ from: mockFrom } as never);
