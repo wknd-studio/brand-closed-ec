@@ -10,6 +10,8 @@ import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { MONTHLY_LIMITS } from "@/lib/constants/membership";
 
 import { checkMonthlyLimit } from "./monthly-limit";
+import { sendOrderConfirmingEmail } from "@/lib/email/order-confirming";
+import { sendOrderOperatorNotification } from "@/lib/email/order-operator-notification";
 
 type PlaceOrderResult = { error: string };
 
@@ -53,9 +55,10 @@ export async function placeOrder(
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, rank, subscribed_at")
+    .select("id, rank, subscribed_at, email")
     .eq("clerk_user_id", userId)
     .single();
+
   if (!user) return { error: "ユーザーが見つかりません" };
 
   const userRank = user.rank as MemberRank;
@@ -159,6 +162,19 @@ export async function placeOrder(
       return { error: "注文明細の記録に失敗しました" };
     }
 
+    await Promise.all([
+      sendOrderConfirmingEmail({
+        to: user.email,
+        orderId: invoiceOrder.id,
+        lineItems,
+      }),
+      sendOrderOperatorNotification({
+        orderId: invoiceOrder.id,
+        customerEmail: user.email,
+        lineItems,
+      }),
+    ]);
+
     redirect(`/order/invoice-complete?order_id=${invoiceOrder.id}`);
   }
 
@@ -202,6 +218,7 @@ export async function placeOrder(
   try {
     const session = await getStripe().checkout.sessions.create({
       mode: "payment",
+      customer_email: user.email,
       line_items: lineItems.map((i) => ({
         price_data: {
           currency: "jpy",

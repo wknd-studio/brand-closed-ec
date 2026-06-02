@@ -21,6 +21,7 @@
   "dependencies": {
     "@clerk/nextjs": "^7.3.2",
     "@portabletext/react": "^6.2.0",
+    "@react-email/components": "^1.0.12",
     "@sanity/client": "^7.22.0",
     "@sentry/nextjs": "^10.52.0",
     "@supabase/supabase-js": "^2.105.3",
@@ -28,6 +29,7 @@
     "next-sanity": "^12.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "resend": "^6.12.4",
     "stripe": "^22.1.1",
     "svix": "^1.94.0"
   },
