@@ -50,7 +50,7 @@ export async function issueInvoice(
       "id, status, user_id, monthly_limit_at_order, users(id, email, stripe_customer_id, subscribed_at)"
     )
     .eq("id", orderId)
-    .in("status", ["confirming", "limit_exceeded"])
+    .eq("status", "confirming")
     .single();
   if (!order) return { error: "注文が見つかりません" };
 

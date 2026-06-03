@@ -168,16 +168,12 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </section>
         )}
 
-        {/* Invoice発行フォーム（confirming または limit_exceeded かつ要相談商品ありの場合） */}
-        {(order.status === "confirming" || order.status === "limit_exceeded") &&
-          negotiableItems.length > 0 && (
-            <section className="rounded-lg border p-5">
-              <InvoiceForm
-                orderId={order.id}
-                negotiableItems={negotiableItems}
-              />
-            </section>
-          )}
+        {/* Invoice発行フォーム（confirming かつ要相談商品ありの場合のみ） */}
+        {order.status === "confirming" && negotiableItems.length > 0 && (
+          <section className="rounded-lg border p-5">
+            <InvoiceForm orderId={order.id} negotiableItems={negotiableItems} />
+          </section>
+        )}
       </div>
     </div>
   );
