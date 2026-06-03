@@ -1,5 +1,8 @@
 import { render } from "@react-email/components";
 import { describe, expect, it } from "vitest";
+import { CheckoutPaidMemberEmail } from "@/lib/email/templates/checkout-paid-member";
+import { CheckoutPaidOperatorEmail } from "@/lib/email/templates/checkout-paid-operator";
+import { InvoicePaidOperatorEmail } from "@/lib/email/templates/invoice-paid-operator";
 import { OrderConfirmingEmail } from "@/lib/email/templates/order-confirming";
 import { OrderOperatorNotificationEmail } from "@/lib/email/templates/order-operator-notification";
 
@@ -79,5 +82,62 @@ describe("OrderOperatorNotificationEmail", () => {
       />
     );
     expect(html).toContain("要相談");
+  });
+});
+
+describe("CheckoutPaidMemberEmail", () => {
+  it("注文IDと商品名とマイページリンクが含まれる", async () => {
+    const html = await render(
+      <CheckoutPaidMemberEmail
+        orderId="ORDER-001"
+        lineItems={[fixedItem]}
+        myPageUrl="https://example.com/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("ORDER-001");
+    expect(html).toContain("テスト商品A");
+    expect(html).toContain("https://example.com/orders/ORDER-001");
+  });
+
+  it("固定価格商品の価格が表示される", async () => {
+    const html = await render(
+      <CheckoutPaidMemberEmail
+        orderId="ORDER-001"
+        lineItems={[fixedItem]}
+        myPageUrl="https://example.com/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("5,000");
+  });
+});
+
+describe("CheckoutPaidOperatorEmail", () => {
+  it("注文IDと注文者メールと管理画面リンクが含まれる", async () => {
+    const html = await render(
+      <CheckoutPaidOperatorEmail
+        orderId="ORDER-001"
+        customerEmail="member@example.com"
+        lineItems={[fixedItem]}
+        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("ORDER-001");
+    expect(html).toContain("member@example.com");
+    expect(html).toContain("https://example.com/admin/orders/ORDER-001");
+  });
+});
+
+describe("InvoicePaidOperatorEmail", () => {
+  it("注文IDと注文者メールと管理画面リンクが含まれる", async () => {
+    const html = await render(
+      <InvoicePaidOperatorEmail
+        orderId="ORDER-001"
+        customerEmail="member@example.com"
+        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("ORDER-001");
+    expect(html).toContain("member@example.com");
+    expect(html).toContain("https://example.com/admin/orders/ORDER-001");
   });
 });
