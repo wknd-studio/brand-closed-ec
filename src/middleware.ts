@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -13,6 +14,9 @@ const isPublic = createRouteMatcher([
 
 const isOnboarding = createRouteMatcher(["/onboarding(.*)"]);
 
+// Stripe/Clerk webhook はレート制限対象外
+const isWebhook = createRouteMatcher(["/api/webhooks/(.*)"]);
+
 function supabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,6 +26,20 @@ function supabaseAdmin() {
 }
 
 export default clerkMiddleware(async (auth, req) => {
+  if (!isWebhook(req)) {
+    const { env } = await getCloudflareContext({ async: true });
+    if (env.RATE_LIMITER) {
+      const ip =
+        req.headers.get("cf-connecting-ip") ??
+        req.headers.get("x-forwarded-for")?.split(",")[0] ??
+        "unknown";
+      const { success } = await env.RATE_LIMITER.limit({ key: ip });
+      if (!success) {
+        return new Response("Too Many Requests", { status: 429 });
+      }
+    }
+  }
+
   if (isPublic(req)) return;
 
   // API ルートは sign-in へのリダイレクトではなく 401 を返す
