@@ -157,83 +157,6 @@ export type Database = {
           },
         ];
       };
-      invitation_codes: {
-        Row: {
-          code: string;
-          created_at: string;
-          expires_at: string | null;
-          id: string;
-          is_active: boolean;
-          issued_by_user_id: string | null;
-          max_uses: number | null;
-          used_count: number;
-        };
-        Insert: {
-          code: string;
-          created_at?: string;
-          expires_at?: string | null;
-          id?: string;
-          is_active?: boolean;
-          issued_by_user_id?: string | null;
-          max_uses?: number | null;
-          used_count?: number;
-        };
-        Update: {
-          code?: string;
-          created_at?: string;
-          expires_at?: string | null;
-          id?: string;
-          is_active?: boolean;
-          issued_by_user_id?: string | null;
-          max_uses?: number | null;
-          used_count?: number;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "invitation_codes_issued_by_user_id_fkey";
-            columns: ["issued_by_user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      invitation_uses: {
-        Row: {
-          id: string;
-          invitation_code_id: string;
-          used_at: string;
-          used_by_user_id: string;
-        };
-        Insert: {
-          id?: string;
-          invitation_code_id: string;
-          used_at?: string;
-          used_by_user_id: string;
-        };
-        Update: {
-          id?: string;
-          invitation_code_id?: string;
-          used_at?: string;
-          used_by_user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "invitation_uses_invitation_code_id_fkey";
-            columns: ["invitation_code_id"];
-            isOneToOne: false;
-            referencedRelation: "invitation_codes";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "invitation_uses_used_by_user_id_fkey";
-            columns: ["used_by_user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       order_items: {
         Row: {
           created_at: string;
@@ -333,14 +256,12 @@ export type Database = {
       };
       users: {
         Row: {
-          can_invite: boolean;
           clerk_user_id: string;
           created_at: string;
           deleted_at: string | null;
           email: string;
           first_name: string;
           id: string;
-          invite_limit: number;
           last_name: string;
           onboarding_completed: boolean;
           rank: Database["public"]["Enums"]["member_rank"];
@@ -352,14 +273,12 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
-          can_invite?: boolean;
           clerk_user_id: string;
           created_at?: string;
           deleted_at?: string | null;
           email: string;
           first_name?: string;
           id?: string;
-          invite_limit?: number;
           last_name?: string;
           onboarding_completed?: boolean;
           rank?: Database["public"]["Enums"]["member_rank"];
@@ -371,14 +290,12 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
-          can_invite?: boolean;
           clerk_user_id?: string;
           created_at?: string;
           deleted_at?: string | null;
           email?: string;
           first_name?: string;
           id?: string;
-          invite_limit?: number;
           last_name?: string;
           onboarding_completed?: boolean;
           rank?: Database["public"]["Enums"]["member_rank"];
@@ -405,6 +322,7 @@ export type Database = {
       order_status:
         | "pending_payment"
         | "confirming"
+        | "limit_exceeded"
         | "invoice_sent"
         | "paid"
         | "sourcing"
@@ -552,6 +470,7 @@ export const Constants = {
       order_status: [
         "pending_payment",
         "confirming",
+        "limit_exceeded",
         "invoice_sent",
         "paid",
         "sourcing",

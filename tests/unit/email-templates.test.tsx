@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CheckoutPaidMemberEmail } from "@/lib/email/templates/checkout-paid-member";
 import { CheckoutPaidOperatorEmail } from "@/lib/email/templates/checkout-paid-operator";
 import { InvoicePaidOperatorEmail } from "@/lib/email/templates/invoice-paid-operator";
+import { LimitExceededMemberEmail } from "@/lib/email/templates/limit-exceeded-member";
 import { OrderConfirmingEmail } from "@/lib/email/templates/order-confirming";
 import { OrderOperatorNotificationEmail } from "@/lib/email/templates/order-operator-notification";
 
@@ -139,5 +140,13 @@ describe("InvoicePaidOperatorEmail", () => {
     expect(html).toContain("ORDER-001");
     expect(html).toContain("member@example.com");
     expect(html).toContain("https://example.com/admin/orders/ORDER-001");
+  });
+});
+
+describe("LimitExceededMemberEmail", () => {
+  it("注文IDと上限超過のメッセージが含まれる", async () => {
+    const html = await render(<LimitExceededMemberEmail orderId="ORDER-001" />);
+    expect(html).toContain("ORDER-001");
+    expect(html).toContain("上限");
   });
 });
