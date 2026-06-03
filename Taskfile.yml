@@ -33,6 +33,11 @@ tasks:
     cmds:
       - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
 
+  supabase:seed-users:
+    desc: Supabase ローカルDBに開発用ユーザーをシード（Clerkに存在するユーザーのみ）
+    cmds:
+      - pnpm tsx scripts/seed-users.ts
+
   sanity:seed:
     desc: Sanity にダミー商品を登録する（開発用・べき等）
     cmds:
