@@ -125,13 +125,17 @@ export default function StatusStepper({
   const [trackingNumber, setTrackingNumber] = useState("");
 
   const steps = paymentFlow === "invoice" ? INVOICE_STEPS : CHECKOUT_STEPS;
-  const currentIndex = steps.findIndex((s) => s.key === currentStatus);
+  const isLimitExceeded = currentStatus === "limit_exceeded";
+  // limit_exceeded は confirming から分岐した状態のため、ステッパー上は confirming の位置を使う
+  const effectiveStatus = isLimitExceeded ? "confirming" : currentStatus;
+  const currentIndex = steps.findIndex((s) => s.key === effectiveStatus);
   const currentStep = steps[currentIndex];
   const isCompleted = currentStatus === "delivered";
   const isCancelled = currentStatus === "cancelled";
   const canAdvance =
     !isCompleted &&
     !isCancelled &&
+    !isLimitExceeded &&
     currentIndex !== -1 &&
     !!currentStep?.actionLabel;
   const canCancel = !isCompleted && !isCancelled;
@@ -185,20 +189,30 @@ export default function StatusStepper({
                     isDone
                       ? "bg-green-500 text-white"
                       : isCurrent
-                        ? step.isAutomatic
-                          ? "bg-amber-400 text-white ring-2 ring-amber-300 ring-offset-1"
-                          : "bg-blue-600 text-white ring-2 ring-blue-300 ring-offset-1"
+                        ? isLimitExceeded
+                          ? "bg-red-500 text-white ring-2 ring-red-300 ring-offset-1"
+                          : step.isAutomatic
+                            ? "bg-amber-400 text-white ring-2 ring-amber-300 ring-offset-1"
+                            : "bg-blue-600 text-white ring-2 ring-blue-300 ring-offset-1"
                         : "bg-gray-200 text-gray-400"
                   }`}
                 >
-                  {isDone ? "✓" : step.isAutomatic && isCurrent ? "⏳" : i + 1}
+                  {isDone
+                    ? "✓"
+                    : isLimitExceeded && isCurrent
+                      ? "!"
+                      : step.isAutomatic && isCurrent
+                        ? "⏳"
+                        : i + 1}
                 </div>
                 <span
                   className={`text-center text-xs leading-tight px-0.5 ${
                     isCurrent
-                      ? step.isAutomatic
-                        ? "font-semibold text-amber-600"
-                        : "font-semibold text-blue-600"
+                      ? isLimitExceeded
+                        ? "font-semibold text-red-600"
+                        : step.isAutomatic
+                          ? "font-semibold text-amber-600"
+                          : "font-semibold text-blue-600"
                       : isDone
                         ? "text-gray-500"
                         : "text-gray-400"
@@ -221,36 +235,44 @@ export default function StatusStepper({
       {currentStep && (
         <div
           className={`rounded-lg border px-5 py-4 ${
-            isCompleted
-              ? "border-green-200 bg-green-50"
-              : currentStep.isAutomatic
-                ? "border-amber-200 bg-amber-50"
-                : "border-blue-200 bg-blue-50"
+            isLimitExceeded
+              ? "border-red-200 bg-red-50"
+              : isCompleted
+                ? "border-green-200 bg-green-50"
+                : currentStep.isAutomatic
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-blue-200 bg-blue-50"
           }`}
         >
           <p
             className={`font-semibold text-sm ${
-              isCompleted
-                ? "text-green-700"
-                : currentStep.isAutomatic
-                  ? "text-amber-700"
-                  : "text-blue-700"
+              isLimitExceeded
+                ? "text-red-700"
+                : isCompleted
+                  ? "text-green-700"
+                  : currentStep.isAutomatic
+                    ? "text-amber-700"
+                    : "text-blue-700"
             }`}
           >
-            現在：{currentStep.label}
+            現在：{isLimitExceeded ? "上限超過・発行停止" : currentStep.label}
           </p>
           <p
             className={`mt-1 text-sm ${
-              isCompleted
-                ? "text-green-600"
-                : currentStep.isAutomatic
-                  ? "text-amber-600"
-                  : "text-blue-600"
+              isLimitExceeded
+                ? "text-red-600"
+                : isCompleted
+                  ? "text-green-600"
+                  : currentStep.isAutomatic
+                    ? "text-amber-600"
+                    : "text-blue-600"
             }`}
           >
-            {currentStep.description}
+            {isLimitExceeded
+              ? "月次仕入れ上限超過のため請求書を発行できません。会員に通知済みです。会員がプランをアップグレードした後、注文は「注文確認中」に戻り、再度発行を試みられます。"
+              : currentStep.description}
           </p>
-          {currentStep.isAutomatic && (
+          {currentStep.isAutomatic && !isLimitExceeded && (
             <p className="mt-2 text-xs text-amber-500">
               ※ このステップは自動で処理されます（運営者の操作は不要です）
             </p>
