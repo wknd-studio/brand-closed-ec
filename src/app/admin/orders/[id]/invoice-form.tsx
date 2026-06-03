@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { issueInvoice } from "./actions";
 
 type NegotiableItem = {
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export default function InvoiceForm({ orderId, negotiableItems }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +26,10 @@ export default function InvoiceForm({ orderId, negotiableItems }: Props) {
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
       const result = await issueInvoice(orderId, formData);
-      if (result && "error" in result) setError(result.error);
+      if (result && "error" in result) {
+        setError(result.error);
+        router.refresh();
+      }
     });
   }
 
