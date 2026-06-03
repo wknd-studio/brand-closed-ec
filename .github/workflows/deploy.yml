@@ -44,10 +44,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
-  deploy:
-    name: Deploy
+  deploy-stg:
+    name: Deploy (staging)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment: staging
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -56,52 +57,58 @@ jobs:
       - uses: supabase/setup-cli@v1
         with: { version: 2.102.0 }
       - run: pnpm install --frozen-lockfile
-      - name: Migrate DB (stg)
-        if: github.ref == 'refs/heads/develop'
+      - name: Migrate DB
         run: |
-          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF_STG }}
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
           supabase db push --linked
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Build (stg)
-        if: github.ref == 'refs/heads/develop'
+      - name: Build
         run: pnpm build:cloudflare
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           NEXT_PUBLIC_SENTRY_ENVIRONMENT: stg
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY_STG }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL_STG }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_STG }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY_STG }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
           NEXT_PUBLIC_SANITY_DATASET: staging
-          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL_STG }}
-
-      - name: Build (prod)
-        if: github.ref == 'refs/heads/main'
-        run: pnpm build:cloudflare
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          NEXT_PUBLIC_SENTRY_ENVIRONMENT: prod
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY_PROD }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL_PROD }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY_PROD }}
-          NEXT_PUBLIC_SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
-          NEXT_PUBLIC_SANITY_DATASET: production
-          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL_PROD }}
-
-      - name: Deploy to stg
-        if: github.ref == 'refs/heads/develop'
+          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+      - name: Deploy
         run: pnpm exec wrangler deploy --config wrangler.stg.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Deploy to prod
-        if: github.ref == 'refs/heads/main'
+  deploy-prod:
+    name: Deploy (production)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: supabase/setup-cli@v1
+        with: { version: 2.102.0 }
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build:cloudflare
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: prod
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
+          NEXT_PUBLIC_SANITY_DATASET: production
+          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+      - name: Deploy
         run: pnpm exec wrangler deploy --config wrangler.prod.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -110,8 +117,9 @@ jobs:
   e2e:
     name: E2E Tests (stg)
     runs-on: ubuntu-latest
-    needs: [deploy]
+    needs: [deploy-stg]
     if: github.ref == 'refs/heads/develop'
+    environment: staging
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -122,7 +130,7 @@ jobs:
       - name: Wait for stg to be ready
         run: |
           for i in $(seq 1 12); do
-            if curl -sf "${{ secrets.APP_URL_STG }}" > /dev/null; then
+            if curl -sf "${{ secrets.APP_URL }}" > /dev/null; then
               echo "stg is ready"
               exit 0
             fi
@@ -133,9 +141,9 @@ jobs:
           exit 1
       - run: pnpm test:e2e
         env:
-          BASE_URL: ${{ secrets.APP_URL_STG }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY_STG }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY_STG }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL_STG }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_STG }}
+          BASE_URL: ${{ secrets.APP_URL }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
