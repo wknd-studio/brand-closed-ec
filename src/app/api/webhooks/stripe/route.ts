@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase/server-admin";
+import { sendCheckoutPaidEmails } from "@/lib/email/checkout-paid";
+import { sendInvoicePaidEmail } from "@/lib/email/invoice-paid";
 import { getStripe } from "@/lib/stripe";
+import { NextResponse } from "next/server";
 import type { Database } from "@/types/database.types";
 
 type MemberRank = Database["public"]["Enums"]["member_rank"];
@@ -31,7 +33,6 @@ export async function POST(req: Request) {
     const session = event.data.object;
 
     if (session.mode === "payment") {
-      // 注文 Checkout フロー (BRAND-61)
       const orderId = session.metadata?.order_id;
       if (!orderId) {
         return NextResponse.json(
@@ -43,7 +44,9 @@ export async function POST(req: Request) {
       const supabase = createAdminClient();
       const { data: order } = await supabase
         .from("orders")
-        .select("id, status")
+        .select(
+          "id, status, user_id, order_items(product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+        )
         .eq("id", orderId)
         .single();
 
@@ -54,7 +57,6 @@ export async function POST(req: Request) {
         );
       }
 
-      // 冪等性チェック：処理済みならスキップして 200 を返す
       if (order.status === "paid") {
         return NextResponse.json({ received: true });
       }
@@ -72,10 +74,34 @@ export async function POST(req: Request) {
         );
       }
 
-      // 運営者通知（メール実装は BRAND-64/66）
-      console.log(`[注文確定] 注文ID: ${order.id} の入金確認`);
+      const { data: user } = await supabase
+        .from("users")
+        .select("email")
+        .eq("clerk_user_id", order.user_id)
+        .single();
+
+      if (user) {
+        const lineItems = (
+          order.order_items as Array<{
+            product_name_snapshot: string;
+            quantity: number;
+            unit_price_snapshot: number | null;
+            is_negotiable: boolean;
+          }>
+        ).map((item) => ({
+          productName: item.product_name_snapshot,
+          quantity: item.quantity,
+          unitPrice: item.unit_price_snapshot,
+          isNegotiable: item.is_negotiable,
+        }));
+
+        sendCheckoutPaidEmails({
+          orderId: order.id,
+          memberEmail: user.email,
+          lineItems,
+        }).catch((e) => console.error("[Checkout入金メール] 送信エラー:", e));
+      }
     } else if (session.mode === "subscription") {
-      // オンボーディング Checkout フロー（既存）
       const clerkUserId = session.metadata?.clerk_user_id;
       const plan = session.metadata?.plan as MemberRank | undefined;
 
@@ -114,22 +140,19 @@ export async function POST(req: Request) {
   }
 
   if (event.type === "invoice.paid") {
-    // Invoice フロー (BRAND-65)
     const invoice = event.data.object;
     const supabase = createAdminClient();
 
     const { data: order } = await supabase
       .from("orders")
-      .select("id, status")
+      .select("id, status, user_id")
       .eq("stripe_invoice_id", invoice.id)
       .single();
 
-    // 私たちが発行していない Invoice（サブスクリプション更新など）は無視
     if (!order) {
       return NextResponse.json({ received: true });
     }
 
-    // 冪等性チェック：処理済みならスキップ
     if (order.status === "paid") {
       return NextResponse.json({ received: true });
     }
@@ -147,8 +170,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // 運営者通知（メール実装は BRAND-64）
-    console.log(`[Invoice入金確認] 注文ID: ${order.id} の入金確認`);
+    const { data: user } = await supabase
+      .from("users")
+      .select("email")
+      .eq("clerk_user_id", order.user_id)
+      .single();
+
+    if (user) {
+      sendInvoicePaidEmail({
+        orderId: order.id,
+        memberEmail: user.email,
+      }).catch((e) => console.error("[Invoice入金メール] 送信エラー:", e));
+    }
   }
 
   return NextResponse.json({ received: true });

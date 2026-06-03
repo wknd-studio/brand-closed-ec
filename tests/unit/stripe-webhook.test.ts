@@ -12,6 +12,14 @@ vi.mock("@/lib/supabase/server-admin", () => ({
   createAdminClient: vi.fn(),
 }));
 
+vi.mock("@/lib/email/checkout-paid", () => ({
+  sendCheckoutPaidEmails: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/email/invoice-paid", () => ({
+  sendInvoicePaidEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { getStripe } from "@/lib/stripe";
 import { clerkClient } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase/server-admin";
@@ -59,12 +67,28 @@ function setupSupabaseForOrderPayment({
             eq: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
                 data: orderFound
-                  ? { id: "order_1", status: orderStatus }
+                  ? {
+                      id: "order_1",
+                      status: orderStatus,
+                      user_id: "user_abc",
+                      order_items: [],
+                    }
                   : null,
               }),
             }),
           }),
           update: mockUpdate,
+        };
+      }
+      if (table === "users") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { email: "member@example.com" },
+              }),
+            }),
+          }),
         };
       }
       return {};
@@ -249,12 +273,27 @@ describe("POST /api/webhooks/stripe", () => {
                 eq: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
                     data: orderFound
-                      ? { id: "order_1", status: orderStatus }
+                      ? {
+                          id: "order_1",
+                          status: orderStatus,
+                          user_id: "user_abc",
+                        }
                       : null,
                   }),
                 }),
               }),
               update: mockUpdate,
+            };
+          }
+          if (table === "users") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { email: "member@example.com" },
+                  }),
+                }),
+              }),
             };
           }
           return {};
