@@ -11,6 +11,7 @@ type Props = {
 const STATUS_LABEL: Record<string, string> = {
   pending_payment: "決済待ち",
   confirming: "注文確認中",
+  limit_exceeded: "上限超過・発行停止",
   invoice_sent: "請求書送付済み",
   paid: "入金確認済み",
   sourcing: "手配中",
@@ -152,6 +153,18 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {/* 上限超過通知バナー */}
+        {order.status === "limit_exceeded" && (
+          <section className="rounded-lg border border-red-200 bg-red-50 p-5">
+            <p className="text-sm font-medium text-red-700">
+              月次仕入れ上限超過のため請求書を発行できません
+            </p>
+            <p className="mt-1 text-xs text-red-600">
+              会員に上限超過の通知メールを送信済みです。会員がプランをアップグレードした後、再度発行を試みてください。
+            </p>
           </section>
         )}
 

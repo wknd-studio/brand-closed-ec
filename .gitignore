@@ -61,3 +61,6 @@ test-results/
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Wrangler
+.wrangler/

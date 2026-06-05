@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server-admin";
+import { sendLimitExceededEmail } from "@/lib/email/limit-exceeded";
 import { getStripe } from "@/lib/stripe";
 
 type IssueInvoiceResult = { error: string };
@@ -46,7 +47,7 @@ export async function issueInvoice(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, user_id, monthly_limit_at_order, users(id, email, stripe_customer_id, subscribed_at)"
+      "id, status, user_id, monthly_limit_at_order, users(id, email, stripe_customer_id, subscribed_at)"
     )
     .eq("id", orderId)
     .eq("status", "confirming")
@@ -113,8 +114,22 @@ export async function issueInvoice(
 
   const monthlyLimit = order.monthly_limit_at_order;
   if (monthlyLimit > 0 && confirmedAmount + negotiableTotal > monthlyLimit) {
+    // ステータスを limit_exceeded に変更（初回のみメール送信）
+    const isFirstTime = order.status === "confirming";
+    await supabase
+      .from("orders")
+      .update({ status: "limit_exceeded" })
+      .eq("id", orderId);
+
+    if (isFirstTime) {
+      await sendLimitExceededEmail({
+        to: (user as { email: string }).email,
+        orderId,
+      });
+    }
+
     return {
-      error: `月次仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため発行できません`,
+      error: `月次仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため発行できません。会員に通知しました。`,
     };
   }
 

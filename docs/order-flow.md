@@ -25,18 +25,19 @@ flowchart TD
 
 ## 注文ステータス
 
-| #   | ステータス        | 表示名                   | 意味                                             | 使用フロー    |
-| --- | ----------------- | ------------------------ | ------------------------------------------------ | ------------- |
-| 1   | `pending_payment` | 決済待ち                 | Stripe Checkout Session 作成済み・決済前         | Checkout のみ |
-| 2   | `confirming`      | 注文確認中               | 注文受付。運営者が内容を確認中                   | Invoice のみ  |
-| 3   | `invoice_sent`    | 請求書送付済み・入金待ち | 運営者が Stripe Invoice を発行・送付済み         | Invoice のみ  |
-| 4   | `paid`            | 入金確認済み             | 決済完了（Webhook で自動更新）                   | 両フロー      |
-| 5   | `sourcing`        | 手配中                   | 仕入れ先への手配を開始                           | 両フロー      |
-| 6   | `ordered`         | 発注完了                 | 仕入れ先への発注が完了                           | 両フロー      |
-| 7   | `preparing`       | 発送準備中               | 商品の梱包・出荷準備中                           | 両フロー      |
-| 8   | `shipping`        | 配送中                   | 配送業者に引き渡し済み                           | 両フロー      |
-| 9   | `delivered`       | 配送完了                 | 会員への配達完了                                 | 両フロー      |
-| —   | `cancelled`       | キャンセル               | 任意のステップで運営者またはシステムがキャンセル | 両フロー      |
+| #   | ステータス        | 表示名                   | 意味                                                      | 使用フロー    |
+| --- | ----------------- | ------------------------ | --------------------------------------------------------- | ------------- |
+| 1   | `pending_payment` | 決済待ち                 | Stripe Checkout Session 作成済み・決済前                  | Checkout のみ |
+| 2   | `confirming`      | 注文確認中               | 注文受付。運営者が内容を確認中                            | Invoice のみ  |
+| 2.5 | `limit_exceeded`  | 上限超過・発行停止       | 月次仕入れ上限超過のため Invoice 発行不可。会員に通知済み | Invoice のみ  |
+| 3   | `invoice_sent`    | 請求書送付済み・入金待ち | 運営者が Stripe Invoice を発行・送付済み                  | Invoice のみ  |
+| 4   | `paid`            | 入金確認済み             | 決済完了（Webhook で自動更新）                            | 両フロー      |
+| 5   | `sourcing`        | 手配中                   | 仕入れ先への手配を開始                                    | 両フロー      |
+| 6   | `ordered`         | 発注完了                 | 仕入れ先への発注が完了                                    | 両フロー      |
+| 7   | `preparing`       | 発送準備中               | 商品の梱包・出荷準備中                                    | 両フロー      |
+| 8   | `shipping`        | 配送中                   | 配送業者に引き渡し済み                                    | 両フロー      |
+| 9   | `delivered`       | 配送完了                 | 会員への配達完了                                          | 両フロー      |
+| —   | `cancelled`       | キャンセル               | 任意のステップで運営者またはシステムがキャンセル          | 両フロー      |
 
 ---
 
@@ -110,12 +111,13 @@ sequenceDiagram
     システム->>システム: 月次仕入れ上限チェック（全額）
 
     alt 上限超過
-        システム->>運営者: 請求書発行をブロック・エラー表示
+        システム->>システム: 注文を「上限超過・発行停止」に更新
         システム->>会員: 上限超過通知メール（プランアップグレード案内含む）
+        システム->>運営者: 請求書発行をブロック・エラー表示（再発行不可）
     else 上限内
         運営者->>Stripe: 請求書を発行・送付
         システム->>システム: 注文を「請求書送付済み・入金待ち」に更新
-        Stripe->>会員: 請求書メール送信
+        Stripe->>会員: 請求書メール送信(Stripeが自動送信)
 
         会員->>Stripe: 「支払う」ボタンをクリック・カード決済
         Stripe->>システム: invoice.paid Webhook
@@ -151,8 +153,10 @@ pending_payment → paid → sourcing → ordered → preparing → shipping →
 
 【Invoice フロー】
 confirming → invoice_sent → paid → sourcing → ordered → preparing → shipping → delivered
-    ↓              ↓         ↓
-cancelled      cancelled  cancelled（入金後キャンセルは返金処理が必要）
+    ↓               ↓         ↓
+limit_exceeded   cancelled  cancelled（入金後キャンセルは返金処理が必要）
+    ↓
+cancelled（会員がプランアップグレードしない場合、運営者が手動キャンセル）
 ```
 
 ### 遷移のトリガー
@@ -161,6 +165,7 @@ cancelled      cancelled  cancelled（入金後キャンセルは返金処理が
 | -------------------- | -------------------------------------------- | ----------------------------- |
 | → `pending_payment`  | 会員が注文確定（Checkout フロー）            | Checkout Session 作成と同時   |
 | → `confirming`       | 会員が注文完了（Invoice フロー）             | システムが自動で作成          |
+| → `limit_exceeded`   | 運営者が Invoice 発行を試み上限超過を検知    | 会員へ自動メール通知済み      |
 | → `invoice_sent`     | 運営者が管理画面で Invoice 発行              | 要相談商品の価格交渉後に実施  |
 | → `paid`（Checkout） | Stripe `checkout.session.completed` Webhook  | システムが自動で更新          |
 | → `paid`（Invoice）  | Stripe `invoice.paid` Webhook                | システムが自動で更新          |
@@ -188,5 +193,5 @@ cancelled      cancelled  cancelled（入金後キャンセルは返金処理が
 | 4   | ステータス変更通知     | メール通知 + マイページ表示の両方。Invoice フローの請求書メール（Stripe が会員に自動送信）を除き、全メールを Resend で自前実装。会員向けはマイページリンク、運営者向けは管理画面リンクを含める |
 | 5   | 月次仕入れ上限チェック | Checkout フロー：注文確定時に全額チェック。Invoice フロー：注文時に固定価格分のみチェック、Invoice 発行時に全額チェック                                                                        |
 | 6   | 要相談商品の価格記録   | システムで時価管理はしない。Invoice 作成時に運営者が入力した金額を注文明細にスナップショットとして記録し、月次集計に加算する                                                                   |
-| 7   | 上限超過時の会員通知   | システムが自動でメール通知。内容は上限超過のお知らせ + プランアップグレードの案内                                                                                                              |
+| 7   | 上限超過時の会員通知   | 注文ステータスを `limit_exceeded` に変更し会員へ自動メール通知（上限超過のお知らせ + お問い合わせ案内）。ステータスが `limit_exceeded` の場合は再通知しない。運営者は手動でキャンセル可能      |
 | 8   | abandoned な Checkout  | Session 作成から30分以内に `checkout.session.completed` が届かない場合、`pending_payment` の注文を `cancelled` に更新するバッチを実装する（フェーズ2）                                         |
