@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       const { data: user } = await supabase
         .from("users")
         .select("email")
-        .eq("clerk_user_id", order.user_id)
+        .eq("id", order.user_id)
         .single();
 
       if (user) {
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
           isNegotiable: item.is_negotiable,
         }));
 
-        sendCheckoutPaidEmails({
+        await sendCheckoutPaidEmails({
           orderId: order.id,
           memberEmail: user.email,
           lineItems,
@@ -173,11 +173,11 @@ export async function POST(req: Request) {
     const { data: user } = await supabase
       .from("users")
       .select("email")
-      .eq("clerk_user_id", order.user_id)
+      .eq("id", order.user_id)
       .single();
 
     if (user) {
-      sendInvoicePaidEmail({
+      await sendInvoicePaidEmail({
         orderId: order.id,
         memberEmail: user.email,
       }).catch((e) => console.error("[Invoice入金メール] 送信エラー:", e));
