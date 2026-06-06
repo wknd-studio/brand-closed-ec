@@ -6,6 +6,8 @@ import { InvoicePaidOperatorEmail } from "@/lib/email/templates/invoice-paid-ope
 import { LimitExceededMemberEmail } from "@/lib/email/templates/limit-exceeded-member";
 import { OrderConfirmingEmail } from "@/lib/email/templates/order-confirming";
 import { OrderOperatorNotificationEmail } from "@/lib/email/templates/order-operator-notification";
+import { ShippingNotificationEmail } from "@/lib/email/templates/shipping-notification";
+import { DeliveryNotificationEmail } from "@/lib/email/templates/delivery-notification";
 
 const fixedItem = {
   productName: "テスト商品A",
@@ -148,5 +150,51 @@ describe("LimitExceededMemberEmail", () => {
     const html = await render(<LimitExceededMemberEmail orderId="ORDER-001" />);
     expect(html).toContain("ORDER-001");
     expect(html).toContain("上限");
+  });
+});
+
+describe("ShippingNotificationEmail", () => {
+  it("注文IDとマイページリンクが含まれる", async () => {
+    const html = await render(
+      <ShippingNotificationEmail
+        orderId="ORDER-001"
+        myPageUrl="https://example.com/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("ORDER-001");
+    expect(html).toContain("https://example.com/orders/ORDER-001");
+  });
+
+  it("発送に関するメッセージが含まれる", async () => {
+    const html = await render(
+      <ShippingNotificationEmail
+        orderId="ORDER-001"
+        myPageUrl="https://example.com/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("発送");
+  });
+});
+
+describe("DeliveryNotificationEmail", () => {
+  it("注文IDとマイページリンクが含まれる", async () => {
+    const html = await render(
+      <DeliveryNotificationEmail
+        orderId="ORDER-001"
+        myPageUrl="https://example.com/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("ORDER-001");
+    expect(html).toContain("https://example.com/orders/ORDER-001");
+  });
+
+  it("配送完了に関するメッセージが含まれる", async () => {
+    const html = await render(
+      <DeliveryNotificationEmail
+        orderId="ORDER-001"
+        myPageUrl="https://example.com/orders/ORDER-001"
+      />
+    );
+    expect(html).toContain("配送完了");
   });
 });

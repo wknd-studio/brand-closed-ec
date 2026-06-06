@@ -4,6 +4,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { sendLimitExceededEmail } from "@/lib/email/limit-exceeded";
+import { sendShippingNotificationEmail } from "@/lib/email/shipping-notification";
+import { sendDeliveryNotificationEmail } from "@/lib/email/delivery-notification";
 import { getStripe } from "@/lib/stripe";
 
 type IssueInvoiceResult = { error: string };
@@ -267,7 +269,7 @@ export async function advanceOrderStatus(
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, status")
+    .select("id, status, users(email)")
     .eq("id", orderId)
     .single();
 
@@ -293,19 +295,24 @@ export async function advanceOrderStatus(
     return { error: "ステータスの更新に失敗しました" };
   }
 
-  if (nextStatus === "shipping") {
+  const memberEmail = (
+    Array.isArray(order.users) ? order.users[0] : order.users
+  )?.email;
+
+  if (nextStatus === "shipping" && memberEmail) {
     const trackingNumber = formData.get("tracking_number") as string | null;
-    // 追跡番号は DB マイグレーション後に保存予定
-    console.log(
-      `[発送] 注文ID: ${orderId} 追跡番号: ${trackingNumber ?? "未入力"}`
+    if (trackingNumber) {
+      console.log(`[発送] 注文ID: ${orderId} 追跡番号: ${trackingNumber}`);
+    }
+    sendShippingNotificationEmail({ orderId, memberEmail }).catch((e) =>
+      console.error("[発送通知メール] 送信エラー:", e)
     );
-    // 発送通知メール（BRAND-69）
-    console.log(`[発送通知メール予定] 注文ID: ${orderId}`);
   }
 
-  if (nextStatus === "delivered") {
-    // 配達完了通知メール（BRAND-69）
-    console.log(`[配達完了通知メール予定] 注文ID: ${orderId}`);
+  if (nextStatus === "delivered" && memberEmail) {
+    sendDeliveryNotificationEmail({ orderId, memberEmail }).catch((e) =>
+      console.error("[配送完了通知メール] 送信エラー:", e)
+    );
   }
 
   redirect(`/admin/orders/${orderId}`);
