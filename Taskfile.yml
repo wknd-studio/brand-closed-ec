@@ -33,6 +33,12 @@ tasks:
     cmds:
       - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
 
+  seed:
+    desc: 開発用シードデータを一括投入（Supabaseユーザー → Sanity商品）
+    cmds:
+      - task: supabase:seed-users
+      - task: sanity:seed
+
   supabase:seed-users:
     desc: Supabase ローカルDBに開発用ユーザーをシード（Clerkに存在するユーザーのみ）
     cmds:
