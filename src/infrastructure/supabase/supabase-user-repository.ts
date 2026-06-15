@@ -1,0 +1,71 @@
+import { createAdminClient } from "@/lib/supabase/server-admin";
+import type { UserRepository } from "@/repositories/user-repository";
+import { User } from "@/domain/entities/user";
+import { MemberRank } from "@/domain/value-objects/member-rank";
+
+type UserRow = {
+  id: string;
+  clerk_user_id: string;
+  email: string;
+  rank: string;
+  subscribed_at: string | null;
+  onboarding_completed: boolean;
+  terms_agreed_at: string | null;
+  terms_version: string | null;
+  deleted_at: string | null;
+};
+
+function toUser(row: UserRow): User {
+  return User.of({
+    id: row.id,
+    clerkUserId: row.clerk_user_id,
+    email: row.email,
+    rank: MemberRank.of(row.rank),
+    subscribedAt: row.subscribed_at ? new Date(row.subscribed_at) : null,
+    onboardingCompleted: row.onboarding_completed,
+    termsAgreedAt: row.terms_agreed_at ? new Date(row.terms_agreed_at) : null,
+    termsVersion: row.terms_version,
+    deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
+  });
+}
+
+const SELECT_FIELDS =
+  "id, clerk_user_id, email, rank, subscribed_at, onboarding_completed, terms_agreed_at, terms_version, deleted_at";
+
+export class SupabaseUserRepository implements UserRepository {
+  private get db() {
+    return createAdminClient();
+  }
+
+  async findByClerkUserId(clerkUserId: string): Promise<User | null> {
+    const { data } = await this.db
+      .from("users")
+      .select(SELECT_FIELDS)
+      .eq("clerk_user_id", clerkUserId)
+      .single();
+    return data ? toUser(data as UserRow) : null;
+  }
+
+  async findById(id: string): Promise<User | null> {
+    const { data } = await this.db
+      .from("users")
+      .select(SELECT_FIELDS)
+      .eq("id", id)
+      .single();
+    return data ? toUser(data as UserRow) : null;
+  }
+
+  async save(user: User): Promise<void> {
+    await this.db.from("users").upsert({
+      id: user.id,
+      clerk_user_id: user.clerkUserId,
+      email: user.email,
+      rank: user.rank.value,
+      subscribed_at: user.subscribedAt?.toISOString() ?? null,
+      onboarding_completed: user.onboardingCompleted,
+      terms_agreed_at: user.termsAgreedAt?.toISOString() ?? null,
+      terms_version: user.termsVersion,
+      deleted_at: user.deletedAt?.toISOString() ?? null,
+    });
+  }
+}

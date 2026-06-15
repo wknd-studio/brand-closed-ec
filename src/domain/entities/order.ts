@@ -54,6 +54,27 @@ export class Order {
     return new Order(props);
   }
 
+  with(overrides: Partial<OrderProps>): Order {
+    return new Order({ ...this.toProps(), ...overrides });
+  }
+
+  private toProps(): OrderProps {
+    return {
+      id: this.id,
+      userId: this.userId,
+      paymentFlow: this.paymentFlow,
+      status: this.status,
+      shippingAddress: this.shippingAddress,
+      billingAddress: this.billingAddress,
+      rankAtOrder: this.rankAtOrder,
+      monthlyLimitAtOrder: this.monthlyLimitAtOrder,
+      stripeCheckoutSessionId: this.stripeCheckoutSessionId,
+      stripeInvoiceId: this.stripeInvoiceId,
+      items: this.items,
+      createdAt: this.createdAt,
+    };
+  }
+
   isInvoiceFlow(): boolean {
     return this.paymentFlow === "invoice";
   }
