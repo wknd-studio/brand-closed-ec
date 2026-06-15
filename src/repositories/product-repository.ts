@@ -1,0 +1,14 @@
+import type { Money } from "@/domain/value-objects/money";
+import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+
+export interface ProductSnapshot {
+  sanityProductId: string;
+  productName: string;
+  unitPrice: Money;
+  isNegotiable: boolean;
+  minRank: MemberRankValue;
+}
+
+export interface ProductRepository {
+  findByIds(ids: string[]): Promise<ProductSnapshot[]>;
+}
