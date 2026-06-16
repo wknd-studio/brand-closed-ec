@@ -16,6 +16,10 @@ vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
   SupabaseUserRepository: vi.fn(),
 }));
 
+vi.mock("@/lib/supabase/server-admin", () => ({
+  createAdminClient: vi.fn().mockReturnValue({}),
+}));
+
 import { headers } from "next/headers";
 import { Webhook } from "svix";
 import { createUser } from "@/use-cases/create-user";
