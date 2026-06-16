@@ -20,6 +20,10 @@ vi.mock("@/infrastructure/clerk/clerk-account-gateway", () => ({
   ClerkAccountGateway: vi.fn(),
 }));
 
+vi.mock("@/lib/supabase/server-admin", () => ({
+  createAdminClient: vi.fn().mockReturnValue({}),
+}));
+
 import { auth } from "@clerk/nextjs/server";
 import { withdraw } from "@/use-cases/withdraw";
 import { deleteAccount } from "@/app/(member)/settings/actions";
