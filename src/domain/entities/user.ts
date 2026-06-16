@@ -41,6 +41,24 @@ export class User {
     return new User(props);
   }
 
+  with(overrides: Partial<UserProps>): User {
+    return new User({ ...this.toProps(), ...overrides });
+  }
+
+  private toProps(): UserProps {
+    return {
+      id: this.id,
+      clerkUserId: this.clerkUserId,
+      email: this.email,
+      rank: this.rank,
+      subscribedAt: this.subscribedAt,
+      onboardingCompleted: this.onboardingCompleted,
+      termsAgreedAt: this.termsAgreedAt,
+      termsVersion: this.termsVersion,
+      deletedAt: this.deletedAt,
+    };
+  }
+
   getMonthlyPeriod(now: Date = new Date()): MonthlyPeriod {
     return MonthlyPeriod.fromSubscribedAt(this.subscribedAt, now);
   }

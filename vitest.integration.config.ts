@@ -6,7 +6,7 @@ export default defineConfig({
   esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
-    include: ["tests/unit/**/*.test.{ts,tsx}"],
+    include: ["tests/integration/**/*.test.{ts,tsx}"],
     setupFiles: ["tests/setup.ts"],
     env: {
       BASE_URL: "http://localhost:3000",
