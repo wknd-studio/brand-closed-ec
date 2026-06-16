@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MonthlyLimitService } from "@/domain/services/monthly-limit-service";
+import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
@@ -17,6 +17,8 @@ function makeUser(rankValue: string): User {
     deletedAt: null,
     termsAgreedAt: null,
     termsVersion: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
   });
 }
 
@@ -40,15 +42,13 @@ function makeNegotiableItem(): CartItem {
   });
 }
 
-describe("MonthlyLimitService", () => {
-  const service = new MonthlyLimitService();
-
+describe("checkMonthlyLimit", () => {
   it("固定金額合計 + 確定済み金額が上限以内なら例外を投げない", () => {
     const user = makeUser("standard"); // 上限5,000,000円
     const cartItems = [makeFixedItem(1_000_000)];
     const confirmed = Money.of(2_000_000);
 
-    expect(() => service.check(user, cartItems, confirmed)).not.toThrow();
+    expect(() => checkMonthlyLimit(user, cartItems, confirmed)).not.toThrow();
   });
 
   it("固定金額合計 + 確定済み金額が上限を超えたら LimitExceededError を投げる", () => {
@@ -56,7 +56,7 @@ describe("MonthlyLimitService", () => {
     const cartItems = [makeFixedItem(3_000_000)];
     const confirmed = Money.of(3_000_000);
 
-    expect(() => service.check(user, cartItems, confirmed)).toThrow(
+    expect(() => checkMonthlyLimit(user, cartItems, confirmed)).toThrow(
       LimitExceededError
     );
   });
@@ -67,7 +67,7 @@ describe("MonthlyLimitService", () => {
     const confirmed = Money.of(3_000_000);
 
     // 固定のみ1,000,000 + 確定済み3,000,000 = 4,000,000 < 5,000,000 → OK
-    expect(() => service.check(user, cartItems, confirmed)).not.toThrow();
+    expect(() => checkMonthlyLimit(user, cartItems, confirmed)).not.toThrow();
   });
 
   it("ちょうど上限と同額なら例外を投げない", () => {
@@ -75,7 +75,7 @@ describe("MonthlyLimitService", () => {
     const cartItems = [makeFixedItem(2_500_000)];
     const confirmed = Money.of(2_500_000);
 
-    expect(() => service.check(user, cartItems, confirmed)).not.toThrow();
+    expect(() => checkMonthlyLimit(user, cartItems, confirmed)).not.toThrow();
   });
 
   it("LimitExceededErrorは試行金額と上限を保持する", () => {
@@ -85,7 +85,7 @@ describe("MonthlyLimitService", () => {
 
     let caught: LimitExceededError | undefined;
     try {
-      service.check(user, cartItems, confirmed);
+      checkMonthlyLimit(user, cartItems, confirmed);
     } catch (e) {
       caught = e as LimitExceededError;
     }

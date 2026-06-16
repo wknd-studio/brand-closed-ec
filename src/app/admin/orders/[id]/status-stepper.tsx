@@ -150,10 +150,8 @@ export default function StatusStepper({
 
   function handleAdvance() {
     setError(null);
-    const fd = new FormData();
-    fd.set("tracking_number", trackingNumber);
     startTransition(async () => {
-      const result = await advanceOrderStatus(orderId, fd);
+      const result = await advanceOrderStatus(orderId);
       if (result && "error" in result) setError(result.error);
     });
   }

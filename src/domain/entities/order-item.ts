@@ -33,6 +33,19 @@ export class OrderItem {
     return new OrderItem(props);
   }
 
+  with(overrides: Partial<OrderItemProps>): OrderItem {
+    return new OrderItem({
+      id: this.id,
+      sanityProductId: this.sanityProductId,
+      productNameSnapshot: this.productNameSnapshot,
+      unitPriceSnapshot: this.unitPriceSnapshot,
+      quantity: this.quantity,
+      isNegotiable: this.isNegotiable,
+      negotiatedUnitPrice: this.negotiatedUnitPrice,
+      ...overrides,
+    });
+  }
+
   getSubtotal(): Money {
     if (this.isNegotiable) {
       if (!this.negotiatedUnitPrice) return Money.zero();

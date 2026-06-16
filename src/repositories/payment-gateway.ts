@@ -1,5 +1,4 @@
 import type { Order } from "@/domain/entities/order";
-import type { ProductSnapshot } from "./product-repository";
 
 export interface CheckoutLineItem {
   productName: string;
@@ -21,8 +20,7 @@ export interface PaymentGateway {
 
   createInvoiceForOrder(
     order: Order,
-    stripeCustomerId: string,
-    lineItems: ProductSnapshot[]
+    stripeCustomerId: string
   ): Promise<string>;
 
   ensureCustomer(email: string, userId: string): Promise<string>;
