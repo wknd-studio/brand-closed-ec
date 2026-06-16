@@ -135,6 +135,7 @@ export function makeOrderRepo(order?: Order): OrderRepository {
     findByStripeInvoiceId: vi.fn().mockResolvedValue(order ?? null),
     sumConfirmedAmountByUserId: vi.fn().mockResolvedValue(0),
     save: vi.fn().mockResolvedValue(undefined),
+    findActiveByUserId: vi.fn().mockResolvedValue([]),
     findActiveOrdersWithUser: vi.fn().mockResolvedValue([]),
     findByIdWithUser: vi.fn().mockResolvedValue(null),
   };

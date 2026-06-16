@@ -34,6 +34,9 @@ export interface OrderRepository {
 
   save(order: Order): Promise<void>;
 
+  /** 退会ゲートチェック用: ユーザーの非ターミナル注文（進行中）を取得 */
+  findActiveByUserId(userId: string): Promise<Order[]>;
+
   /** 管理画面用: アクティブな注文一覧をユーザー情報込みで取得 */
   findActiveOrdersWithUser(): Promise<OrderWithUser[]>;
 

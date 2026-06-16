@@ -20,6 +20,10 @@ vi.mock("@/infrastructure/clerk/clerk-account-gateway", () => ({
   ClerkAccountGateway: vi.fn(),
 }));
 
+vi.mock("@/infrastructure/supabase/supabase-order-repository", () => ({
+  SupabaseOrderRepository: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server-admin", () => ({
   createAdminClient: vi.fn().mockReturnValue({}),
 }));

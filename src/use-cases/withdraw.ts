@@ -1,6 +1,8 @@
 import type { UserRepository } from "@/repositories/user-repository";
+import type { OrderRepository } from "@/repositories/order-repository";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
+import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 
 export type WithdrawInput = {
   clerkUserId: string;
@@ -8,6 +10,7 @@ export type WithdrawInput = {
 
 export type WithdrawDeps = {
   userRepo: UserRepository;
+  orderRepo: OrderRepository;
   subscriptionGateway: SubscriptionGateway;
   accountGateway: AccountGateway;
 };
@@ -16,10 +19,13 @@ export async function withdraw(
   input: WithdrawInput,
   deps: WithdrawDeps
 ): Promise<void> {
-  const { userRepo, subscriptionGateway, accountGateway } = deps;
+  const { userRepo, orderRepo, subscriptionGateway, accountGateway } = deps;
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
   if (!user) throw new Error("ユーザーが見つかりません");
+
+  const activeOrders = await orderRepo.findActiveByUserId(user.id);
+  if (activeOrders.length > 0) throw new ActiveOrdersExistError();
 
   const withdrawnUser = user.with({ deletedAt: new Date() });
   await userRepo.save(withdrawnUser);

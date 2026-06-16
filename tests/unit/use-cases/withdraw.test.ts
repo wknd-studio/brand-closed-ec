@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { withdraw } from "@/use-cases/withdraw";
+import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import {
   makeUserRepo,
+  makeOrderRepo,
   makeSubscriptionGateway,
   makeAccountGateway,
   makeUser,
+  makeOrder,
 } from "./helpers";
 
 describe("withdraw", () => {
@@ -17,6 +20,7 @@ describe("withdraw", () => {
         { clerkUserId: "clerk-1" },
         {
           userRepo,
+          orderRepo: makeOrderRepo(),
           subscriptionGateway: makeSubscriptionGateway(),
           accountGateway: makeAccountGateway(),
         }
@@ -24,17 +28,36 @@ describe("withdraw", () => {
     ).rejects.toThrow("ユーザーが見つかりません");
   });
 
+  it("進行中の注文がある場合は ActiveOrdersExistError をthrowする", async () => {
+    const userRepo = makeUserRepo();
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.findActiveByUserId).mockResolvedValue([makeOrder()]);
+
+    await expect(
+      withdraw(
+        { clerkUserId: "clerk-1" },
+        {
+          userRepo,
+          orderRepo,
+          subscriptionGateway: makeSubscriptionGateway(),
+          accountGateway: makeAccountGateway(),
+        }
+      )
+    ).rejects.toThrow(ActiveOrdersExistError);
+  });
+
   it("有料会員: Supabase論理削除 → Stripe解約 → Clerk削除を順に実行する", async () => {
     const user = makeUser({ rank: "entry" }).with({
       stripeSubscriptionId: "sub_123",
     });
     const userRepo = makeUserRepo(user);
+    const orderRepo = makeOrderRepo();
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
 
     await withdraw(
       { clerkUserId: "clerk-1" },
-      { userRepo, subscriptionGateway, accountGateway }
+      { userRepo, orderRepo, subscriptionGateway, accountGateway }
     );
 
     const savedUser = vi.mocked(userRepo.save).mock.calls[0][0];
@@ -50,12 +73,13 @@ describe("withdraw", () => {
       stripeSubscriptionId: null,
     });
     const userRepo = makeUserRepo(user);
+    const orderRepo = makeOrderRepo();
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
 
     await withdraw(
       { clerkUserId: "clerk-1" },
-      { userRepo, subscriptionGateway, accountGateway }
+      { userRepo, orderRepo, subscriptionGateway, accountGateway }
     );
 
     expect(subscriptionGateway.cancelSubscription).not.toHaveBeenCalled();
@@ -67,6 +91,7 @@ describe("withdraw", () => {
       stripeSubscriptionId: "sub_123",
     });
     const userRepo = makeUserRepo(user);
+    const orderRepo = makeOrderRepo();
     const subscriptionGateway = makeSubscriptionGateway();
     vi.mocked(subscriptionGateway.cancelSubscription).mockRejectedValue(
       new Error("Stripe error")
@@ -76,7 +101,7 @@ describe("withdraw", () => {
     await expect(
       withdraw(
         { clerkUserId: "clerk-1" },
-        { userRepo, subscriptionGateway, accountGateway }
+        { userRepo, orderRepo, subscriptionGateway, accountGateway }
       )
     ).rejects.toThrow();
 
@@ -90,6 +115,7 @@ describe("withdraw", () => {
       stripeSubscriptionId: "sub_123",
     });
     const userRepo = makeUserRepo(user);
+    const orderRepo = makeOrderRepo();
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
     vi.mocked(accountGateway.deleteUser).mockRejectedValue(
@@ -99,7 +125,7 @@ describe("withdraw", () => {
     await expect(
       withdraw(
         { clerkUserId: "clerk-1" },
-        { userRepo, subscriptionGateway, accountGateway }
+        { userRepo, orderRepo, subscriptionGateway, accountGateway }
       )
     ).resolves.toBeUndefined();
   });
