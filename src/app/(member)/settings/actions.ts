@@ -7,6 +7,7 @@ import { createAddress } from "@/use-cases/create-address";
 import { updateAddress } from "@/use-cases/update-address";
 import { deleteAddress } from "@/use-cases/delete-address";
 import { setDefaultAddress } from "@/use-cases/set-default-address";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
@@ -26,8 +27,8 @@ export async function setDefaultAddressAction(
     await setDefaultAddress(
       { clerkUserId: userId, addressId, type },
       {
-        userRepo: new SupabaseUserRepository(),
-        addressRepo: new SupabaseAddressRepository(),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
+        addressRepo: new SupabaseAddressRepository(createAdminClient()),
       }
     );
     revalidatePath("/settings");
@@ -58,8 +59,8 @@ export async function createAddressAction(
         phoneNumber: String(formData.get("phone_number") ?? ""),
       },
       {
-        userRepo: new SupabaseUserRepository(),
-        addressRepo: new SupabaseAddressRepository(),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
+        addressRepo: new SupabaseAddressRepository(createAdminClient()),
       }
     );
     revalidatePath("/settings");
@@ -89,7 +90,7 @@ export async function updateAddressAction(
         addressLine2: (formData.get("address_line2") as string) || null,
         phoneNumber: String(formData.get("phone_number") ?? ""),
       },
-      { addressRepo: new SupabaseAddressRepository() }
+      { addressRepo: new SupabaseAddressRepository(createAdminClient()) }
     );
     revalidatePath("/settings");
     return { success: true };
@@ -107,7 +108,7 @@ export async function deleteAddressAction(
   try {
     await deleteAddress(
       { addressId },
-      { addressRepo: new SupabaseAddressRepository() }
+      { addressRepo: new SupabaseAddressRepository(createAdminClient()) }
     );
     revalidatePath("/settings");
     return { success: true };
@@ -126,7 +127,7 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
     await withdraw(
       { clerkUserId: userId },
       {
-        userRepo: new SupabaseUserRepository(),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
         subscriptionGateway: new StripeSubscriptionGateway(),
         accountGateway: new ClerkAccountGateway(),
       }

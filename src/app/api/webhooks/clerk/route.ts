@@ -2,6 +2,7 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createUser } from "@/use-cases/create-user";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 
 export async function POST(req: Request) {
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
         firstName: data.first_name ?? "",
         lastName: data.last_name ?? "",
       },
-      { userRepo: new SupabaseUserRepository() }
+      { userRepo: new SupabaseUserRepository(createAdminClient()) }
     );
   }
 

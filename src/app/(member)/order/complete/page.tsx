@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createServerClient } from "@/lib/supabase/server";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import OrderCompleteClient from "./order-complete-client";
 
 type Props = {
@@ -14,28 +15,25 @@ export default async function OrderCompletePage({ searchParams }: Props) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const supabase = createAdminClient();
+  const supabase = await createServerClient();
+  const orderRepo = new SupabaseOrderRepository(supabase);
 
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id, created_at")
-    .eq("stripe_checkout_session_id", session_id)
-    .single();
-
+  const order = await orderRepo.findByStripeCheckoutSessionId(session_id);
   if (!order) redirect("/shop");
-
-  const { data: items } = await supabase
-    .from("order_items")
-    .select(
-      "id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable"
-    )
-    .eq("order_id", order.id);
 
   return (
     <OrderCompleteClient
       orderId={order.id}
-      createdAt={order.created_at}
-      items={items ?? []}
+      createdAt={order.createdAt.toISOString()}
+      items={order.items.map((item) => ({
+        id: item.id,
+        productNameSnapshot: item.productNameSnapshot,
+        quantity: item.quantity,
+        unitPriceSnapshot: item.isNegotiable
+          ? null
+          : item.unitPriceSnapshot.amount,
+        isNegotiable: item.isNegotiable,
+      }))}
     />
   );
 }

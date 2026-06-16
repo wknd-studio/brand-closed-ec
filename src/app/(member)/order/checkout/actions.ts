@@ -6,6 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { placeOrder as placeOrderUseCase } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
@@ -43,9 +44,9 @@ export async function placeOrder(
         baseUrl,
       },
       {
-        userRepo: new SupabaseUserRepository(),
-        orderRepo: new SupabaseOrderRepository(),
-        addressRepo: new SupabaseAddressRepository(),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
+        orderRepo: new SupabaseOrderRepository(createAdminClient()),
+        addressRepo: new SupabaseAddressRepository(createAdminClient()),
         productRepo: new SanityProductRepository(),
         paymentGateway: new StripePaymentGateway(),
         notificationService: new ResendNotificationService(),

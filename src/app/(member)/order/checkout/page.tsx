@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createServerClient } from "@/lib/supabase/server";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { fetchProductsByIds, type MemberRank } from "@/lib/sanity/products";
 import CheckoutForm from "./checkout-form";
@@ -13,35 +15,38 @@ export default async function CheckoutPage() {
   const cart = parseCart(cookieStore.get(COOKIE_NAME)?.value);
   if (cart.items.length === 0) redirect("/shop");
 
-  const supabase = createAdminClient();
+  const supabase = await createServerClient();
+  const userRepo = new SupabaseUserRepository(supabase);
+  const addressRepo = new SupabaseAddressRepository(supabase);
 
-  const [{ data: user }, products] = await Promise.all([
-    supabase
-      .from("users")
-      .select("id, rank")
-      .eq("clerk_user_id", userId!)
-      .single(),
+  const [user, products] = await Promise.all([
+    userRepo.findByClerkUserId(userId!),
     fetchProductsByIds(cart.items.map((i) => i.productId)),
   ]);
 
   if (!user) redirect("/shop");
 
-  const userRank = user.rank as MemberRank;
+  const userRank = user.rank.value as MemberRank;
+  const addresses = await addressRepo.findByUserId(user.id);
 
-  const { data: addresses } = await supabase
-    .from("addresses")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
+  const addressDtos = addresses.map((a) => ({
+    id: a.id,
+    isDefault: a.isDefault,
+    recipientLastName: a.recipientLastName,
+    recipientFirstName: a.recipientFirstName,
+    postalCode: a.postalCode,
+    prefecture: a.prefecture,
+    city: a.city,
+    addressLine1: a.addressLine1,
+  }));
 
-  const shippingAddresses = (addresses ?? []).filter(
-    (a) => a.type === "shipping"
+  const shippingAddresses = addressDtos.filter(
+    (a) => addresses.find((addr) => addr.id === a.id)?.type === "shipping"
   );
-  const billingAddresses = (addresses ?? []).filter(
-    (a) => a.type === "billing"
+  const billingAddresses = addressDtos.filter(
+    (a) => addresses.find((addr) => addr.id === a.id)?.type === "billing"
   );
 
-  // Sanityから取得した正規価格でカートアイテムを再構築
   const lineItems = cart.items.map((item) => {
     const product = products.find((p) => p._id === item.productId);
     const unitPrice = product?.is_negotiable

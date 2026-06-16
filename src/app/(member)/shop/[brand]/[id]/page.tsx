@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { PortableText } from "@portabletext/react";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createServerClient } from "@/lib/supabase/server";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import {
   fetchProductById,
   isProductAccessible,
@@ -20,14 +21,11 @@ export default async function ProductDetailPage({
   const brand = decodeURIComponent(encodedBrand);
   const { userId } = await auth();
 
-  const supabase = createAdminClient();
-  const { data: user } = await supabase
-    .from("users")
-    .select("rank")
-    .eq("clerk_user_id", userId!)
-    .single();
+  const supabase = await createServerClient();
+  const userRepo = new SupabaseUserRepository(supabase);
 
-  const userRank = user?.rank ?? "free";
+  const user = await userRepo.findByClerkUserId(userId!);
+  const userRank = user?.rank.value ?? "free";
   const product = await fetchProductById(id);
 
   if (!product || !isProductAccessible(userRank, product.min_rank)) {

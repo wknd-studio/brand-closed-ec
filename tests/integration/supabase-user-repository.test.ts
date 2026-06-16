@@ -34,7 +34,7 @@ afterAll(async () => {
 });
 
 describe("SupabaseUserRepository", () => {
-  const repo = new SupabaseUserRepository();
+  const repo = new SupabaseUserRepository(supabase);
 
   describe("findByClerkUserId()", () => {
     it("存在するユーザーを返す", async () => {

@@ -1,4 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import type { UserRepository } from "@/repositories/user-repository";
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -37,9 +38,7 @@ const SELECT_FIELDS =
   "id, clerk_user_id, email, rank, subscribed_at, onboarding_completed, terms_agreed_at, terms_version, deleted_at, stripe_customer_id, stripe_subscription_id";
 
 export class SupabaseUserRepository implements UserRepository {
-  private get db() {
-    return createAdminClient();
-  }
+  constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findByClerkUserId(clerkUserId: string): Promise<User | null> {
     const { data } = await this.db

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
 import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
@@ -35,8 +36,8 @@ export async function POST(req: Request) {
 
     if (session.mode === "payment") {
       const deps = {
-        orderRepo: new SupabaseOrderRepository(),
-        userRepo: new SupabaseUserRepository(),
+        orderRepo: new SupabaseOrderRepository(createAdminClient()),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
         notificationService: new ResendNotificationService(),
       };
 
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
             stripeSubscriptionId: session.subscription as string,
           },
           {
-            userRepo: new SupabaseUserRepository(),
+            userRepo: new SupabaseUserRepository(createAdminClient()),
             accountGateway: new ClerkAccountGateway(),
           }
         );
@@ -89,8 +90,8 @@ export async function POST(req: Request) {
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
     const deps = {
-      orderRepo: new SupabaseOrderRepository(),
-      userRepo: new SupabaseUserRepository(),
+      orderRepo: new SupabaseOrderRepository(createAdminClient()),
+      userRepo: new SupabaseUserRepository(createAdminClient()),
       notificationService: new ResendNotificationService(),
     };
 

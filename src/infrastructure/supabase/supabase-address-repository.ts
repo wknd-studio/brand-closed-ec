@@ -1,4 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import type { AddressRepository } from "@/repositories/address-repository";
 import { Address } from "@/domain/entities/address";
 import type { AddressType } from "@/domain/entities/address";
@@ -37,9 +38,7 @@ const SELECT_FIELDS =
   "id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number";
 
 export class SupabaseAddressRepository implements AddressRepository {
-  private get db() {
-    return createAdminClient();
-  }
+  constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findById(id: string): Promise<Address | null> {
     const { data } = await this.db

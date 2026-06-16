@@ -80,7 +80,7 @@ afterAll(async () => {
 });
 
 describe("SupabaseOrderRepository", () => {
-  const repo = new SupabaseOrderRepository();
+  const repo = new SupabaseOrderRepository(supabase);
 
   describe("save() — 新規作成", () => {
     it("Order と OrderItem を保存できる", async () => {

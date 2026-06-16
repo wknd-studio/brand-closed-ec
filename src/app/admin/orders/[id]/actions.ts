@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { issueInvoice as issueInvoiceUseCase } from "@/use-cases/issue-invoice";
 import { advanceOrderStatus as advanceOrderStatusUseCase } from "@/use-cases/advance-order-status";
 import { cancelOrder as cancelOrderUseCase } from "@/use-cases/cancel-order";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { StripePaymentGateway } from "@/infrastructure/stripe/stripe-payment-gateway";
@@ -26,7 +27,7 @@ export async function issueInvoice(
   const authError = await requireAdmin();
   if (authError) return authError;
 
-  const orderRepo = new SupabaseOrderRepository();
+  const orderRepo = new SupabaseOrderRepository(createAdminClient());
 
   const order = await orderRepo.findById(orderId);
   if (!order) return { error: "注文が見つかりません" };
@@ -48,7 +49,7 @@ export async function issueInvoice(
     { orderId, negotiatedPrices },
     {
       orderRepo,
-      userRepo: new SupabaseUserRepository(),
+      userRepo: new SupabaseUserRepository(createAdminClient()),
       paymentGateway: new StripePaymentGateway(),
       notificationService: new ResendNotificationService(),
     }
@@ -73,8 +74,8 @@ export async function advanceOrderStatus(
     await advanceOrderStatusUseCase(
       { orderId },
       {
-        orderRepo: new SupabaseOrderRepository(),
-        userRepo: new SupabaseUserRepository(),
+        orderRepo: new SupabaseOrderRepository(createAdminClient()),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
         notificationService: new ResendNotificationService(),
       }
     );
@@ -98,7 +99,7 @@ export async function cancelOrder(
   try {
     await cancelOrderUseCase(
       { orderId },
-      { orderRepo: new SupabaseOrderRepository() }
+      { orderRepo: new SupabaseOrderRepository(createAdminClient()) }
     );
   } catch (err) {
     const message =
