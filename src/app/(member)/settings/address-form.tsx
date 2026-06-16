@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createAddress, updateAddress } from "./actions";
+import { createAddressAction, updateAddressAction } from "./actions";
 import type { Database } from "@/types/database.types";
 
 type Address = Database["public"]["Tables"]["addresses"]["Row"];
@@ -110,8 +110,8 @@ export default function AddressForm(props: Props) {
     setIsPending(true);
     const result =
       props.mode === "create"
-        ? await createAddress(formData)
-        : await updateAddress(props.address.id, formData);
+        ? await createAddressAction(formData)
+        : await updateAddressAction(props.address.id, formData);
     setIsPending(false);
     if ("error" in result) {
       setError(result.error);

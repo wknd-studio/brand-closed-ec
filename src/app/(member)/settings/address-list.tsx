@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setDefaultAddress, deleteAddress } from "./actions";
+import { setDefaultAddressAction, deleteAddressAction } from "./actions";
 import AddressForm from "./address-form";
 import type { Database } from "@/types/database.types";
 
@@ -67,7 +67,7 @@ export default function AddressList({ addresses, type, label }: Props) {
                       disabled={isPending}
                       onClick={() =>
                         startTransition(async () => {
-                          await setDefaultAddress(addr.id, type);
+                          await setDefaultAddressAction(addr.id, type);
                         })
                       }
                       className="text-xs text-gray-400 hover:text-gray-900 disabled:opacity-40"
@@ -107,7 +107,7 @@ export default function AddressList({ addresses, type, label }: Props) {
                       disabled={isPending}
                       onClick={() =>
                         startTransition(async () => {
-                          await deleteAddress(addr.id);
+                          await deleteAddressAction(addr.id);
                           setDeleteConfirmId(null);
                         })
                       }

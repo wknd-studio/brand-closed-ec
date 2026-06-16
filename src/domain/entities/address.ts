@@ -20,30 +20,60 @@ export class Address {
   readonly id: string;
   readonly type: AddressType;
   readonly isDefault: boolean;
-
-  private readonly props: AddressProps;
+  readonly recipientLastName: string;
+  readonly recipientFirstName: string;
+  readonly postalCode: string;
+  readonly prefecture: string;
+  readonly city: string;
+  readonly addressLine1: string;
+  readonly addressLine2: string;
+  readonly phoneNumber: string;
 
   private constructor(props: AddressProps) {
     this.id = props.id;
     this.type = props.type;
     this.isDefault = props.isDefault;
-    this.props = props;
+    this.recipientLastName = props.recipientLastName;
+    this.recipientFirstName = props.recipientFirstName;
+    this.postalCode = props.postalCode;
+    this.prefecture = props.prefecture;
+    this.city = props.city;
+    this.addressLine1 = props.addressLine1;
+    this.addressLine2 = props.addressLine2;
+    this.phoneNumber = props.phoneNumber;
   }
 
   static of(props: AddressProps): Address {
     return new Address(props);
   }
 
+  with(overrides: Partial<AddressProps>): Address {
+    return Address.of({
+      id: this.id,
+      type: this.type,
+      isDefault: this.isDefault,
+      recipientLastName: this.recipientLastName,
+      recipientFirstName: this.recipientFirstName,
+      postalCode: this.postalCode,
+      prefecture: this.prefecture,
+      city: this.city,
+      addressLine1: this.addressLine1,
+      addressLine2: this.addressLine2,
+      phoneNumber: this.phoneNumber,
+      ...overrides,
+    });
+  }
+
   toSnapshot(): AddressSnapshot {
     return AddressSnapshot.of({
-      recipientLastName: this.props.recipientLastName,
-      recipientFirstName: this.props.recipientFirstName,
-      postalCode: this.props.postalCode,
-      prefecture: this.props.prefecture,
-      city: this.props.city,
-      addressLine1: this.props.addressLine1,
-      addressLine2: this.props.addressLine2,
-      phoneNumber: this.props.phoneNumber,
+      recipientLastName: this.recipientLastName,
+      recipientFirstName: this.recipientFirstName,
+      postalCode: this.postalCode,
+      prefecture: this.prefecture,
+      city: this.city,
+      addressLine1: this.addressLine1,
+      addressLine2: this.addressLine2,
+      phoneNumber: this.phoneNumber,
     });
   }
 }
