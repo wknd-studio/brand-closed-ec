@@ -148,6 +148,11 @@ export function makeAddressRepo(): AddressRepository {
         )
       ),
     findByUserId: vi.fn().mockResolvedValue([]),
+    countByUserIdAndType: vi.fn().mockResolvedValue(0),
+    save: vi.fn().mockResolvedValue(undefined),
+    update: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+    clearDefault: vi.fn().mockResolvedValue(undefined),
   };
 }
 

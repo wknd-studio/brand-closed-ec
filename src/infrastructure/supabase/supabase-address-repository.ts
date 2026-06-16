@@ -58,4 +58,63 @@ export class SupabaseAddressRepository implements AddressRepository {
       .order("is_default", { ascending: false });
     return (data ?? []).map((row) => toAddress(row as AddressRow));
   }
+
+  async countByUserIdAndType(
+    userId: string,
+    type: AddressType
+  ): Promise<number> {
+    const { count } = await this.db
+      .from("addresses")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("type", type);
+    return count ?? 0;
+  }
+
+  async save(address: Address, userId: string): Promise<void> {
+    await this.db.from("addresses").insert({
+      id: address.id,
+      user_id: userId,
+      type: address.type,
+      is_default: address.isDefault,
+      recipient_last_name: address.recipientLastName,
+      recipient_first_name: address.recipientFirstName,
+      postal_code: address.postalCode,
+      prefecture: address.prefecture,
+      city: address.city,
+      address_line1: address.addressLine1,
+      address_line2: address.addressLine2 || null,
+      phone_number: address.phoneNumber,
+    });
+  }
+
+  async update(address: Address): Promise<void> {
+    await this.db
+      .from("addresses")
+      .update({
+        type: address.type,
+        is_default: address.isDefault,
+        recipient_last_name: address.recipientLastName,
+        recipient_first_name: address.recipientFirstName,
+        postal_code: address.postalCode,
+        prefecture: address.prefecture,
+        city: address.city,
+        address_line1: address.addressLine1,
+        address_line2: address.addressLine2 || null,
+        phone_number: address.phoneNumber,
+      })
+      .eq("id", address.id);
+  }
+
+  async delete(addressId: string): Promise<void> {
+    await this.db.from("addresses").delete().eq("id", addressId);
+  }
+
+  async clearDefault(userId: string, type: AddressType): Promise<void> {
+    await this.db
+      .from("addresses")
+      .update({ is_default: false })
+      .eq("user_id", userId)
+      .eq("type", type);
+  }
 }
