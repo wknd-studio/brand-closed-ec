@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server-admin";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import InvoiceForm from "./invoice-form";
 import StatusStepper from "./status-stepper";
 
@@ -25,30 +26,15 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function AdminOrderDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = createAdminClient();
+  const orderRepo = new SupabaseOrderRepository(supabase);
 
-  const [{ data: order }, { data: items }] = await Promise.all([
-    supabase
-      .from("orders")
-      .select(
-        "id, created_at, status, payment_flow, users(first_name, last_name, email, stripe_customer_id)"
-      )
-      .eq("id", id)
-      .single(),
-    supabase
-      .from("order_items")
-      .select(
-        "id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable"
-      )
-      .eq("order_id", id),
-  ]);
-
+  const order = await orderRepo.findByIdWithUser(id);
   if (!order) notFound();
 
-  const user = Array.isArray(order.users) ? order.users[0] : order.users;
-  const fixedItems = (items ?? []).filter((i) => !i.is_negotiable);
-  const negotiableItems = (items ?? []).filter((i) => i.is_negotiable);
+  const fixedItems = order.items.filter((i) => !i.isNegotiable);
+  const negotiableItems = order.items.filter((i) => i.isNegotiable);
   const fixedTotal = fixedItems.reduce(
-    (sum, i) => sum + (i.unit_price_snapshot ?? 0) * i.quantity,
+    (sum, i) => sum + (i.unitPriceSnapshot ?? 0) * i.quantity,
     0
   );
 
@@ -78,7 +64,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           <StatusStepper
             orderId={order.id}
             currentStatus={order.status}
-            paymentFlow={order.payment_flow}
+            paymentFlow={order.paymentFlow}
           />
         </section>
 
@@ -88,15 +74,19 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           <dl className="space-y-1 text-sm">
             <div className="flex gap-4">
               <dt className="w-24 text-gray-500">氏名</dt>
-              <dd>{user ? `${user.last_name} ${user.first_name}` : "—"}</dd>
+              <dd>
+                {order.user
+                  ? `${order.user.lastName} ${order.user.firstName}`
+                  : "—"}
+              </dd>
             </div>
             <div className="flex gap-4">
               <dt className="w-24 text-gray-500">メール</dt>
-              <dd>{user?.email ?? "—"}</dd>
+              <dd>{order.user?.email ?? "—"}</dd>
             </div>
             <div className="flex gap-4">
               <dt className="w-24 text-gray-500">注文日時</dt>
-              <dd>{new Date(order.created_at).toLocaleString("ja-JP")}</dd>
+              <dd>{order.createdAt.toLocaleString("ja-JP")}</dd>
             </div>
           </dl>
         </section>
@@ -114,13 +104,13 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                   className="flex items-center justify-between py-2 text-sm"
                 >
                   <div>
-                    <p className="font-medium">{item.product_name_snapshot}</p>
+                    <p className="font-medium">{item.productNameSnapshot}</p>
                     <p className="text-xs text-gray-500">× {item.quantity}</p>
                   </div>
                   <p className="tabular-nums">
                     ¥
                     {(
-                      (item.unit_price_snapshot ?? 0) * item.quantity
+                      (item.unitPriceSnapshot ?? 0) * item.quantity
                     ).toLocaleString()}
                   </p>
                 </li>
@@ -144,11 +134,11 @@ export default async function AdminOrderDetailPage({ params }: Props) {
             <ul className="divide-y divide-amber-200">
               {negotiableItems.map((item) => (
                 <li key={item.id} className="py-2 text-sm">
-                  <p className="font-medium">{item.product_name_snapshot}</p>
+                  <p className="font-medium">{item.productNameSnapshot}</p>
                   <p className="text-xs text-amber-700">
                     数量：{item.quantity}
-                    {item.unit_price_snapshot !== null &&
-                      ` / ¥${item.unit_price_snapshot.toLocaleString()}`}
+                    {item.unitPriceSnapshot !== null &&
+                      ` / ¥${item.unitPriceSnapshot.toLocaleString()}`}
                   </p>
                 </li>
               ))}
@@ -171,7 +161,16 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         {/* Invoice発行フォーム（confirming かつ要相談商品ありの場合のみ） */}
         {order.status === "confirming" && negotiableItems.length > 0 && (
           <section className="rounded-lg border p-5">
-            <InvoiceForm orderId={order.id} negotiableItems={negotiableItems} />
+            <InvoiceForm
+              orderId={order.id}
+              negotiableItems={negotiableItems.map((i) => ({
+                id: i.id,
+                product_name_snapshot: i.productNameSnapshot,
+                quantity: i.quantity,
+                unit_price_snapshot: i.unitPriceSnapshot,
+                is_negotiable: i.isNegotiable,
+              }))}
+            />
           </section>
         )}
       </div>

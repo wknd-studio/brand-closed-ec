@@ -1,6 +1,26 @@
 import type { Order } from "@/domain/entities/order";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 
+export type OrderWithUser = {
+  id: string;
+  createdAt: Date;
+  status: string;
+  paymentFlow: "checkout" | "invoice";
+  user: {
+    lastName: string;
+    firstName: string;
+    email: string;
+    stripeCustomerId: string | null;
+  } | null;
+  items: {
+    id: string;
+    productNameSnapshot: string;
+    quantity: number;
+    unitPriceSnapshot: number | null;
+    isNegotiable: boolean;
+  }[];
+};
+
 export interface OrderRepository {
   findById(id: string): Promise<Order | null>;
   findByStripeCheckoutSessionId(sessionId: string): Promise<Order | null>;
@@ -13,4 +33,10 @@ export interface OrderRepository {
   ): Promise<number>;
 
   save(order: Order): Promise<void>;
+
+  /** 管理画面用: アクティブな注文一覧をユーザー情報込みで取得 */
+  findActiveOrdersWithUser(): Promise<OrderWithUser[]>;
+
+  /** 管理画面用: 注文詳細をユーザー情報・アイテム込みで取得 */
+  findByIdWithUser(orderId: string): Promise<OrderWithUser | null>;
 }

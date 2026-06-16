@@ -6,10 +6,10 @@ import { useCart } from "@/lib/cart/context";
 
 type OrderItem = {
   id: string;
-  product_name_snapshot: string;
+  productNameSnapshot: string;
   quantity: number;
-  unit_price_snapshot: number | null;
-  is_negotiable: boolean;
+  unitPriceSnapshot: number | null;
+  isNegotiable: boolean;
 };
 
 type Props = {
@@ -31,10 +31,10 @@ export default function InvoiceCompleteClient({
 
   const orderNumber = orderId.slice(0, 8).toUpperCase();
   const fixedTotal = items.reduce((sum, i) => {
-    if (i.unit_price_snapshot === null) return sum;
-    return sum + i.unit_price_snapshot * i.quantity;
+    if (i.unitPriceSnapshot === null) return sum;
+    return sum + i.unitPriceSnapshot * i.quantity;
   }, 0);
-  const hasNegotiable = items.some((i) => i.is_negotiable);
+  const hasNegotiable = items.some((i) => i.isNegotiable);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -64,22 +64,22 @@ export default function InvoiceCompleteClient({
               >
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium">
-                    {item.product_name_snapshot}
+                    {item.productNameSnapshot}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {item.is_negotiable
+                    {item.isNegotiable
                       ? "価格要相談"
-                      : item.unit_price_snapshot !== null
-                        ? `¥${item.unit_price_snapshot.toLocaleString()}`
+                      : item.unitPriceSnapshot !== null
+                        ? `¥${item.unitPriceSnapshot.toLocaleString()}`
                         : "—"}{" "}
                     × {item.quantity}
                   </p>
                 </div>
                 <p className="text-sm font-medium tabular-nums">
-                  {item.is_negotiable
+                  {item.isNegotiable
                     ? "—"
-                    : item.unit_price_snapshot !== null
-                      ? `¥${(item.unit_price_snapshot * item.quantity).toLocaleString()}`
+                    : item.unitPriceSnapshot !== null
+                      ? `¥${(item.unitPriceSnapshot * item.quantity).toLocaleString()}`
                       : "—"}
                 </p>
               </li>

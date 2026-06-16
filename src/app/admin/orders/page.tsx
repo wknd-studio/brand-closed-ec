@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server-admin";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 
 const STATUS_LABEL: Record<string, string> = {
   confirming: "注文確認中",
@@ -23,31 +24,16 @@ const STATUS_COLOR: Record<string, string> = {
   shipping: "bg-indigo-100 text-indigo-700",
 };
 
-const ACTIVE_STATUSES = [
-  "confirming",
-  "limit_exceeded",
-  "invoice_sent",
-  "paid",
-  "sourcing",
-  "ordered",
-  "preparing",
-  "shipping",
-] as const;
-
 export default async function AdminOrdersPage() {
   const supabase = createAdminClient();
-
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id, created_at, status, users(first_name, last_name, email)")
-    .in("status", ACTIVE_STATUSES)
-    .order("created_at", { ascending: true });
+  const orderRepo = new SupabaseOrderRepository(supabase);
+  const orders = await orderRepo.findActiveOrdersWithUser();
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
       <h1 className="mb-6 text-xl font-semibold">注文管理</h1>
 
-      {!orders || orders.length === 0 ? (
+      {orders.length === 0 ? (
         <p className="text-sm text-gray-500">対応中の注文はありません</p>
       ) : (
         <table className="w-full text-sm">
@@ -61,39 +47,36 @@ export default async function AdminOrdersPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {orders.map((order) => {
-              const user = Array.isArray(order.users)
-                ? order.users[0]
-                : order.users;
-              return (
-                <tr key={order.id}>
-                  <td className="py-3 pr-6 font-mono text-xs">
-                    {order.id.slice(0, 8).toUpperCase()}
-                  </td>
-                  <td className="py-3 pr-6">
-                    {user ? `${user.last_name} ${user.first_name}` : "—"}
-                  </td>
-                  <td className="py-3 pr-6">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[order.status] ?? "bg-gray-100 text-gray-600"}`}
-                    >
-                      {STATUS_LABEL[order.status] ?? order.status}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-6 text-gray-500">
-                    {new Date(order.created_at).toLocaleString("ja-JP")}
-                  </td>
-                  <td className="py-3">
-                    <Link
-                      href={`/admin/orders/${order.id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      詳細
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
+            {orders.map((order) => (
+              <tr key={order.id}>
+                <td className="py-3 pr-6 font-mono text-xs">
+                  {order.id.slice(0, 8).toUpperCase()}
+                </td>
+                <td className="py-3 pr-6">
+                  {order.user
+                    ? `${order.user.lastName} ${order.user.firstName}`
+                    : "—"}
+                </td>
+                <td className="py-3 pr-6">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[order.status] ?? "bg-gray-100 text-gray-600"}`}
+                  >
+                    {STATUS_LABEL[order.status] ?? order.status}
+                  </span>
+                </td>
+                <td className="py-3 pr-6 text-gray-500">
+                  {order.createdAt.toLocaleString("ja-JP")}
+                </td>
+                <td className="py-3">
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    詳細
+                  </Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}

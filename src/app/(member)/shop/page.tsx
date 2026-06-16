@@ -1,20 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createServerClient } from "@/lib/supabase/server";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { fetchBrands, getAllowedRanks } from "@/lib/sanity/products";
 
 export default async function ShopPage() {
   const { userId } = await auth();
+  const supabase = await createServerClient();
+  const userRepo = new SupabaseUserRepository(supabase);
 
-  const supabase = createAdminClient();
-  const { data: user } = await supabase
-    .from("users")
-    .select("rank")
-    .eq("clerk_user_id", userId!)
-    .single();
-
-  const userRank = user?.rank ?? "free";
+  const user = await userRepo.findByClerkUserId(userId!);
+  const userRank = user?.rank.value ?? "free";
   const allowedRanks = getAllowedRanks(userRank);
   const brands = await fetchBrands(allowedRanks);
 

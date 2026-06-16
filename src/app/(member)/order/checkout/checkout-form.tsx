@@ -4,19 +4,27 @@ import { useState } from "react";
 import Link from "next/link";
 import AddressSelector from "./address-selector";
 import { placeOrder } from "./actions";
-import type { Database } from "@/types/database.types";
 
-type Address = Database["public"]["Tables"]["addresses"]["Row"];
+type AddressDto = {
+  id: string;
+  isDefault: boolean;
+  recipientLastName: string;
+  recipientFirstName: string;
+  postalCode: string;
+  prefecture: string;
+  city: string;
+  addressLine1: string;
+};
 
 type Props = {
-  shippingAddresses: Address[];
-  billingAddresses: Address[];
+  shippingAddresses: AddressDto[];
+  billingAddresses: AddressDto[];
   hasOutOfStock: boolean;
   fixedTotal: number;
 };
 
-function defaultId(addresses: Address[]): string {
-  return (addresses.find((a) => a.is_default) ?? addresses[0])?.id ?? "";
+function defaultId(addresses: AddressDto[]): string {
+  return (addresses.find((a) => a.isDefault) ?? addresses[0])?.id ?? "";
 }
 
 export default function CheckoutForm({

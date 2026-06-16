@@ -2,14 +2,22 @@
 
 import { useState } from "react";
 import { createAddressAction, updateAddressAction } from "./actions";
-import type { Database } from "@/types/database.types";
 
-type Address = Database["public"]["Tables"]["addresses"]["Row"];
-type AddressType = Database["public"]["Enums"]["address_type"];
+type AddressDto = {
+  id: string;
+  recipientLastName: string;
+  recipientFirstName: string;
+  postalCode: string;
+  prefecture: string;
+  city: string;
+  addressLine1: string;
+  addressLine2: string;
+  phoneNumber: string;
+};
 
 type Props =
-  | { mode: "create"; type: AddressType; onClose: () => void }
-  | { mode: "edit"; address: Address; onClose: () => void };
+  | { mode: "create"; type: "shipping" | "billing"; onClose: () => void }
+  | { mode: "edit"; address: AddressDto; onClose: () => void };
 
 const PREFECTURES = [
   "北海道",
@@ -89,7 +97,7 @@ export default function AddressForm(props: Props) {
   const [isPending, setIsPending] = useState(false);
   const [prefecture, setPrefecture] = useState(addr?.prefecture ?? "");
   const [city, setCity] = useState(addr?.city ?? "");
-  const [addressLine1, setAddressLine1] = useState(addr?.address_line1 ?? "");
+  const [addressLine1, setAddressLine1] = useState(addr?.addressLine1 ?? "");
   const [zipcodeLoading, setZipcodeLoading] = useState(false);
 
   async function handleZipcodeChange(value: string) {
@@ -137,7 +145,7 @@ export default function AddressForm(props: Props) {
               <label className="mb-1 block text-xs text-gray-500">姓</label>
               <input
                 name="recipient_last_name"
-                defaultValue={addr?.recipient_last_name ?? ""}
+                defaultValue={addr?.recipientLastName ?? ""}
                 required
                 className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
               />
@@ -146,7 +154,7 @@ export default function AddressForm(props: Props) {
               <label className="mb-1 block text-xs text-gray-500">名</label>
               <input
                 name="recipient_first_name"
-                defaultValue={addr?.recipient_first_name ?? ""}
+                defaultValue={addr?.recipientFirstName ?? ""}
                 required
                 className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
               />
@@ -158,7 +166,7 @@ export default function AddressForm(props: Props) {
             <div className="relative">
               <input
                 name="postal_code"
-                defaultValue={addr?.postal_code ?? ""}
+                defaultValue={addr?.postalCode ?? ""}
                 required
                 placeholder="1500001"
                 onChange={(e) => handleZipcodeChange(e.target.value)}
@@ -220,7 +228,7 @@ export default function AddressForm(props: Props) {
             </label>
             <input
               name="address_line2"
-              defaultValue={addr?.address_line2 ?? ""}
+              defaultValue={addr?.addressLine2 ?? ""}
               className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
             />
           </div>
@@ -229,7 +237,7 @@ export default function AddressForm(props: Props) {
             <label className="mb-1 block text-xs text-gray-500">電話番号</label>
             <input
               name="phone_number"
-              defaultValue={addr?.phone_number ?? ""}
+              defaultValue={addr?.phoneNumber ?? ""}
               required
               placeholder="09012345678"
               className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"

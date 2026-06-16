@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
@@ -42,7 +43,7 @@ export async function selectPlan(
         termsVersion: TERMS_VERSION,
       },
       {
-        userRepo: new SupabaseUserRepository(),
+        userRepo: new SupabaseUserRepository(createAdminClient()),
         accountGateway: new ClerkAccountGateway(),
       }
     );

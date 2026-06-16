@@ -1,5 +1,9 @@
-import { createAdminClient } from "@/lib/supabase/server-admin";
-import type { OrderRepository } from "@/repositories/order-repository";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
+import type {
+  OrderRepository,
+  OrderWithUser,
+} from "@/repositories/order-repository";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
 import { OrderStatus } from "@/domain/value-objects/order-status";
@@ -94,10 +98,61 @@ function toOrder(row: OrderRow): Order {
 const ORDER_SELECT =
   "*, order_items(id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price)";
 
+type OrderWithUserRow = {
+  id: string;
+  created_at: string;
+  status: string;
+  payment_flow: string;
+  users:
+    | {
+        last_name: string;
+        first_name: string;
+        email: string;
+        stripe_customer_id: string | null;
+      }
+    | {
+        last_name: string;
+        first_name: string;
+        email: string;
+        stripe_customer_id: string | null;
+      }[]
+    | null;
+  order_items: {
+    id: string;
+    product_name_snapshot: string;
+    quantity: number;
+    unit_price_snapshot: number | null;
+    is_negotiable: boolean;
+  }[];
+};
+
+function toOrderWithUser(row: OrderWithUserRow): OrderWithUser {
+  const u = Array.isArray(row.users) ? row.users[0] : row.users;
+  return {
+    id: row.id,
+    createdAt: new Date(row.created_at),
+    status: row.status,
+    paymentFlow: row.payment_flow as "checkout" | "invoice",
+    user: u
+      ? {
+          lastName: u.last_name,
+          firstName: u.first_name,
+          email: u.email,
+          stripeCustomerId: u.stripe_customer_id,
+        }
+      : null,
+    items: (row.order_items ?? []).map((i) => ({
+      id: i.id,
+      productNameSnapshot: i.product_name_snapshot,
+      quantity: i.quantity,
+      unitPriceSnapshot: i.unit_price_snapshot,
+      isNegotiable: i.is_negotiable,
+    })),
+  };
+}
+
 export class SupabaseOrderRepository implements OrderRepository {
-  private get db() {
-    return createAdminClient();
-  }
+  constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findById(id: string): Promise<Order | null> {
     const { data } = await this.db
@@ -153,6 +208,40 @@ export class SupabaseOrderRepository implements OrderRepository {
       (sum, i) => sum + (i.unit_price_snapshot ?? 0) * i.quantity,
       0
     );
+  }
+
+  async findActiveOrdersWithUser(): Promise<OrderWithUser[]> {
+    const ACTIVE_STATUSES = [
+      "confirming",
+      "limit_exceeded",
+      "invoice_sent",
+      "paid",
+      "sourcing",
+      "ordered",
+      "preparing",
+      "shipping",
+    ] as const;
+    const { data } = await this.db
+      .from("orders")
+      .select(
+        "id, created_at, status, payment_flow, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+      )
+      .in("status", ACTIVE_STATUSES)
+      .order("created_at", { ascending: true });
+
+    return (data ?? []).map((row) => toOrderWithUser(row));
+  }
+
+  async findByIdWithUser(orderId: string): Promise<OrderWithUser | null> {
+    const { data } = await this.db
+      .from("orders")
+      .select(
+        "id, created_at, status, payment_flow, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+      )
+      .eq("id", orderId)
+      .single();
+
+    return data ? toOrderWithUser(data) : null;
   }
 
   async save(order: Order): Promise<void> {

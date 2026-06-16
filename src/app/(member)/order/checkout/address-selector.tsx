@@ -2,27 +2,35 @@
 
 import { useState } from "react";
 import AddressForm from "@/app/(member)/settings/address-form";
-import type { Database } from "@/types/database.types";
 
-type Address = Database["public"]["Tables"]["addresses"]["Row"];
+type AddressDto = {
+  id: string;
+  isDefault: boolean;
+  recipientLastName: string;
+  recipientFirstName: string;
+  postalCode: string;
+  prefecture: string;
+  city: string;
+  addressLine1: string;
+};
 
 type Props = {
-  shippingAddresses: Address[];
-  billingAddresses: Address[];
+  shippingAddresses: AddressDto[];
+  billingAddresses: AddressDto[];
   onSelect: (shippingId: string, billingId: string) => void;
 };
 
-function defaultId(addresses: Address[]): string {
-  return (addresses.find((a) => a.is_default) ?? addresses[0])?.id ?? "";
+function defaultId(addresses: AddressDto[]): string {
+  return (addresses.find((a) => a.isDefault) ?? addresses[0])?.id ?? "";
 }
 
-function AddressOption({ address }: { address: Address }) {
+function AddressOption({ address }: { address: AddressDto }) {
   return (
     <span className="text-sm text-gray-700">
-      {address.recipient_last_name} {address.recipient_first_name}〒
-      {address.postal_code} {address.prefecture}
+      {address.recipientLastName} {address.recipientFirstName}〒
+      {address.postalCode} {address.prefecture}
       {address.city}
-      {address.address_line1}
+      {address.addressLine1}
     </span>
   );
 }

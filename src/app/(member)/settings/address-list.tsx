@@ -3,21 +3,31 @@
 import { useState, useTransition } from "react";
 import { setDefaultAddressAction, deleteAddressAction } from "./actions";
 import AddressForm from "./address-form";
-import type { Database } from "@/types/database.types";
 
-type Address = Database["public"]["Tables"]["addresses"]["Row"];
-type AddressType = Database["public"]["Enums"]["address_type"];
+type AddressDto = {
+  id: string;
+  type: string;
+  isDefault: boolean;
+  recipientLastName: string;
+  recipientFirstName: string;
+  postalCode: string;
+  prefecture: string;
+  city: string;
+  addressLine1: string;
+  addressLine2: string;
+  phoneNumber: string;
+};
 
 type Props = {
-  addresses: Address[];
-  type: AddressType;
+  addresses: AddressDto[];
+  type: "shipping" | "billing";
   label: string;
 };
 
 export default function AddressList({ addresses, type, label }: Props) {
   const [isPending, startTransition] = useTransition();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [editingAddress, setEditingAddress] = useState<AddressDto | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const filtered = addresses.filter((a) => a.type === type);
@@ -44,25 +54,25 @@ export default function AddressList({ addresses, type, label }: Props) {
                 <div className="space-y-0.5 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
-                      {addr.recipient_last_name} {addr.recipient_first_name}
+                      {addr.recipientLastName} {addr.recipientFirstName}
                     </span>
-                    {addr.is_default && (
+                    {addr.isDefault && (
                       <span className="rounded bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-white">
                         デフォルト
                       </span>
                     )}
                   </div>
                   <p className="text-gray-500">
-                    〒{addr.postal_code} {addr.prefecture}
+                    〒{addr.postalCode} {addr.prefecture}
                     {addr.city}
-                    {addr.address_line1}
-                    {addr.address_line2 ? ` ${addr.address_line2}` : ""}
+                    {addr.addressLine1}
+                    {addr.addressLine2 ? ` ${addr.addressLine2}` : ""}
                   </p>
-                  <p className="text-gray-500">{addr.phone_number}</p>
+                  <p className="text-gray-500">{addr.phoneNumber}</p>
                 </div>
 
                 <div className="ml-4 flex flex-shrink-0 flex-col items-end gap-1">
-                  {!addr.is_default && (
+                  {!addr.isDefault && (
                     <button
                       disabled={isPending}
                       onClick={() =>
