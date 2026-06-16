@@ -1,10 +1,13 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase/server-admin";
-import { sendCheckoutPaidEmails } from "@/lib/email/checkout-paid";
-import { sendInvoicePaidEmail } from "@/lib/email/invoice-paid";
 import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import type { Database } from "@/types/database.types";
+import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
+import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 
 type MemberRank = Database["public"]["Enums"]["member_rank"];
 
@@ -33,73 +36,23 @@ export async function POST(req: Request) {
     const session = event.data.object;
 
     if (session.mode === "payment") {
-      const orderId = session.metadata?.order_id;
-      if (!orderId) {
-        return NextResponse.json(
-          { error: "order_id がありません" },
-          { status: 400 }
+      const deps = {
+        orderRepo: new SupabaseOrderRepository(),
+        userRepo: new SupabaseUserRepository(),
+        notificationService: new ResendNotificationService(),
+      };
+
+      try {
+        await markCheckoutOrderAsPaid(
+          { stripeCheckoutSessionId: session.id },
+          deps
         );
-      }
-
-      const supabase = createAdminClient();
-      const { data: order } = await supabase
-        .from("orders")
-        .select(
-          "id, status, user_id, order_items(product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
-        )
-        .eq("id", orderId)
-        .single();
-
-      if (!order) {
+      } catch (err) {
+        console.error("[Checkout Webhook] 処理失敗:", err);
         return NextResponse.json(
-          { error: "注文が見つかりません" },
-          { status: 400 }
-        );
-      }
-
-      if (order.status === "paid") {
-        return NextResponse.json({ received: true });
-      }
-
-      const { error: updateError } = await supabase
-        .from("orders")
-        .update({ status: "paid" })
-        .eq("id", order.id);
-
-      if (updateError) {
-        console.error("[注文Webhook] ステータス更新失敗:", updateError);
-        return NextResponse.json(
-          { error: "DB更新に失敗しました" },
+          { error: "処理に失敗しました" },
           { status: 500 }
         );
-      }
-
-      const { data: user } = await supabase
-        .from("users")
-        .select("email")
-        .eq("id", order.user_id)
-        .single();
-
-      if (user) {
-        const lineItems = (
-          order.order_items as Array<{
-            product_name_snapshot: string;
-            quantity: number;
-            unit_price_snapshot: number | null;
-            is_negotiable: boolean;
-          }>
-        ).map((item) => ({
-          productName: item.product_name_snapshot,
-          quantity: item.quantity,
-          unitPrice: item.unit_price_snapshot,
-          isNegotiable: item.is_negotiable,
-        }));
-
-        await sendCheckoutPaidEmails({
-          orderId: order.id,
-          memberEmail: user.email,
-          lineItems,
-        }).catch((e) => console.error("[Checkout入金メール] 送信エラー:", e));
       }
     } else if (session.mode === "subscription") {
       const clerkUserId = session.metadata?.clerk_user_id;
@@ -141,46 +94,20 @@ export async function POST(req: Request) {
 
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
-    const supabase = createAdminClient();
+    const deps = {
+      orderRepo: new SupabaseOrderRepository(),
+      userRepo: new SupabaseUserRepository(),
+      notificationService: new ResendNotificationService(),
+    };
 
-    const { data: order } = await supabase
-      .from("orders")
-      .select("id, status, user_id")
-      .eq("stripe_invoice_id", invoice.id)
-      .single();
-
-    if (!order) {
-      return NextResponse.json({ received: true });
-    }
-
-    if (order.status === "paid") {
-      return NextResponse.json({ received: true });
-    }
-
-    const { error: updateError } = await supabase
-      .from("orders")
-      .update({ status: "paid" })
-      .eq("id", order.id);
-
-    if (updateError) {
-      console.error("[Invoice Webhook] ステータス更新失敗:", updateError);
+    try {
+      await markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id }, deps);
+    } catch (err) {
+      console.error("[Invoice Webhook] 処理失敗:", err);
       return NextResponse.json(
-        { error: "DB更新に失敗しました" },
+        { error: "処理に失敗しました" },
         { status: 500 }
       );
-    }
-
-    const { data: user } = await supabase
-      .from("users")
-      .select("email")
-      .eq("id", order.user_id)
-      .single();
-
-    if (user) {
-      await sendInvoicePaidEmail({
-        orderId: order.id,
-        memberEmail: user.email,
-      }).catch((e) => console.error("[Invoice入金メール] 送信エラー:", e));
     }
   }
 

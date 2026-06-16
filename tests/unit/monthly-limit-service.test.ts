@@ -17,6 +17,8 @@ function makeUser(rankValue: string): User {
     deletedAt: null,
     termsAgreedAt: null,
     termsVersion: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
   });
 }
 

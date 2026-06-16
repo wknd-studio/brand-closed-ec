@@ -13,6 +13,8 @@ function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
     termsAgreedAt: new Date(2026, 0, 10),
     termsVersion: "v1",
     deletedAt: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
     ...overrides,
   });
 }

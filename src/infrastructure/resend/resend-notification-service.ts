@@ -7,6 +7,8 @@ import { sendOrderOperatorNotification } from "@/lib/email/order-operator-notifi
 import { sendLimitExceededEmail } from "@/lib/email/limit-exceeded";
 import { sendShippingNotificationEmail } from "@/lib/email/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/lib/email/delivery-notification";
+import { sendCheckoutPaidEmails } from "@/lib/email/checkout-paid";
+import { sendInvoicePaidEmail } from "@/lib/email/invoice-paid";
 
 export class ResendNotificationService implements NotificationService {
   async sendOrderConfirming(
@@ -63,5 +65,23 @@ export class ResendNotificationService implements NotificationService {
     memberEmail: string
   ): Promise<void> {
     await sendDeliveryNotificationEmail({ orderId, memberEmail });
+  }
+
+  async sendCheckoutPaid(order: Order, user: User): Promise<void> {
+    const lineItems = order.items.map((item) => ({
+      productName: item.productNameSnapshot,
+      quantity: item.quantity,
+      unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
+      isNegotiable: item.isNegotiable,
+    }));
+    await sendCheckoutPaidEmails({
+      orderId: order.id,
+      memberEmail: user.email,
+      lineItems,
+    });
+  }
+
+  async sendInvoicePaid(order: Order, user: User): Promise<void> {
+    await sendInvoicePaidEmail({ orderId: order.id, memberEmail: user.email });
   }
 }

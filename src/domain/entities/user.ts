@@ -12,6 +12,8 @@ interface UserProps {
   termsAgreedAt: Date | null;
   termsVersion: string | null;
   deletedAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
 }
 
 export class User {
@@ -24,6 +26,8 @@ export class User {
   readonly termsAgreedAt: Date | null;
   readonly termsVersion: string | null;
   readonly deletedAt: Date | null;
+  readonly stripeCustomerId: string | null;
+  readonly stripeSubscriptionId: string | null;
 
   private constructor(props: UserProps) {
     this.id = props.id;
@@ -35,6 +39,8 @@ export class User {
     this.termsAgreedAt = props.termsAgreedAt;
     this.termsVersion = props.termsVersion;
     this.deletedAt = props.deletedAt;
+    this.stripeCustomerId = props.stripeCustomerId;
+    this.stripeSubscriptionId = props.stripeSubscriptionId;
   }
 
   static of(props: UserProps): User {
@@ -56,6 +62,8 @@ export class User {
       termsAgreedAt: this.termsAgreedAt,
       termsVersion: this.termsVersion,
       deletedAt: this.deletedAt,
+      stripeCustomerId: this.stripeCustomerId,
+      stripeSubscriptionId: this.stripeSubscriptionId,
     };
   }
 

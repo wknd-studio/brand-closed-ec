@@ -20,4 +20,8 @@ export interface NotificationService {
   sendShippingNotification(orderId: string, memberEmail: string): Promise<void>;
 
   sendDeliveryNotification(orderId: string, memberEmail: string): Promise<void>;
+
+  sendCheckoutPaid(order: Order, user: User): Promise<void>;
+
+  sendInvoicePaid(order: Order, user: User): Promise<void>;
 }

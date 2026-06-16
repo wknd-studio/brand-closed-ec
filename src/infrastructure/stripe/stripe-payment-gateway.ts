@@ -4,7 +4,6 @@ import type {
   CheckoutLineItem,
   CheckoutSession,
 } from "@/repositories/payment-gateway";
-import type { ProductSnapshot } from "@/repositories/product-repository";
 import type { Order } from "@/domain/entities/order";
 
 export class StripePaymentGateway implements PaymentGateway {
@@ -42,8 +41,7 @@ export class StripePaymentGateway implements PaymentGateway {
 
   async createInvoiceForOrder(
     order: Order,
-    stripeCustomerId: string,
-    lineItems: ProductSnapshot[]
+    stripeCustomerId: string
   ): Promise<string> {
     const invoice = await getStripe().invoices.create({
       customer: stripeCustomerId,
@@ -52,12 +50,13 @@ export class StripePaymentGateway implements PaymentGateway {
       metadata: { order_id: order.id },
     });
 
-    for (const item of lineItems) {
+    for (const item of order.items) {
+      const unitPrice = item.negotiatedUnitPrice ?? item.unitPriceSnapshot;
       await getStripe().invoiceItems.create({
         customer: stripeCustomerId,
         invoice: invoice.id,
-        description: item.productName,
-        amount: item.unitPrice.amount,
+        description: item.productNameSnapshot,
+        amount: unitPrice.amount * item.quantity,
         currency: "jpy",
       });
     }

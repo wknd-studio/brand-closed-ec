@@ -13,6 +13,8 @@ type UserRow = {
   terms_agreed_at: string | null;
   terms_version: string | null;
   deleted_at: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
 };
 
 function toUser(row: UserRow): User {
@@ -26,11 +28,13 @@ function toUser(row: UserRow): User {
     termsAgreedAt: row.terms_agreed_at ? new Date(row.terms_agreed_at) : null,
     termsVersion: row.terms_version,
     deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
+    stripeCustomerId: row.stripe_customer_id,
+    stripeSubscriptionId: row.stripe_subscription_id,
   });
 }
 
 const SELECT_FIELDS =
-  "id, clerk_user_id, email, rank, subscribed_at, onboarding_completed, terms_agreed_at, terms_version, deleted_at";
+  "id, clerk_user_id, email, rank, subscribed_at, onboarding_completed, terms_agreed_at, terms_version, deleted_at, stripe_customer_id, stripe_subscription_id";
 
 export class SupabaseUserRepository implements UserRepository {
   private get db() {
@@ -66,6 +70,8 @@ export class SupabaseUserRepository implements UserRepository {
       terms_agreed_at: user.termsAgreedAt?.toISOString() ?? null,
       terms_version: user.termsVersion,
       deleted_at: user.deletedAt?.toISOString() ?? null,
+      stripe_customer_id: user.stripeCustomerId,
+      stripe_subscription_id: user.stripeSubscriptionId,
     });
   }
 }
