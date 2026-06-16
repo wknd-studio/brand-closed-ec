@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { upgradeSubscription } from "@/use-cases/upgrade-subscription";
+import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
 import { makeUserRepo, makeAccountGateway, makeUser } from "./helpers";
 
-describe("upgradeSubscription", () => {
+describe("completeSubscriptionOnboarding", () => {
   it("userが見つからない場合はエラーをthrowする", async () => {
     const userRepo = makeUserRepo();
     vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
 
     await expect(
-      upgradeSubscription(
+      completeSubscriptionOnboarding(
         {
           clerkUserId: "clerk-1",
           plan: "entry",
@@ -25,7 +25,7 @@ describe("upgradeSubscription", () => {
     const userRepo = makeUserRepo(user);
     const accountGateway = makeAccountGateway();
 
-    await upgradeSubscription(
+    await completeSubscriptionOnboarding(
       {
         clerkUserId: "clerk-1",
         plan: "entry",
@@ -47,7 +47,7 @@ describe("upgradeSubscription", () => {
     const userRepo = makeUserRepo(makeUser({ rank: "free" }));
     const accountGateway = makeAccountGateway();
 
-    await upgradeSubscription(
+    await completeSubscriptionOnboarding(
       {
         clerkUserId: "clerk-1",
         plan: "standard",

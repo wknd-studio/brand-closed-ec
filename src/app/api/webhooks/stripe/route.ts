@@ -2,7 +2,7 @@ import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
-import { upgradeSubscription } from "@/use-cases/upgrade-subscription";
+import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       }
 
       try {
-        await upgradeSubscription(
+        await completeSubscriptionOnboarding(
           {
             clerkUserId,
             plan,
