@@ -210,6 +210,15 @@ export class SupabaseOrderRepository implements OrderRepository {
     );
   }
 
+  async findActiveByUserId(userId: string): Promise<Order[]> {
+    const { data } = await this.db
+      .from("orders")
+      .select(ORDER_SELECT)
+      .eq("user_id", userId)
+      .not("status", "in", '("delivered","cancelled")');
+    return (data ?? []).map((row) => toOrder(row as unknown as OrderRow));
+  }
+
   async findActiveOrdersWithUser(): Promise<OrderWithUser[]> {
     const ACTIVE_STATUSES = [
       "confirming",

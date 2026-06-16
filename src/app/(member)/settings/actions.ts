@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { withdraw } from "@/use-cases/withdraw";
+import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { createAddress } from "@/use-cases/create-address";
 import { updateAddress } from "@/use-cases/update-address";
 import { deleteAddress } from "@/use-cases/delete-address";
@@ -10,6 +11,7 @@ import { setDefaultAddress } from "@/use-cases/set-default-address";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import type { AddressType } from "@/domain/entities/address";
@@ -124,16 +126,21 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
   if (!userId) return { error: "認証されていません" };
 
   try {
+    const supabase = createAdminClient();
     await withdraw(
       { clerkUserId: userId },
       {
-        userRepo: new SupabaseUserRepository(createAdminClient()),
+        userRepo: new SupabaseUserRepository(supabase),
+        orderRepo: new SupabaseOrderRepository(supabase),
         subscriptionGateway: new StripeSubscriptionGateway(),
         accountGateway: new ClerkAccountGateway(),
       }
     );
     return { success: true };
-  } catch {
+  } catch (err) {
+    if (err instanceof ActiveOrdersExistError) {
+      return { error: "進行中の注文があるため退会できません" };
+    }
     return { error: "退会処理に失敗しました" };
   }
 }
