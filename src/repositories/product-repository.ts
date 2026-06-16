@@ -10,5 +10,5 @@ export interface ProductSnapshot {
 }
 
 export interface ProductRepository {
-  findByIds(ids: string[]): Promise<ProductSnapshot[]>;
+  findByIds(ids: string[], rank: MemberRankValue): Promise<ProductSnapshot[]>;
 }
