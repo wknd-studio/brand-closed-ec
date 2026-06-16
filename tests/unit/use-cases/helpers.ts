@@ -16,6 +16,8 @@ import type {
 } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
+import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
+import type { AccountGateway } from "@/repositories/account-gateway";
 
 export function makeUser(overrides?: Partial<{ rank: string }>) {
   return User.of({
@@ -177,5 +179,18 @@ export function makeNotificationService(): NotificationService {
     sendDeliveryNotification: vi.fn().mockResolvedValue(undefined),
     sendCheckoutPaid: vi.fn().mockResolvedValue(undefined),
     sendInvoicePaid: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeSubscriptionGateway(): SubscriptionGateway {
+  return {
+    cancelSubscription: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeAccountGateway(): AccountGateway {
+  return {
+    deleteUser: vi.fn().mockResolvedValue(undefined),
+    updateOnboardingMetadata: vi.fn().mockResolvedValue(undefined),
   };
 }

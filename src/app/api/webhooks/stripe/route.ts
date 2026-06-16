@@ -1,15 +1,13 @@
-import { clerkClient } from "@clerk/nextjs/server";
-import { createAdminClient } from "@/lib/supabase/server-admin";
 import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
-import type { Database } from "@/types/database.types";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
+import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
-
-type MemberRank = Database["public"]["Enums"]["member_rank"];
+import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -56,7 +54,7 @@ export async function POST(req: Request) {
       }
     } else if (session.mode === "subscription") {
       const clerkUserId = session.metadata?.clerk_user_id;
-      const plan = session.metadata?.plan as MemberRank | undefined;
+      const plan = session.metadata?.plan as MemberRankValue | undefined;
 
       if (!clerkUserId || !plan) {
         return NextResponse.json(
@@ -65,30 +63,26 @@ export async function POST(req: Request) {
         );
       }
 
-      const supabase = createAdminClient();
-      const { error } = await supabase
-        .from("users")
-        .update({
-          rank: plan,
-          stripe_customer_id: session.customer as string | null,
-          stripe_subscription_id: session.subscription as string | null,
-          subscribed_at: new Date().toISOString(),
-          onboarding_completed: true,
-        })
-        .eq("clerk_user_id", clerkUserId);
-
-      if (error) {
-        console.error("[Stripe Webhook] Supabase 更新失敗:", error);
+      try {
+        await completeSubscriptionOnboarding(
+          {
+            clerkUserId,
+            plan,
+            stripeCustomerId: session.customer as string,
+            stripeSubscriptionId: session.subscription as string,
+          },
+          {
+            userRepo: new SupabaseUserRepository(),
+            accountGateway: new ClerkAccountGateway(),
+          }
+        );
+      } catch (err) {
+        console.error("[Stripe Webhook] サブスクリプション更新失敗:", err);
         return NextResponse.json(
-          { error: "DB更新に失敗しました" },
+          { error: "処理に失敗しました" },
           { status: 500 }
         );
       }
-
-      const clerk = await clerkClient();
-      await clerk.users.updateUserMetadata(clerkUserId, {
-        publicMetadata: { onboarding_completed: true },
-      });
     }
   }
 
