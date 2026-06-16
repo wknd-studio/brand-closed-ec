@@ -1,12 +1,15 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
 const TERMS_VERSION = "2026-05-25";
 
-type MemberRank = "free" | "entry" | "standard" | "pro";
+const VALID_PLANS: MemberRankValue[] = ["free", "entry", "standard", "pro"];
 
 export type SelectPlanResult = { redirectTo: string } | { error: string };
 
@@ -14,10 +17,9 @@ export async function selectPlan(
   _: SelectPlanResult | null,
   formData: FormData
 ): Promise<SelectPlanResult> {
-  const plan = formData.get("plan") as MemberRank;
+  const plan = formData.get("plan") as MemberRankValue;
 
-  const validPlans: MemberRank[] = ["free", "entry", "standard", "pro"];
-  if (!validPlans.includes(plan)) {
+  if (!VALID_PLANS.includes(plan)) {
     return { error: "無効なプランです" };
   }
 
@@ -29,37 +31,23 @@ export async function selectPlan(
   const firstName = user?.firstName ?? "";
   const lastName = user?.lastName ?? "";
 
-  const isFree = plan === "free";
-  const supabase = createAdminClient();
-
-  const { data: userRecord, error: userError } = await supabase
-    .from("users")
-    .upsert(
+  try {
+    const result = await selectPlanUseCase(
       {
-        clerk_user_id: userId,
+        clerkUserId: userId,
         email,
-        first_name: firstName,
-        last_name: lastName,
-        rank: plan,
-        terms_agreed_at: new Date().toISOString(),
-        terms_version: TERMS_VERSION,
-        onboarding_completed: isFree,
+        firstName,
+        lastName,
+        plan,
+        termsVersion: TERMS_VERSION,
       },
-      { onConflict: "clerk_user_id" }
-    )
-    .select("id")
-    .single();
-
-  if (userError || !userRecord) {
+      {
+        userRepo: new SupabaseUserRepository(),
+        accountGateway: new ClerkAccountGateway(),
+      }
+    );
+    return result;
+  } catch {
     return { error: "ユーザーレコードの作成に失敗しました" };
   }
-
-  const clerk = await clerkClient();
-  await clerk.users.updateUserMetadata(userId, {
-    publicMetadata: { onboarding_completed: isFree },
-  });
-
-  return {
-    redirectTo: isFree ? "/shop" : `/onboarding/payment?plan=${plan}`,
-  };
 }

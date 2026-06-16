@@ -8,13 +8,17 @@ vi.mock("svix", () => ({
   Webhook: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server-admin", () => ({
-  createAdminClient: vi.fn(),
+vi.mock("@/use-cases/create-user", () => ({
+  createUser: vi.fn(),
+}));
+
+vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
+  SupabaseUserRepository: vi.fn(),
 }));
 
 import { headers } from "next/headers";
 import { Webhook } from "svix";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createUser } from "@/use-cases/create-user";
 import { POST } from "@/app/api/webhooks/clerk/route";
 
 const ALL_SVIX_HEADERS: Record<string, string | null> = {
@@ -81,7 +85,7 @@ describe("POST /api/webhooks/clerk", () => {
   });
 
   describe("user.created イベント", () => {
-    it("users テーブルに INSERT して 200 を返す", async () => {
+    it("createUser UseCase を呼び出して 200 を返す", async () => {
       setupHeaders();
 
       const payload = {
@@ -94,38 +98,30 @@ describe("POST /api/webhooks/clerk", () => {
         },
       };
       setupWebhook(() => payload);
-
-      const mockInsert = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({ insert: mockInsert }),
-      } as never);
+      vi.mocked(createUser).mockResolvedValue(undefined);
 
       const res = await POST(makeRequest(JSON.stringify(payload)));
       expect(res.status).toBe(200);
-      expect(mockInsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          clerk_user_id: "user_abc",
+      expect(createUser).toHaveBeenCalledWith(
+        {
+          clerkUserId: "user_abc",
           email: "test@example.com",
-          first_name: "太郎",
-          last_name: "山田",
-          rank: "free",
-          onboarding_completed: false,
-        })
+          firstName: "太郎",
+          lastName: "山田",
+        },
+        expect.any(Object)
       );
     });
   });
 
   describe("その他のイベント", () => {
-    it("user.created 以外は DB 操作なしで 200 を返す", async () => {
+    it("user.created 以外は createUser を呼ばずに 200 を返す", async () => {
       setupHeaders();
       setupWebhook(() => ({ type: "user.updated", data: {} }));
 
-      const mockFrom = vi.fn();
-      vi.mocked(createAdminClient).mockReturnValue({ from: mockFrom } as never);
-
       const res = await POST(makeRequest());
       expect(res.status).toBe(200);
-      expect(mockFrom).not.toHaveBeenCalled();
+      expect(createUser).not.toHaveBeenCalled();
     });
   });
 });

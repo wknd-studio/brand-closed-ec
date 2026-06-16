@@ -1,8 +1,8 @@
 import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server-admin";
-import { buildUserInsertPayload } from "@/lib/webhook/clerk";
+import { createUser } from "@/use-cases/create-user";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -44,8 +44,15 @@ export async function POST(req: Request) {
       last_name: string | null;
     };
 
-    const supabase = createAdminClient();
-    await supabase.from("users").insert(buildUserInsertPayload(data));
+    await createUser(
+      {
+        clerkUserId: data.id,
+        email: data.email_addresses[0]?.email_address ?? "",
+        firstName: data.first_name ?? "",
+        lastName: data.last_name ?? "",
+      },
+      { userRepo: new SupabaseUserRepository() }
+    );
   }
 
   return NextResponse.json({ received: true });

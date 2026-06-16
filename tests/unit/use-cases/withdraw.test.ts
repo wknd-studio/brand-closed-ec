@@ -1,0 +1,106 @@
+import { describe, it, expect, vi } from "vitest";
+import { withdraw } from "@/use-cases/withdraw";
+import {
+  makeUserRepo,
+  makeSubscriptionGateway,
+  makeAccountGateway,
+  makeUser,
+} from "./helpers";
+
+describe("withdraw", () => {
+  it("userが見つからない場合はエラーをthrowする", async () => {
+    const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+
+    await expect(
+      withdraw(
+        { clerkUserId: "clerk-1" },
+        {
+          userRepo,
+          subscriptionGateway: makeSubscriptionGateway(),
+          accountGateway: makeAccountGateway(),
+        }
+      )
+    ).rejects.toThrow("ユーザーが見つかりません");
+  });
+
+  it("有料会員: Supabase論理削除 → Stripe解約 → Clerk削除を順に実行する", async () => {
+    const user = makeUser({ rank: "entry" }).with({
+      stripeSubscriptionId: "sub_123",
+    });
+    const userRepo = makeUserRepo(user);
+    const subscriptionGateway = makeSubscriptionGateway();
+    const accountGateway = makeAccountGateway();
+
+    await withdraw(
+      { clerkUserId: "clerk-1" },
+      { userRepo, subscriptionGateway, accountGateway }
+    );
+
+    const savedUser = vi.mocked(userRepo.save).mock.calls[0][0];
+    expect(savedUser.deletedAt).not.toBeNull();
+    expect(subscriptionGateway.cancelSubscription).toHaveBeenCalledWith(
+      "sub_123"
+    );
+    expect(accountGateway.deleteUser).toHaveBeenCalledWith("clerk-1");
+  });
+
+  it("freeランク会員: Stripe解約をスキップする", async () => {
+    const user = makeUser({ rank: "free" }).with({
+      stripeSubscriptionId: null,
+    });
+    const userRepo = makeUserRepo(user);
+    const subscriptionGateway = makeSubscriptionGateway();
+    const accountGateway = makeAccountGateway();
+
+    await withdraw(
+      { clerkUserId: "clerk-1" },
+      { userRepo, subscriptionGateway, accountGateway }
+    );
+
+    expect(subscriptionGateway.cancelSubscription).not.toHaveBeenCalled();
+    expect(accountGateway.deleteUser).toHaveBeenCalled();
+  });
+
+  it("Stripe解約失敗時はdeleted_atをロールバックしてエラーをthrowする", async () => {
+    const user = makeUser({ rank: "entry" }).with({
+      stripeSubscriptionId: "sub_123",
+    });
+    const userRepo = makeUserRepo(user);
+    const subscriptionGateway = makeSubscriptionGateway();
+    vi.mocked(subscriptionGateway.cancelSubscription).mockRejectedValue(
+      new Error("Stripe error")
+    );
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      withdraw(
+        { clerkUserId: "clerk-1" },
+        { userRepo, subscriptionGateway, accountGateway }
+      )
+    ).rejects.toThrow();
+
+    const rollbackCall = vi.mocked(userRepo.save).mock.calls[1];
+    expect(rollbackCall[0].deletedAt).toBeNull();
+    expect(accountGateway.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("Clerk削除失敗時もvoidで正常終了する（deleted_atでアクセス遮断済み）", async () => {
+    const user = makeUser({ rank: "entry" }).with({
+      stripeSubscriptionId: "sub_123",
+    });
+    const userRepo = makeUserRepo(user);
+    const subscriptionGateway = makeSubscriptionGateway();
+    const accountGateway = makeAccountGateway();
+    vi.mocked(accountGateway.deleteUser).mockRejectedValue(
+      new Error("Clerk error")
+    );
+
+    await expect(
+      withdraw(
+        { clerkUserId: "clerk-1" },
+        { userRepo, subscriptionGateway, accountGateway }
+      )
+    ).resolves.toBeUndefined();
+  });
+});
