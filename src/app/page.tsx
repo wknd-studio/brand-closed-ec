@@ -3,8 +3,12 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
-  const { userId } = await auth();
-  if (userId) redirect("/shop");
+  const { userId, sessionClaims } = await auth();
+  if (userId) {
+    const role = (sessionClaims?.metadata as { role?: string } | undefined)
+      ?.role;
+    redirect(role === "admin" ? "/admin" : "/shop");
+  }
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-10 p-8">
       <div className="text-center space-y-3">

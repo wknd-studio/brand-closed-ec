@@ -31,6 +31,12 @@ export default async function AdminOrdersPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
+      <Link
+        href="/admin"
+        className="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+      >
+        ← 管理メニュー
+      </Link>
       <h1 className="mb-6 text-xl font-semibold">注文管理</h1>
 
       {orders.length === 0 ? (

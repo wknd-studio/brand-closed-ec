@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Invitation = {
   id: string;
@@ -77,6 +78,12 @@ export default function InvitationsPage() {
 
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-8">
+      <Link
+        href="/admin"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+      >
+        ← 管理メニュー
+      </Link>
       <h1 className="text-2xl font-semibold">招待管理</h1>
 
       {toast && (
