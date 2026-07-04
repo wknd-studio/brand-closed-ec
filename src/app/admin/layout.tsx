@@ -1,5 +1,6 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
+import AdminHeader from "@/components/admin-header";
 
 export default async function AdminLayout({
   children,
@@ -11,5 +12,10 @@ export default async function AdminLayout({
 
   if (role !== "admin") notFound();
 
-  return <>{children}</>;
+  return (
+    <div className="flex min-h-full flex-col">
+      <AdminHeader />
+      <main className="flex-1">{children}</main>
+    </div>
+  );
 }

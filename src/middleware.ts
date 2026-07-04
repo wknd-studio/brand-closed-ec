@@ -13,6 +13,7 @@ const isPublic = createRouteMatcher([
 ]);
 
 const isOnboarding = createRouteMatcher(["/onboarding(.*)"]);
+const isAdmin = createRouteMatcher(["/admin(.*)"]);
 
 // Stripe/Clerk webhook はレート制限対象外
 const isWebhook = createRouteMatcher(["/api/webhooks/(.*)"]);
@@ -58,8 +59,13 @@ export default clerkMiddleware(async (auth, req) => {
     | { onboarding_completed?: boolean; role?: string }
     | undefined;
 
-  // admin はオンボーディング不要
-  if (meta?.role === "admin") return;
+  // admin は /admin 以下に強制リダイレクト
+  if (meta?.role === "admin") {
+    if (!isAdmin(req)) {
+      return NextResponse.redirect(new URL("/admin", req.url));
+    }
+    return;
+  }
   if (isOnboarding(req)) return;
 
   // JWT 高速パス: トークンが最新であれば DB クエリ不要
