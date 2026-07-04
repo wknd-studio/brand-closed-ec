@@ -27,7 +27,7 @@ export async function placeOrder(
   const cart = parseCart(cookieStore.get(COOKIE_NAME)?.value);
   if (cart.items.length === 0) return { error: "カートが空です" };
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   let redirectUrl: string;
   try {
