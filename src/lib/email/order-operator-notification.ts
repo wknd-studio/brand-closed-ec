@@ -20,7 +20,7 @@ export async function sendOrderOperatorNotification({
   customerEmail,
   lineItems,
 }: SendOrderOperatorNotificationParams): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL!;
   const adminOrderUrl = `${baseUrl}/admin/orders/${orderId}`;
 
   const html = await render(
