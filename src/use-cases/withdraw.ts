@@ -41,7 +41,10 @@ export async function withdraw(
 
   try {
     await accountGateway.deleteUser(input.clerkUserId);
-  } catch {
-    // deleted_atでアクセスは遮断済み
+  } catch (err) {
+    console.error(
+      "[退会] Clerk アカウント削除失敗（deleted_at でアクセス遮断済み）:",
+      err
+    );
   }
 }

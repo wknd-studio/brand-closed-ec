@@ -68,10 +68,7 @@ export default clerkMiddleware(async (auth, req) => {
   }
   if (isOnboarding(req)) return;
 
-  // JWT 高速パス: トークンが最新であれば DB クエリ不要
-  if (meta?.onboarding_completed === true) return;
-
-  // JWT が古いか未更新の場合は DB を正とする
+  // deleted_at は JWT に反映されないため常に DB で確認する
   const { data } = await supabaseAdmin()
     .from("users")
     .select("onboarding_completed, deleted_at")
