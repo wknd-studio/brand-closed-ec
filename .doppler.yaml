@@ -1,0 +1,3 @@
+setup:
+  project: brand-closed-ec
+  config: dev
