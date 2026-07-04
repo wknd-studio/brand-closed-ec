@@ -110,7 +110,7 @@ describe("withdraw", () => {
     expect(accountGateway.deleteUser).not.toHaveBeenCalled();
   });
 
-  it("Clerk削除失敗時もvoidで正常終了する（deleted_atでアクセス遮断済み）", async () => {
+  it("Clerk削除失敗時もvoidで正常終了し、console.errorでログを残す", async () => {
     const user = makeUser({ rank: "entry" }).with({
       stripeSubscriptionId: "sub_123",
     });
@@ -121,6 +121,7 @@ describe("withdraw", () => {
     vi.mocked(accountGateway.deleteUser).mockRejectedValue(
       new Error("Clerk error")
     );
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await expect(
       withdraw(
@@ -128,5 +129,8 @@ describe("withdraw", () => {
         { userRepo, orderRepo, subscriptionGateway, accountGateway }
       )
     ).resolves.toBeUndefined();
+
+    expect(consoleSpy).toHaveBeenCalledOnce();
+    consoleSpy.mockRestore();
   });
 });
