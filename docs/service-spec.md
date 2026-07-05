@@ -199,6 +199,7 @@ STARTER 登録（初期 ¥5,000 支払い）→ initial_fee_paid_rank = STARTER
 
 ### 退会
 
+- 入会日から **6ヶ月間は退会できない**（最低利用期間）。
 - `paid` 以降（`paid` / `sourcing` / `ordered` / `preparing` / `shipping`）の注文が1件でもある場合、退会をブロックする。
 - `paid` より前のステータス（`pending_payment` / `confirming` / `invoice_sent` / `limit_exceeded`）は退会をブロックしない。
 - 退会後もデータは保持する（論理削除）。
