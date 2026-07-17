@@ -32,4 +32,5 @@
 ## Notes
 
 - 初稿では `docs/archive/user-stories.md`（PLAN-01/PLAN-02）の旧5ランクモデル（Free/Entry/Standard/Pro/Enterprise）をそのまま参照してしまい、「Freeプランへのダウングレード＝実質解約のタイミング」という誤った前提の `[NEEDS CLARIFICATION]` を立てていた。ユーザー指摘により `docs/archive/service-spec.md`（新7ランクモデル: STARTER〜ENTERPRISE、Freeプランなし）に基づいて修正し、当該の疑問は前提の誤りに起因するものと判明したため解消した
-- 全項目パス。`/speckit-clarify` を経由せず `/speckit-plan` に進んでよい
+- 2026-07-17 `/speckit-clarify`: PR #84（GitHub PRレビュー導線のテスト）のConversationコメント「初期費用の差分請求ってどういう意味ですか？」を受け、FR-004・User Story 1の受け入れ条件に具体例（STARTER→PROの差額¥45,000）を追加。チェックリストの状態変化なし（既に全項目パス済み）
+- 全項目パス。`/speckit-plan` に進んでよい
