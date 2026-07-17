@@ -7,4 +7,4 @@
 # （ビジネスサイドへの無関係な通知を防ぐため）。
 #
 # TODO: TBD を実際のビジネスレビュアーのGitHubハンドルに置き換える
-specs/**/spec.md @TBD
+specs/**/spec.md @yaito6502
