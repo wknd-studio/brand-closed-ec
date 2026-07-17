@@ -1,5 +1,7 @@
 # ユーザーストーリー
 
+> 🔒 **凍結済みドキュメント**: `docs/archive/` に移動済み。直接編集しない。このトピックへの変更は `specs/` 配下の仕様駆動開発ワークフロー（`docs/spec-driven-workflow.md` 参照）で行うこと。本ファイルは移行時点のスナップショットとして保持する。
+
 > ⚠️ **ランク名について**: 本ドキュメント中の「Free / Entry / Standard / Pro / Enterprise」という表記は旧5ランクモデル。既に実装済み・完了しているストーリー（AUTH-01/02/03/04/05等）は現行コードと一致しているためそのまま有効。一方、未実装のストーリー（PLAN-01/02等）は `service-spec.md` が定める新7ランクモデル（STARTER〜ENTERPRISE）・差分初期費用ロジックに沿って実装すること（コード移行は [BRAND-97](https://linear.app/wknd-studio/issue/BRAND-97) で管理）。ランク名・料金の正は常に `service-spec.md` を参照する。
 
 ## 記述ルール
