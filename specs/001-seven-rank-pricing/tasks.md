@@ -117,11 +117,11 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 ### Tests
 
-- [ ] T019 [P] [US4] 注文確定ユースケースの統合テストを更新する（`tests/integration/use-cases/place-order.test.ts`。`rankAtOrder`が7ランクの値で保存され、後からランク変更しても変わらないことを検証）
+- [x] T019 [P] [US4] 注文確定ユースケースの統合テストを更新する（`tests/integration/use-cases/place-order.test.ts`。新規作成。実DBに対しplaceOrder使用時のadvancedランクでの`rankAtOrder`保存と、後から会員ランクを変更しても保存済み注文のスナップショットが変わらないことを検証。productRepo/paymentGateway/notificationServiceは外部連携のためモック化し、userRepo/orderRepo/addressRepoは実Supabaseを使用）
 
 ### Implementation
 
-- [ ] T020 [US4] `src/domain/entities/order.ts`・関連リポジトリで型エラーが出ないことを確認する（型は`MemberRankValue`を参照しているため、T005の変更が自動的に反映される想定。追加実装は基本的に不要）
+- [x] T020 [US4] `src/domain/entities/order.ts`・関連リポジトリで型エラーが出ないことを確認する（`pnpm typecheck`通過を確認。`rankAtOrder`は`MemberRank`型を使用しておりハードコードなし。想定通り追加実装不要）
 
 **チェックポイント**: 全User Storyが独立して動作・テスト可能
 
