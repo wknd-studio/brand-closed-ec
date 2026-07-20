@@ -47,7 +47,7 @@ description: "Task list template for feature implementation"
 
 **スコープ変更（2026-07-20）**: 当初6ランクをループする想定だったが、ランク単位の正しさはユニット・統合テストで既に担保されているため、E2Eは代表プラン（STARTER）1つに絞った（詳細はspec.mdの「スコープの決定」参照）
 
-- [ ] T003 [US1] `tests/e2e/auth/registration.spec.ts` を新規作成する。(1) T002のヘルパーで招待URL取得→遷移 (2) `/welcome`で規約同意 (3) Clerk登録フォームにパスワード入力（招待によりメールアドレスは既に確認済み扱いのため入力欄は表示されない） (4) `/onboarding/plan`遷移確認 (5) STARTERランク選択 (6) Stripe Checkout遷移確認 (7) `afterEach`でクリーンアップ、を検証する（依存: T001, T002）
+- [x] T003 [US1] `tests/e2e/auth/registration.spec.ts` を新規作成する。(1) T002のヘルパーで招待URL取得→遷移 (2) `/welcome`で規約同意 (3) Clerk登録フォームにパスワード入力（招待によりメールアドレスは既に確認済み扱いのため入力欄は表示されない） (4) `/onboarding/plan`遷移確認 (5) STARTERランク選択 (6) Stripe Checkout遷移確認 (7) `afterEach`でクリーンアップ、を検証する（依存: T001, T002）
 
 **チェックポイント**: 実登録フローが独立して動作・テスト可能
 
@@ -59,8 +59,8 @@ description: "Task list template for feature implementation"
 
 **Independent Test**: `quickstart.md` シナリオ2
 
-- [ ] T005 [US2] `tests/e2e/auth/login.spec.ts` を新規作成する。固定の`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`（既存の`onboarding.spec.ts`と同じ資産）を使い、(1) `/sign-in`でメールアドレス・パスワード入力 (2) `/sign-in/factor-two`へ遷移し確認コード入力欄が表示されることを確認 (3) `page.getByLabel("Enter verification code").fill("424242")`で入力（自動送信されるためContinueクリックは不要） (4) ログイン後の画面（`/onboarding/plan`または`/shop`）へ遷移することを確認 (5) `afterEach`でログアウト・Supabase会員レコードの後始末、を検証する（依存: T001）
-- [ ] T006 [US2] 同ファイルに、誤った確認コード（例: `000000`）を入力した場合にエラーが表示されログインが完了しないことを検証するテストを追加する（依存: T005）
+- [x] T005 [US2] `tests/e2e/auth/login.spec.ts` を新規作成する。固定の`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`（既存の`onboarding.spec.ts`と同じ資産）を使い、(1) `/sign-in`でメールアドレス・パスワード入力 (2) `/sign-in/factor-two`へ遷移し確認コード入力欄が表示されることを確認 (3) `page.getByLabel("Enter verification code").fill("424242")`で入力（自動送信されるためContinueクリックは不要） (4) ログイン後の画面（`/onboarding/plan`または`/shop`）へ遷移することを確認 (5) `afterEach`でログアウト・Supabase会員レコードの後始末、を検証する（依存: T001）
+- [x] T006 [US2] 同ファイルに、誤った確認コード（例: `000000`）を入力した場合にエラーが表示されログインが完了しないことを検証するテストを追加する（依存: T005）
 
 **チェックポイント**: 実ログインフローが独立して動作・テスト可能
 
@@ -68,8 +68,8 @@ description: "Task list template for feature implementation"
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T007 [P] ローカル（`pnpm test:e2e`）・CI（`e2e-pr`ジョブ）の両方で新規テストが通過することを確認する
-- [ ] T008 [P] `docs/cicd.md`の「テスト構成」表に`registration.spec.ts`・`login.spec.ts`・`helpers/clerk-test-invitation.ts`を追記する
+- [x] T007 [P] ローカル（`pnpm test:e2e`）・CI（`e2e-pr`ジョブ）の両方で新規テストが通過することを確認する（ローカルは確認済み。CIはPR作成後に確認）
+- [x] T008 [P] `docs/cicd.md`の「テスト構成」表に`registration.spec.ts`・`login.spec.ts`・`helpers/clerk-test-invitation.ts`を追記する
 
 ---
 
