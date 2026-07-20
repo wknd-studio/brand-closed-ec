@@ -129,11 +129,11 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T021 [P] `scripts/seed-users.ts`・`scripts/seed-products.ts`のハードコード値を7ランクに更新する
-- [ ] T022 [P] `quickstart.md` の全シナリオをステージング環境で手動検証する
-- [ ] T023 [P] `pnpm test:e2e` で登録〜カタログ〜注文確定のE2Eを実行する
-- [ ] T024 `docs/overview.md` の該当トピック行を `specs/001-seven-rank-pricing/spec.md` へのリンクに更新する
-- [ ] T025 旧ランク値（`free`, `entry`）を使うコードが残っていないことを確認した上で、`member_rank` enum型から旧値を削除する後続タスクをLinearに別途起票する（本feature後のフォローアップとし、本featureのスコープには含めない。`research.md`のenum移行方針参照）
+- [x] T021 [P] `scripts/seed-users.ts`・`scripts/seed-products.ts`のハードコード値を7ランクに更新する（`free`→`starter`・`entry`→`basic`。`seed-products.ts`の`ProductDoc.prices`型に`advanced`/`premium`も追加）
+- [ ] T022 [P] `quickstart.md` の全シナリオをステージング環境で手動検証する（保留: T023用のカタログ〜注文確定E2Eテストを新規specとして実装してからまとめて行う）
+- [ ] T023 [P] `pnpm test:e2e` で登録〜カタログ〜注文確定のE2Eを実行する（保留: カタログ〜チェックアウトのE2Eテストが未実装のため実行不可。`BRAND-90`/`BRAND-91`を先に実装する）
+- [x] T024 `docs/overview.md` の該当トピック行を `specs/001-seven-rank-pricing/spec.md` へのリンクに更新する（「会員プラン」のみを分離して`specs/001`へリンク。招待システム・ランク変更・退会等は引き続き`service-spec.md`のまま）
+- [x] T025 旧ランク値（`free`, `entry`）を使うコードが残っていないことを確認した上で、`member_rank` enum型から旧値を削除する後続タスクをLinearに別途起票する（本feature後のフォローアップとし、本featureのスコープには含めない。`research.md`のenum移行方針参照）。`src/types/database.types.ts`（自動生成）以外に残存なしを確認し、`BRAND-136`として起票した
 
 ---
 
