@@ -68,7 +68,7 @@ description: "Task list template for feature implementation"
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [x] T007 [P] ローカル（`pnpm test:e2e`）・CI（`e2e-pr`ジョブ）の両方で新規テストが通過することを確認する（ローカルは確認済み。CIはPR作成後に確認）
+- [x] T007 [P] ローカル（`pnpm test:e2e`）・CI（`e2e-pr`ジョブ）の両方で新規テストが通過することを確認する（PR #91で両方確認済み）
 - [x] T008 [P] `docs/cicd.md`の「テスト構成」表に`registration.spec.ts`・`login.spec.ts`・`helpers/clerk-test-invitation.ts`を追記する
 
 ---
