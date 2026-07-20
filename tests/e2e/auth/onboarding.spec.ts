@@ -92,18 +92,24 @@ test.describe.serial("認証済みアクセス", () => {
     await expect(
       page.getByRole("heading", { name: /プランを選択/ })
     ).toBeVisible();
-    await expect(page.getByRole("radio", { name: /Free/ })).toBeVisible();
-    await expect(page.getByRole("radio", { name: /Entry/ })).toBeVisible();
-    await expect(page.getByRole("radio", { name: /Standard/ })).toBeVisible();
-    await expect(page.getByRole("radio", { name: /Pro/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /STARTER/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /BASIC/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /STANDARD/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /PRO/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /ADVANCED/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /PREMIUM/ })).toBeVisible();
   });
 
-  test("Free プランを選択すると /shop へリダイレクトされる", async ({
+  test("STARTER プランを選択すると Stripe Checkout へリダイレクトされる", async ({
     page,
   }) => {
     await page.goto("/onboarding/plan");
-    await page.getByRole("radio", { name: /Free/ }).check();
+    await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
-    await expect(page).toHaveURL(/\/shop/);
+    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+
+    // Stripeの外部ドメインに遷移したままだとafterEachのclerk.signOut()が
+    // 動作しないため、自アプリのドメインに戻しておく
+    await page.goto("/");
   });
 });

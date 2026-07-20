@@ -60,12 +60,12 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 ### Tests
 
-- [ ] T010 [P] [US1] `selectPlan`ユースケースの統合テストを更新する（`tests/integration/select-plan.test.ts`。7ランクのいずれでも登録できることを検証）
+- [x] T010 [P] [US1] `selectPlan`ユースケースの統合テストを更新する（`tests/integration/select-plan.test.ts`。7ランクのいずれでも登録できることを検証）
 
 ### Implementation
 
-- [ ] T011 [US1] `src/app/onboarding/plan/actions.ts` の `VALID_PLANS` を `RANK_ORDER`（`enterprise`を除く6つ）から動的に生成するよう変更する（依存: T005, T009）
-- [ ] T012 [US1] `src/app/onboarding/plan/plan-selector.tsx` の `PLANS` 表示配列を7ランク（STARTER〜PREMIUM）に更新し、日本語ラベルを`docs/archive/service-spec.md`のプラン概要表に合わせる（依存: T005）
+- [x] T011 [US1] `src/app/onboarding/plan/actions.ts` の `VALID_PLANS` を `RANK_ORDER`（`enterprise`を除く6つ）から動的に生成するよう変更する（依存: T005, T009）。合わせて`onboarding/payment/page.tsx`の`VALID_PLANS`も`STRIPE_PRICE_IDS`のキーから動的生成するよう修正
+- [x] T012 [US1] `src/app/onboarding/plan/plan-selector.tsx` の `PLANS` 表示配列を7ランク（STARTER〜PREMIUM、ENTERPRISE除く）に更新し、日本語ラベルを`docs/archive/service-spec.md`のプラン概要表に合わせる（依存: T005）。既存のE2Eテスト（`tests/e2e/auth/onboarding.spec.ts`）が旧ラベル・旧動作（Free選択→即/shop）を前提にしていたため合わせて更新し、実際にブラウザで動作確認済み（STARTER選択→Stripe Checkoutへの実遷移を確認）
 
 **チェックポイント**: 会員登録が7ランクで独立して動作・テスト可能
 

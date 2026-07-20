@@ -4,17 +4,45 @@ import { useActionState, useEffect } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { selectPlan, type SelectPlanResult } from "./actions";
+import { RANK_ORDER } from "@/domain/value-objects/member-rank";
+import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
-const PLANS = [
-  {
-    id: "free",
-    label: "Free",
-    description: "無料で基本機能をご利用いただけます",
+// 表示ラベル・説明はdocs/archive/service-spec.mdの「プラン概要」表と一致させる。
+// 対象プランの一覧自体はRANK_ORDER（enterpriseを除く）から動的に生成する。
+const PLAN_LABELS: Record<
+  MemberRankValue,
+  { label: string; description: string }
+> = {
+  starter: {
+    label: "STARTER",
+    description: "入門プラン（副業・お試し層向け）",
   },
-  { id: "entry", label: "Entry", description: "エントリープラン" },
-  { id: "standard", label: "Standard", description: "スタンダードプラン" },
-  { id: "pro", label: "Pro", description: "プロプラン" },
-] as const;
+  basic: {
+    label: "BASIC",
+    description: "基本プラン（個人せどり・副業層向け）",
+  },
+  standard: {
+    label: "STANDARD",
+    description: "標準プラン（本業EC事業者・小規模セレクトショップ向け）",
+  },
+  pro: {
+    label: "PRO",
+    description: "上位プラン（中規模セレクトショップ・法人向け）",
+  },
+  advanced: {
+    label: "ADVANCED",
+    description: "上級プラン（中〜大規模法人向け）",
+  },
+  premium: {
+    label: "PREMIUM",
+    description: "最上位固定プラン（大規模法人・チェーン店向け）",
+  },
+  enterprise: { label: "ENTERPRISE", description: "個別契約プラン" },
+};
+
+const PLANS = RANK_ORDER.filter((rank) => rank !== "enterprise").map(
+  (rank) => ({ id: rank, ...PLAN_LABELS[rank] })
+);
 
 export default function PlanSelector() {
   const { session } = useClerk();
