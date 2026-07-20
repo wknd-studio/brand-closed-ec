@@ -6,19 +6,22 @@
 PR (develop・main)
   ├─ TypeScript チェック
   ├─ Lint / Format チェック
-  └─ Unit Tests
+  ├─ Unit Tests
+  └─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
 
 push (develop・main)
   └─ Deploy
-       ├─ [develop] DB マイグレーション (stg) → ビルド → デプロイ → E2E
+       ├─ [develop] DB マイグレーション (stg) → ビルド → デプロイ → E2E（stg環境に対して）
        └─ [main]    DB マイグレーション (prod) → ビルド → デプロイ
 ```
 
-| トリガー            | 実行されるジョブ               |
-| ------------------- | ------------------------------ |
-| PR → develop / main | typecheck・lint・test          |
-| push → develop      | migrate stg → deploy stg → E2E |
-| push → main         | migrate prod → deploy prod     |
+| トリガー            | 実行されるジョブ                           |
+| ------------------- | ------------------------------------------ |
+| PR → develop / main | typecheck・lint・test・E2E（コード変更時） |
+| push → develop      | migrate stg → deploy stg → E2E             |
+| push → main         | migrate prod → deploy prod                 |
+
+> **PR時のE2Eについて**: `docs/`・`specs/`・`*.md`のみの変更（ドキュメントのみのPR）ではE2Eジョブをスキップする（`dorny/paths-filter`で判定）。実行する場合もstgの本物のDBには触れず、CI実行環境内でSupabaseをローカル起動してテスト用データを使う（PRごとに独立、他のPRのテストと干渉しない）。
 
 > GitHub 無料プランの private リポジトリは branch protection が使えないため、PR なし直接 push のリスクは運用でカバーする。チェックは PR 時のみ実行し、push 時はデプロイのみ行う。
 
@@ -101,16 +104,21 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 
 ## E2E テスト
 
-### CI での実行タイミング
+### CI での実行タイミング（2種類）
 
-`develop` への push 後、stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動する。
+1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットは`staging` Doppler環境から取得する。
+2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
+
+どちらも失敗したテストの動画・トレースをGitHub ActionsのArtifacts（`playwright-report-pr`・`playwright-report-stg`）としてアップロードする（保持期間7日）。ダウンロードして`.mp4`をそのまま再生するか、`pnpm exec playwright show-trace <trace.zip>`でトレースビューアを開いて確認できる。
 
 ### ローカルでの実行
 
 ```bash
 pnpm test:e2e       # pnpm dev を自動起動してテスト
-pnpm test:e2e --ui  # Playwright UI モード
+pnpm test:e2e --ui  # Playwright UI モード（ブラウザの動きをリアルタイムで確認できる）
 ```
+
+失敗したテストの動画・トレースはローカルでも`test-results/`配下に自動保存される（`playwright.config.ts`の`video: "retain-on-failure"` / `trace: "retain-on-failure"`）。
 
 ### 必要な前提条件
 
