@@ -99,11 +99,11 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 ### Tests
 
-- [ ] T017 [P] [US3] `getMonthlyUsageInfo`の統合テストを更新する（`tests/integration/cart/monthly-confirmed.test.ts`。7ランクの上限値で判定されることを検証）
+- [x] T017 [P] [US3] `getMonthlyUsageInfo`の統合テストを更新する（`tests/integration/cart/monthly-confirmed.test.ts`。新規作成。7ランクの上限値で判定されることを検証。キャンセル済み注文が確定金額の計算から除外されることも検証）
 
 ### Implementation
 
-- [ ] T018 [US3] `src/app/(member)/order/checkout/page.tsx`・関連Server Actionで上限超過メッセージが7ランクの値で正しく表示されることを確認する（依存: T008）
+- [x] T018 [US3] `src/app/(member)/order/checkout/page.tsx`・関連Server Actionで上限超過メッセージが7ランクの値で正しく表示されることを確認する（依存: T008）。コードレビューの結果、実際の上限超過フローは`actions.ts`の`err.limit.toLocaleString()`（`LimitExceededError`経由、`domain/services/monthly-limit-service.ts`が発行）であり、ランク非依存の実装のため変更不要だった。調査中に発見した未使用（どこからもimportされていない）の`src/app/(member)/order/checkout/monthly-limit.ts`（重複した別実装）は削除した
 
 **チェックポイント**: 上限チェックが7ランクで独立して動作・テスト可能
 
