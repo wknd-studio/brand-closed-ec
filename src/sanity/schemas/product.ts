@@ -1,10 +1,12 @@
 import { defineField, defineType } from "sanity";
 
 const RANK_OPTIONS = [
-  { title: "Free", value: "free" },
-  { title: "Entry", value: "entry" },
+  { title: "Starter", value: "starter" },
+  { title: "Basic", value: "basic" },
   { title: "Standard", value: "standard" },
   { title: "Pro", value: "pro" },
+  { title: "Advanced", value: "advanced" },
+  { title: "Premium", value: "premium" },
   { title: "Enterprise", value: "enterprise" },
 ];
 
@@ -87,10 +89,12 @@ export const product = defineType({
       description: "要相談商品の場合は空欄で構いません",
       type: "object",
       fields: [
-        defineField({ name: "free", title: "Free", type: "number" }),
-        defineField({ name: "entry", title: "Entry", type: "number" }),
+        defineField({ name: "starter", title: "Starter", type: "number" }),
+        defineField({ name: "basic", title: "Basic", type: "number" }),
         defineField({ name: "standard", title: "Standard", type: "number" }),
         defineField({ name: "pro", title: "Pro", type: "number" }),
+        defineField({ name: "advanced", title: "Advanced", type: "number" }),
+        defineField({ name: "premium", title: "Premium", type: "number" }),
         defineField({
           name: "enterprise",
           title: "Enterprise",
@@ -111,7 +115,7 @@ export const product = defineType({
       description: "このランク未満の会員には商品が表示されません",
       type: "string",
       options: { list: RANK_OPTIONS },
-      initialValue: "free",
+      initialValue: "starter",
       validation: (r) => r.required(),
     }),
     defineField({

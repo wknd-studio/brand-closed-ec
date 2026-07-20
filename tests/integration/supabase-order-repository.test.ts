@@ -39,7 +39,7 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
     status: OrderStatus.of("pending_payment"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
-    rankAtOrder: MemberRank.of("entry"),
+    rankAtOrder: MemberRank.of("basic"),
     monthlyLimitAtOrder: Money.of(1_000_000),
     stripeCheckoutSessionId: TEST_STRIPE_SESSION_ID,
     stripeInvoiceId: null,
@@ -67,7 +67,7 @@ beforeAll(async () => {
     email: "order-infra-test@example.com",
     first_name: "テスト",
     last_name: "太郎",
-    rank: "entry",
+    rank: "basic",
     onboarding_completed: true,
     subscribed_at: "2026-01-10T00:00:00.000Z",
   });

@@ -7,22 +7,26 @@ vi.mock("next-sanity", () => ({
 import { getAllowedRanks } from "@/lib/sanity/products";
 
 describe("getAllowedRanks", () => {
-  it("free ランクは free のみ閲覧可能", () => {
-    expect(getAllowedRanks("free")).toEqual(["free"]);
+  it("starter ランクは starter のみ閲覧可能", () => {
+    expect(getAllowedRanks("starter")).toEqual(["starter"]);
   });
 
-  it("entry ランクは free・entry を閲覧可能", () => {
-    expect(getAllowedRanks("entry")).toEqual(["free", "entry"]);
+  it("basic ランクは starter・basic を閲覧可能", () => {
+    expect(getAllowedRanks("basic")).toEqual(["starter", "basic"]);
   });
 
-  it("standard ランクは free・entry・standard を閲覧可能", () => {
-    expect(getAllowedRanks("standard")).toEqual(["free", "entry", "standard"]);
+  it("standard ランクは starter・basic・standard を閲覧可能", () => {
+    expect(getAllowedRanks("standard")).toEqual([
+      "starter",
+      "basic",
+      "standard",
+    ]);
   });
 
-  it("pro ランクは free〜pro を閲覧可能", () => {
+  it("pro ランクは starter〜pro を閲覧可能", () => {
     expect(getAllowedRanks("pro")).toEqual([
-      "free",
-      "entry",
+      "starter",
+      "basic",
       "standard",
       "pro",
     ]);
@@ -30,15 +34,17 @@ describe("getAllowedRanks", () => {
 
   it("enterprise ランクはすべて閲覧可能", () => {
     expect(getAllowedRanks("enterprise")).toEqual([
-      "free",
-      "entry",
+      "starter",
+      "basic",
       "standard",
       "pro",
+      "advanced",
+      "premium",
       "enterprise",
     ]);
   });
 
-  it("不明なランクは free のみ", () => {
-    expect(getAllowedRanks("unknown")).toEqual(["free"]);
+  it("不明なランクは starter のみ", () => {
+    expect(getAllowedRanks("unknown")).toEqual(["starter"]);
   });
 });

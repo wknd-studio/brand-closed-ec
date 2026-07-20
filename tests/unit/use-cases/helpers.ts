@@ -109,7 +109,7 @@ export const fixedProduct: ProductSnapshot = {
   productName: "固定商品",
   unitPrice: Money.of(100_000),
   isNegotiable: false,
-  minRank: "free",
+  minRank: "starter",
 };
 
 export const negotiableProduct: ProductSnapshot = {
@@ -117,7 +117,7 @@ export const negotiableProduct: ProductSnapshot = {
   productName: "交渉商品",
   unitPrice: Money.zero(),
   isNegotiable: true,
-  minRank: "free",
+  minRank: "starter",
 };
 
 export function makeUserRepo(user = makeUser()): UserRepository {

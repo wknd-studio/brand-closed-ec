@@ -21,7 +21,7 @@ export async function createUser(
     id: crypto.randomUUID(),
     clerkUserId: input.clerkUserId,
     email: input.email,
-    rank: MemberRank.of("free"),
+    rank: MemberRank.of("starter"),
     subscribedAt: null,
     onboardingCompleted: false,
     termsAgreedAt: null,

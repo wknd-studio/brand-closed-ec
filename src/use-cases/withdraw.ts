@@ -30,7 +30,7 @@ export async function withdraw(
   const withdrawnUser = user.with({ deletedAt: new Date() });
   await userRepo.save(withdrawnUser);
 
-  if (user.stripeSubscriptionId && user.rank.value !== "free") {
+  if (user.stripeSubscriptionId) {
     try {
       await subscriptionGateway.cancelSubscription(user.stripeSubscriptionId);
     } catch (err) {

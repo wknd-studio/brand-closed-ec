@@ -25,7 +25,7 @@ export default async function ProductDetailPage({
   const userRepo = new SupabaseUserRepository(supabase);
 
   const user = await userRepo.findByClerkUserId(userId!);
-  const userRank = user?.rank.value ?? "free";
+  const userRank = user?.rank.value ?? "starter";
   const product = await fetchProductById(id);
 
   if (!product || !isProductAccessible(userRank, product.min_rank)) {
