@@ -70,6 +70,7 @@ GitHub リポジトリの Settings → Secrets and variables → Actions に設�
 | `SUPABASE_ACCESS_TOKEN`         | Supabase CLI 認証トークン（DB マイグレーション用）                   |
 | `SUPABASE_PROJECT_REF_STG`      | stg Supabase プロジェクト参照 ID                                     |
 | `E2E_USER_EMAIL`                | E2E テスト用アカウントのメールアドレス                               |
+| `E2E_USER_PASSWORD`             | E2E テスト用アカウントのパスワード（実ログインフローテスト用）       |
 
 ### 要追加（prod 準備時）
 
@@ -124,7 +125,8 @@ E2E テストを実行するには以下が必要：
 2. **環境変数**（ローカルの場合は `.env.local`、CI の場合は GitHub Secrets）
 
 ```
-E2E_USER_EMAIL=test@example.com
+E2E_USER_EMAIL=test+clerk_test@example.com
+E2E_USER_PASSWORD=...
 CLERK_SECRET_KEY=sk_test_...
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
@@ -132,12 +134,15 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 ### テスト構成
 
-| ファイル                            | 内容                                               |
-| ----------------------------------- | -------------------------------------------------- |
-| `tests/e2e/auth/onboarding.spec.ts` | オンボーディングフロー（プラン選択・リダイレクト） |
-| `tests/e2e/global.setup.ts`         | Clerk テスト環境のセットアップ                     |
+| ファイル                                     | 内容                                                                         |
+| -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `tests/e2e/auth/onboarding.spec.ts`          | オンボーディングフロー（プラン選択・リダイレクト。`ticket`方式バイパス）     |
+| `tests/e2e/auth/registration.spec.ts`        | 実際の招待リンク→登録フォーム→プラン選択→Stripe Checkoutまでの実登録フロー   |
+| `tests/e2e/auth/login.spec.ts`               | 実際のログインフォーム操作＋未知デバイスの確認コード入力                     |
+| `tests/e2e/helpers/clerk-test-invitation.ts` | 招待作成・テストユーザークリーンアップの共通処理（`registration.spec.ts`用） |
+| `tests/e2e/global.setup.ts`                  | Clerk テスト環境のセットアップ                                               |
 
-`E2E_USER_EMAIL` が未設定の場合、認証済みアクセスのテストは自動的にスキップされる。
+`E2E_USER_EMAIL`/`E2E_USER_PASSWORD` が未設定の場合、認証済みアクセス・ログインのテストは自動的にスキップされる。`E2E_USER_EMAIL` は Clerk のテスト用メール規約（`+clerk_test` を含むアドレス）で作成すること。
 
 ---
 
