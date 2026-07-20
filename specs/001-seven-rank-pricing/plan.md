@@ -42,16 +42,20 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 ### 重複しているランク定義の棚卸し（移行時に同時更新が必須）
 
-| 箇所                                        | 内容                                                                              |
-| ------------------------------------------- | --------------------------------------------------------------------------------- |
-| `src/domain/value-objects/member-rank.ts`   | `RANK_ORDER`, `MONTHLY_LIMITS`, `MemberRank`クラス                                |
-| `src/lib/sanity/products.ts`                | 独自の`RANK_ORDER`, `MemberRank`型, `getAllowedRanks()`, `isProductAccessible()`  |
-| `src/lib/constants/membership.ts`           | 独自の`MONTHLY_LIMITS`（`lib/sanity/products`の型を参照）                         |
-| `src/app/onboarding/plan/actions.ts`        | `VALID_PLANS`配列（ハードコード）                                                 |
-| `src/app/onboarding/plan/plan-selector.tsx` | `PLANS`表示用配列（ハードコード）                                                 |
-| `supabase/migrations/*`                     | `member_rank` enum型（`users.rank`, `orders.rank_at_order`, `order_items`が参照） |
+| 箇所                                                 | 内容                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `src/domain/value-objects/member-rank.ts`            | `RANK_ORDER`, `MONTHLY_LIMITS`, `MemberRank`クラス                                                  |
+| `src/lib/sanity/products.ts`                         | 独自の`RANK_ORDER`, `MemberRank`型, `getAllowedRanks()`, `isProductAccessible()`                    |
+| `src/lib/constants/membership.ts`                    | 独自の`MONTHLY_LIMITS`（`lib/sanity/products`の型を参照）                                           |
+| `src/app/onboarding/plan/actions.ts`                 | `VALID_PLANS`配列（ハードコード）                                                                   |
+| `src/app/onboarding/plan/plan-selector.tsx`          | `PLANS`表示用配列（ハードコード）                                                                   |
+| `src/lib/stripe.ts`                                  | `PaidRank`型（`"entry" \| "standard" \| "pro"`）・`STRIPE_PRICE_IDS`・`STRIPE_PRICE_ID_*`環境変数名 |
+| `supabase/migrations/*`                              | `member_rank` enum型（`users.rank`, `orders.rank_at_order`, `order_items`が参照）                   |
+| `scripts/seed-users.ts` / `scripts/seed-products.ts` | シード用スクリプトのハードコード値（開発用。優先度は低いがPolishフェーズで更新）                    |
 
-**方針**: `src/domain/value-objects/member-rank.ts` を唯一の正とし、`src/lib/sanity/products.ts` の`RANK_ORDER`/`MemberRank`型・`src/lib/constants/membership.ts`の`MONTHLY_LIMITS`は独自定義をやめてdomain層からimportするよう変更する（架空の新規リファクタリングではなく、7ランクの値を安全に反映させるために必須の対応）。UI側のハードコード配列（`VALID_PLANS`, `PLANS`）も同様にdomain層の`RANK_ORDER`から動的に生成する。
+**方針**: `src/domain/value-objects/member-rank.ts` を唯一の正とし、`src/lib/sanity/products.ts` の`RANK_ORDER`/`MemberRank`型・`src/lib/constants/membership.ts`の`MONTHLY_LIMITS`は独自定義をやめてdomain層からimportするよう変更する（架空の新規リファクタリングではなく、7ランクの値を安全に反映させるために必須の対応）。UI側のハードコード配列（`VALID_PLANS`, `PLANS`）も同様にdomain層の`RANK_ORDER`から動的に生成する。`src/lib/stripe.ts`の`PaidRank`型・`STRIPE_PRICE_IDS`も7ランク分に拡張し、環境変数名を新ランク名に合わせる。
+
+**補足（BRAND-97の記述との差分）**: 商品ごとの掛け率（割引率）は、計算式ではなく`Product.prices`（Sanityの`prices`フィールド）にランクごとの絶対価格を直接持たせる形で既に実装されている。新規のロジック実装は不要で、既存商品データに7ランク分の価格を追加するだけで足りる（`data-model.md`・`tasks.md` T014参照）。
 
 ## Project Structure
 
