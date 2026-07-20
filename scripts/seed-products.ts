@@ -38,10 +38,12 @@ type ProductDoc = {
   retail_price: number;
   is_negotiable: boolean;
   prices?: {
-    free?: number;
-    entry?: number;
+    starter?: number;
+    basic?: number;
     standard?: number;
     pro?: number;
+    advanced?: number;
+    premium?: number;
     enterprise?: number;
   };
   min_rank: string;
@@ -244,13 +246,13 @@ const productDefs = [
     retail_price: 55000,
     is_negotiable: false,
     prices: {
-      free: 28000,
-      entry: 25000,
+      starter: 28000,
+      basic: 25000,
       standard: 22000,
       pro: 20000,
       enterprise: 18500,
     },
-    min_rank: "free",
+    min_rank: "starter",
     availability: "available",
   },
   {
@@ -271,13 +273,13 @@ const productDefs = [
     retail_price: 33000,
     is_negotiable: false,
     prices: {
-      free: 17000,
-      entry: 15500,
+      starter: 17000,
+      basic: 15500,
       standard: 14000,
       pro: 12500,
       enterprise: 11500,
     },
-    min_rank: "free",
+    min_rank: "starter",
     availability: "available",
   },
   {
@@ -298,12 +300,12 @@ const productDefs = [
     retail_price: 198000,
     is_negotiable: false,
     prices: {
-      entry: 100000,
+      basic: 100000,
       standard: 90000,
       pro: 82000,
       enterprise: 75000,
     },
-    min_rank: "entry",
+    min_rank: "basic",
     availability: "available",
   },
   // ── GUCCI ────────────────────────────────────────────
@@ -325,13 +327,13 @@ const productDefs = [
     retail_price: 185000,
     is_negotiable: false,
     prices: {
-      free: 93000,
-      entry: 85000,
+      starter: 93000,
+      basic: 85000,
       standard: 76000,
       pro: 70000,
       enterprise: 65000,
     },
-    min_rank: "free",
+    min_rank: "starter",
     availability: "available",
   },
   {
@@ -377,13 +379,13 @@ const productDefs = [
     retail_price: 115500,
     is_negotiable: false,
     prices: {
-      free: 58000,
-      entry: 52000,
+      starter: 58000,
+      basic: 52000,
       standard: 47000,
       pro: 43000,
       enterprise: 40000,
     },
-    min_rank: "free",
+    min_rank: "starter",
     availability: "available",
   },
   // ── LOEWE ────────────────────────────────────────────
@@ -429,12 +431,12 @@ const productDefs = [
     retail_price: 231000,
     is_negotiable: false,
     prices: {
-      entry: 116000,
+      basic: 116000,
       standard: 105000,
       pro: 96000,
       enterprise: 88000,
     },
-    min_rank: "entry",
+    min_rank: "basic",
     availability: "available",
   },
   {
@@ -455,13 +457,13 @@ const productDefs = [
     retail_price: 79200,
     is_negotiable: false,
     prices: {
-      free: 40000,
-      entry: 36000,
+      starter: 40000,
+      basic: 36000,
       standard: 32000,
       pro: 30000,
       enterprise: 28000,
     },
-    min_rank: "free",
+    min_rank: "starter",
     availability: "available",
   },
   // ── HERMÈS ────────────────────────────────────────────
@@ -483,13 +485,13 @@ const productDefs = [
     retail_price: 93500,
     is_negotiable: false,
     prices: {
-      free: 47000,
-      entry: 43000,
+      starter: 47000,
+      basic: 43000,
       standard: 38000,
       pro: 35000,
       enterprise: 33000,
     },
-    min_rank: "free",
+    min_rank: "starter",
     availability: "available",
   },
   {
@@ -510,12 +512,12 @@ const productDefs = [
     retail_price: 249700,
     is_negotiable: false,
     prices: {
-      entry: 125000,
+      basic: 125000,
       standard: 112000,
       pro: 103000,
       enterprise: 95000,
     },
-    min_rank: "entry",
+    min_rank: "basic",
     availability: "available",
   },
   // ── CHANEL ───────────────────────────────────────────
@@ -561,12 +563,12 @@ const productDefs = [
     retail_price: 143000,
     is_negotiable: false,
     prices: {
-      entry: 72000,
+      basic: 72000,
       standard: 65000,
       pro: 59000,
       enterprise: 55000,
     },
-    min_rank: "entry",
+    min_rank: "basic",
     availability: "available",
   },
 ];

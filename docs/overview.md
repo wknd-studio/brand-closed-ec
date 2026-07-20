@@ -8,13 +8,14 @@
 
 ## トピック索引
 
-| トピック                                                                                 | 現在の正                                                                                        |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| サービス概要・利用者・会員プラン・招待システム・ランク変更・退会・禁止事項・運営者ロール | [`docs/archive/service-spec.md`](./archive/service-spec.md)（凍結済みスナップショット）         |
-| 各機能のユーザーストーリー・受け入れ条件                                                 | [`docs/archive/user-stories.md`](./archive/user-stories.md)（凍結済みスナップショット）         |
-| データモデル（エンティティ定義）                                                         | [`docs/archive/data-model.md`](./archive/data-model.md)（凍結済みスナップショット）             |
-| 注文・決済フロー（Checkout / Invoice）                                                   | [`docs/archive/order-flow.md`](./archive/order-flow.md)（凍結済みスナップショット）             |
-| 注文対応オペレーション                                                                   | [`docs/archive/operations-order.md`](./archive/operations-order.md)（凍結済みスナップショット） |
+| トピック                                                                     | 現在の正                                                                                        |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| サービス概要・利用者・招待システム・ランク変更・退会・禁止事項・運営者ロール | [`docs/archive/service-spec.md`](./archive/service-spec.md)（凍結済みスナップショット）         |
+| 会員プラン（7ランクモデル）                                                  | [`specs/001-seven-rank-pricing/spec.md`](../specs/001-seven-rank-pricing/spec.md)               |
+| 各機能のユーザーストーリー・受け入れ条件                                     | [`docs/archive/user-stories.md`](./archive/user-stories.md)（凍結済みスナップショット）         |
+| データモデル（エンティティ定義）                                             | [`docs/archive/data-model.md`](./archive/data-model.md)（凍結済みスナップショット）             |
+| 注文・決済フロー（Checkout / Invoice）                                       | [`docs/archive/order-flow.md`](./archive/order-flow.md)（凍結済みスナップショット）             |
+| 注文対応オペレーション                                                       | [`docs/archive/operations-order.md`](./archive/operations-order.md)（凍結済みスナップショット） |
 
 ---
 

@@ -53,7 +53,7 @@ async function main() {
         email,
         first_name: clerkUser.firstName ?? "",
         last_name: clerkUser.lastName ?? "",
-        rank: "free",
+        rank: "starter",
         onboarding_completed: false,
       },
       { onConflict: "clerk_user_id" }
