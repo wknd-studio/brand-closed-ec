@@ -3,7 +3,14 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { getStripe, STRIPE_PRICE_IDS, type PaidRank } from "@/lib/stripe";
 import Link from "next/link";
 
-const VALID_PLANS: PaidRank[] = ["entry", "standard", "pro"];
+const VALID_PLANS: PaidRank[] = [
+  "starter",
+  "basic",
+  "standard",
+  "pro",
+  "advanced",
+  "premium",
+];
 
 export default async function OnboardingPaymentPage({
   searchParams,

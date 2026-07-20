@@ -63,19 +63,19 @@ describe("InvalidStatusTransitionError", () => {
 
 describe("ProductNotAccessibleError", () => {
   it("DomainError を継承している", () => {
-    const err = new ProductNotAccessibleError("prod-001", "entry", "pro");
+    const err = new ProductNotAccessibleError("prod-001", "basic", "pro");
     expect(err).toBeInstanceOf(DomainError);
   });
 
   it("productId, userRank, requiredRank を保持する", () => {
-    const err = new ProductNotAccessibleError("prod-001", "entry", "pro");
+    const err = new ProductNotAccessibleError("prod-001", "basic", "pro");
     expect(err.productId).toBe("prod-001");
-    expect(err.userRank).toBe("entry");
+    expect(err.userRank).toBe("basic");
     expect(err.requiredRank).toBe("pro");
   });
 
   it("name が ProductNotAccessibleError", () => {
-    const err = new ProductNotAccessibleError("prod-001", "entry", "pro");
+    const err = new ProductNotAccessibleError("prod-001", "basic", "pro");
     expect(err.name).toBe("ProductNotAccessibleError");
   });
 });

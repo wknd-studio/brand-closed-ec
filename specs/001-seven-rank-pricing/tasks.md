@@ -33,13 +33,20 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 **⚠️ このPhaseが完了するまで、どのユーザーストーリーにも着手できない**
 
-- [ ] T003 `supabase migration new add_seven_rank_values` で `member_rank` enum型に7つの新しい値（`starter`, `basic`, `advanced`, `premium`）を追加するマイグレーションを作成する（`standard`/`pro`/`enterprise`は既存値を流用。`data-model.md`のSQL参照）
-- [ ] T004 `supabase db reset` で適用し、`supabase gen types typescript --local > src/types/database.types.ts` で型を再生成する（依存: T003）
-- [ ] T005 `src/domain/value-objects/member-rank.ts` の `RANK_ORDER`・`MONTHLY_LIMITS` を7ランクに更新する（月間仕入れ上限はTBDのため`docs/archive/service-spec.md`確定後に反映。それまでは暫定値かつ`TODO`コメントを残す）
-- [ ] T006 [P] `src/domain/value-objects/member-rank.ts` のユニットテストを更新する（`tests/unit/domain/member-rank.test.ts`。7ランクの序列比較・上限取得を検証。依存: T005）
-- [ ] T007 `src/lib/sanity/products.ts` の独自`RANK_ORDER`/`MemberRank`型定義を削除し、`src/domain/value-objects/member-rank.ts`からimportするよう変更する（依存: T005）
-- [ ] T008 `src/lib/constants/membership.ts` の独自`MONTHLY_LIMITS`定義を削除し、`MemberRank.getMonthlyLimit()`を使うよう呼び出し側（`src/lib/cart/monthly-confirmed.ts`）を更新する（依存: T005）
-- [ ] T009 `src/lib/stripe.ts` の `PaidRank`型・`STRIPE_PRICE_IDS`・`STRIPE_PRICE_ID_*`環境変数名を7ランク分に拡張する（依存: T001, T005）
+- [x] T003 `supabase migration new add_seven_rank_values` で `member_rank` enum型に7つの新しい値（`starter`, `basic`, `advanced`, `premium`）を追加するマイグレーションを作成する（`standard`/`pro`/`enterprise`は既存値を流用。`data-model.md`のSQL参照）
+- [x] T004 `supabase db reset` で適用し、`supabase gen types typescript --local > src/types/database.types.ts` で型を再生成する（依存: T003）
+- [x] T005 `src/domain/value-objects/member-rank.ts` の `RANK_ORDER`・`MONTHLY_LIMITS` を7ランクに更新する（月間仕入れ上限はTBDのため`docs/archive/service-spec.md`確定後に反映。それまでは暫定値かつ`TODO`コメントを残す）
+- [x] T006 [P] `src/domain/value-objects/member-rank.ts` のユニットテストを更新する（`tests/unit/domain/member-rank.test.ts`。7ランクの序列比較・上限取得を検証。依存: T005）
+- [x] T007 `src/lib/sanity/products.ts` の独自`RANK_ORDER`/`MemberRank`型定義を削除し、`src/domain/value-objects/member-rank.ts`からimportするよう変更する（依存: T005）
+- [x] T008 `src/lib/constants/membership.ts` の独自`MONTHLY_LIMITS`定義を削除し、`MemberRank.getMonthlyLimit()`を使うよう呼び出し側（`src/lib/cart/monthly-confirmed.ts`）を更新する（依存: T005）
+- [x] T009 `src/lib/stripe.ts` の `PaidRank`型・`STRIPE_PRICE_IDS`・`STRIPE_PRICE_ID_*`環境変数名を7ランク分に拡張する（依存: T001, T005）
+
+**Foundational完了時に追加で必要だった修正（tasks.md起票時には想定していなかった波及範囲）**:
+`src/use-cases/select-plan.ts`（isFree分岐の削除）・`src/use-cases/withdraw.ts`（free判定の削除）・
+`src/use-cases/create-user.ts`・`src/lib/webhook/clerk.ts`（placeholderランクをstarterに変更）・
+`src/app/onboarding/plan/actions.ts`・`src/app/onboarding/payment/page.tsx`（VALID_PLANSの暫定修正。
+本格対応はT011/T012）・`src/app/(member)/shop/**`（"free"フォールバックをstarterに変更）・
+関連テスト一式。詳細はコミット履歴参照。
 
 **チェックポイント**: ランク定義が単一情報源化され、7ランクの値がドメイン層に反映されている。各領域の実装に着手可能
 

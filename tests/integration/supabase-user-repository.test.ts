@@ -21,7 +21,7 @@ beforeAll(async () => {
     email: "infra-test@example.com",
     first_name: "インフラ",
     last_name: "テスト",
-    rank: "entry",
+    rank: "basic",
     onboarding_completed: true,
     subscribed_at: "2026-01-10T00:00:00.000Z",
     terms_agreed_at: "2026-01-10T00:00:00.000Z",
@@ -42,7 +42,7 @@ describe("SupabaseUserRepository", () => {
       expect(user).not.toBeNull();
       expect(user!.id).toBe(TEST_USER_ID);
       expect(user!.email).toBe("infra-test@example.com");
-      expect(user!.rank.value).toBe("entry");
+      expect(user!.rank.value).toBe("basic");
     });
 
     it("存在しないユーザーは null を返す", async () => {

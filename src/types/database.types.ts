@@ -317,7 +317,16 @@ export type Database = {
     };
     Enums: {
       address_type: "billing" | "shipping";
-      member_rank: "free" | "entry" | "standard" | "pro" | "enterprise";
+      member_rank:
+        | "free"
+        | "entry"
+        | "standard"
+        | "pro"
+        | "enterprise"
+        | "starter"
+        | "basic"
+        | "advanced"
+        | "premium";
       order_payment_flow: "checkout" | "invoice";
       order_status:
         | "pending_payment"
@@ -465,7 +474,17 @@ export const Constants = {
   public: {
     Enums: {
       address_type: ["billing", "shipping"],
-      member_rank: ["free", "entry", "standard", "pro", "enterprise"],
+      member_rank: [
+        "free",
+        "entry",
+        "standard",
+        "pro",
+        "enterprise",
+        "starter",
+        "basic",
+        "advanced",
+        "premium",
+      ],
       order_payment_flow: ["checkout", "invoice"],
       order_status: [
         "pending_payment",

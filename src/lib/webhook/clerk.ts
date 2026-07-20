@@ -11,7 +11,7 @@ export function buildUserInsertPayload(data: ClerkUserCreatedData) {
     email: data.email_addresses[0]?.email_address ?? "",
     first_name: data.first_name ?? "",
     last_name: data.last_name ?? "",
-    rank: "free" as const,
+    rank: "starter" as const,
     onboarding_completed: false,
   };
 }

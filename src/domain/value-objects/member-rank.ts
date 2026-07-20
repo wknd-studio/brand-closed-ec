@@ -1,20 +1,28 @@
 import { Money } from "./money";
 
 export const RANK_ORDER = [
-  "free",
-  "entry",
+  "starter",
+  "basic",
   "standard",
   "pro",
+  "advanced",
+  "premium",
   "enterprise",
 ] as const;
 
 export type MemberRankValue = (typeof RANK_ORDER)[number];
 
+// TODO: 月間仕入れ上限はdocs/archive/service-spec.mdで未確定（TBD）。
+// 確定次第この暫定値を更新する（specs/001-seven-rank-pricing/research.md参照）。
+// standard/pro/enterpriseは名称が旧モデルから引き継がれるため、旧モデルの数値を
+// そのまま流用した（starter/basic/advanced/premiumは新規ランクのため新規に暫定設定）。
 const MONTHLY_LIMITS: Record<MemberRankValue, number> = {
-  free: 300_000,
-  entry: 1_000_000,
+  starter: 300_000,
+  basic: 1_000_000,
   standard: 5_000_000,
   pro: 20_000_000,
+  advanced: 50_000_000,
+  premium: 100_000_000,
   enterprise: Number.MAX_SAFE_INTEGER,
 };
 

@@ -22,7 +22,7 @@ export async function fetchMoreProducts(
     .eq("clerk_user_id", userId)
     .single();
 
-  const allowedRanks = getAllowedRanks(user?.rank ?? "free");
+  const allowedRanks = getAllowedRanks(user?.rank ?? "starter");
   const { products } = await fetchProducts({ allowedRanks, brand, offset });
   return products;
 }

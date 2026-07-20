@@ -7,7 +7,7 @@ function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
     id: "user-001",
     clerkUserId: "clerk_abc123",
     email: "test@example.com",
-    rank: MemberRank.of("entry"),
+    rank: MemberRank.of("basic"),
     subscribedAt: new Date(2026, 0, 10),
     onboardingCompleted: true,
     termsAgreedAt: new Date(2026, 0, 10),

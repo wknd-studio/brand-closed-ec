@@ -51,7 +51,7 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
     status: OrderStatus.of("paid"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
-    rankAtOrder: MemberRank.of("entry"),
+    rankAtOrder: MemberRank.of("basic"),
     monthlyLimitAtOrder: Money.of(1_000_000),
     stripeCheckoutSessionId: "cs_test_001",
     stripeInvoiceId: null,

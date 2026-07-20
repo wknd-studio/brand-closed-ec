@@ -47,7 +47,7 @@ describe("withdraw", () => {
   });
 
   it("有料会員: Supabase論理削除 → Stripe解約 → Clerk削除を順に実行する", async () => {
-    const user = makeUser({ rank: "entry" }).with({
+    const user = makeUser({ rank: "basic" }).with({
       stripeSubscriptionId: "sub_123",
     });
     const userRepo = makeUserRepo(user);
@@ -68,8 +68,8 @@ describe("withdraw", () => {
     expect(accountGateway.deleteUser).toHaveBeenCalledWith("clerk-1");
   });
 
-  it("freeランク会員: Stripe解約をスキップする", async () => {
-    const user = makeUser({ rank: "free" }).with({
+  it("stripeSubscriptionIdがない会員: Stripe解約をスキップする", async () => {
+    const user = makeUser({ rank: "starter" }).with({
       stripeSubscriptionId: null,
     });
     const userRepo = makeUserRepo(user);
@@ -87,7 +87,7 @@ describe("withdraw", () => {
   });
 
   it("Stripe解約失敗時はdeleted_atをロールバックしてエラーをthrowする", async () => {
-    const user = makeUser({ rank: "entry" }).with({
+    const user = makeUser({ rank: "basic" }).with({
       stripeSubscriptionId: "sub_123",
     });
     const userRepo = makeUserRepo(user);
@@ -111,7 +111,7 @@ describe("withdraw", () => {
   });
 
   it("Clerk削除失敗時もvoidで正常終了し、console.errorでログを残す", async () => {
-    const user = makeUser({ rank: "entry" }).with({
+    const user = makeUser({ rank: "basic" }).with({
       stripeSubscriptionId: "sub_123",
     });
     const userRepo = makeUserRepo(user);

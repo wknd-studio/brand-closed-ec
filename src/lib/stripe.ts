@@ -14,22 +14,41 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-export type PaidRank = "entry" | "standard" | "pro";
+// enterpriseは個別契約のためセルフサービスのPaidRankには含めない（FR-006）
+export type PaidRank =
+  | "starter"
+  | "basic"
+  | "standard"
+  | "pro"
+  | "advanced"
+  | "premium";
 
 export const STRIPE_PRICE_IDS: Record<
   PaidRank,
   { monthly: string; initialFee: string }
 > = {
-  entry: {
-    monthly: process.env.STRIPE_PRICE_ID_ENTRY!,
-    initialFee: process.env.STRIPE_PRICE_ID_INITIAL_FEE!,
+  starter: {
+    monthly: process.env.STRIPE_PRICE_ID_STARTER!,
+    initialFee: process.env.STRIPE_PRICE_ID_STARTER_INITIAL_FEE!,
+  },
+  basic: {
+    monthly: process.env.STRIPE_PRICE_ID_BASIC!,
+    initialFee: process.env.STRIPE_PRICE_ID_BASIC_INITIAL_FEE!,
   },
   standard: {
     monthly: process.env.STRIPE_PRICE_ID_STANDARD!,
-    initialFee: process.env.STRIPE_PRICE_ID_INITIAL_FEE!,
+    initialFee: process.env.STRIPE_PRICE_ID_STANDARD_INITIAL_FEE!,
   },
   pro: {
     monthly: process.env.STRIPE_PRICE_ID_PRO!,
-    initialFee: process.env.STRIPE_PRICE_ID_INITIAL_FEE!,
+    initialFee: process.env.STRIPE_PRICE_ID_PRO_INITIAL_FEE!,
+  },
+  advanced: {
+    monthly: process.env.STRIPE_PRICE_ID_ADVANCED!,
+    initialFee: process.env.STRIPE_PRICE_ID_ADVANCED_INITIAL_FEE!,
+  },
+  premium: {
+    monthly: process.env.STRIPE_PRICE_ID_PREMIUM!,
+    initialFee: process.env.STRIPE_PRICE_ID_PREMIUM_INITIAL_FEE!,
   },
 };

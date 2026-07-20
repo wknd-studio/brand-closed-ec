@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server-admin";
-import { MONTHLY_LIMITS } from "@/lib/constants/membership";
-import type { MemberRank } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 
 export type MonthlyUsageInfo = {
   confirmedAmount: number;
@@ -45,7 +44,7 @@ export async function getMonthlyUsageInfo(
 
   if (!user) return { confirmedAmount: 0, monthlyLimit: 0 };
 
-  const monthlyLimit = MONTHLY_LIMITS[user.rank as MemberRank] ?? 0;
+  const monthlyLimit = MemberRank.of(user.rank).getMonthlyLimit().amount;
   const { start, end } = getCurrentMonthPeriod(user.subscribed_at);
 
   const { data: orders } = await supabase

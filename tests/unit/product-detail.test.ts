@@ -8,18 +8,18 @@ import { isProductAccessible } from "@/lib/sanity/products";
 
 describe("isProductAccessible", () => {
   it("ユーザーランクが min_rank 以上なら true", () => {
-    expect(isProductAccessible("entry", "free")).toBe(true);
-    expect(isProductAccessible("entry", "entry")).toBe(true);
-    expect(isProductAccessible("standard", "entry")).toBe(true);
+    expect(isProductAccessible("basic", "starter")).toBe(true);
+    expect(isProductAccessible("basic", "basic")).toBe(true);
+    expect(isProductAccessible("standard", "basic")).toBe(true);
   });
 
   it("ユーザーランクが min_rank 未満なら false", () => {
-    expect(isProductAccessible("entry", "standard")).toBe(false);
-    expect(isProductAccessible("free", "pro")).toBe(false);
+    expect(isProductAccessible("basic", "standard")).toBe(false);
+    expect(isProductAccessible("starter", "pro")).toBe(false);
   });
 
   it("不明なランクは false", () => {
-    expect(isProductAccessible("unknown", "free")).toBe(false);
-    expect(isProductAccessible("free", "unknown")).toBe(false);
+    expect(isProductAccessible("unknown", "starter")).toBe(false);
+    expect(isProductAccessible("starter", "unknown")).toBe(false);
   });
 });

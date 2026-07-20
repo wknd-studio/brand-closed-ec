@@ -30,6 +30,4 @@ STRIPE_PRICE_ID_PREMIUM=
 STRIPE_PRICE_ID_PREMIUM_INITIAL_FEE=
 ```
 
-旧変数（`STRIPE_PRICE_ID_ENTRY` / `STRIPE_PRICE_ID_STANDARD`（旧Price）/ `STRIPE_PRICE_ID_PRO`（旧Price）/ `STRIPE_PRICE_ID_INITIAL_FEE`）はT009でコードを更新した後、旧コードパスが無くなったことを確認してから削除する。
-
-**注記**: `.env.local`では新STANDARD・新PROのPrice IDが旧変数名と衝突するため、暫定的に`STRIPE_PRICE_ID_STANDARD_NEW`・`STRIPE_PRICE_ID_PRO_NEW`という名前で設定した。T009で旧変数を削除するタイミングで`_NEW`サフィックスを外し、`STRIPE_PRICE_ID_STANDARD`・`STRIPE_PRICE_ID_PRO`にリネームする。
+**完了**: T009にて`src/lib/stripe.ts`のコードを新変数に切り替え、旧変数（`STRIPE_PRICE_ID_ENTRY` / 旧`STRIPE_PRICE_ID_STANDARD` / 旧`STRIPE_PRICE_ID_PRO` / `STRIPE_PRICE_ID_INITIAL_FEE`）は削除済み。新STANDARD・新PROのPrice IDは`STRIPE_PRICE_ID_STANDARD`・`STRIPE_PRICE_ID_PRO`としてそのまま設定している（一時的な`_NEW`サフィックスは使用していない）。

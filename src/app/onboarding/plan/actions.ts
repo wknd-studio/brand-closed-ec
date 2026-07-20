@@ -10,7 +10,15 @@ import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
 const TERMS_VERSION = "2026-05-25";
 
-const VALID_PLANS: MemberRankValue[] = ["free", "entry", "standard", "pro"];
+// TODO(T011): RANK_ORDERから動的に生成するよう変更する（enterpriseを除く）
+const VALID_PLANS: MemberRankValue[] = [
+  "starter",
+  "basic",
+  "standard",
+  "pro",
+  "advanced",
+  "premium",
+];
 
 export type SelectPlanResult = { redirectTo: string } | { error: string };
 

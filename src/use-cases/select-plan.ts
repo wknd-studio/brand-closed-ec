@@ -24,7 +24,6 @@ export async function selectPlan(
 ): Promise<{ redirectTo: string }> {
   const { userRepo, accountGateway } = deps;
 
-  const isFree = input.plan === "free";
   const now = new Date();
 
   const existing = await userRepo.findByClerkUserId(input.clerkUserId);
@@ -35,7 +34,7 @@ export async function selectPlan(
         rank: MemberRank.of(input.plan),
         termsAgreedAt: now,
         termsVersion: input.termsVersion,
-        onboardingCompleted: isFree,
+        onboardingCompleted: false,
       })
     : User.of({
         id: crypto.randomUUID(),
@@ -43,7 +42,7 @@ export async function selectPlan(
         email: input.email,
         rank: MemberRank.of(input.plan),
         subscribedAt: null,
-        onboardingCompleted: isFree,
+        onboardingCompleted: false,
         termsAgreedAt: now,
         termsVersion: input.termsVersion,
         deletedAt: null,
@@ -52,9 +51,9 @@ export async function selectPlan(
       });
 
   await userRepo.save(user);
-  await accountGateway.updateOnboardingMetadata(input.clerkUserId, isFree);
+  await accountGateway.updateOnboardingMetadata(input.clerkUserId, false);
 
   return {
-    redirectTo: isFree ? "/shop" : `/onboarding/payment?plan=${input.plan}`,
+    redirectTo: `/onboarding/payment?plan=${input.plan}`,
   };
 }

@@ -1,17 +1,12 @@
 import { sanityClient } from "./client";
+import { RANK_ORDER } from "@/domain/value-objects/member-rank";
+import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
-export const RANK_ORDER = [
-  "free",
-  "entry",
-  "standard",
-  "pro",
-  "enterprise",
-] as const;
-export type MemberRank = (typeof RANK_ORDER)[number];
+export type MemberRank = MemberRankValue;
 
 export function getAllowedRanks(userRank: string): string[] {
   const idx = RANK_ORDER.indexOf(userRank as MemberRank);
-  if (idx === -1) return ["free"];
+  if (idx === -1) return [RANK_ORDER[0]];
   return [...RANK_ORDER].slice(0, idx + 1);
 }
 
