@@ -6,19 +6,15 @@ import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import { RANK_ORDER } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
 const TERMS_VERSION = "2026-05-25";
 
-// TODO(T011): RANK_ORDERから動的に生成するよう変更する（enterpriseを除く）
-const VALID_PLANS: MemberRankValue[] = [
-  "starter",
-  "basic",
-  "standard",
-  "pro",
-  "advanced",
-  "premium",
-];
+// ENTERPRISEは個別契約のためセルフサービスの選択肢から除外する（FR-006）
+const VALID_PLANS: MemberRankValue[] = RANK_ORDER.filter(
+  (rank) => rank !== "enterprise"
+);
 
 export type SelectPlanResult = { redirectTo: string } | { error: string };
 
