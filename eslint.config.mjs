@@ -18,6 +18,9 @@ const eslintConfig = defineConfig([
     "dist/**",
     // Sanity CLI runtime:
     ".sanity/**",
+    // Playwright実行時の生成物:
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 

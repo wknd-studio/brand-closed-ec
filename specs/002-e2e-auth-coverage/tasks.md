@@ -8,7 +8,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md, spec.md, research.md, quickstart.md
 
-**Story**: US1=実登録フロー（6ランク）, US2=実ログインフロー（メール2段階認証）
+**Story**: US1=実登録フロー（代表プラン1つ）, US2=実ログインフロー（未知デバイスの確認コード込み）
 
 ## PRサイズについて
 
@@ -18,9 +18,12 @@ description: "Task list template for feature implementation"
 
 ## Phase 1: Setup
 
-- [ ] T001 ローカルで`pnpm dev`を起動し、`/sign-up`・`/sign-in`の実際のDOM構造を確認して、Playwrightロケーター（`getByLabel`/`getByRole`等）を確定する（研究事項。research.md参照）
+- [x] T001 ローカルで`pnpm dev`を起動し、`/sign-up`・`/sign-in`の実際のDOM構造を確認して、Playwrightロケーター（`getByLabel`/`getByRole`等）を確定する（研究事項。research.md参照）
 
 **チェックポイント**: ロケーター確定。以降の実装で迷わず使える
+
+**T001実施中に発覚し、その後訂正・確定した事実（research.md参照）**:
+(1) 招待リンク経由の登録では確認コード入力画面は表示されない（招待自体がメール確認済み扱いにするため。これは確定した仕様）。(2) ログイン時の確認コードは、当初「MFAが存在しない」と誤って結論したが、実際は**Clerkのデバイス認識ベースの仕組み**であり、見慣れないブラウザ・デバイスからのログインでのみ発動する。(3) ログインテスト用会員は動的に作成・削除するのではなく、**固定の`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`アカウント（`+clerk_test`アドレスで新規に作り直し、`.env.local`・Doppler`dev`/`stg`に設定済み）を使い回す**方針に変更した（既存の`onboarding.spec.ts`と同じ資産を再利用し、Backend APIでのユーザー作成・削除の複雑さを避けるため）。実機確認済みのロケーター（`page.getByLabel("Enter verification code").fill("424242")`で自動送信される。Continueボタンのクリックは不要）もresearch.md参照。
 
 ---
 
@@ -28,35 +31,36 @@ description: "Task list template for feature implementation"
 
 **⚠️ このPhaseが完了するまで、どのユーザーストーリーにも着手できない**
 
-- [ ] T002 `tests/e2e/helpers/clerk-test-invitation.ts` を新規作成する。以下を提供する:
+- [x] T002 `tests/e2e/helpers/clerk-test-invitation.ts` を新規作成する。以下を提供する（US1の登録テスト専用。US2のログインテストは固定の`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`を使うため本ヘルパーは不要）:
   - `createTestInvitation(emailAddress)`: `clerkClient.invitations.createInvitation`を呼び、招待URLを返す
-  - `cleanupTestUser(emailAddress)`: 該当するClerkユーザー・Supabase会員レコードを削除する
+  - `cleanupTestUser(emailAddress)`: 該当するClerkユーザー・保留中の招待・Supabase会員レコードを削除する（招待の取消が失敗してもクリーンアップ全体は継続するベストエフォート方式）
 
 **チェックポイント**: 招待作成・クリーンアップの共通処理が使える。各ユーザーストーリーの実装に着手可能
 
 ---
 
-## Phase 3: User Story 1 - 実登録フロー・6ランク (Priority: P1)
+## Phase 3: User Story 1 - 実登録フロー (Priority: P1)
 
-**Goal**: 実際の登録画面を操作して、6ランクいずれでも登録が完了しStripe Checkoutへ到達できることを保証する
+**Goal**: 実際の登録画面を操作して、登録が完了しStripe Checkoutへ到達できることを保証する
 
 **Independent Test**: `quickstart.md` シナリオ1
 
-- [ ] T003 [US1] `tests/e2e/auth/registration.spec.ts` を新規作成する。STARTER〜PREMIUMの6ランクをループし、それぞれ (1) T002のヘルパーで招待URL取得→遷移 (2) `/welcome`で規約同意 (3) Clerk登録フォームにメールアドレス・パスワード入力 (4) 確認コード`424242`入力 (5) `/onboarding/plan`遷移確認 (6) 該当ランク選択 (7) Stripe Checkout遷移確認 (8) `afterEach`でクリーンアップ、を検証する（依存: T001, T002）
-- [ ] T004 [US1] 同ファイルに、誤った確認コード（例: `000000`）を入力した場合にエラーが表示され次に進まないことを検証するテストを追加する（依存: T003）
+**スコープ変更（2026-07-20）**: 当初6ランクをループする想定だったが、ランク単位の正しさはユニット・統合テストで既に担保されているため、E2Eは代表プラン（STARTER）1つに絞った（詳細はspec.mdの「スコープの決定」参照）
 
-**チェックポイント**: 実登録フローが6ランク全てで独立して動作・テスト可能
+- [ ] T003 [US1] `tests/e2e/auth/registration.spec.ts` を新規作成する。(1) T002のヘルパーで招待URL取得→遷移 (2) `/welcome`で規約同意 (3) Clerk登録フォームにパスワード入力（招待によりメールアドレスは既に確認済み扱いのため入力欄は表示されない） (4) `/onboarding/plan`遷移確認 (5) STARTERランク選択 (6) Stripe Checkout遷移確認 (7) `afterEach`でクリーンアップ、を検証する（依存: T001, T002）
+
+**チェックポイント**: 実登録フローが独立して動作・テスト可能
 
 ---
 
-## Phase 4: User Story 2 - 実ログインフロー・メール2段階認証 (Priority: P1)
+## Phase 4: User Story 2 - 実ログインフロー・未知デバイスの確認コード込み (Priority: P1)
 
-**Goal**: 実際のログイン画面を操作して、パスワード＋メール2段階認証コードでログインが完了できることを保証する
+**Goal**: 実際のログイン画面を操作して、メールアドレス＋パスワード＋確認コードでログインが完了できることを保証する
 
 **Independent Test**: `quickstart.md` シナリオ2
 
-- [ ] T005 [US2] `tests/e2e/auth/login.spec.ts` を新規作成する。事前準備で登録済みの状態のテスト会員を作成し、(1) `/sign-in`でメールアドレス・パスワード入力 (2) 2段階認証コード`424242`入力 (3) ログイン後の画面へ遷移することを確認 (4) `afterEach`でクリーンアップ、を検証する（依存: T001, T002）
-- [ ] T006 [US2] 同ファイルに、誤った2段階認証コードを入力した場合にエラーが表示されログインが完了しないことを検証するテストを追加する（依存: T005）
+- [ ] T005 [US2] `tests/e2e/auth/login.spec.ts` を新規作成する。固定の`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`（既存の`onboarding.spec.ts`と同じ資産）を使い、(1) `/sign-in`でメールアドレス・パスワード入力 (2) `/sign-in/factor-two`へ遷移し確認コード入力欄が表示されることを確認 (3) `page.getByLabel("Enter verification code").fill("424242")`で入力（自動送信されるためContinueクリックは不要） (4) ログイン後の画面（`/onboarding/plan`または`/shop`）へ遷移することを確認 (5) `afterEach`でログアウト・Supabase会員レコードの後始末、を検証する（依存: T001）
+- [ ] T006 [US2] 同ファイルに、誤った確認コード（例: `000000`）を入力した場合にエラーが表示されログインが完了しないことを検証するテストを追加する（依存: T005）
 
 **チェックポイント**: 実ログインフローが独立して動作・テスト可能
 
