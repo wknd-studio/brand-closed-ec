@@ -18,6 +18,15 @@ describe("isProductAccessible", () => {
     expect(isProductAccessible("starter", "pro")).toBe(false);
   });
 
+  it("7ランクの新規追加境界（advanced・premium）でも正しく判定される", () => {
+    expect(isProductAccessible("pro", "advanced")).toBe(false);
+    expect(isProductAccessible("advanced", "advanced")).toBe(true);
+    expect(isProductAccessible("advanced", "premium")).toBe(false);
+    expect(isProductAccessible("premium", "premium")).toBe(true);
+    expect(isProductAccessible("premium", "enterprise")).toBe(false);
+    expect(isProductAccessible("enterprise", "premium")).toBe(true);
+  });
+
   it("不明なランクは false", () => {
     expect(isProductAccessible("unknown", "starter")).toBe(false);
     expect(isProductAccessible("starter", "unknown")).toBe(false);

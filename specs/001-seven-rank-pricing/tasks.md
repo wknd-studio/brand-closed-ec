@@ -79,13 +79,13 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 ### Tests
 
-- [ ] T013 [P] [US2] `isProductAccessible`/`getAllowedRanks`のユニットテストを更新する（`tests/unit/lib/sanity/products.test.ts`。7ランクでの境界値を検証）
-- [ ] T014 [P] [US2] カタログ取得（`fetchProducts`等）の統合テストを更新する（`tests/integration/sanity/products.test.ts`）
+- [x] T013 [P] [US2] `isProductAccessible`/`getAllowedRanks`のユニットテストを更新する（7ランクでの境界値を検証）
+- [x] T014 [P] [US2] カタログ取得（`fetchProducts`等）の統合テストを更新する（`tests/integration/sanity-products.test.ts`。新規作成。実Sanityデータセットにテスト用商品を作成し、STARTER/ADVANCEDランクでの取得結果を検証してクリーンアップ）
 
 ### Implementation
 
-- [ ] T015 [US2] Sanity Studio上の既存商品ドキュメントの`min_rank`・`prices`を7ランクの値に更新する（件数次第で手動またはスクリプト。依存: T002）
-- [ ] T016 [US2] `src/app/(member)/shop/**` の表示箇所で7ランクの値が正しく扱われることを確認する（ロジック変更は不要な想定。依存: T007）
+- [x] T015 [US2] Sanity Studio上の既存商品ドキュメントの`min_rank`・`prices`を7ランクの値に更新する（`free`→`starter`・`entry`→`basic`。data-model.mdの対応表通り。一時マイグレーションスクリプトで13件中10件を更新し、旧ランク値の残存が0件であることを確認。依存: T002）
+- [x] T016 [US2] `src/app/(member)/shop/**` の表示箇所で7ランクの値が正しく扱われることを確認する（コードレビューにより確認。全箇所が`user?.rank.value ?? "starter"`から取得したランクをT013/T014で検証済みの`getAllowedRanks`/`isProductAccessible`/`fetchProducts`に渡すのみで、ランク固有のハードコードなし。ロジック変更不要。依存: T007）
 
 **チェックポイント**: カタログのアクセス制御が7ランクで独立して動作・テスト可能
 
