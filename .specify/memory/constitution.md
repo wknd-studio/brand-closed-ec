@@ -28,8 +28,12 @@
 
 仕様変更は `/speckit-specify` で `specs/NNN-topic/` に起票することから開始し、直接 `docs/` 配下の既存ファイルを書き換えない。`/speckit-tasks` で生成したタスクは、Linear連携スキルを通じて必ずLinear issueへ変換してから実装に着手する（詳細は `docs/spec-driven-workflow.md` 参照）。
 
+### ドキュメント更新の頻度
+
+`spec.md`/`plan.md`/`tasks.md` は実装着手前に一度確定させれば十分である。特にビジネスサイドのレビューを介さない技術的feature（既存機能へのテスト追加・内部インフラ整備等）では、実装中に判明した細部の変更を都度ドキュメントに反映してはならない（実装速度が落ちる）。判明した変更は実装を進めながらメモに留め、PRを作成する直前に一度だけまとめて反映する。ただし「曖昧なまま実装に着手しない」というConstitution本来の目的は損なわない範囲に限る。大きな方針転換（User Storyの追加・削除、スコープの大幅な変更等）が判明した場合は、その時点でドキュメントに反映してから実装を続けてよい。
+
 ## Governance
 
 本Constitutionは `/speckit-plan` の Constitution Check で必ず参照される。改定はPRで行い、`CLAUDE.md` との内容重複を作らないことをレビュー観点に含める。
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-17 | **Last Amended**: 2026-07-17
+**Version**: 1.1.0 | **Ratified**: 2026-07-17 | **Last Amended**: 2026-07-20
