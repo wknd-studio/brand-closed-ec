@@ -12,7 +12,8 @@ export default defineConfig({
   reporter: "html",
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:3000",
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
+    video: "retain-on-failure",
   },
   // BASE_URL が外部 URL（stg など）を指している場合はローカルサーバーを起動しない
   ...(!process.env.BASE_URL && {

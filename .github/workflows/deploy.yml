@@ -7,6 +7,25 @@ on:
     branches: [main, develop]
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # docs/・specs/・*.mdのみの変更（仕様駆動開発のドキュメントPR等）ではE2Eを走らせない
+          filters: |
+            code:
+              - '!(docs/**|specs/**|**/*.md)'
+
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
@@ -43,6 +62,50 @@ jobs:
         with: { node-version: "22", cache: "pnpm" }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+
+  e2e-pr:
+    name: E2E Tests (PR)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: supabase/setup-cli@v1
+        with: { version: 2.102.0 }
+      - uses: dopplerhq/cli-action@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Start local Supabase
+        run: supabase start
+      - name: Apply local migrations
+        run: supabase db reset
+      - name: Run E2E tests
+        # Clerk/Stripe/Sanity等のテスト用シークレットはstaging Doppler環境から取得するが、
+        # Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルのSupabaseを
+        # 明示的に上書きして使う（本物のstg DBには一切アクセスしない）
+        run: |
+          eval "$(supabase status -o env | sed 's/^/export /')"
+          doppler run -- env \
+            NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+            NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUBLISHABLE_KEY" \
+            SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" \
+            NEXT_PUBLIC_APP_URL="http://localhost:3000" \
+            pnpm test:e2e
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Upload Playwright report (動画・トレース含む)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-pr
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   deploy-stg:
     name: Deploy (staging)
@@ -136,3 +199,12 @@ jobs:
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Upload Playwright report (動画・トレース含む)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-stg
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
