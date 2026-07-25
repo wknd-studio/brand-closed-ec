@@ -10,6 +10,28 @@ const RANK_OPTIONS = [
   { title: "Enterprise", value: "enterprise" },
 ];
 
+// Enterpriseランクは個別契約のため、固定価格商品でも価格入力の必須対象外
+const REQUIRED_PRICE_RANKS = RANK_OPTIONS.filter(
+  (option) => option.value !== "enterprise"
+).map((option) => option.value);
+
+export function validatePrices(
+  prices: Partial<Record<string, number>> | undefined,
+  document: { is_negotiable?: boolean } | undefined
+): string | true {
+  if (document?.is_negotiable) return true;
+  if (!prices) return "固定価格商品にはランク別価格の設定が必要です";
+
+  const missingRanks = REQUIRED_PRICE_RANKS.filter(
+    (rank) => prices[rank] == null
+  );
+  if (missingRanks.length > 0) {
+    return `固定価格商品は以下のランクの価格が未入力です: ${missingRanks.join(", ")}`;
+  }
+
+  return true;
+}
+
 export const product = defineType({
   name: "product",
   title: "商品",
@@ -102,12 +124,12 @@ export const product = defineType({
         }),
       ],
       validation: (r) =>
-        r.custom((prices, { document }) => {
-          if (!document?.is_negotiable && !prices) {
-            return "固定価格商品にはランク別価格の設定が必要です";
-          }
-          return true;
-        }),
+        r.custom((prices, { document }) =>
+          validatePrices(
+            prices as Partial<Record<string, number>> | undefined,
+            document as { is_negotiable?: boolean } | undefined
+          )
+        ),
     }),
     defineField({
       name: "min_rank",

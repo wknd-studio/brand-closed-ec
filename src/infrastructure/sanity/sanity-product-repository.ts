@@ -5,6 +5,7 @@ import type {
 } from "@/repositories/product-repository";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 import { Money } from "@/domain/value-objects/money";
+import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 
 type SanityProduct = {
   _id: string;
@@ -27,7 +28,10 @@ export class SanityProductRepository implements ProductRepository {
     );
 
     return products.map((p) => {
-      const unitPrice = p.is_negotiable ? 0 : (p.prices?.[rank] ?? 0);
+      const unitPrice = p.is_negotiable ? 0 : p.prices?.[rank];
+      if (unitPrice == null) {
+        throw new ProductPriceNotSetError(p._id, rank);
+      }
       return {
         sanityProductId: p._id,
         productName: p.name,

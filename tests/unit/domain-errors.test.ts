@@ -3,6 +3,7 @@ import { DomainError } from "@/domain/errors/domain-error";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 
 describe("DomainError", () => {
   it("Error を継承している", () => {
@@ -77,5 +78,23 @@ describe("ProductNotAccessibleError", () => {
   it("name が ProductNotAccessibleError", () => {
     const err = new ProductNotAccessibleError("prod-001", "basic", "pro");
     expect(err.name).toBe("ProductNotAccessibleError");
+  });
+});
+
+describe("ProductPriceNotSetError", () => {
+  it("DomainError を継承している", () => {
+    const err = new ProductPriceNotSetError("prod-001", "standard");
+    expect(err).toBeInstanceOf(DomainError);
+  });
+
+  it("productId と rank を保持する", () => {
+    const err = new ProductPriceNotSetError("prod-001", "standard");
+    expect(err.productId).toBe("prod-001");
+    expect(err.rank).toBe("standard");
+  });
+
+  it("name が ProductPriceNotSetError", () => {
+    const err = new ProductPriceNotSetError("prod-001", "standard");
+    expect(err.name).toBe("ProductPriceNotSetError");
   });
 });
