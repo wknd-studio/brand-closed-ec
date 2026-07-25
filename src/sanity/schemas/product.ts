@@ -2,6 +2,8 @@ import { defineField, defineType } from "sanity";
 
 import { RANK_OPTIONS, PRICING_RANK_OPTIONS } from "./rank-options";
 import { ProductPriceRateInput } from "./product-price-rate-input";
+import { ProductPricesDisplay } from "./product-prices-display";
+import { FormattedYenInput } from "./formatted-yen-input";
 
 // Enterpriseランクは個別契約のため、固定価格商品でも価格入力の必須対象外
 const REQUIRED_PRICE_RANKS = PRICING_RANK_OPTIONS.map((option) => option.value);
@@ -87,6 +89,7 @@ export const product = defineType({
       description: "一般小売店での参考価格。商品カードに表示されます",
       type: "number",
       validation: (r) => r.required().min(0),
+      components: { input: FormattedYenInput },
     }),
     defineField({
       name: "is_negotiable",
@@ -139,6 +142,7 @@ export const product = defineType({
             document as { is_negotiable?: boolean } | undefined
           )
         ),
+      components: { input: ProductPricesDisplay },
     }),
     defineField({
       name: "min_rank",

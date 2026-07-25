@@ -3,6 +3,7 @@ import {
   resolveEffectiveRate,
   computeRankPrices,
   clampRate,
+  parseYen,
 } from "@/sanity/schemas/product-price-calculator";
 
 describe("resolveEffectiveRate", () => {
@@ -71,5 +72,23 @@ describe("clampRate", () => {
 
   it("undefinedはそのままundefinedを返す", () => {
     expect(clampRate(undefined)).toBeUndefined();
+  });
+});
+
+describe("parseYen", () => {
+  it("カンマ区切りの文字列を数値に変換する", () => {
+    expect(parseYen("100,000")).toBe(100000);
+  });
+
+  it("カンマなしの数字文字列もそのまま変換する", () => {
+    expect(parseYen("55000")).toBe(55000);
+  });
+
+  it("空文字列はundefinedを返す", () => {
+    expect(parseYen("")).toBeUndefined();
+  });
+
+  it("数字を含まない文字列はundefinedを返す", () => {
+    expect(parseYen("abc")).toBeUndefined();
   });
 });

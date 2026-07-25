@@ -13,6 +13,12 @@ export function clampRate(value: number | undefined): number | undefined {
   return Math.min(100, Math.max(0, value));
 }
 
+export function parseYen(raw: string): number | undefined {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (digits === "") return undefined;
+  return Number(digits);
+}
+
 export function computeRankPrices(
   retailPrice: number | undefined,
   rates: RateMap,
