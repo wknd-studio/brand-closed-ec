@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveEffectiveRate,
   computeRankPrices,
+  clampRate,
 } from "@/sanity/schemas/product-price-calculator";
 
 describe("resolveEffectiveRate", () => {
@@ -50,5 +51,25 @@ describe("computeRankPrices", () => {
     expect(result.starter).toBe(9000);
     expect(result.basic).toBeUndefined();
     expect(Object.keys(result)).not.toContain("basic");
+  });
+});
+
+describe("clampRate", () => {
+  it("0〜100の範囲内の値はそのまま返す", () => {
+    expect(clampRate(50)).toBe(50);
+    expect(clampRate(0)).toBe(0);
+    expect(clampRate(100)).toBe(100);
+  });
+
+  it("100を超える値は100に丸める", () => {
+    expect(clampRate(150)).toBe(100);
+  });
+
+  it("0未満の値は0に丸める", () => {
+    expect(clampRate(-10)).toBe(0);
+  });
+
+  it("undefinedはそのままundefinedを返す", () => {
+    expect(clampRate(undefined)).toBeUndefined();
   });
 });

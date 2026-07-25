@@ -8,6 +8,11 @@ export function resolveEffectiveRate(
   return rates[rank] ?? defaultRates[rank];
 }
 
+export function clampRate(value: number | undefined): number | undefined {
+  if (value == null) return undefined;
+  return Math.min(100, Math.max(0, value));
+}
+
 export function computeRankPrices(
   retailPrice: number | undefined,
   rates: RateMap,

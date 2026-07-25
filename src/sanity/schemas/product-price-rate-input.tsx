@@ -4,7 +4,7 @@ import { set, useClient, useFormValue } from "sanity";
 import type { ObjectInputProps } from "sanity";
 
 import { PRICING_RANK_OPTIONS } from "./rank-options";
-import { computeRankPrices } from "./product-price-calculator";
+import { clampRate, computeRankPrices } from "./product-price-calculator";
 
 const API_VERSION = "2026-05-17";
 
@@ -37,11 +37,14 @@ export function ProductPriceRateInput(props: ObjectInputProps) {
   const handleRateChange = useCallback(
     (rank: string, rawValue: string) => {
       const parsed = rawValue === "" ? undefined : Number(rawValue);
+      const clamped = clampRate(
+        parsed == null || Number.isNaN(parsed) ? undefined : parsed
+      );
       const nextRates: RateMap = { ...((value as RateMap | undefined) ?? {}) };
-      if (parsed == null || Number.isNaN(parsed)) {
+      if (clamped == null) {
         delete nextRates[rank];
       } else {
-        nextRates[rank] = parsed;
+        nextRates[rank] = clamped;
       }
       onChange(set(nextRates));
 
@@ -88,6 +91,8 @@ export function ProductPriceRateInput(props: ObjectInputProps) {
               <Box flex={1}>
                 <TextInput
                   type="number"
+                  min={0}
+                  max={100}
                   value={rates[rank.value]?.toString() ?? ""}
                   placeholder={
                     defaultRates[rank.value] != null
@@ -103,7 +108,9 @@ export function ProductPriceRateInput(props: ObjectInputProps) {
                 <Text size={1} muted>
                   {computedPrice != null
                     ? `¥${computedPrice.toLocaleString()}`
-                    : "計算不可（定価未入力）"}
+                    : retailPrice == null
+                      ? "計算不可（定価未入力）"
+                      : "計算不可（掛け率未設定）"}
                 </Text>
               </Box>
             </Flex>
