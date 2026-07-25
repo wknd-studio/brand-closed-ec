@@ -49,6 +49,11 @@ tasks:
     cmds:
       - pnpm tsx scripts/seed-products.ts
 
+  sanity:dev:
+    desc: Sanity Studio をローカルで起動する（動作確認用。公開URLには影響しない）
+    cmds:
+      - pnpm sanity dev
+
   sanity:deploy:
     desc: Sanity Studio をホスティングサービスにデプロイする
     cmds:

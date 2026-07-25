@@ -1,14 +1,29 @@
 import { defineField, defineType } from "sanity";
 
-const RANK_OPTIONS = [
-  { title: "Starter", value: "starter" },
-  { title: "Basic", value: "basic" },
-  { title: "Standard", value: "standard" },
-  { title: "Pro", value: "pro" },
-  { title: "Advanced", value: "advanced" },
-  { title: "Premium", value: "premium" },
-  { title: "Enterprise", value: "enterprise" },
-];
+import { RANK_OPTIONS, PRICING_RANK_OPTIONS } from "./rank-options";
+import { ProductPriceRateInput } from "./product-price-rate-input";
+import { ProductPricesDisplay } from "./product-prices-display";
+import { FormattedYenInput } from "./formatted-yen-input";
+
+// Enterpriseランクは個別契約のため、固定価格商品でも価格入力の必須対象外
+const REQUIRED_PRICE_RANKS = PRICING_RANK_OPTIONS.map((option) => option.value);
+
+export function validatePrices(
+  prices: Partial<Record<string, number>> | undefined,
+  document: { is_negotiable?: boolean } | undefined
+): string | true {
+  if (document?.is_negotiable) return true;
+  if (!prices) return "固定価格商品にはランク別価格の設定が必要です";
+
+  const missingRanks = REQUIRED_PRICE_RANKS.filter(
+    (rank) => prices[rank] == null
+  );
+  if (missingRanks.length > 0) {
+    return `固定価格商品は以下のランクの価格が未入力です: ${missingRanks.join(", ")}`;
+  }
+
+  return true;
+}
 
 export const product = defineType({
   name: "product",
@@ -74,6 +89,7 @@ export const product = defineType({
       description: "一般小売店での参考価格。商品カードに表示されます",
       type: "number",
       validation: (r) => r.required().min(0),
+      components: { input: FormattedYenInput },
     }),
     defineField({
       name: "is_negotiable",
@@ -84,10 +100,28 @@ export const product = defineType({
       initialValue: false,
     }),
     defineField({
+      name: "price_rates",
+      title: "ランク別掛け率（%）",
+      description:
+        "定価に対する掛け率。空欄のランクはデフォルト掛け率が使われます。入力するとランク別仕入れ価格が自動計算されます",
+      type: "object",
+      fields: PRICING_RANK_OPTIONS.map((rank) =>
+        defineField({
+          name: rank.value,
+          title: rank.title,
+          type: "number",
+          validation: (r) => r.min(0).max(100),
+        })
+      ),
+      components: { input: ProductPriceRateInput },
+    }),
+    defineField({
       name: "prices",
       title: "ランク別仕入れ価格（円）",
-      description: "要相談商品の場合は空欄で構いません",
+      description:
+        "掛け率から自動計算されます（直接編集不可）。要相談商品の場合は空欄で構いません",
       type: "object",
+      readOnly: true,
       fields: [
         defineField({ name: "starter", title: "Starter", type: "number" }),
         defineField({ name: "basic", title: "Basic", type: "number" }),
@@ -102,12 +136,13 @@ export const product = defineType({
         }),
       ],
       validation: (r) =>
-        r.custom((prices, { document }) => {
-          if (!document?.is_negotiable && !prices) {
-            return "固定価格商品にはランク別価格の設定が必要です";
-          }
-          return true;
-        }),
+        r.custom((prices, { document }) =>
+          validatePrices(
+            prices as Partial<Record<string, number>> | undefined,
+            document as { is_negotiable?: boolean } | undefined
+          )
+        ),
+      components: { input: ProductPricesDisplay },
     }),
     defineField({
       name: "min_rank",
@@ -137,7 +172,17 @@ export const product = defineType({
     select: {
       title: "name",
       subtitle: "brand.name",
-      media: "images.0",
+      media: "images",
+    },
+    prepare({ title, subtitle, media }) {
+      // preview.select.mediaへの配列インデックス指定（images.0）はSanityの既知の不具合で
+      // 常にundefinedになるため、配列ごと取得しprepare側で先頭要素を取り出す
+      // (https://github.com/sanity-io/sanity/issues/4107)
+      return {
+        title,
+        subtitle,
+        media: Array.isArray(media) ? media[0] : undefined,
+      };
     },
   },
 });

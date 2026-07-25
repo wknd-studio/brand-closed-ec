@@ -1,6 +1,8 @@
 import { config } from "dotenv";
 import { createClient } from "@sanity/client";
 
+import { computeRankPrices } from "../src/sanity/schemas/product-price-calculator";
+
 type Block = {
   _type: "block";
   _key: string;
@@ -16,17 +18,26 @@ type FileRef = {
   asset: { _type: "reference"; _ref: string };
 };
 
+type ImageRef = {
+  _type: "image";
+  asset: { _type: "reference"; _ref: string };
+};
+
 type BrandDoc = {
   _id: string;
   _type: "brand";
   name: string;
+  logo?: ImageRef;
 };
 
 type CategoryDoc = {
   _id: string;
   _type: "category";
   name: string;
+  icon?: ImageRef;
 };
+
+type RateMap = Partial<Record<string, number>>;
 
 type ProductDoc = {
   _id: string;
@@ -37,15 +48,8 @@ type ProductDoc = {
   description?: Block[];
   retail_price: number;
   is_negotiable: boolean;
-  prices?: {
-    starter?: number;
-    basic?: number;
-    standard?: number;
-    pro?: number;
-    advanced?: number;
-    premium?: number;
-    enterprise?: number;
-  };
+  price_rates?: RateMap;
+  prices?: RateMap;
   min_rank: string;
   availability: string;
   images?: {
@@ -54,6 +58,16 @@ type ProductDoc = {
     asset: { _type: "reference"; _ref: string };
   }[];
   files?: FileRef[];
+};
+
+// 全商品共通のランク別デフォルト掛け率（%）。Enterpriseは個別契約のため対象外
+const DEFAULT_RATES: RateMap = {
+  starter: 55,
+  basic: 50,
+  standard: 45,
+  pro: 40,
+  advanced: 36,
+  premium: 32,
 };
 
 config({ path: ".env.local" });
@@ -137,6 +151,67 @@ const PRODUCT_IMAGE_URLS: Record<string, string> = {
     "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=800", // 高級財布
 };
 
+// ブランドロゴ・カテゴリアイコンは新規URLを用意せず、既に検証済みの商品画像を
+// 別ファイル名で再アップロードして流用する（商標ロゴの無断使用リスクを避けるため）
+const BRAND_LOGO_SOURCES: Record<string, { url: string; filename: string }> = {
+  "seed-brand-refa": {
+    url: PRODUCT_IMAGE_URLS["seed-refa-001"],
+    filename: "seed-brand-logo-refa.jpg",
+  },
+  "seed-brand-gucci": {
+    url: PRODUCT_IMAGE_URLS["seed-gucci-001"],
+    filename: "seed-brand-logo-gucci.jpg",
+  },
+  "seed-brand-loewe": {
+    url: PRODUCT_IMAGE_URLS["seed-loewe-001"],
+    filename: "seed-brand-logo-loewe.jpg",
+  },
+  "seed-brand-hermes": {
+    url: PRODUCT_IMAGE_URLS["seed-hermes-001"],
+    filename: "seed-brand-logo-hermes.jpg",
+  },
+  "seed-brand-chanel": {
+    url: PRODUCT_IMAGE_URLS["seed-chanel-001"],
+    filename: "seed-brand-logo-chanel.jpg",
+  },
+};
+
+const CATEGORY_ICON_SOURCES: Record<string, { url: string; filename: string }> =
+  {
+    "seed-cat-bag": {
+      url: PRODUCT_IMAGE_URLS["seed-gucci-001"],
+      filename: "seed-category-icon-bag.jpg",
+    },
+    "seed-cat-leather": {
+      url: PRODUCT_IMAGE_URLS["seed-gucci-002"],
+      filename: "seed-category-icon-leather.jpg",
+    },
+    "seed-cat-scarf": {
+      url: PRODUCT_IMAGE_URLS["seed-hermes-001"],
+      filename: "seed-category-icon-scarf.jpg",
+    },
+    "seed-cat-silk": {
+      url: PRODUCT_IMAGE_URLS["seed-hermes-001"],
+      filename: "seed-category-icon-silk.jpg",
+    },
+    "seed-cat-wallet": {
+      url: PRODUCT_IMAGE_URLS["seed-gucci-003"],
+      filename: "seed-category-icon-wallet.jpg",
+    },
+    "seed-cat-beauty": {
+      url: PRODUCT_IMAGE_URLS["seed-refa-002"],
+      filename: "seed-category-icon-beauty.jpg",
+    },
+    "seed-cat-haircare": {
+      url: PRODUCT_IMAGE_URLS["seed-refa-001"],
+      filename: "seed-category-icon-haircare.jpg",
+    },
+    "seed-cat-limited": {
+      url: PRODUCT_IMAGE_URLS["seed-chanel-001"],
+      filename: "seed-category-icon-limited.jpg",
+    },
+  };
+
 const FILE_DEFS: Record<string, { label: string; filename: string }> = {
   "seed-refa-003": {
     label: "ReFa LED MASK 使用方法・仕様書（PDF）",
@@ -186,16 +261,15 @@ function createMinimalPdf(title: string): Buffer {
   return Buffer.from(header + obj1 + obj2 + obj3 + obj4 + obj5 + xref);
 }
 
-async function uploadImage(productId: string): Promise<string> {
-  const filename = `${productId}.jpg`;
+async function uploadImageFromUrl(
+  filename: string,
+  imageUrl: string
+): Promise<string> {
   const existing = await client.fetch<{ _id: string } | null>(
     `*[_type == "sanity.imageAsset" && originalFilename == $filename][0]{ _id }`,
     { filename }
   );
   if (existing) return existing._id;
-
-  const imageUrl = PRODUCT_IMAGE_URLS[productId];
-  if (!imageUrl) throw new Error(`画像URLが定義されていません: ${productId}`);
 
   const response = await fetch(imageUrl);
   if (!response.ok)
@@ -206,6 +280,12 @@ async function uploadImage(productId: string): Promise<string> {
     contentType: "image/jpeg",
   });
   return asset._id;
+}
+
+async function uploadImage(productId: string): Promise<string> {
+  const imageUrl = PRODUCT_IMAGE_URLS[productId];
+  if (!imageUrl) throw new Error(`画像URLが定義されていません: ${productId}`);
+  return uploadImageFromUrl(`${productId}.jpg`, imageUrl);
 }
 
 async function uploadFile(filename: string, title: string): Promise<string> {
@@ -245,13 +325,6 @@ const productDefs = [
     ],
     retail_price: 55000,
     is_negotiable: false,
-    prices: {
-      starter: 28000,
-      basic: 25000,
-      standard: 22000,
-      pro: 20000,
-      enterprise: 18500,
-    },
     min_rank: "starter",
     availability: "available",
   },
@@ -272,13 +345,6 @@ const productDefs = [
     ],
     retail_price: 33000,
     is_negotiable: false,
-    prices: {
-      starter: 17000,
-      basic: 15500,
-      standard: 14000,
-      pro: 12500,
-      enterprise: 11500,
-    },
     min_rank: "starter",
     availability: "available",
   },
@@ -299,12 +365,8 @@ const productDefs = [
     ],
     retail_price: 198000,
     is_negotiable: false,
-    prices: {
-      basic: 100000,
-      standard: 90000,
-      pro: 82000,
-      enterprise: 75000,
-    },
+    // 掛け率の商品ごと上書き例（basicのみデフォルトより優遇）
+    price_rates: { basic: 48 },
     min_rank: "basic",
     availability: "available",
   },
@@ -326,13 +388,6 @@ const productDefs = [
     ],
     retail_price: 185000,
     is_negotiable: false,
-    prices: {
-      starter: 93000,
-      basic: 85000,
-      standard: 76000,
-      pro: 70000,
-      enterprise: 65000,
-    },
     min_rank: "starter",
     availability: "available",
   },
@@ -353,11 +408,6 @@ const productDefs = [
     ],
     retail_price: 495000,
     is_negotiable: false,
-    prices: {
-      standard: 248000,
-      pro: 225000,
-      enterprise: 210000,
-    },
     min_rank: "standard",
     availability: "available",
   },
@@ -378,13 +428,6 @@ const productDefs = [
     ],
     retail_price: 115500,
     is_negotiable: false,
-    prices: {
-      starter: 58000,
-      basic: 52000,
-      standard: 47000,
-      pro: 43000,
-      enterprise: 40000,
-    },
     min_rank: "starter",
     availability: "available",
   },
@@ -406,10 +449,6 @@ const productDefs = [
     ],
     retail_price: 693000,
     is_negotiable: false,
-    prices: {
-      pro: 347000,
-      enterprise: 320000,
-    },
     min_rank: "pro",
     availability: "available",
   },
@@ -430,12 +469,6 @@ const productDefs = [
     ],
     retail_price: 231000,
     is_negotiable: false,
-    prices: {
-      basic: 116000,
-      standard: 105000,
-      pro: 96000,
-      enterprise: 88000,
-    },
     min_rank: "basic",
     availability: "available",
   },
@@ -456,13 +489,6 @@ const productDefs = [
     ],
     retail_price: 79200,
     is_negotiable: false,
-    prices: {
-      starter: 40000,
-      basic: 36000,
-      standard: 32000,
-      pro: 30000,
-      enterprise: 28000,
-    },
     min_rank: "starter",
     availability: "available",
   },
@@ -484,13 +510,6 @@ const productDefs = [
     ],
     retail_price: 93500,
     is_negotiable: false,
-    prices: {
-      starter: 47000,
-      basic: 43000,
-      standard: 38000,
-      pro: 35000,
-      enterprise: 33000,
-    },
     min_rank: "starter",
     availability: "available",
   },
@@ -511,12 +530,6 @@ const productDefs = [
     ],
     retail_price: 249700,
     is_negotiable: false,
-    prices: {
-      basic: 125000,
-      standard: 112000,
-      pro: 103000,
-      enterprise: 95000,
-    },
     min_rank: "basic",
     availability: "available",
   },
@@ -538,10 +551,8 @@ const productDefs = [
     ],
     retail_price: 1210000,
     is_negotiable: false,
-    prices: {
-      pro: 605000,
-      enterprise: 560000,
-    },
+    // 掛け率の商品ごと上書き例（限定品のためproをデフォルトより高めに設定）
+    price_rates: { pro: 42 },
     min_rank: "pro",
     availability: "available",
   },
@@ -562,12 +573,6 @@ const productDefs = [
     ],
     retail_price: 143000,
     is_negotiable: false,
-    prices: {
-      basic: 72000,
-      standard: 65000,
-      pro: 59000,
-      enterprise: 55000,
-    },
     min_rank: "basic",
     availability: "available",
   },
@@ -581,7 +586,7 @@ async function seed() {
   console.log("既存のシードデータを削除します...");
   // perspective: 'raw' でドラフト含む全ドキュメントを対象にする
   const rawClient = client.withConfig({ perspective: "raw" });
-  const types = ["product", "brand", "category"];
+  const types = ["product", "brand", "category", "priceSettings"];
   let deletedTotal = 0;
   for (const t of types) {
     const ids: string[] = await rawClient.fetch(
@@ -603,17 +608,50 @@ async function seed() {
   deletedTotal += imageAssetIds.length;
   console.log(`  ${deletedTotal}件削除しました\n`);
 
-  // ブランドドキュメントを登録
+  // ブランドドキュメントを登録（ロゴ画像を添付）
   console.log(`ブランドを登録します（${brandDefs.length}件）`);
   for (const brand of brandDefs) {
-    await client.createOrReplace(brand);
+    const logoSource = BRAND_LOGO_SOURCES[brand._id];
+    const doc: BrandDoc = { ...brand };
+    if (logoSource) {
+      const assetId = await uploadImageFromUrl(
+        logoSource.filename,
+        logoSource.url
+      );
+      doc.logo = {
+        _type: "image",
+        asset: { _type: "reference", _ref: assetId },
+      };
+    }
+    await client.createOrReplace(doc);
     console.log(`  登録完了: ${brand.name} (${brand._id})`);
   }
 
-  // カテゴリドキュメントを登録
+  // 価格設定（デフォルト掛け率）ドキュメントを登録
+  console.log("\n価格設定（デフォルト掛け率）を登録します");
+  await client.createOrReplace({
+    _id: "seed-price-settings",
+    _type: "priceSettings",
+    default_rates: DEFAULT_RATES,
+  });
+  console.log("  登録完了: 価格設定（デフォルト掛け率）(seed-price-settings)");
+
+  // カテゴリドキュメントを登録（アイコン画像を添付）
   console.log(`\nカテゴリを登録します（${categoryDefs.length}件）`);
   for (const cat of categoryDefs) {
-    await client.createOrReplace(cat);
+    const iconSource = CATEGORY_ICON_SOURCES[cat._id];
+    const doc: CategoryDoc = { ...cat };
+    if (iconSource) {
+      const assetId = await uploadImageFromUrl(
+        iconSource.filename,
+        iconSource.url
+      );
+      doc.icon = {
+        _type: "image",
+        asset: { _type: "reference", _ref: assetId },
+      };
+    }
+    await client.createOrReplace(doc);
     console.log(`  登録完了: ${cat.name} (${cat._id})`);
   }
 
@@ -633,9 +671,21 @@ async function seed() {
     const brandId = brandIdByName[brandName];
     if (!brandId) throw new Error(`ブランドIDが見つかりません: ${brandName}`);
 
+    const priceRates =
+      "price_rates" in productProps ? productProps.price_rates : undefined;
+    const prices = productProps.is_negotiable
+      ? undefined
+      : computeRankPrices(
+          productProps.retail_price,
+          priceRates ?? {},
+          DEFAULT_RATES
+        );
+
     const doc: ProductDoc = {
       ...productProps,
       _type: "product",
+      price_rates: priceRates,
+      prices,
       brand: { _type: "reference", _ref: brandId },
       categories: categoryNames?.map((name, ci) => {
         const ref = categoryIdByName[name];
