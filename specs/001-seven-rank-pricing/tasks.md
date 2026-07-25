@@ -22,7 +22,7 @@ Foundationalフェーズ（ランク値の変更＋重複解消）は、値だ�
 
 ## Phase 1: Setup
 
-- [x] T001 Stripeテストモードで7ランク分のProduct/Priceを作成し、Price IDの対応表を`docs/archive/service-spec.md`の料金表と突き合わせて記録する（`stripe-price-ids.md`参照）
+- [x] T001 Stripeテストモードで7ランク分のProduct/Priceを作成し、`docs/archive/service-spec.md`の料金表と突き合わせる（現在のPrice IDはDoppler `dev`/`stg`の`STRIPE_PRICE_ID_*`が単一の情報源。再作成・確認は`scripts/setup-stripe-prices.ts`を参照。2026-07-26: 個別ドキュメントでのID管理は陳腐化しやすいため`stripe-price-ids.md`は廃止した）
 - [x] T002 [P] `src/sanity/schemas/product.ts` の `RANK_OPTIONS` を7ランクに更新する（`prices`オブジェクトの各ランクフィールドも合わせて更新）
 
 **チェックポイント**: 外部サービス（Stripe/Sanity）側の準備完了
