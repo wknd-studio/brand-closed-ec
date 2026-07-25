@@ -42,6 +42,7 @@ export async function createTestInvitation(emailAddress: string) {
     emailAddress,
     redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/welcome`,
     ignoreExisting: true,
+    notify: false, // テスト用招待のためメール送信を止める。invitation.url を直接使うので通知不要
   });
 
   if (!invitation.url) {
