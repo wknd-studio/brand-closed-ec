@@ -1,19 +1,10 @@
 import { defineField, defineType } from "sanity";
 
-const RANK_OPTIONS = [
-  { title: "Starter", value: "starter" },
-  { title: "Basic", value: "basic" },
-  { title: "Standard", value: "standard" },
-  { title: "Pro", value: "pro" },
-  { title: "Advanced", value: "advanced" },
-  { title: "Premium", value: "premium" },
-  { title: "Enterprise", value: "enterprise" },
-];
+import { RANK_OPTIONS, PRICING_RANK_OPTIONS } from "./rank-options";
+import { ProductPriceRateInput } from "./product-price-rate-input";
 
 // Enterpriseランクは個別契約のため、固定価格商品でも価格入力の必須対象外
-const REQUIRED_PRICE_RANKS = RANK_OPTIONS.filter(
-  (option) => option.value !== "enterprise"
-).map((option) => option.value);
+const REQUIRED_PRICE_RANKS = PRICING_RANK_OPTIONS.map((option) => option.value);
 
 export function validatePrices(
   prices: Partial<Record<string, number>> | undefined,
@@ -106,10 +97,28 @@ export const product = defineType({
       initialValue: false,
     }),
     defineField({
+      name: "price_rates",
+      title: "ランク別掛け率（%）",
+      description:
+        "定価に対する掛け率。空欄のランクはデフォルト掛け率が使われます。入力するとランク別仕入れ価格が自動計算されます",
+      type: "object",
+      fields: PRICING_RANK_OPTIONS.map((rank) =>
+        defineField({
+          name: rank.value,
+          title: rank.title,
+          type: "number",
+          validation: (r) => r.min(0).max(100),
+        })
+      ),
+      components: { input: ProductPriceRateInput },
+    }),
+    defineField({
       name: "prices",
       title: "ランク別仕入れ価格（円）",
-      description: "要相談商品の場合は空欄で構いません",
+      description:
+        "掛け率から自動計算されます（直接編集不可）。要相談商品の場合は空欄で構いません",
       type: "object",
+      readOnly: true,
       fields: [
         defineField({ name: "starter", title: "Starter", type: "number" }),
         defineField({ name: "basic", title: "Basic", type: "number" }),
