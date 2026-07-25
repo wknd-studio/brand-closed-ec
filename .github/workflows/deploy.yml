@@ -79,6 +79,8 @@ jobs:
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - name: Install Stripe CLI
+        run: npm install -g @stripe/cli
       - name: Start local Supabase
         run: supabase start
       - name: Apply local migrations
@@ -86,9 +88,14 @@ jobs:
       - name: Run E2E tests
         # Clerk/Stripe/Sanity等のテスト用シークレットはstaging Doppler環境から取得するが、
         # Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルのSupabaseを
-        # 明示的に上書きして使う（本物のstg DBには一切アクセスしない）
+        # 明示的に上書きして使う（本物のstg DBには一切アクセスしない）。
+        # stripe listenはローカルのtask dev:stripeと同じ役割（Stripe Webhookを
+        # localhost:3000へ転送）で、これがないと決済確定後のWebhook処理がテストで
+        # 検証できない。署名シークレット（STRIPE_WEBHOOK_SECRET）はStripeアカウント
+        # に紐づく固定値のため、Doppler側に設定済みの値をそのまま使う
         run: |
           eval "$(supabase status -o env | sed 's/^/export /')"
+          doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe &
           doppler run -- env \
             NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
             NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUBLISHABLE_KEY" \
