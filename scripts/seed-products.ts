@@ -18,16 +18,23 @@ type FileRef = {
   asset: { _type: "reference"; _ref: string };
 };
 
+type ImageRef = {
+  _type: "image";
+  asset: { _type: "reference"; _ref: string };
+};
+
 type BrandDoc = {
   _id: string;
   _type: "brand";
   name: string;
+  logo?: ImageRef;
 };
 
 type CategoryDoc = {
   _id: string;
   _type: "category";
   name: string;
+  icon?: ImageRef;
 };
 
 type RateMap = Partial<Record<string, number>>;
@@ -144,6 +151,67 @@ const PRODUCT_IMAGE_URLS: Record<string, string> = {
     "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=800", // 高級財布
 };
 
+// ブランドロゴ・カテゴリアイコンは新規URLを用意せず、既に検証済みの商品画像を
+// 別ファイル名で再アップロードして流用する（商標ロゴの無断使用リスクを避けるため）
+const BRAND_LOGO_SOURCES: Record<string, { url: string; filename: string }> = {
+  "seed-brand-refa": {
+    url: PRODUCT_IMAGE_URLS["seed-refa-001"],
+    filename: "seed-brand-logo-refa.jpg",
+  },
+  "seed-brand-gucci": {
+    url: PRODUCT_IMAGE_URLS["seed-gucci-001"],
+    filename: "seed-brand-logo-gucci.jpg",
+  },
+  "seed-brand-loewe": {
+    url: PRODUCT_IMAGE_URLS["seed-loewe-001"],
+    filename: "seed-brand-logo-loewe.jpg",
+  },
+  "seed-brand-hermes": {
+    url: PRODUCT_IMAGE_URLS["seed-hermes-001"],
+    filename: "seed-brand-logo-hermes.jpg",
+  },
+  "seed-brand-chanel": {
+    url: PRODUCT_IMAGE_URLS["seed-chanel-001"],
+    filename: "seed-brand-logo-chanel.jpg",
+  },
+};
+
+const CATEGORY_ICON_SOURCES: Record<string, { url: string; filename: string }> =
+  {
+    "seed-cat-bag": {
+      url: PRODUCT_IMAGE_URLS["seed-gucci-001"],
+      filename: "seed-category-icon-bag.jpg",
+    },
+    "seed-cat-leather": {
+      url: PRODUCT_IMAGE_URLS["seed-gucci-002"],
+      filename: "seed-category-icon-leather.jpg",
+    },
+    "seed-cat-scarf": {
+      url: PRODUCT_IMAGE_URLS["seed-hermes-001"],
+      filename: "seed-category-icon-scarf.jpg",
+    },
+    "seed-cat-silk": {
+      url: PRODUCT_IMAGE_URLS["seed-hermes-001"],
+      filename: "seed-category-icon-silk.jpg",
+    },
+    "seed-cat-wallet": {
+      url: PRODUCT_IMAGE_URLS["seed-gucci-003"],
+      filename: "seed-category-icon-wallet.jpg",
+    },
+    "seed-cat-beauty": {
+      url: PRODUCT_IMAGE_URLS["seed-refa-002"],
+      filename: "seed-category-icon-beauty.jpg",
+    },
+    "seed-cat-haircare": {
+      url: PRODUCT_IMAGE_URLS["seed-refa-001"],
+      filename: "seed-category-icon-haircare.jpg",
+    },
+    "seed-cat-limited": {
+      url: PRODUCT_IMAGE_URLS["seed-chanel-001"],
+      filename: "seed-category-icon-limited.jpg",
+    },
+  };
+
 const FILE_DEFS: Record<string, { label: string; filename: string }> = {
   "seed-refa-003": {
     label: "ReFa LED MASK 使用方法・仕様書（PDF）",
@@ -193,16 +261,15 @@ function createMinimalPdf(title: string): Buffer {
   return Buffer.from(header + obj1 + obj2 + obj3 + obj4 + obj5 + xref);
 }
 
-async function uploadImage(productId: string): Promise<string> {
-  const filename = `${productId}.jpg`;
+async function uploadImageFromUrl(
+  filename: string,
+  imageUrl: string
+): Promise<string> {
   const existing = await client.fetch<{ _id: string } | null>(
     `*[_type == "sanity.imageAsset" && originalFilename == $filename][0]{ _id }`,
     { filename }
   );
   if (existing) return existing._id;
-
-  const imageUrl = PRODUCT_IMAGE_URLS[productId];
-  if (!imageUrl) throw new Error(`画像URLが定義されていません: ${productId}`);
 
   const response = await fetch(imageUrl);
   if (!response.ok)
@@ -213,6 +280,12 @@ async function uploadImage(productId: string): Promise<string> {
     contentType: "image/jpeg",
   });
   return asset._id;
+}
+
+async function uploadImage(productId: string): Promise<string> {
+  const imageUrl = PRODUCT_IMAGE_URLS[productId];
+  if (!imageUrl) throw new Error(`画像URLが定義されていません: ${productId}`);
+  return uploadImageFromUrl(`${productId}.jpg`, imageUrl);
 }
 
 async function uploadFile(filename: string, title: string): Promise<string> {
@@ -535,10 +608,22 @@ async function seed() {
   deletedTotal += imageAssetIds.length;
   console.log(`  ${deletedTotal}件削除しました\n`);
 
-  // ブランドドキュメントを登録
+  // ブランドドキュメントを登録（ロゴ画像を添付）
   console.log(`ブランドを登録します（${brandDefs.length}件）`);
   for (const brand of brandDefs) {
-    await client.createOrReplace(brand);
+    const logoSource = BRAND_LOGO_SOURCES[brand._id];
+    const doc: BrandDoc = { ...brand };
+    if (logoSource) {
+      const assetId = await uploadImageFromUrl(
+        logoSource.filename,
+        logoSource.url
+      );
+      doc.logo = {
+        _type: "image",
+        asset: { _type: "reference", _ref: assetId },
+      };
+    }
+    await client.createOrReplace(doc);
     console.log(`  登録完了: ${brand.name} (${brand._id})`);
   }
 
@@ -551,10 +636,22 @@ async function seed() {
   });
   console.log("  登録完了: 価格設定（デフォルト掛け率）(seed-price-settings)");
 
-  // カテゴリドキュメントを登録
+  // カテゴリドキュメントを登録（アイコン画像を添付）
   console.log(`\nカテゴリを登録します（${categoryDefs.length}件）`);
   for (const cat of categoryDefs) {
-    await client.createOrReplace(cat);
+    const iconSource = CATEGORY_ICON_SOURCES[cat._id];
+    const doc: CategoryDoc = { ...cat };
+    if (iconSource) {
+      const assetId = await uploadImageFromUrl(
+        iconSource.filename,
+        iconSource.url
+      );
+      doc.icon = {
+        _type: "image",
+        asset: { _type: "reference", _ref: assetId },
+      };
+    }
+    await client.createOrReplace(doc);
     console.log(`  登録完了: ${cat.name} (${cat._id})`);
   }
 

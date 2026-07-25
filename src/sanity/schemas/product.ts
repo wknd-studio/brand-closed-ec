@@ -172,7 +172,17 @@ export const product = defineType({
     select: {
       title: "name",
       subtitle: "brand.name",
-      media: "images.0",
+      media: "images",
+    },
+    prepare({ title, subtitle, media }) {
+      // preview.select.mediaへの配列インデックス指定（images.0）はSanityの既知の不具合で
+      // 常にundefinedになるため、配列ごと取得しprepare側で先頭要素を取り出す
+      // (https://github.com/sanity-io/sanity/issues/4107)
+      return {
+        title,
+        subtitle,
+        media: Array.isArray(media) ? media[0] : undefined,
+      };
     },
   },
 });

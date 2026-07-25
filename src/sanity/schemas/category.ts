@@ -11,8 +11,14 @@ export const category = defineType({
       type: "string",
       validation: (r) => r.required(),
     }),
+    defineField({
+      name: "icon",
+      title: "アイコン画像",
+      type: "image",
+      options: { hotspot: true },
+    }),
   ],
   preview: {
-    select: { title: "name" },
+    select: { title: "name", media: "icon" },
   },
 });
