@@ -9,25 +9,33 @@
 
 ## 検証シナリオ
 
-### シナリオ1: 固定価格商品の決済確定（新規住所入力）
+### シナリオ1: 固定価格商品のStripe Checkout画面遷移（新規住所入力・E2E）
 
 1. テストの事前準備で、招待URLを取得し実際の画面操作で会員登録する（住所は登録しない）
 2. カタログ画面でブランド→商品を選択し、「カートに追加」する
 3. チェックアウト画面へ進み、配送先・請求先の住所入力フォームに入力する
 4. 注文を確定し、Stripe Checkout画面へ遷移することを確認する
-5. テストカード（`4242424242424242`）で決済する
-6. 決済完了後の画面へ遷移することを確認する
-7. Supabaseへの直接照会で、Stripe webhook処理後に対象注文のステータスが`paid`になることを（ポーリングで）確認する
-8. 事後処理でClerkユーザー・Supabase会員レコード・住所・注文レコードを削除する
+5. 事後処理でClerkユーザー・Supabase会員レコード・住所・注文レコードを削除する
 
-### シナリオ2: 固定価格商品の決済確定（既存住所選択）
+**注記（2026-07-25、訂正）**: 当初はここでテストカード決済〜`paid`確認まで行う想定だったが、Stripeの公式ボット検知により実際の決済操作は信頼できないことが判明した。決済確定処理の検証はシナリオ1bへ分離した。
+
+### シナリオ1b: Stripe決済確定Webhookの処理（統合テスト）
+
+1. `placeOrder`ユースケース経由で実際の注文（`pending_payment`状態、`stripeCheckoutSessionId`あり）を作成する
+2. Stripe公式のテスト用ヘルパー`stripe.webhooks.generateTestHeaderString({ payload, secret })`で、その注文の`stripeCheckoutSessionId`を含む`checkout.session.completed`イベント（`mode: "payment"`）に正しい署名を付与する
+3. `/api/webhooks/stripe`のRoute Handler（`POST`関数）を直接呼び出し、署名付きイベントを送信する
+4. Supabaseへの直接照会で、対象注文のステータスが`paid`になることを確認する
+5. 事後処理でテストデータを削除する
+
+### シナリオ2: 固定価格商品のStripe Checkout画面遷移（既存住所選択・E2E）
 
 1. テストの事前準備で、会員登録済みかつSupabaseへ住所を直接作成した状態を作る
 2. カタログ→カート追加→チェックアウト画面まではシナリオ1と同様
 3. チェックアウト画面で、既存住所を選択する（新規入力しない）
-4. 以降はシナリオ1のステップ4〜8と同様
+4. 注文を確定し、Stripe Checkout画面へ遷移することを確認する
+5. 事後処理でクリーンアップする
 
-### シナリオ3: 月次仕入れ上限超過時のブロック
+### シナリオ3: 月次仕入れ上限超過時のブロック（E2E）
 
 1. テストの事前準備で、当月の確定済み仕入れ金額が上限に近い会員を作る（Supabaseへ直接注文レコードを作成）
 2. 上限を超える金額の固定価格商品をカートに追加し、チェックアウト画面で注文を確定しようとする
@@ -49,4 +57,5 @@ supabase start
 pnpm tsx scripts/seed-products.ts
 pnpm test:e2e tests/e2e/order/checkout.spec.ts tests/e2e/order/invoice.spec.ts
 pnpm test:e2e:ui   # ブラウザの動きを見ながら確認する場合
+pnpm test:integration tests/integration/webhooks/stripe-checkout-webhook.test.ts
 ```

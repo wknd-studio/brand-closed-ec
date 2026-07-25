@@ -40,6 +40,41 @@
 - **Rationale**: 会員登録の仕組みは既に確立済みで、本featureで変更する理由がない
 - **Alternatives considered**: なし
 
+## Decision: Stripe Checkout決済確定はE2Eの対象外とし、Webhook統合テストに切り替える（重要な訂正）
+
+- **Decision**: T002実装中の実機検証で、Playwrightからテストカード（`4242424242424242`）を入力してStripe Checkout画面を送信したところ、Stripeのボット検知（hCaptcha challenge）が発動し、決済が完了せず自アプリの`/`（→`/shop`）へ差し戻される事象が再現した。Stripe公式ドキュメント（`https://docs.stripe.com/automated-testing`）を確認したところ、以下が明記されている:
+
+  > 「Stripe Checkout や Payment Element などのフロントエンドのシステムには、自動化されたテストを防ぐためのセキュリティ対策が講じられており」「疑似データを使用して Stripe のインターフェースと API リクエストの出力をシミュレートし、アプリケーションの動作とそのエラー処理能力をテストできます」
+
+  つまりStripeは、ホスト画面自体を自動化ツールで操作されることを想定しておらず、それを防ぐ設計になっている。これに従い、**E2Eテストの範囲は「Stripe Checkout画面への遷移」の確認までとし、決済完了後の処理（Webhook受信→注文`paid`化）は、Stripe公式のテスト用ヘルパー`stripe.webhooks.generateTestHeaderString({ payload, secret })`で正しく署名した疑似`checkout.session.completed`イベントを`/api/webhooks/stripe`へ直接送信する統合テストとして検証する**方針に変更した
+
+- **Rationale**: Stripe公式が推奨する方法に従うことで、hCaptcha発動によるフレーキーな失敗を避けられる。また`generateTestHeaderString`はStripeの公式SDK（`stripe` npmパッケージ）に含まれる正規のテストヘルパーであり、ハックではない
+- **既存のE2Eテストへの影響**: `tests/e2e/auth/registration.spec.ts`・`tests/e2e/auth/onboarding.spec.ts`（`specs/002-e2e-auth-coverage`で実装済み）は確認したところ、いずれも「Stripe Checkout画面への遷移確認」で止まっており、カード情報の入力・送信は行っていない。既にStripe公式推奨のパターンに従っていたため、**変更不要**
+- **同種の穴が別領域にも存在**: 会員登録時のサブスク決済確定処理（`completeSubscriptionOnboarding`）にも、実際のWebhookルート（署名検証込み）を通す統合テストが存在しないことが判明した。これはspecs/002の領域のため、`BRAND-146`として別issueに起票し、本featureのスコープには含めない
+- **統合テストの実装方針**: `tests/integration/webhooks/stripe-checkout-webhook.test.ts`を新規作成する。実際に`placeOrder`で注文を作成し、その`stripeCheckoutSessionId`を含む`checkout.session.completed`イベント（`mode: "payment"`）を`generateTestHeaderString`で署名し、`/api/webhooks/stripe`のRoute Handler（`POST`関数）を直接呼び出す。実DBで対象注文が`paid`になることを確認する
+- **Alternatives considered**: hCaptcha発動を許容しリトライで乗り切る → Stripe公式の推奨に反し、CIでの再現性が保証されないため却下
+
+## Decision: Clerkのuser.createdイベントもWebhook配信を前提にせず、DBへ直接会員行を作成する（T002実装中の発見）
+
+- **Decision**: 招待経由の新規サインアップ後にSupabaseの`users`行が作成されるのはClerkの`user.created`Webhook経由だが、実機検証でこのWebhookがローカル（`task dev:ngrok`未起動時）やCI環境（ngrok同等のトンネルが存在しない）では一切届かないことを確認した。Stripeのホスト画面と同じく、外部サービスからのWebhook配信自体をE2Eテストの前提にはできない。そのため`checkout.spec.ts`の`registerAndMarkOnboarded`では、Webhookの到着を待つのではなく、`users`行自体をテスト側で直接insertする方式にした
+- **Rationale**: 既存の`registration.spec.ts`・`onboarding.spec.ts`はこの行の作成完了を一切待たずに完結する（前者はStripe Checkout画面への遷移確認まで、後者は固定のシード済みテストアカウントを使う）ため、この問題が顕在化していなかった。本featureで初めて「招待経由の新規サインアップ→オンボーディング完了済み状態でショップ画面を使う」という組み合わせが必要になり発覚した
+- **既存のE2Eテストへの影響**: なし（`registration.spec.ts`・`onboarding.spec.ts`は変更不要）
+- **Alternatives considered**: CI・ローカルの両方にngrok等のトンネルを常設する → 外部トンネルへの継続的な依存が増え、Stripeの件と同様の理由（外部サービスの可用性にE2Eの安定性を委ねるべきではない）で却下
+
+## Decision: `cleanupTestUser`ヘルパーの2つの潜在バグを修正した（T002実装中の発見）
+
+- **Decision**: `tests/e2e/helpers/clerk-test-invitation.ts`の`cleanupTestUser`に以下2つのバグがあり修正した
+  1. Clerk側API呼び出し（`getClerkUserIdByEmail`・`clerk.users.deleteUser`等）の失敗がtry/catchされておらず、例外が伝播すると後続のSupabase側の`users`削除が一切実行されなかった
+  2. `users`の削除がテスト中に作成した`addresses`/`orders`（`user_id`外部キー）に阻まれて失敗するケースを検知しておらず、削除エラーを無視したまま「削除済み」として扱っていた
+- **Rationale**: この環境ではClerkのFAPI/Backend APIが断続的に失敗することがあり（`SyntaxError: Unexpected token '<'`等）、(1)が実際に発生してテスト用会員行が残り続けた。また`checkout.spec.ts`が初めて住所・注文をテスト中に作成するE2Eのため(2)も初めて顕在化した。修正により、Clerk側の後片付けはベストエフォート、Supabase側は関連テーブル（order_items→orders→addresses→users）を順に削除してから確実に削除する
+- **既存のE2Eテストへの影響**: なし（`registration.spec.ts`・`onboarding.spec.ts`は住所・注文を作らないため実質的に影響を受けていなかった）
+
+## Decision: 月次上限チェックはカート追加時（クライアント側）と注文確定時（サーバー側）の2箇所に存在する（T004実装中の発見）
+
+- **Decision**: `src/lib/cart/context.tsx`の`addToCart`にも、`confirmedAmount + カート内合計 + 追加分 > monthlyLimit`の場合に追加自体を拒否するクライアント側チェックが存在することが判明した。シナリオ3（月次仕入れ上限超過）で検証したいのは`place-order.ts`のサーバー側`checkMonthlyLimit`（注文確定時）だが、先に上限超過となる確定済み注文をDBに作成してからカートに追加しようとすると、カート追加自体がクライアント側チェックでブロックされてしまい意図した検証にならない。そのため、テストの手順を「(1)カートに追加 (2)その後に上限超過となる確定済み注文をDBへ直接作成 (3)チェックアウト画面で注文確定を試みる」の順にした
+- **Rationale**: カートは一度追加されればCookieに保持され、その後の確定済み金額の変化には影響されない。この順序であれば、カート追加時点では確定済み金額がまだ増えていないため通過し、注文確定時にはサーバー側の`checkMonthlyLimit`が正しくブロックする
+- **Alternatives considered**: クライアント側チェックを回避するため直接Cookieを操作してカート内容を注入する → 実装の詳細に依存しすぎるテストになり、UI操作としての自然さを損なうため却下
+
 ## NEEDS CLARIFICATION（未解決）
 
 - なし。実装時に確認が必要な点（Stripe Checkout画面のロケーター）はtasks.mdの最初のタスクとして明記し、ブロッカーにはしない
