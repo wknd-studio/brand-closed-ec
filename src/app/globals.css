@@ -10,6 +10,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* ブランド別デザインテーマ用トークン。--brand-*は各ブランドページの
+     ラッパー要素でテーマごとに上書きされる（未設定時は既定色/フォントにフォールバック） */
+  --color-brand-primary: var(--brand-primary, var(--color-foreground));
+  --color-brand-accent: var(--brand-accent, var(--color-foreground));
+  --font-brand: var(--brand-font, var(--font-sans));
 }
 
 @media (prefers-color-scheme: dark) {

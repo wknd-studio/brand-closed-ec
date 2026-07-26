@@ -23,6 +23,14 @@ export const brand = defineType({
       type: "text",
       rows: 3,
     }),
+    defineField({
+      name: "design_theme",
+      title: "デザインテーマ",
+      description:
+        "未設定の場合はデフォルトの見た目（配色・フォント・バナーなし）になります",
+      type: "reference",
+      to: [{ type: "designTheme" }],
+    }),
   ],
   preview: {
     select: {
