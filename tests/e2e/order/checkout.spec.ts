@@ -4,7 +4,6 @@ import { createClient } from "@supabase/supabase-js";
 import {
   createTestInvitation,
   cleanupTestUser,
-  getClerkUserIdByEmail,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_EMAIL = "info+clerk_test_checkout@wknd-studio.com";
@@ -28,7 +27,24 @@ function supabaseAdmin() {
  * にしか配信されず、ローカルの`task dev:ngrok`やCI環境では届かない
  * （Stripeのホスト画面と同様、外部サービスからのWebhook配信自体はE2Eで信頼しない）。
  * そのため、Webhookの到着を待つのではなく、この行自体をテスト側で直接作成する。
+ *
+ * clerk_user_idは、Clerkの検索API（getUserListのメールアドレス絞り込み）ではなく、
+ * 実際に認証済みのセッションが持つClerkのセッションCookie（`__session`。Clerkの
+ * サーバー側`auth()`ヘルパーが読んでいるものと同一）のJWTから直接取り出す。
+ * 検索APIは新規作成直後のユーザーが即座に反映される保証がある確証を得られておらず、
+ * CI環境でこの行のclerk_user_idと実際にサインインしているセッションのIDが一致せず
+ * ミドルウェアがオンボーディング未完了と判定してしまう不具合が発生した。
+ * セッションCookie自体を読む方式であれば、ミドルウェアが見るものと100%一致する。
  */
+function decodeClerkUserIdFromSessionCookie(
+  sessionCookieValue: string
+): string {
+  const payload = sessionCookieValue.split(".")[1];
+  const json = Buffer.from(payload, "base64url").toString("utf-8");
+  const claims = JSON.parse(json) as { sub: string };
+  return claims.sub;
+}
+
 async function registerAndMarkOnboarded(page: Page): Promise<void> {
   await setupClerkTestingToken({ page });
 
@@ -45,10 +61,12 @@ async function registerAndMarkOnboarded(page: Page): Promise<void> {
 
   await expect(page).toHaveURL(/\/onboarding\/plan/);
 
-  const clerkUserId = await getClerkUserIdByEmail(TEST_EMAIL);
-  if (!clerkUserId) {
-    throw new Error(`Clerkユーザーが見つかりません: ${TEST_EMAIL}`);
+  const cookies = await page.context().cookies();
+  const sessionCookie = cookies.find((c) => c.name === "__session");
+  if (!sessionCookie) {
+    throw new Error("セッションCookie（__session）が見つかりませんでした");
   }
+  const clerkUserId = decodeClerkUserIdFromSessionCookie(sessionCookie.value);
 
   const { error } = await supabaseAdmin().from("users").insert({
     clerk_user_id: clerkUserId,
