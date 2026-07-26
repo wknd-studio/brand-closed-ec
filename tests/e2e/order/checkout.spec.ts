@@ -62,24 +62,51 @@ async function registerAndMarkOnboarded(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/onboarding\/plan/);
 
   const cookies = await page.context().cookies();
+  // デバッグ調査用（CI原因究明のため一時的に追加。原因判明後に削除する）
+  console.log("[debug] cookies:", cookies.map((c) => c.name).join(", "));
   const sessionCookie = cookies.find((c) => c.name === "__session");
   if (!sessionCookie) {
     throw new Error("セッションCookie（__session）が見つかりませんでした");
   }
   const clerkUserId = decodeClerkUserIdFromSessionCookie(sessionCookie.value);
+  console.log("[debug] clerkUserId from cookie:", clerkUserId);
 
-  const { error } = await supabaseAdmin().from("users").insert({
-    clerk_user_id: clerkUserId,
-    email: TEST_EMAIL,
-    rank: "starter",
-    onboarding_completed: true,
-    subscribed_at: new Date().toISOString(),
-  });
+  const { error, data: insertedRows } = await supabaseAdmin()
+    .from("users")
+    .insert({
+      clerk_user_id: clerkUserId,
+      email: TEST_EMAIL,
+      rank: "starter",
+      onboarding_completed: true,
+      subscribed_at: new Date().toISOString(),
+    })
+    .select("id, clerk_user_id, onboarding_completed");
   if (error) {
     throw new Error(`テスト用会員行の作成に失敗しました: ${error.message}`);
   }
+  console.log("[debug] inserted row:", JSON.stringify(insertedRows));
 
   await page.goto("/shop");
+  console.log("[debug] after /shop goto, url:", page.url());
+
+  if (page.url().includes("/onboarding")) {
+    const { data: recheck } = await supabaseAdmin()
+      .from("users")
+      .select("*")
+      .eq("clerk_user_id", clerkUserId);
+    console.log(
+      "[debug] recheck by clerk_user_id after redirect:",
+      JSON.stringify(recheck)
+    );
+    const postCookies = await page.context().cookies();
+    const postSession = postCookies.find((c) => c.name === "__session");
+    console.log(
+      "[debug] clerkUserId from cookie AFTER redirect:",
+      postSession
+        ? decodeClerkUserIdFromSessionCookie(postSession.value)
+        : "(none)"
+    );
+  }
 }
 
 async function addFirstProductToCart(page: Page): Promise<void> {
