@@ -17,34 +17,21 @@ function supabaseAdmin() {
 }
 
 /**
- * Stripeのホスト画面（Checkout）は自動テストを防ぐボット検知の対象であり
- * 実際の決済操作は行わない（research.md参照）。オンボーディング自体は
- * specs/002-e2e-auth-coverageで別途検証済みのため、本テストの前提として
- * 必要な「オンボーディング完了済み会員」はDBへ直接書き込んで作る。
+ * Stripeのホスト画面（Checkout）は自動テストを防ぐボット検知の対象であり、
+ * 実際のカード決済操作だけは自動化できない（research.md参照）。
+ * それ以外の画面操作（プラン選択画面での「このプランで始める」クリックまで）は
+ * Stripeに一切触れないため、実際にブラウザ操作でシミュレートする
+ * （`registration.spec.ts`と同じ導線）。これにより`selectPlan`サーバー
+ * アクションが実行され、実際の`auth()`が返す正しいclerk_user_idで
+ * usersテーブルの行が作成される（この時点ではonboarding_completed: false）。
+ * 本テストの前提として必要な「決済完了・オンボーディング完了済み」の状態だけを、
+ * その行をSupabase経由で更新することで作る（Stripeでの実決済はしない）。
  *
- * usersテーブルの行は本来Clerkのuser.createdイベントのWebhook経由で作成されるが、
- * このWebhookはClerk側から実際にネットワーク到達可能なエンドポイント（ngrokトンネル等）
- * にしか配信されず、ローカルの`task dev:ngrok`やCI環境では届かない
- * （Stripeのホスト画面と同様、外部サービスからのWebhook配信自体はE2Eで信頼しない）。
- * そのため、Webhookの到着を待つのではなく、この行自体をテスト側で直接作成する。
- *
- * clerk_user_idは、Clerkの検索API（getUserListのメールアドレス絞り込み）ではなく、
- * 実際に認証済みのセッションが持つClerkのセッションCookie（`__session`。Clerkの
- * サーバー側`auth()`ヘルパーが読んでいるものと同一）のJWTから直接取り出す。
- * 検索APIは新規作成直後のユーザーが即座に反映される保証がある確証を得られておらず、
- * CI環境でこの行のclerk_user_idと実際にサインインしているセッションのIDが一致せず
- * ミドルウェアがオンボーディング未完了と判定してしまう不具合が発生した。
- * セッションCookie自体を読む方式であれば、ミドルウェアが見るものと100%一致する。
+ * 以前はこの行自体をテスト側で直接insertし、clerk_user_idをClerkの検索APIや
+ * セッションCookieから自前で取得していたが、CI環境でのみ実際にログイン中の
+ * セッションと一致しない場合があり不具合の原因になっていた。実際の画面操作で
+ * アプリ本体にclerk_user_idを解決させる方式であれば、この種の不一致は起こり得ない。
  */
-function decodeClerkUserIdFromSessionCookie(
-  sessionCookieValue: string
-): string {
-  const payload = sessionCookieValue.split(".")[1];
-  const json = Buffer.from(payload, "base64url").toString("utf-8");
-  const claims = JSON.parse(json) as { sub: string };
-  return claims.sub;
-}
-
 async function registerAndMarkOnboarded(page: Page): Promise<void> {
   await setupClerkTestingToken({ page });
 
@@ -60,53 +47,26 @@ async function registerAndMarkOnboarded(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/plan/);
+  await page.getByRole("radio", { name: /STARTER/ }).check();
+  await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-  const cookies = await page.context().cookies();
-  // デバッグ調査用（CI原因究明のため一時的に追加。原因判明後に削除する）
-  console.log("[debug] cookies:", cookies.map((c) => c.name).join(", "));
-  const sessionCookie = cookies.find((c) => c.name === "__session");
-  if (!sessionCookie) {
-    throw new Error("セッションCookie（__session）が見つかりませんでした");
-  }
-  const clerkUserId = decodeClerkUserIdFromSessionCookie(sessionCookie.value);
-  console.log("[debug] clerkUserId from cookie:", clerkUserId);
+  // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
+  // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
+  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
+  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
 
-  const { error, data: insertedRows } = await supabaseAdmin()
+  const { error } = await supabaseAdmin()
     .from("users")
-    .insert({
-      clerk_user_id: clerkUserId,
-      email: TEST_EMAIL,
-      rank: "starter",
+    .update({
       onboarding_completed: true,
       subscribed_at: new Date().toISOString(),
     })
-    .select("id, clerk_user_id, onboarding_completed");
+    .eq("email", TEST_EMAIL);
   if (error) {
-    throw new Error(`テスト用会員行の作成に失敗しました: ${error.message}`);
+    throw new Error(`テスト用会員行の更新に失敗しました: ${error.message}`);
   }
-  console.log("[debug] inserted row:", JSON.stringify(insertedRows));
 
   await page.goto("/shop");
-  console.log("[debug] after /shop goto, url:", page.url());
-
-  if (page.url().includes("/onboarding")) {
-    const { data: recheck } = await supabaseAdmin()
-      .from("users")
-      .select("*")
-      .eq("clerk_user_id", clerkUserId);
-    console.log(
-      "[debug] recheck by clerk_user_id after redirect:",
-      JSON.stringify(recheck)
-    );
-    const postCookies = await page.context().cookies();
-    const postSession = postCookies.find((c) => c.name === "__session");
-    console.log(
-      "[debug] clerkUserId from cookie AFTER redirect:",
-      postSession
-        ? decodeClerkUserIdFromSessionCookie(postSession.value)
-        : "(none)"
-    );
-  }
 }
 
 async function addFirstProductToCart(page: Page): Promise<void> {
