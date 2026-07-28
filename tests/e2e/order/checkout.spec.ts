@@ -16,6 +16,12 @@ function supabaseAdmin() {
   );
 }
 
+// デバッグ調査用（CI原因究明のため一時的に追加。原因判明後に削除する）
+console.log(
+  "[debug] test process NEXT_PUBLIC_SUPABASE_URL:",
+  process.env.NEXT_PUBLIC_SUPABASE_URL
+);
+
 /**
  * Stripeのホスト画面（Checkout）は自動テストを防ぐボット検知の対象であり、
  * 実際のカード決済操作だけは自動化できない（research.md参照）。
