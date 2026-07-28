@@ -16,12 +16,6 @@ function supabaseAdmin() {
   );
 }
 
-// デバッグ調査用（CI原因究明のため一時的に追加。原因判明後に削除する）
-console.log(
-  "[debug] test process NEXT_PUBLIC_SUPABASE_URL:",
-  process.env.NEXT_PUBLIC_SUPABASE_URL
-);
-
 /**
  * Stripeのホスト画面（Checkout）は自動テストを防ぐボット検知の対象であり、
  * 実際のカード決済操作だけは自動化できない（research.md参照）。
@@ -60,32 +54,19 @@ async function registerAndMarkOnboarded(page: Page): Promise<void> {
   // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
   // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
   await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
-  console.log("[debug] after plan select, url:", page.url());
 
-  const debugEnvRes = await page.request.get("/api/debug-env");
-  console.log("[debug] server-side env via API:", await debugEnvRes.text());
-
-  const { data: beforeUpdate } = await supabaseAdmin()
-    .from("users")
-    .select("*")
-    .eq("email", TEST_EMAIL);
-  console.log("[debug] row before update:", JSON.stringify(beforeUpdate));
-
-  const { error, data: updated } = await supabaseAdmin()
+  const { error } = await supabaseAdmin()
     .from("users")
     .update({
       onboarding_completed: true,
       subscribed_at: new Date().toISOString(),
     })
-    .eq("email", TEST_EMAIL)
-    .select("id, clerk_user_id, onboarding_completed");
+    .eq("email", TEST_EMAIL);
   if (error) {
     throw new Error(`テスト用会員行の更新に失敗しました: ${error.message}`);
   }
-  console.log("[debug] updated rows:", JSON.stringify(updated));
 
   await page.goto("/shop");
-  console.log("[debug] after /shop goto, url:", page.url());
 }
 
 async function addFirstProductToCart(page: Page): Promise<void> {
