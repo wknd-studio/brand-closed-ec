@@ -54,19 +54,29 @@ async function registerAndMarkOnboarded(page: Page): Promise<void> {
   // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
   // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
   await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
+  console.log("[debug] after plan select, url:", page.url());
 
-  const { error } = await supabaseAdmin()
+  const { data: beforeUpdate } = await supabaseAdmin()
+    .from("users")
+    .select("*")
+    .eq("email", TEST_EMAIL);
+  console.log("[debug] row before update:", JSON.stringify(beforeUpdate));
+
+  const { error, data: updated } = await supabaseAdmin()
     .from("users")
     .update({
       onboarding_completed: true,
       subscribed_at: new Date().toISOString(),
     })
-    .eq("email", TEST_EMAIL);
+    .eq("email", TEST_EMAIL)
+    .select("id, clerk_user_id, onboarding_completed");
   if (error) {
     throw new Error(`テスト用会員行の更新に失敗しました: ${error.message}`);
   }
+  console.log("[debug] updated rows:", JSON.stringify(updated));
 
   await page.goto("/shop");
+  console.log("[debug] after /shop goto, url:", page.url());
 }
 
 async function addFirstProductToCart(page: Page): Promise<void> {
