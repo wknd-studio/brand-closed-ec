@@ -9,6 +9,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
+  // CIのランナーはローカルより低速で、Sanity等の外部APIへのアクセスも
+  // 余分にレイテンシがかかるため、テストごとのタイムアウトを長めにする
+  timeout: process.env.CI ? 60000 : 30000,
   reporter: "html",
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:3000",
