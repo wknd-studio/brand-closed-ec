@@ -36,12 +36,6 @@ export async function selectPlan(
   const firstName = user?.firstName ?? "";
   const lastName = user?.lastName ?? "";
 
-  // デバッグ調査用（CI原因究明のため一時的に追加。原因判明後に削除する）
-  console.log(
-    "[debug] selectPlan NEXT_PUBLIC_SUPABASE_URL:",
-    process.env.NEXT_PUBLIC_SUPABASE_URL
-  );
-
   try {
     const result = await selectPlanUseCase(
       {

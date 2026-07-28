@@ -62,6 +62,9 @@ async function registerAndMarkOnboarded(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
   console.log("[debug] after plan select, url:", page.url());
 
+  const debugEnvRes = await page.request.get("/api/debug-env");
+  console.log("[debug] server-side env via API:", await debugEnvRes.text());
+
   const { data: beforeUpdate } = await supabaseAdmin()
     .from("users")
     .select("*")
