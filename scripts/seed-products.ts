@@ -1,7 +1,10 @@
 import { config } from "dotenv";
 import { createClient } from "@sanity/client";
 
-import { computeRankPrices } from "../src/sanity/schemas/product-price-calculator";
+import {
+  computeRankPrices,
+  pickEffectivePriceSettingsRates,
+} from "../src/sanity/schemas/product-price-calculator";
 
 type Block = {
   _type: "block";
@@ -23,11 +26,15 @@ type ImageRef = {
   asset: { _type: "reference"; _ref: string };
 };
 
+type RefValue = { _type: "reference"; _ref: string };
+
 type BrandDoc = {
   _id: string;
   _type: "brand";
   name: string;
   logo?: ImageRef;
+  design_theme?: RefValue;
+  price_settings?: RefValue;
 };
 
 type CategoryDoc = {
@@ -49,6 +56,7 @@ type ProductDoc = {
   retail_price: number;
   is_negotiable: boolean;
   price_rates?: RateMap;
+  price_settings?: RefValue;
   prices?: RateMap;
   min_rank: string;
   availability: string;
@@ -70,6 +78,48 @@ const DEFAULT_RATES: RateMap = {
   premium: 32,
 };
 
+// 掛け率設定（priceSettings）のプリセット定義。商品・ブランド優先順位の
+// 動作確認用に、デフォルト以外に2種類のカタログを用意する
+const priceSettingsDefs: {
+  _id: string;
+  name: string;
+  is_default: boolean;
+  default_rates: RateMap;
+}[] = [
+  {
+    _id: "seed-price-settings",
+    name: "デフォルト掛け率",
+    is_default: true,
+    default_rates: DEFAULT_RATES,
+  },
+  {
+    _id: "seed-price-settings-retail",
+    name: "定価カタログ",
+    is_default: false,
+    default_rates: {
+      starter: 100,
+      basic: 100,
+      standard: 100,
+      pro: 100,
+      advanced: 100,
+      premium: 100,
+    },
+  },
+  {
+    _id: "seed-price-settings-shallow-discount",
+    name: "少なめ割引カタログ",
+    is_default: false,
+    default_rates: {
+      starter: 100,
+      basic: 95,
+      standard: 92,
+      pro: 88,
+      advanced: 84,
+      premium: 80,
+    },
+  },
+];
+
 config({ path: ".env.local" });
 
 const client = createClient({
@@ -90,13 +140,65 @@ function makeBlock(key: string, text: string): Block {
   };
 }
 
+// デザインテーマ定義（動作確認用に2種類のみ用意。LOEWE/HERMÈS/CHANELは
+// 未アタッチのままにし、テーマ未設定時のデフォルト見た目も確認できるようにする）
+const designThemeDefs: {
+  _id: string;
+  name: string;
+  primary_color: string;
+  accent_color: string;
+  font: "sans" | "serif" | "elegant";
+  bannerFilename: string;
+  bannerSourceProductId: string;
+}[] = [
+  {
+    _id: "seed-theme-refa-elegant",
+    name: "ReFaエレガントテーマ",
+    primary_color: "#1a2b4c",
+    accent_color: "#c9a227",
+    font: "serif",
+    bannerFilename: "seed-theme-banner-refa.jpg",
+    bannerSourceProductId: "seed-refa-001",
+  },
+  {
+    _id: "seed-theme-gucci-modern",
+    name: "GUCCIモダンテーマ",
+    primary_color: "#111111",
+    accent_color: "#b8860b",
+    font: "sans",
+    bannerFilename: "seed-theme-banner-gucci.jpg",
+    bannerSourceProductId: "seed-gucci-001",
+  },
+];
+
 // ブランドドキュメント定義
+// - ReFa/GUCCI: デザインテーマをアタッチ（未アタッチ時のデフォルト見た目との対比用）
+// - CHANEL: 掛け率設定「定価カタログ」をアタッチ（商品優先/ブランド優先の動作確認用。
+//   seed-chanel-001は商品側で別カタログを上書き、seed-chanel-002はこのブランド設定を継承する）
 const brandDefs: BrandDoc[] = [
-  { _id: "seed-brand-refa", _type: "brand", name: "ReFa" },
-  { _id: "seed-brand-gucci", _type: "brand", name: "GUCCI" },
+  {
+    _id: "seed-brand-refa",
+    _type: "brand",
+    name: "ReFa",
+    design_theme: { _type: "reference", _ref: "seed-theme-refa-elegant" },
+  },
+  {
+    _id: "seed-brand-gucci",
+    _type: "brand",
+    name: "GUCCI",
+    design_theme: { _type: "reference", _ref: "seed-theme-gucci-modern" },
+  },
   { _id: "seed-brand-loewe", _type: "brand", name: "LOEWE" },
   { _id: "seed-brand-hermes", _type: "brand", name: "HERMÈS" },
-  { _id: "seed-brand-chanel", _type: "brand", name: "CHANEL" },
+  {
+    _id: "seed-brand-chanel",
+    _type: "brand",
+    name: "CHANEL",
+    price_settings: {
+      _type: "reference",
+      _ref: "seed-price-settings-retail",
+    },
+  },
 ];
 
 // カテゴリドキュメント定義
@@ -305,6 +407,18 @@ async function uploadFile(filename: string, title: string): Promise<string> {
 
 // ブランド名 → ドキュメントID のマッピング
 const brandIdByName = Object.fromEntries(brandDefs.map((b) => [b.name, b._id]));
+
+// 掛け率設定の優先順位解決に使うルックアップ（商品優先 > ブランド > デフォルト）
+const priceSettingsRatesById: Record<string, RateMap> = Object.fromEntries(
+  priceSettingsDefs.map((p) => [p._id, p.default_rates])
+);
+const defaultPriceSettingsRates: RateMap =
+  priceSettingsDefs.find((p) => p.is_default)?.default_rates ?? {};
+const brandPriceSettingsRefById: Record<string, string> = Object.fromEntries(
+  brandDefs
+    .filter((b) => b.price_settings)
+    .map((b) => [b._id, b.price_settings!._ref])
+);
 
 const productDefs = [
   // ── ReFa ─────────────────────────────────────────────
@@ -553,6 +667,11 @@ const productDefs = [
     is_negotiable: false,
     // 掛け率の商品ごと上書き例（限定品のためproをデフォルトより高めに設定）
     price_rates: { pro: 42 },
+    // 掛け率設定も商品優先の動作確認用に上書き（ブランドの「定価カタログ」より優先される）
+    price_settings: {
+      _type: "reference" as const,
+      _ref: "seed-price-settings-shallow-discount",
+    },
     min_rank: "pro",
     availability: "available",
   },
@@ -586,7 +705,13 @@ async function seed() {
   console.log("既存のシードデータを削除します...");
   // perspective: 'raw' でドラフト含む全ドキュメントを対象にする
   const rawClient = client.withConfig({ perspective: "raw" });
-  const types = ["product", "brand", "category", "priceSettings"];
+  const types = [
+    "product",
+    "brand",
+    "category",
+    "priceSettings",
+    "designTheme",
+  ];
   let deletedTotal = 0;
   for (const t of types) {
     const ids: string[] = await rawClient.fetch(
@@ -608,8 +733,42 @@ async function seed() {
   deletedTotal += imageAssetIds.length;
   console.log(`  ${deletedTotal}件削除しました\n`);
 
+  // デザインテーマドキュメントを登録（バナー画像を添付）
+  console.log(`デザインテーマを登録します（${designThemeDefs.length}件）`);
+  for (const theme of designThemeDefs) {
+    const bannerUrl = PRODUCT_IMAGE_URLS[theme.bannerSourceProductId];
+    const assetId = await uploadImageFromUrl(theme.bannerFilename, bannerUrl);
+    await client.createOrReplace({
+      _id: theme._id,
+      _type: "designTheme",
+      name: theme.name,
+      primary_color: { _type: "color", hex: theme.primary_color },
+      accent_color: { _type: "color", hex: theme.accent_color },
+      font: theme.font,
+      banner: {
+        _type: "image",
+        asset: { _type: "reference", _ref: assetId },
+      },
+    });
+    console.log(`  登録完了: ${theme.name} (${theme._id})`);
+  }
+
+  // 掛け率設定ドキュメントを登録（デフォルト1件 + プリセット2件）
+  // ブランド・商品からのreference先になるため、ブランド登録より前に作成する
+  console.log(`\n掛け率設定を登録します（${priceSettingsDefs.length}件）`);
+  for (const preset of priceSettingsDefs) {
+    await client.createOrReplace({
+      _id: preset._id,
+      _type: "priceSettings",
+      name: preset.name,
+      is_default: preset.is_default,
+      default_rates: preset.default_rates,
+    });
+    console.log(`  登録完了: ${preset.name} (${preset._id})`);
+  }
+
   // ブランドドキュメントを登録（ロゴ画像を添付）
-  console.log(`ブランドを登録します（${brandDefs.length}件）`);
+  console.log(`\nブランドを登録します（${brandDefs.length}件）`);
   for (const brand of brandDefs) {
     const logoSource = BRAND_LOGO_SOURCES[brand._id];
     const doc: BrandDoc = { ...brand };
@@ -626,15 +785,6 @@ async function seed() {
     await client.createOrReplace(doc);
     console.log(`  登録完了: ${brand.name} (${brand._id})`);
   }
-
-  // 価格設定（デフォルト掛け率）ドキュメントを登録
-  console.log("\n価格設定（デフォルト掛け率）を登録します");
-  await client.createOrReplace({
-    _id: "seed-price-settings",
-    _type: "priceSettings",
-    default_rates: DEFAULT_RATES,
-  });
-  console.log("  登録完了: 価格設定（デフォルト掛け率）(seed-price-settings)");
 
   // カテゴリドキュメントを登録（アイコン画像を添付）
   console.log(`\nカテゴリを登録します（${categoryDefs.length}件）`);
@@ -673,12 +823,20 @@ async function seed() {
 
     const priceRates =
       "price_rates" in productProps ? productProps.price_rates : undefined;
+    const ownPriceSettingsRef = productProps.price_settings?._ref;
+    const effectiveDefaultRates = pickEffectivePriceSettingsRates({
+      ownRates: ownPriceSettingsRef
+        ? priceSettingsRatesById[ownPriceSettingsRef]
+        : undefined,
+      brandRates: priceSettingsRatesById[brandPriceSettingsRefById[brandId]],
+      defaultRates: defaultPriceSettingsRates,
+    });
     const prices = productProps.is_negotiable
       ? undefined
       : computeRankPrices(
           productProps.retail_price,
           priceRates ?? {},
-          DEFAULT_RATES
+          effectiveDefaultRates
         );
 
     const doc: ProductDoc = {

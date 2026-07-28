@@ -23,6 +23,22 @@ export const brand = defineType({
       type: "text",
       rows: 3,
     }),
+    defineField({
+      name: "design_theme",
+      title: "デザインテーマ",
+      description:
+        "未設定の場合はデフォルトの見た目（配色・フォント・バナーなし）になります",
+      type: "reference",
+      to: [{ type: "designTheme" }],
+    }),
+    defineField({
+      name: "price_settings",
+      title: "掛け率設定",
+      description:
+        "このブランドの商品にデフォルトで適用される掛け率設定。商品ごとに個別の掛け率設定で上書き可能",
+      type: "reference",
+      to: [{ type: "priceSettings" }],
+    }),
   ],
   preview: {
     select: {

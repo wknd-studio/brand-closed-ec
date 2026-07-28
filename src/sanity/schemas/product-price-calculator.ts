@@ -19,6 +19,29 @@ export function parseYen(raw: string): number | undefined {
   return Number(digits);
 }
 
+export function pickEffectivePriceSettingsRates({
+  ownRates,
+  brandRates,
+  defaultRates,
+}: {
+  ownRates: RateMap | undefined;
+  brandRates: RateMap | undefined;
+  defaultRates: RateMap | undefined;
+}): RateMap {
+  return ownRates ?? brandRates ?? defaultRates ?? {};
+}
+
+export function validateSingleDefaultPriceSettings(
+  isDefault: boolean | undefined,
+  otherDefaultCount: number
+): string | true {
+  if (!isDefault) return true;
+  if (otherDefaultCount > 0) {
+    return "デフォルトは1件のみ設定できます。他の掛け率設定のデフォルトを先に解除してください";
+  }
+  return true;
+}
+
 export function computeRankPrices(
   retailPrice: number | undefined,
   rates: RateMap,

@@ -100,6 +100,14 @@ export const product = defineType({
       initialValue: false,
     }),
     defineField({
+      name: "price_settings",
+      title: "掛け率設定",
+      description:
+        "未アタッチの場合はブランドの掛け率設定、それもなければデフォルトの掛け率設定が使われます",
+      type: "reference",
+      to: [{ type: "priceSettings" }],
+    }),
+    defineField({
       name: "price_rates",
       title: "ランク別掛け率（%）",
       description:
