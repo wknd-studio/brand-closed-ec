@@ -627,14 +627,16 @@ async function seed() {
     console.log(`  登録完了: ${brand.name} (${brand._id})`);
   }
 
-  // 価格設定（デフォルト掛け率）ドキュメントを登録
-  console.log("\n価格設定（デフォルト掛け率）を登録します");
+  // 掛け率設定（デフォルト）ドキュメントを登録
+  console.log("\n掛け率設定（デフォルト）を登録します");
   await client.createOrReplace({
     _id: "seed-price-settings",
     _type: "priceSettings",
+    name: "デフォルト掛け率",
+    is_default: true,
     default_rates: DEFAULT_RATES,
   });
-  console.log("  登録完了: 価格設定（デフォルト掛け率）(seed-price-settings)");
+  console.log("  登録完了: 掛け率設定（デフォルト）(seed-price-settings)");
 
   // カテゴリドキュメントを登録（アイコン画像を添付）
   console.log(`\nカテゴリを登録します（${categoryDefs.length}件）`);

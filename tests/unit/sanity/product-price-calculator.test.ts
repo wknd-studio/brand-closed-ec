@@ -4,6 +4,8 @@ import {
   computeRankPrices,
   clampRate,
   parseYen,
+  pickEffectivePriceSettingsRates,
+  validateSingleDefaultPriceSettings,
 } from "@/sanity/schemas/product-price-calculator";
 
 describe("resolveEffectiveRate", () => {
@@ -90,5 +92,58 @@ describe("parseYen", () => {
 
   it("数字を含まない文字列はundefinedを返す", () => {
     expect(parseYen("abc")).toBeUndefined();
+  });
+});
+
+describe("pickEffectivePriceSettingsRates", () => {
+  it("商品に紐づく掛け率設定があれば最優先で使う", () => {
+    const result = pickEffectivePriceSettingsRates({
+      ownRates: { starter: 90 },
+      brandRates: { starter: 80 },
+      defaultRates: { starter: 70 },
+    });
+    expect(result).toEqual({ starter: 90 });
+  });
+
+  it("商品に紐づく設定がなければブランドの設定を使う", () => {
+    const result = pickEffectivePriceSettingsRates({
+      ownRates: undefined,
+      brandRates: { starter: 80 },
+      defaultRates: { starter: 70 },
+    });
+    expect(result).toEqual({ starter: 80 });
+  });
+
+  it("商品にもブランドにも設定がなければデフォルトを使う", () => {
+    const result = pickEffectivePriceSettingsRates({
+      ownRates: undefined,
+      brandRates: undefined,
+      defaultRates: { starter: 70 },
+    });
+    expect(result).toEqual({ starter: 70 });
+  });
+
+  it("どれも存在しない場合は空オブジェクトを返す", () => {
+    const result = pickEffectivePriceSettingsRates({
+      ownRates: undefined,
+      brandRates: undefined,
+      defaultRates: undefined,
+    });
+    expect(result).toEqual({});
+  });
+});
+
+describe("validateSingleDefaultPriceSettings", () => {
+  it("is_defaultがfalseの場合は常にOK", () => {
+    expect(validateSingleDefaultPriceSettings(false, 3)).toBe(true);
+  });
+
+  it("is_defaultがtrueで他にデフォルトが存在しなければOK", () => {
+    expect(validateSingleDefaultPriceSettings(true, 0)).toBe(true);
+  });
+
+  it("is_defaultがtrueで他にもデフォルトが存在すればNG", () => {
+    const result = validateSingleDefaultPriceSettings(true, 1);
+    expect(result).not.toBe(true);
   });
 });

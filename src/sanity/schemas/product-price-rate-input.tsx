@@ -4,7 +4,11 @@ import { set, useClient, useFormValue } from "sanity";
 import type { ObjectInputProps } from "sanity";
 
 import { PRICING_RANK_OPTIONS } from "./rank-options";
-import { clampRate, computeRankPrices } from "./product-price-calculator";
+import {
+  clampRate,
+  computeRankPrices,
+  pickEffectivePriceSettingsRates,
+} from "./product-price-calculator";
 
 const API_VERSION = "2026-05-17";
 
@@ -16,21 +20,42 @@ export function ProductPriceRateInput(props: ObjectInputProps) {
   const documentId = useFormValue(["_id"]) as string | undefined;
   const retailPrice = useFormValue(["retail_price"]) as number | undefined;
   const currentPrices = useFormValue(["prices"]) as RateMap | undefined;
+  const ownPriceSettingsRef = useFormValue(["price_settings", "_ref"]) as
+    | string
+    | undefined;
+  const brandRef = useFormValue(["brand", "_ref"]) as string | undefined;
   const [defaultRates, setDefaultRates] = useState<RateMap>({});
 
   useEffect(() => {
     let cancelled = false;
     client
       .fetch<{
-        default_rates?: RateMap;
-      } | null>(`*[_type=="priceSettings"][0]{default_rates}`)
+        ownRates?: RateMap;
+        brandRates?: RateMap;
+        defaultRates?: RateMap;
+      }>(
+        `{
+          "ownRates": *[_id==$ownRef][0].default_rates,
+          "brandRates": *[_id==$brandRef][0].price_settings->default_rates,
+          "defaultRates": *[_type=="priceSettings"&&is_default==true][0].default_rates
+        }`,
+        { ownRef: ownPriceSettingsRef ?? null, brandRef: brandRef ?? null }
+      )
       .then((result) => {
-        if (!cancelled) setDefaultRates(result?.default_rates ?? {});
+        if (!cancelled) {
+          setDefaultRates(
+            pickEffectivePriceSettingsRates({
+              ownRates: result.ownRates,
+              brandRates: result.brandRates,
+              defaultRates: result.defaultRates,
+            })
+          );
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, ownPriceSettingsRef, brandRef]);
 
   const rates = (value as RateMap | undefined) ?? {};
 

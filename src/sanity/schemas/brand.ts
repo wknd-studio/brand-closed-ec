@@ -31,6 +31,14 @@ export const brand = defineType({
       type: "reference",
       to: [{ type: "designTheme" }],
     }),
+    defineField({
+      name: "price_settings",
+      title: "掛け率設定",
+      description:
+        "このブランドの商品にデフォルトで適用される掛け率設定。商品ごとに個別の掛け率設定で上書き可能",
+      type: "reference",
+      to: [{ type: "priceSettings" }],
+    }),
   ],
   preview: {
     select: {
