@@ -119,6 +119,16 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     environment: staging
+    # developへの複数マージがほぼ同時に発生すると、stgデプロイとE2E検証が
+    # 同時に走り、共有のClerkテストインスタンスへの同時アクセスでレート制限
+    # （ボット検知）にかかりE2Eが不安定に失敗する事象が実際に発生した。
+    # deploy-stgとe2e（stg検証）を同じグループにして直列化し、各pushの
+    # デプロイ→検証が完全に終わってから次のpushの分を開始する。古い方を
+    # キャンセルすると中途半端な状態でデプロイが止まる恐れがあるため
+    # cancel-in-progressは使わずキューイングする
+    concurrency:
+      group: stg-deploy-and-verify
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -178,6 +188,12 @@ jobs:
     needs: [deploy-stg]
     if: github.ref == 'refs/heads/develop'
     environment: staging
+    # deploy-stgと同じグループで直列化する（上のdeploy-stgのコメント参照）。
+    # 同じグループ名にすることで、deploy-stg→e2eの一連の流れ全体が
+    # 他のpushの分と重ならないようにする
+    concurrency:
+      group: stg-deploy-and-verify
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
