@@ -79,7 +79,9 @@ allowed_cidrs_v6 = ["::/0"]
 # enabled = true
 
 [realtime]
-enabled = true
+# アプリはSupabase Realtimeを使用していない（コード・マイグレーションともに参照なし）ため無効化し、
+# ローカル/CIでのsupabase start起動時間を短縮する
+enabled = false
 # Bind realtime via either IPv4 or IPv6. (default: IPv4)
 # ip_version = "IPv6"
 # The maximum length in bytes of HTTP request headers. (default: 4096)
@@ -97,7 +99,9 @@ openai_api_key = "env(OPENAI_API_KEY)"
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
 [inbucket]
-enabled = true
+# 認証はClerkが担っており、Supabase Auth自体のメール送信機能を使っていないため
+# 確認用メールサーバーも不要。無効化してsupabase start起動時間を短縮する
+enabled = false
 # Port to use for the email testing server web interface.
 port = 54324
 # Uncomment to expose additional ports for testing user applications that send emails.
@@ -107,7 +111,9 @@ port = 54324
 # sender_name = "Admin"
 
 [storage]
-enabled = true
+# アプリはSupabase Storageを使用していない（画像等はSanityで管理）。
+# コード・マイグレーションともに参照なしのため無効化する
+enabled = false
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
