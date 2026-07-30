@@ -53,20 +53,23 @@ User Story 1（T001〜T004）とUser Story 2（T005〜T007）は、それぞれ�
 
 ## Phase 4: User Story 2 - 要相談商品の見積依頼 (Priority: P2)
 
-**Goal**: 会員が実際の画面操作で要相談商品をカートに追加して注文確定すると、Stripeへのリダイレクトなく確認完了画面へ遷移することを保証する
+**Goal**: 会員が実際の画面操作で要相談商品をカートに追加して注文確定すると、Stripeへのリダイレクトなく確認完了画面へ遷移することを保証する。また、Stripeからの請求書決済完了Webhookを受けた際に注文が`paid`になることを保証する
 
-**Independent Test**: `quickstart.md` シナリオ4
+**Independent Test**: `quickstart.md` シナリオ4・4b
 
-- [ ] T006 [US2] `tests/e2e/order/invoice.spec.ts` を新規作成する。(1) `beforeAll`で、固定の明示的なドキュメントID（例: `test-invoice-brand-003`・`test-invoice-product-003`）を使い、テスト専用のブランド・要相談商品（`is_negotiable: true`）をSanity APIで作成する（研究事項: 既存シードデータには要相談商品が存在しないため。research.md参照） (2) 招待URL経由で会員登録し、住所も準備する (3) カタログから当該テスト商品を選択し、価格が「要相談」と表示されることを確認 (4) カートに追加してチェックアウト画面へ進み、住所を確定して注文確定 (5) Stripe Checkout画面へは遷移せず`/order/invoice-complete`へ遷移することを確認 (6) Supabaseへの照会で、注文が`payment_flow: "invoice"`・`status: "confirming"`で作成されていることを確認 (7) `afterAll`でSanityのテスト専用ブランド・商品を固定IDを指定して削除し（既存データへの影響なし。研究事項参照）、`afterEach`で`cleanupTestUser`によるClerk・Supabaseのクリーンアップを行う（依存: T001）
+- [x] T006 [US2] `tests/e2e/order/invoice.spec.ts` を新規作成する。(1) `beforeAll`で、固定の明示的なドキュメントID（例: `test-invoice-brand-003`・`test-invoice-product-003`）を使い、テスト専用のブランド・要相談商品（`is_negotiable: true`）をSanity APIで作成する（研究事項: 既存シードデータには要相談商品が存在しないため。research.md参照） (2) 招待URL経由で会員登録し、住所も準備する (3) カタログから当該テスト商品を選択し、価格が「要相談」と表示されることを確認 (4) カートに追加してチェックアウト画面へ進み、住所を確定して注文確定 (5) Stripe Checkout画面へは遷移せず`/order/invoice-complete`へ遷移することを確認 (6) Supabaseへの照会で、注文が`payment_flow: "invoice"`・`status: "confirming"`で作成されていることを確認 (7) `afterAll`でSanityのテスト専用ブランド・商品を固定IDを指定して削除し（既存データへの影響なし。研究事項参照）、`afterEach`で`cleanupTestUser`によるClerk・Supabaseのクリーンアップを行う（依存: T001）
+- [x] T007 [US2] `tests/integration/webhooks/stripe-invoice-webhook.test.ts` を新規作成する（シナリオ4b、統合テスト。T005と対になるinvoiceフロー版）: (1) `issueInvoice`ユースケース経由で実際の注文（`invoice_sent`、`stripeInvoiceId`あり）を実DBに作成する（運営者側の請求書発行操作自体はBRAND-137で別スコープのため、ここでは前提条件としてユースケースを直接呼ぶ） (2) Stripe公式のテストヘルパー`stripe.webhooks.generateTestHeaderString({ payload, secret })`で、その`stripeInvoiceId`を含む`invoice.paid`イベントに正しい署名を付与する (3) `/api/webhooks/stripe`のRoute Handler（`POST`関数）をインポートし、構築した`Request`で直接呼び出す (4) 実Supabaseへの照会で対象注文のステータスが`paid`になることを確認する (5) クリーンアップ（依存: T006と同じテスト専用Sanity商品を再利用してもよいが、独立実行できるよう自前で用意してもよい）
 
-**チェックポイント**: 要相談商品の見積依頼導線が独立して動作・テスト可能
+**実装中に発覚した事実**: `issueInvoice`の月次上限再チェックは見積確定時の合意済み金額（`negotiatedPrices`）の合計で判定されるため、T007のテストデータはSTARTERランクの月次上限（300,000円）を超えない金額（200,000円）にする必要があった。480,000円で組んだ初回実装は`invoice_sent`ではなく`limit_exceeded`になり、テストが意図通りの前提状態を検証できていないことに気づいた。
+
+**チェックポイント**: 要相談商品の見積依頼導線（画面遷移＋決済確定Webhook処理）が独立して動作・テスト可能
 
 ---
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T007 [P] ローカル（`pnpm test:e2e`・`pnpm test:integration`）・CI（`e2e-pr`ジョブ）の両方で新規テストが通過することを確認する
-- [ ] T008 [P] `docs/cicd.md`の「テスト構成」表に`checkout.spec.ts`・`invoice.spec.ts`・`stripe-checkout-webhook.test.ts`を追記する
+- [x] T008 [P] ローカル（`pnpm test:e2e`・`pnpm test:integration`）・CI（`e2e-pr`ジョブ）の両方で新規テストが通過することを確認する（ローカルは`checkout.spec.ts`＋`invoice.spec.ts`同時実行・`stripe-invoice-webhook.test.ts`単体で確認済み。CIはPR作成後に確認）
+- [x] T009 [P] `docs/cicd.md`の「テスト構成」表に`checkout.spec.ts`・`invoice.spec.ts`・`stripe-checkout-webhook.test.ts`・`stripe-invoice-webhook.test.ts`を追記する
 
 ---
 
@@ -80,7 +83,7 @@ User Story 1（T001〜T004）とUser Story 2（T005〜T007）は、それぞれ�
 ## Suggested PR Split（CLAUDE.mdのPRサイズ規律に対応・ユーザーとの合意事項）
 
 1. PR1: Phase 1 + Phase 3（T001〜T005） — Stripeロケーター確定＋固定価格商品のチェックアウト画面遷移（住所2経路＋上限超過）＋決済確定Webhookの統合テスト
-2. PR2: Phase 4 + Phase 5（T006〜T008） — 要相談商品の見積依頼＋最終確認・ドキュメント更新
+2. PR2: Phase 4 + Phase 5（T006〜T009） — 要相談商品の見積依頼・決済確定Webhookの統合テスト＋最終確認・ドキュメント更新
 
 ## Implementation Strategy
 

@@ -142,13 +142,17 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 ### テスト構成
 
-| ファイル                                     | 内容                                                                         |
-| -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `tests/e2e/auth/onboarding.spec.ts`          | オンボーディングフロー（プラン選択・リダイレクト。`ticket`方式バイパス）     |
-| `tests/e2e/auth/registration.spec.ts`        | 実際の招待リンク→登録フォーム→プラン選択→Stripe Checkoutまでの実登録フロー   |
-| `tests/e2e/auth/login.spec.ts`               | 実際のログインフォーム操作＋未知デバイスの確認コード入力                     |
-| `tests/e2e/helpers/clerk-test-invitation.ts` | 招待作成・テストユーザークリーンアップの共通処理（`registration.spec.ts`用） |
-| `tests/e2e/global.setup.ts`                  | Clerk テスト環境のセットアップ                                               |
+| ファイル                                                     | 内容                                                                                                                                          |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/e2e/auth/onboarding.spec.ts`                          | オンボーディングフロー（プラン選択・リダイレクト。`ticket`方式バイパス）                                                                      |
+| `tests/e2e/auth/registration.spec.ts`                        | 実際の招待リンク→登録フォーム→プラン選択→Stripe Checkoutまでの実登録フロー                                                                    |
+| `tests/e2e/auth/login.spec.ts`                               | 実際のログインフォーム操作＋未知デバイスの確認コード入力                                                                                      |
+| `tests/e2e/order/checkout.spec.ts`                           | カタログ〜チェックアウト〜Stripe Checkout画面遷移（住所新規入力・既存選択・月次上限超過）                                                     |
+| `tests/e2e/order/invoice.spec.ts`                            | 要相談商品の見積依頼フロー（カタログ〜チェックアウト〜`/order/invoice-complete`遷移）                                                         |
+| `tests/integration/webhooks/stripe-checkout-webhook.test.ts` | Stripe決済確定Webhook（`checkout.session.completed`）受信後、注文が`paid`になることの統合テスト                                               |
+| `tests/integration/webhooks/stripe-invoice-webhook.test.ts`  | Stripe請求書決済確定Webhook（`invoice.paid`）受信後、注文が`paid`になることの統合テスト                                                       |
+| `tests/e2e/helpers/clerk-test-invitation.ts`                 | 招待作成・テストユーザークリーンアップ・オンボーディング完了までの共通処理（`registration.spec.ts`・`checkout.spec.ts`・`invoice.spec.ts`用） |
+| `tests/e2e/global.setup.ts`                                  | Clerk テスト環境のセットアップ                                                                                                                |
 
 `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` が未設定の場合、認証済みアクセス・ログインのテストは自動的にスキップされる。`E2E_USER_EMAIL` は Clerk のテスト用メール規約（`+clerk_test` を含むアドレス）で作成すること。
 

@@ -70,10 +70,11 @@ tests/e2e/
     └── invoice.spec.ts              # 新規。User Story 2（要相談商品の見積依頼）
 
 tests/integration/webhooks/
-└── stripe-checkout-webhook.test.ts  # 新規。User Story 1（Webhook受信→注文paid化の統合テスト）
+├── stripe-checkout-webhook.test.ts  # 新規。User Story 1（Webhook受信→注文paid化の統合テスト）
+└── stripe-invoice-webhook.test.ts   # 新規。User Story 2（invoice.paid Webhook受信→注文paid化の統合テスト）
 ```
 
-**Structure Decision**: 新規ディレクトリ`tests/e2e/order/`を作り、注文関連のE2Eテストを`auth/`と分離する。招待作成・クリーンアップは既存の`tests/e2e/helpers/clerk-test-invitation.ts`をそのまま再利用し、新規ヘルパーは作らない（住所の事前準備・注文ステータスの検証はSupabaseクライアントを各specファイル内で直接使う。既存の`tests/e2e/auth/onboarding.spec.ts`・統合テスト群と同じパターン）。Stripe決済確定Webhookの検証は`tests/integration/webhooks/`という新規ディレクトリに分離する（E2Eではなく統合テストのため）。
+**Structure Decision**: 新規ディレクトリ`tests/e2e/order/`を作り、注文関連のE2Eテストを`auth/`と分離する。招待作成・クリーンアップは既存の`tests/e2e/helpers/clerk-test-invitation.ts`をそのまま再利用し、新規ヘルパーは作らない（住所の事前準備・注文ステータスの検証はSupabaseクライアントを各specファイル内で直接使う。既存の`tests/e2e/auth/onboarding.spec.ts`・統合テスト群と同じパターン）。Stripe決済確定Webhookの検証は`tests/integration/webhooks/`という新規ディレクトリに分離する（E2Eではなく統合テストのため）。invoiceフローの決済確定Webhook（`invoice.paid`）も同じ理由・同じディレクトリで検証する。
 
 ## Complexity Tracking
 

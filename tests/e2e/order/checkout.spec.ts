@@ -1,9 +1,8 @@
-import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { test, expect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import {
-  createTestInvitation,
   cleanupTestUser,
+  signUpAndCompleteOnboarding,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_EMAIL = "info+clerk_test_checkout@wknd-studio.com";
@@ -14,59 +13,6 @@ function supabaseAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-/**
- * Stripeのホスト画面（Checkout）は自動テストを防ぐボット検知の対象であり、
- * 実際のカード決済操作だけは自動化できない（research.md参照）。
- * それ以外の画面操作（プラン選択画面での「このプランで始める」クリックまで）は
- * Stripeに一切触れないため、実際にブラウザ操作でシミュレートする
- * （`registration.spec.ts`と同じ導線）。これにより`selectPlan`サーバー
- * アクションが実行され、実際の`auth()`が返す正しいclerk_user_idで
- * usersテーブルの行が作成される（この時点ではonboarding_completed: false）。
- * 本テストの前提として必要な「決済完了・オンボーディング完了済み」の状態だけを、
- * その行をSupabase経由で更新することで作る（Stripeでの実決済はしない）。
- *
- * 以前はこの行自体をテスト側で直接insertし、clerk_user_idをClerkの検索APIや
- * セッションCookieから自前で取得していたが、CI環境でのみ実際にログイン中の
- * セッションと一致しない場合があり不具合の原因になっていた。実際の画面操作で
- * アプリ本体にclerk_user_idを解決させる方式であれば、この種の不一致は起こり得ない。
- */
-async function registerAndMarkOnboarded(page: Page): Promise<void> {
-  await setupClerkTestingToken({ page });
-
-  const invitationUrl = await createTestInvitation(TEST_EMAIL);
-  await page.goto(invitationUrl);
-
-  await expect(page.getByRole("heading", { name: "利用規約" })).toBeVisible();
-  await page.getByLabel("利用規約に同意する").check();
-  await page.getByRole("button", { name: "同意してアカウントを作成" }).click();
-
-  await expect(page).toHaveURL(/\/sign-up/);
-  await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
-  await page.getByRole("button", { name: "Continue" }).click();
-
-  await expect(page).toHaveURL(/\/onboarding\/plan/);
-  await page.getByRole("radio", { name: /STARTER/ }).check();
-  await page.getByRole("button", { name: /このプランで始める/ }).click();
-
-  // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
-  // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
-  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
-  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
-
-  const { error } = await supabaseAdmin()
-    .from("users")
-    .update({
-      onboarding_completed: true,
-      subscribed_at: new Date().toISOString(),
-    })
-    .eq("email", TEST_EMAIL);
-  if (error) {
-    throw new Error(`テスト用会員行の更新に失敗しました: ${error.message}`);
-  }
-
-  await page.goto("/shop");
 }
 
 async function addFirstProductToCart(page: Page): Promise<void> {
@@ -119,7 +65,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
   test("登録済み住所がない会員が新規入力した住所で注文を確定すると、Stripe Checkout画面へ遷移する", async ({
     page,
   }) => {
-    await registerAndMarkOnboarded(page);
+    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
     await addFirstProductToCart(page);
 
     await page.goto("/order/checkout");
@@ -136,7 +82,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
   test("登録済み住所がある会員が既存住所を選択して注文を確定すると、Stripe Checkout画面へ遷移する", async ({
     page,
   }) => {
-    await registerAndMarkOnboarded(page);
+    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
 
     const userId = await getTestUserId();
     await supabaseAdmin()
@@ -184,7 +130,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
   test("月次仕入れ上限を超える注文は確定できず、Stripe Checkout画面へ遷移しない", async ({
     page,
   }) => {
-    await registerAndMarkOnboarded(page);
+    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
     const userId = await getTestUserId();
 
     // カート追加時点ではまだ確定済み金額がないため、
