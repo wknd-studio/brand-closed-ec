@@ -78,7 +78,21 @@ jobs:
         with: { version: 2.102.0 }
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - name: Get installed Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright Chromium (ブラウザ本体・OS依存パッケージ両方)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright OS依存パッケージのみ（ブラウザ本体はキャッシュ済み）
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
       - name: Install Stripe CLI
         run: npm install -g @stripe/cli
       - name: Start local Supabase
@@ -119,6 +133,16 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     environment: staging
+    # developへの複数マージがほぼ同時に発生すると、stgデプロイとE2E検証が
+    # 同時に走り、共有のClerkテストインスタンスへの同時アクセスでレート制限
+    # （ボット検知）にかかりE2Eが不安定に失敗する事象が実際に発生した。
+    # deploy-stgとe2e（stg検証）を同じグループにして直列化し、各pushの
+    # デプロイ→検証が完全に終わってから次のpushの分を開始する。古い方を
+    # キャンセルすると中途半端な状態でデプロイが止まる恐れがあるため
+    # cancel-in-progressは使わずキューイングする
+    concurrency:
+      group: stg-deploy-and-verify
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -178,6 +202,12 @@ jobs:
     needs: [deploy-stg]
     if: github.ref == 'refs/heads/develop'
     environment: staging
+    # deploy-stgと同じグループで直列化する（上のdeploy-stgのコメント参照）。
+    # 同じグループ名にすることで、deploy-stg→e2eの一連の流れ全体が
+    # 他のpushの分と重ならないようにする
+    concurrency:
+      group: stg-deploy-and-verify
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -185,7 +215,21 @@ jobs:
         with: { node-version: "22", cache: "pnpm" }
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - name: Get installed Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright Chromium (ブラウザ本体・OS依存パッケージ両方)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright OS依存パッケージのみ（ブラウザ本体はキャッシュ済み）
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
       - name: Wait for stg to be ready
         run: |
           doppler run -- sh -c '
