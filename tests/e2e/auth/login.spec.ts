@@ -1,40 +1,37 @@
 import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { test, expect } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
+import {
+  signUpViaInvitation,
+  cleanupTestUser,
+} from "../helpers/clerk-test-invitation";
 
-function supabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+const TEST_EMAIL = "info+clerk_test_login@wknd-studio.com";
+const TEST_PASSWORD = "TestPassw0rd!12345";
 
-async function getClerkUserId(email: string): Promise<string> {
-  const res = await fetch(
-    `https://api.clerk.com/v1/users?email_address=${encodeURIComponent(email)}`,
-    { headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` } }
-  );
-  const users = await res.json();
-  return users[0].id;
-}
-
-test.describe("実際のログイン画面を経由したログイン（未知デバイスの確認コード込み）", () => {
-  test.skip(
-    !process.env.E2E_USER_EMAIL || !process.env.E2E_USER_PASSWORD,
-    "E2E_USER_EMAIL / E2E_USER_PASSWORD が未設定のためスキップ"
-  );
-
-  let clerkUserId: string;
-
-  test.beforeAll(async () => {
-    clerkUserId = await getClerkUserId(process.env.E2E_USER_EMAIL!);
+/**
+ * 招待経由で毎回一意な新規アカウントを作成する（以前は環境変数
+ * E2E_USER_EMAIL で指定した固定の共有アカウントを使い回しており、
+ * onboarding.spec.tsと同じアカウントを操作するため互いのafterEachが
+ * 相手のSupabase行を削除し合う競合が発生していた）。
+ *
+ * アカウント作成自体は使い捨ての別ブラウザコンテキストで行う。
+ * 各テストの既定の`page`（Playwrightが用意する新規コンテキスト）で
+ * ログインし直すことで、Clerkから見て「見覚えのないデバイス」からの
+ * サインインとなり、本テストの主題である未知デバイス確認コードの
+ * フローが正しく発生する（作成に使ったコンテキストのままログインすると
+ * 同一デバイスとみなされ確認コードが要求されない可能性があるため）。
+ */
+test.describe
+  .serial("実際のログイン画面を経由したログイン（未知デバイスの確認コード込み）", () => {
+  test.beforeAll(async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await signUpViaInvitation(page, TEST_EMAIL, TEST_PASSWORD);
+    await context.close();
   });
 
-  test.afterEach(async () => {
-    await supabaseAdmin()
-      .from("users")
-      .delete()
-      .eq("clerk_user_id", clerkUserId);
+  test.afterAll(async () => {
+    await cleanupTestUser(TEST_EMAIL);
   });
 
   test("メールアドレス・パスワード入力後、確認コードを入力するとログインが完了する", async ({
@@ -43,12 +40,10 @@ test.describe("実際のログイン画面を経由したログイン（未知�
     await setupClerkTestingToken({ page });
 
     await page.goto("/sign-in");
-    await page.getByLabel("Email address").fill(process.env.E2E_USER_EMAIL!);
+    await page.getByLabel("Email address").fill(TEST_EMAIL);
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await page
-      .getByLabel("Password", { exact: true })
-      .fill(process.env.E2E_USER_PASSWORD!);
+    await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await page.getByRole("button", { name: "Continue" }).click();
 
     await expect(page).toHaveURL(/\/sign-in\/factor-two/);
@@ -68,12 +63,10 @@ test.describe("実際のログイン画面を経由したログイン（未知�
     await setupClerkTestingToken({ page });
 
     await page.goto("/sign-in");
-    await page.getByLabel("Email address").fill(process.env.E2E_USER_EMAIL!);
+    await page.getByLabel("Email address").fill(TEST_EMAIL);
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await page
-      .getByLabel("Password", { exact: true })
-      .fill(process.env.E2E_USER_PASSWORD!);
+    await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await page.getByRole("button", { name: "Continue" }).click();
 
     await expect(page).toHaveURL(/\/sign-in\/factor-two/);
