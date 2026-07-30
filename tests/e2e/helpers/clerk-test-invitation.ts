@@ -1,5 +1,7 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
+import { setupClerkTestingToken } from "@clerk/testing/playwright";
+import { expect, type Page } from "@playwright/test";
 
 function supabaseAdmin() {
   return createClient(
@@ -50,6 +52,32 @@ export async function createTestInvitation(emailAddress: string) {
   }
 
   return invitation.url;
+}
+
+/**
+ * 招待受諾→利用規約同意→パスワード設定までの、実際の画面操作を伴う
+ * 新規会員登録フロー（`registration.spec.ts`等で重複していた処理を共通化）。
+ * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/plan）の状態になる。
+ */
+export async function signUpViaInvitation(
+  page: Page,
+  emailAddress: string,
+  password: string
+): Promise<void> {
+  await setupClerkTestingToken({ page });
+
+  const invitationUrl = await createTestInvitation(emailAddress);
+  await page.goto(invitationUrl);
+
+  await expect(page.getByRole("heading", { name: "利用規約" })).toBeVisible();
+  await page.getByLabel("利用規約に同意する").check();
+  await page.getByRole("button", { name: "同意してアカウントを作成" }).click();
+
+  await expect(page).toHaveURL(/\/sign-up/);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page).toHaveURL(/\/onboarding\/plan/);
 }
 
 export async function cleanupTestUser(emailAddress: string) {
