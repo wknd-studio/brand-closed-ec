@@ -50,6 +50,14 @@
 4. Supabaseへの直接照会で、注文が`invoice`フロー・`confirming`ステータスで作成されていることを確認する
 5. 事後処理でテスト専用のSanity商品・ブランド、Clerkユーザー、Supabaseレコードを削除する
 
+### シナリオ4b: Stripe請求書決済確定Webhookの処理（統合テスト）
+
+1. `issueInvoice`ユースケース経由で実際の注文（`invoice_sent`状態、`stripeInvoiceId`あり）を作成する（運営者による請求書発行操作自体はBRAND-137で別スコープのため、ここでは前提条件としてユースケースを直接呼ぶ）
+2. Stripe公式のテスト用ヘルパー`stripe.webhooks.generateTestHeaderString({ payload, secret })`で、その注文の`stripeInvoiceId`を含む`invoice.paid`イベントに正しい署名を付与する
+3. `/api/webhooks/stripe`のRoute Handler（`POST`関数）を直接呼び出し、署名付きイベントを送信する
+4. Supabaseへの直接照会で、対象注文のステータスが`paid`になることを確認する
+5. 事後処理でテストデータを削除する
+
 ## 実行コマンド
 
 ```bash
@@ -58,4 +66,5 @@ pnpm tsx scripts/seed-products.ts
 pnpm test:e2e tests/e2e/order/checkout.spec.ts tests/e2e/order/invoice.spec.ts
 pnpm test:e2e:ui   # ブラウザの動きを見ながら確認する場合
 pnpm test:integration tests/integration/webhooks/stripe-checkout-webhook.test.ts
+pnpm test:integration tests/integration/webhooks/stripe-invoice-webhook.test.ts
 ```

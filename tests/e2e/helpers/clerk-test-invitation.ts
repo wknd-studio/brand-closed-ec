@@ -80,6 +80,43 @@ export async function signUpViaInvitation(
   await expect(page).toHaveURL(/\/onboarding\/plan/);
 }
 
+/**
+ * `signUpViaInvitation`に加え、プラン選択画面で実際にSTARTERプランを
+ * 選択して`selectPlan`サーバーアクションを実行させ（実際のauth()が返す
+ * 正しいclerk_user_idでusersテーブルの行が作成される）、Stripeでの
+ * 実決済は行わず本テストの前提として必要な「決済完了・オンボーディング
+ * 完了済み」の状態だけをSupabase経由で作る（`checkout.spec.ts`・
+ * `invoice.spec.ts`で重複していた処理を共通化）。
+ */
+export async function signUpAndCompleteOnboarding(
+  page: Page,
+  emailAddress: string,
+  password: string
+): Promise<void> {
+  await signUpViaInvitation(page, emailAddress, password);
+
+  await page.getByRole("radio", { name: /STARTER/ }).check();
+  await page.getByRole("button", { name: /このプランで始める/ }).click();
+
+  // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
+  // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
+  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
+  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
+
+  const { error } = await supabaseAdmin()
+    .from("users")
+    .update({
+      onboarding_completed: true,
+      subscribed_at: new Date().toISOString(),
+    })
+    .eq("email", emailAddress);
+  if (error) {
+    throw new Error(`テスト用会員行の更新に失敗しました: ${error.message}`);
+  }
+
+  await page.goto("/shop");
+}
+
 export async function cleanupTestUser(emailAddress: string) {
   // ClerkのFAPI/Backend APIがこの実行環境で断続的に失敗することがあり、
   // ここで例外が伝播すると後続のSupabase側の削除が一切実行されず
