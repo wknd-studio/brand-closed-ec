@@ -104,6 +104,10 @@ export async function applyImport(
       brand: { _type: "reference" as const, _ref: brandId },
       retail_price: record.retailPrice,
       is_negotiable: false,
+      // schemaのinitialValueはStudioのフォーム入力時のみ適用され、client.create()に
+      // よるAPI経由の書き込みには効かないため、ここで明示的に既定値を設定する。
+      // 未設定のままだとインポート後に商品ごとの手動設定が必要になり運用負荷が高い
+      payment_timing: "at_order" as const,
       prices,
       min_rank: record.minRank ?? "starter",
       availability: record.availability,

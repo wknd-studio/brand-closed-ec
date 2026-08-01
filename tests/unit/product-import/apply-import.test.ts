@@ -101,6 +101,28 @@ describe("applyImport", () => {
     expect(productDoc.brand._ref).toBe("brand-1");
   });
 
+  it("インポートで作成した商品は支払いタイミングを先払い(at_order)で初期設定する", async () => {
+    // schemaのinitialValueはStudioのフォーム入力時のみ適用され、client.create()による
+    // API経由の書き込みには効かないため、ここで明示的に設定しないと全件が
+    // 支払いタイミング未設定になり、インポート後に商品ごとの手動設定が必要になってしまう
+    const { client, created } = createFakeClient();
+
+    await applyImport({
+      client,
+      catalogId: "catalog-1",
+      triggeredBy: "manual_csv",
+      startedAt: new Date(),
+      outcome: "completed",
+      validRecords: [record()],
+      failureCount: 0,
+    });
+
+    const productDoc = created.find((d) => d._type === "product") as {
+      payment_timing: string;
+    };
+    expect(productDoc.payment_timing).toBe("at_order");
+  });
+
   it("既存商品とJANコードが一致すれば新規作成せず更新する", async () => {
     const { client, patched, created } = createFakeClient({
       existingProducts: [
