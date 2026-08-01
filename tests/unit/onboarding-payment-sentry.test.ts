@@ -10,7 +10,9 @@ vi.mock("@clerk/nextjs/server", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  redirect: vi.fn(),
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
 }));
 
 const createCheckoutSessionMock = vi.fn();
@@ -25,6 +27,7 @@ vi.mock("@/lib/stripe", () => ({
 
 import * as Sentry from "@sentry/nextjs";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import OnboardingPaymentPage from "@/app/onboarding/payment/page";
 
 describe("OnboardingPaymentPage - Sentry例外送信", () => {
@@ -50,5 +53,25 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
         tags: expect.objectContaining({ page: "onboarding-payment" }),
       })
     );
+  });
+
+  it("currentUser()が404で失敗した場合、Sentryに送信した上で/sign-inへリダイレクトする（有効なセッションだがClerk上のUserが見つからないケース）", async () => {
+    const error = new Error("ClerkAPIResponseError: Not Found");
+    vi.mocked(currentUser).mockRejectedValue(error);
+
+    await expect(
+      OnboardingPaymentPage({
+        searchParams: Promise.resolve({ plan: "starter" }),
+      })
+    ).rejects.toThrow("NEXT_REDIRECT:/sign-in");
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        tags: expect.objectContaining({ page: "onboarding-payment" }),
+      })
+    );
+    expect(redirect).toHaveBeenCalledWith("/sign-in");
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 });

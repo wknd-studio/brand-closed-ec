@@ -22,7 +22,18 @@ export default async function OnboardingPaymentPage({
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const user = await currentUser();
+  let user;
+  try {
+    user = await currentUser();
+  } catch (err) {
+    // 有効なセッション（JWT）は残っているが、Clerk上のUser自体が
+    // 既に削除されているケース（退会直後の古いタブ等）。
+    Sentry.captureException(err, {
+      tags: { page: "onboarding-payment" },
+      extra: { clerkUserId: userId },
+    });
+    redirect("/sign-in");
+  }
   const email = user?.emailAddresses[0]?.emailAddress;
 
   let session;
