@@ -10,7 +10,13 @@ const REQUIRED_PRICE_RANKS = PRICING_RANK_OPTIONS.map((option) => option.value);
 
 export function validatePrices(
   prices: Partial<Record<string, number>> | undefined,
-  document: { is_negotiable?: boolean } | undefined
+  document:
+    | {
+        is_negotiable?: boolean;
+        retail_price?: number;
+        vendor_cost_rate?: number;
+      }
+    | undefined
 ): string | true {
   if (document?.is_negotiable) return true;
   if (!prices) return "固定価格商品にはランク別価格の設定が必要です";
@@ -20,6 +26,19 @@ export function validatePrices(
   );
   if (missingRanks.length > 0) {
     return `固定価格商品は以下のランクの価格が未入力です: ${missingRanks.join(", ")}`;
+  }
+
+  // 仕入れ掛け率（vendor_cost_rate）を下回るランク価格は赤字になるため保存をブロックする
+  // （specs/004-product-data-import。業者提示の掛け率は会員向け価格には自動反映せず、
+  // この下限チェックにのみ使う）
+  if (document?.vendor_cost_rate != null && document?.retail_price != null) {
+    const costFloor = (document.retail_price * document.vendor_cost_rate) / 100;
+    const belowCostRanks = REQUIRED_PRICE_RANKS.filter(
+      (rank) => (prices[rank] ?? 0) < costFloor
+    );
+    if (belowCostRanks.length > 0) {
+      return `仕入れ掛け率（${document.vendor_cost_rate}%、仕入れ値${Math.round(costFloor)}円）を下回るランクがあります: ${belowCostRanks.join(", ")}`;
+    }
   }
 
   return true;
@@ -147,7 +166,13 @@ export const product = defineType({
         r.custom((prices, { document }) =>
           validatePrices(
             prices as Partial<Record<string, number>> | undefined,
-            document as { is_negotiable?: boolean } | undefined
+            document as
+              | {
+                  is_negotiable?: boolean;
+                  retail_price?: number;
+                  vendor_cost_rate?: number;
+                }
+              | undefined
           )
         ),
       components: { input: ProductPricesDisplay },
@@ -188,6 +213,23 @@ export const product = defineType({
       description: "業者商品データインポートで作成・更新された場合の取得元業者",
       type: "reference",
       to: [{ type: "vendor" }],
+    }),
+    defineField({
+      name: "vendor_cost_rate",
+      title: "仕入れ掛け率（%）※運営者専用",
+      description:
+        "業者から提示された、定価に対する仕入れ支払い比率（例: 60なら定価の60%で仕入れ）。" +
+        "会員向けのランク別価格計算には使わず、赤字価格になっていないかのチェック（下限）にのみ使う。" +
+        "会員向け画面には表示されない",
+      type: "number",
+      validation: (r) => r.min(0).max(100),
+    }),
+    defineField({
+      name: "case_quantity",
+      title: "入数",
+      description: "1梱包あたりの数量。任意項目",
+      type: "number",
+      validation: (r) => r.min(1),
     }),
   ],
   preview: {

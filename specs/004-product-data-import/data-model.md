@@ -6,12 +6,16 @@
 
 既存フィールド（`name`, `brand`, `retail_price`, `price_rates`, `prices`, `min_rank`, `availability`等）に加え、以下を追加する。
 
-| フィールド      | 型                  | 必須 | 説明                                                                                |
-| --------------- | ------------------- | ---- | ----------------------------------------------------------------------------------- |
-| `jan_code`      | string              | 任意 | JANコード。重複判定（FR-004）の優先キー。業者によっては提供されないため必須にしない |
-| `source_vendor` | reference(`vendor`) | 任意 | この商品データの取得元業者。手動でSanity Studio上から直接作成された商品は空でもよい |
+| フィールド         | 型                  | 必須 | 説明                                                                                                                                                                           |
+| ------------------ | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `jan_code`         | string              | 任意 | JANコード。重複判定（FR-004）の優先キー。業者によっては提供されないため必須にしない                                                                                            |
+| `source_vendor`    | reference(`vendor`) | 任意 | この商品データの取得元業者。手動でSanity Studio上から直接作成された商品は空でもよい                                                                                            |
+| `vendor_cost_rate` | number（0〜100）    | 任意 | 業者提示の仕入れ掛け率（定価に対する仕入れ支払い比率）。運営者専用の参照情報で、会員向けランク価格の自動計算には使わない（FR-024）。`prices`の下限チェックにのみ使う（FR-025） |
+| `case_quantity`    | number              | 任意 | 入数（1梱包あたりの数量）。価格計算には関与しない、単なる商品情報（FR-026）                                                                                                    |
 
 `availability`の既存の値（`available` / `out_of_stock` / `discontinued`）はそのまま使う。情報源から消えた商品を即座に`discontinued`にはしない（FR-014）ため、値自体の追加は不要で、代わりに`ProductAvailabilityReview`（後述）で保留状態を表現する。
+
+**`prices`のバリデーション拡張**: 既存の`validatePrices`（`src/sanity/schemas/product.ts`）に、`vendor_cost_rate`が設定されている場合の下限チェックを追加する。`retail_price × vendor_cost_rate / 100`（仕入れ値）を下回るランクが1つでもあれば保存をエラーとしてブロックする（FR-025）。このチェックはSanity StudioでのUI編集だけでなく、`apply-import.ts`がAPI経由で書き込む際にも同じ関数（`validatePrices`）を呼び出して適用する（Sanityのフィールドバリデーションはスキーマ経由のAPI書き込みには効かないため）。
 
 ## 新規エンティティ
 
@@ -19,14 +23,15 @@
 
 商品データソースとなる業者（spec.md Key Entity「商品データソース（業者）」に対応）。
 
-| フィールド           | 型                                            | 必須 | 説明                                                                    |
-| -------------------- | --------------------------------------------- | ---- | ----------------------------------------------------------------------- |
-| `name`               | string                                        | 必須 | 業者名                                                                  |
-| `data_source_type`   | string（`"csv"` \| `"scraping"`）             | 必須 | CSV提供業者か、スクレイピング対象業者かの区分（FR-001 / FR-008の分岐）  |
-| `is_contracted`      | boolean                                       | 必須 | 取引契約の有無。`false`の業者は自動収集の対象にしない（FR-009のガード） |
-| `csv_column_mapping` | object（任意, `data_source_type=csv`時）      | 任意 | 業者のCSV列名 → 統一データ形式フィールドのマッピング定義                |
-| `scrape_target_url`  | url（任意, `data_source_type=scraping`時）    | 任意 | スクレイピング対象のトップページ等                                      |
-| `scrape_adapter_id`  | string（任意, `data_source_type=scraping`時） | 任意 | `scripts/product-import/vendors/<vendor-id>/`に対応するアダプター識別子 |
+| フィールド           | 型                                            | 必須 | 説明                                                                                                                    |
+| -------------------- | --------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| `name`               | string                                        | 必須 | 業者名                                                                                                                  |
+| `data_source_type`   | string（`"csv"` \| `"scraping"`）             | 必須 | CSV提供業者か、スクレイピング対象業者かの区分（FR-001 / FR-008の分岐）                                                  |
+| `is_contracted`      | boolean                                       | 必須 | 取引契約の有無。`false`の業者は自動収集の対象にしない（FR-009のガード）                                                 |
+| `default_brand`      | reference(`brand`)                            | 任意 | CSVにブランド列が無い業者向けの固定ブランド。CSV側にブランド列があればそちらを優先（FR-027）                            |
+| `csv_column_mapping` | object（任意, `data_source_type=csv`時）      | 任意 | 業者のCSV列名 → 統一データ形式フィールドのマッピング定義（JAN・商品名・ブランド名・定価・在庫状況・仕入れ掛け率・入数） |
+| `scrape_target_url`  | url（任意, `data_source_type=scraping`時）    | 任意 | スクレイピング対象のトップページ等                                                                                      |
+| `scrape_adapter_id`  | string（任意, `data_source_type=scraping`時） | 任意 | `scripts/product-import/vendors/<vendor-id>/`に対応するアダプター識別子                                                 |
 
 ### ProductImportRun（`src/sanity/schemas/product-import-run.ts`）
 
