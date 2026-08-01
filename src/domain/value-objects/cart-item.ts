@@ -6,6 +6,7 @@ interface CartItemProps {
   quantity: number;
   unitPrice: Money;
   isNegotiable: boolean;
+  paymentTiming: "at_order" | "after_order";
 }
 
 export class CartItem {
@@ -14,6 +15,7 @@ export class CartItem {
   readonly quantity: number;
   readonly unitPrice: Money;
   readonly isNegotiable: boolean;
+  readonly paymentTiming: "at_order" | "after_order";
 
   private constructor(props: CartItemProps) {
     this.sanityProductId = props.sanityProductId;
@@ -21,6 +23,7 @@ export class CartItem {
     this.quantity = props.quantity;
     this.unitPrice = props.unitPrice;
     this.isNegotiable = props.isNegotiable;
+    this.paymentTiming = props.paymentTiming;
   }
 
   static of(props: CartItemProps): CartItem {
@@ -45,6 +48,7 @@ export class CartItem {
       quantity: this.quantity,
       unitPrice: this.unitPrice,
       isNegotiable: this.isNegotiable,
+      paymentTiming: this.paymentTiming,
     };
   }
 }

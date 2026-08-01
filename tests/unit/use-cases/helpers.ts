@@ -118,6 +118,7 @@ export const fixedProduct: ProductSnapshot = {
   unitPrice: Money.of(100_000),
   isNegotiable: false,
   minRank: "starter",
+  paymentTiming: "at_order",
 };
 
 export const negotiableProduct: ProductSnapshot = {
@@ -126,6 +127,16 @@ export const negotiableProduct: ProductSnapshot = {
   unitPrice: Money.zero(),
   isNegotiable: true,
   minRank: "starter",
+  paymentTiming: "after_order",
+};
+
+export const afterOrderFixedProduct: ProductSnapshot = {
+  sanityProductId: "prod-3",
+  productName: "後払い固定商品",
+  unitPrice: Money.of(50_000),
+  isNegotiable: false,
+  minRank: "starter",
+  paymentTiming: "after_order",
 };
 
 export function makeUserRepo(user = makeUser()): UserRepository {

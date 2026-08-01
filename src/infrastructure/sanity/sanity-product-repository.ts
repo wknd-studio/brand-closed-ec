@@ -13,6 +13,10 @@ type SanityProduct = {
   is_negotiable: boolean;
   prices: Partial<Record<MemberRankValue, number>> | null;
   min_rank: string;
+  // 本機能追加前に作成された既存商品ドキュメントにはフィールド自体が存在しないため
+  // null/undefinedが返り得る（Sanity StudioのinitialValueは新規作成時のみ適用され、
+  // 既存ドキュメントには遡及しないため）
+  payment_timing: "at_order" | "after_order" | null | undefined;
 };
 
 export class SanityProductRepository implements ProductRepository {
@@ -23,7 +27,7 @@ export class SanityProductRepository implements ProductRepository {
     if (ids.length === 0) return [];
 
     const products = await sanityClient.fetch<SanityProduct[]>(
-      `*[_type=="product"&&_id in $ids]{_id,name,is_negotiable,prices,min_rank}`,
+      `*[_type=="product"&&_id in $ids]{_id,name,is_negotiable,prices,min_rank,payment_timing}`,
       { ids }
     );
 
@@ -38,6 +42,8 @@ export class SanityProductRepository implements ProductRepository {
         unitPrice: Money.of(unitPrice),
         isNegotiable: p.is_negotiable,
         minRank: p.min_rank as MemberRankValue,
+        // 後方互換: payment_timing未設定の既存商品はat_order（従来のcheckoutフロー相当）として扱う
+        paymentTiming: p.payment_timing ?? "at_order",
       };
     });
   }

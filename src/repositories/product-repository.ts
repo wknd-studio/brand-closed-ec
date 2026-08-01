@@ -7,6 +7,7 @@ export interface ProductSnapshot {
   unitPrice: Money;
   isNegotiable: boolean;
   minRank: MemberRankValue;
+  paymentTiming: "at_order" | "after_order";
 }
 
 export interface ProductRepository {

@@ -1,5 +1,5 @@
 import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
-import { selectOrderFlow } from "@/domain/services/order-flow-selector";
+import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -9,7 +9,10 @@ import { OrderItem } from "@/domain/entities/order-item";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
-import type { ProductRepository } from "@/repositories/product-repository";
+import type {
+  ProductRepository,
+  ProductSnapshot,
+} from "@/repositories/product-repository";
 import type {
   PaymentGateway,
   CheckoutLineItem,
@@ -68,6 +71,8 @@ export async function placeOrder(
     }
   }
 
+  // paymentTimingの分割判定は必ずサーバー側で取得したProductSnapshotの値のみを根拠にする。
+  // クライアント入力（cartItems）にpaymentTimingが含まれていても一切参照しない（研究文書 決定9）
   const cartItems = input.cartItems.map((c) => {
     const product = products.find(
       (p) => p.sanityProductId === c.sanityProductId
@@ -80,6 +85,7 @@ export async function placeOrder(
         ? Money.zero()
         : (product?.unitPrice ?? Money.zero()),
       isNegotiable: product?.isNegotiable ?? false,
+      paymentTiming: product?.paymentTiming ?? "at_order",
     });
   });
 
@@ -88,9 +94,13 @@ export async function placeOrder(
     user.id,
     period
   );
+  // 月次上限チェックは分割前のカート合計に対して1回だけ判定する（超過時はCheckout・Invoice両方をブロック）
   checkMonthlyLimit(user, cartItems, Money.of(confirmedAmount));
 
-  const paymentFlow = selectOrderFlow(cartItems);
+  const { atOrderItems, afterOrderItems } = splitCartByPaymentTiming(cartItems);
+  if (atOrderItems.length === 0 && afterOrderItems.length === 0) {
+    throw new Error("カートに商品がありません");
+  }
 
   const [shippingAddress, billingAddress] = await Promise.all([
     addressRepo.findById(input.shippingAddressId),
@@ -99,70 +109,120 @@ export async function placeOrder(
   if (!shippingAddress || !billingAddress)
     throw new Error("住所が見つかりません");
 
-  const orderId = crypto.randomUUID();
-  const initialStatus = OrderStatus.of(
-    paymentFlow === "checkout" ? "pending_payment" : "confirming"
-  );
-
-  const orderItems = input.cartItems.map((c) => {
-    const product = products.find(
-      (p) => p.sanityProductId === c.sanityProductId
+  const toOrderItems = (items: CartItem[]): OrderItem[] =>
+    items.map((c) =>
+      OrderItem.of({
+        id: crypto.randomUUID(),
+        sanityProductId: c.sanityProductId,
+        productNameSnapshot: c.productName,
+        unitPriceSnapshot: c.unitPrice,
+        quantity: c.quantity,
+        isNegotiable: c.isNegotiable,
+        negotiatedUnitPrice: null,
+      })
     );
-    return OrderItem.of({
+
+  const isSplit = atOrderItems.length > 0 && afterOrderItems.length > 0;
+  const splitGroupId = isSplit ? crypto.randomUUID() : null;
+
+  const buildOrder = (
+    paymentFlow: "checkout" | "invoice",
+    items: OrderItem[]
+  ): Order =>
+    Order.of({
       id: crypto.randomUUID(),
-      sanityProductId: c.sanityProductId,
-      productNameSnapshot: product?.productName ?? c.productName,
-      unitPriceSnapshot: product?.isNegotiable
-        ? Money.zero()
-        : (product?.unitPrice ?? Money.zero()),
-      quantity: c.quantity,
-      isNegotiable: product?.isNegotiable ?? false,
-      negotiatedUnitPrice: null,
+      userId: user.id,
+      paymentFlow,
+      status: OrderStatus.of(
+        paymentFlow === "checkout" ? "pending_payment" : "confirming"
+      ),
+      shippingAddress: shippingAddress.toSnapshot(),
+      billingAddress: billingAddress.toSnapshot(),
+      rankAtOrder: user.rank,
+      monthlyLimitAtOrder: user.getMonthlyLimit(),
+      stripeCheckoutSessionId: null,
+      stripeInvoiceId: null,
+      splitGroupId,
+      items,
+      createdAt: new Date(),
     });
-  });
 
-  const order = Order.of({
-    id: orderId,
-    userId: user.id,
-    paymentFlow,
-    status: initialStatus,
-    shippingAddress: shippingAddress.toSnapshot(),
-    billingAddress: billingAddress.toSnapshot(),
-    rankAtOrder: user.rank,
-    monthlyLimitAtOrder: user.getMonthlyLimit(),
-    stripeCheckoutSessionId: null,
-    stripeInvoiceId: null,
-    splitGroupId: null, // TODO(T018): 分割チェックアウト実装時に設定する
-    items: orderItems,
-    createdAt: new Date(),
-  });
+  const checkoutOrder =
+    atOrderItems.length > 0
+      ? buildOrder("checkout", toOrderItems(atOrderItems))
+      : null;
+  const invoiceOrder =
+    afterOrderItems.length > 0
+      ? buildOrder("invoice", toOrderItems(afterOrderItems))
+      : null;
 
-  await orderRepo.save(order);
+  const ordersToSave = [checkoutOrder, invoiceOrder].filter(
+    (o): o is Order => o !== null
+  );
+  await saveOrdersAtomically(ordersToSave, orderRepo);
 
-  if (paymentFlow === "checkout") {
-    const lineItems: CheckoutLineItem[] = cartItems.map((c) => ({
+  const productsForOrder = (order: Order): ProductSnapshot[] => {
+    const ids = new Set(order.items.map((i) => i.sanityProductId));
+    return products.filter((p) => ids.has(p.sanityProductId));
+  };
+
+  const notifyInvoiceOrder = async (order: Order) => {
+    await Promise.all([
+      notificationService.sendOrderConfirming(
+        order,
+        user,
+        productsForOrder(order)
+      ),
+      notificationService.sendOrderOperatorNotification(
+        order,
+        user.email,
+        productsForOrder(order)
+      ),
+    ]);
+  };
+
+  if (checkoutOrder) {
+    const lineItems: CheckoutLineItem[] = atOrderItems.map((c) => ({
       productName: c.productName,
       unitPrice: c.unitPrice.amount,
       quantity: c.quantity,
     }));
     const session = await paymentGateway.createCheckoutSession(
-      order,
+      checkoutOrder,
       lineItems,
       input.baseUrl
     );
     await orderRepo.save(
-      order.with({ stripeCheckoutSessionId: session.sessionId })
+      checkoutOrder.with({ stripeCheckoutSessionId: session.sessionId })
     );
+
+    if (invoiceOrder) {
+      await notifyInvoiceOrder(invoiceOrder);
+    }
+
     return { redirectUrl: session.url };
-  } else {
-    await Promise.all([
-      notificationService.sendOrderConfirming(order, user, products),
-      notificationService.sendOrderOperatorNotification(
-        order,
-        user.email,
-        products
-      ),
-    ]);
-    return { redirectUrl: `/order/invoice-complete?order_id=${orderId}` };
+  }
+
+  // ここに到達する場合、afterOrderItemsが非空(invoiceOrderが必ず存在)であることが
+  // atOrderItems.length === 0 && afterOrderItems.length === 0 が発生しない前提から保証される
+  await notifyInvoiceOrder(invoiceOrder!);
+  return {
+    redirectUrl: `/order/invoice-complete?order_id=${invoiceOrder!.id}`,
+  };
+}
+
+async function saveOrdersAtomically(
+  orders: Order[],
+  orderRepo: OrderRepository
+): Promise<void> {
+  const saved: Order[] = [];
+  try {
+    for (const order of orders) {
+      await orderRepo.save(order);
+      saved.push(order);
+    }
+  } catch (error) {
+    await Promise.all(saved.map((order) => orderRepo.delete(order.id)));
+    throw error;
   }
 }

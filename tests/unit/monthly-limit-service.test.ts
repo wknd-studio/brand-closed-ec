@@ -29,6 +29,7 @@ function makeFixedItem(amount: number, quantity = 1): CartItem {
     quantity,
     unitPrice: Money.of(amount),
     isNegotiable: false,
+    paymentTiming: "at_order",
   });
 }
 
@@ -39,6 +40,7 @@ function makeNegotiableItem(): CartItem {
     quantity: 1,
     unitPrice: Money.zero(),
     isNegotiable: true,
+    paymentTiming: "after_order",
   });
 }
 
