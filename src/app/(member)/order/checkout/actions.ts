@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { placeOrder as placeOrderUseCase } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
@@ -21,7 +21,7 @@ export async function placeOrder(
   shippingAddressId: string,
   billingAddressId: string
 ): Promise<PlaceOrderResult | never> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   const cookieStore = await cookies();

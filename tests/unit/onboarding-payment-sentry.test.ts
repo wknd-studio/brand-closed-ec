@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
+  setUser: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { PortableText } from "@portabletext/react";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
@@ -21,7 +21,7 @@ export default async function ProductDetailPage({
 }) {
   const { brand: encodedBrand, id } = await params;
   const brand = decodeURIComponent(encodedBrand);
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
 
   const supabase = await createServerClient();
   const userRepo = new SupabaseUserRepository(supabase);
