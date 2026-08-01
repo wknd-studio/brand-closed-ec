@@ -3,6 +3,7 @@ import { placeOrder } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { Money } from "@/domain/value-objects/money";
 import {
+  makeUser,
   makeUserRepo,
   makeOrderRepo,
   makeAddressRepo,
@@ -89,6 +90,48 @@ describe("placeOrder", () => {
     await expect(placeOrder(baseInput, deps)).rejects.toThrow(
       LimitExceededError
     );
+    expect(deps.orderRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("カートに存在しない商品IDが含まれる場合はエラーを投げる（カート改竄対策）", async () => {
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+    };
+
+    await expect(
+      placeOrder(
+        {
+          ...baseInput,
+          cartItems: [
+            {
+              sanityProductId: "prod-does-not-exist",
+              quantity: 1,
+              productName: "偽装商品",
+            },
+          ],
+        },
+        deps
+      )
+    ).rejects.toThrow();
+    expect(deps.orderRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("自分のランクでは閲覧できない商品が含まれる場合はエラーを投げる（カート改竄対策）", async () => {
+    const deps = {
+      userRepo: makeUserRepo(makeUser({ rank: "starter" })),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([{ ...fixedProduct, minRank: "premium" }]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+    };
+
+    await expect(placeOrder(baseInput, deps)).rejects.toThrow();
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
   });
 });

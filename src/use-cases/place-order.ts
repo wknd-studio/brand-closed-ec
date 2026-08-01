@@ -2,6 +2,7 @@ import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { selectOrderFlow } from "@/domain/services/order-flow-selector";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
@@ -54,6 +55,18 @@ export async function placeOrder(
 
   const productIds = input.cartItems.map((c) => c.sanityProductId);
   const products = await productRepo.findByIds(productIds, user.rank.value);
+
+  // カート情報は会員のブラウザ側で保持・改竄されうるため、価格・支払いタイミング等の
+  // 判断材料としては使わず、ここで商品IDごとにサーバー側の商品情報の実在性・アクセス権限を検証する
+  for (const c of input.cartItems) {
+    const product = products.find(
+      (p) => p.sanityProductId === c.sanityProductId
+    );
+    if (!product) throw new Error("商品が見つかりません");
+    if (!user.rank.canAccess(MemberRank.of(product.minRank))) {
+      throw new Error("アクセス権限のない商品が含まれています");
+    }
+  }
 
   const cartItems = input.cartItems.map((c) => {
     const product = products.find(
