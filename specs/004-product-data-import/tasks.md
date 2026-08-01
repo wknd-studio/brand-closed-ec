@@ -31,17 +31,17 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 **⚠️ CRITICAL**: このフェーズが完了するまで、どのUser Storyの実装にも着手できない
 
-- [ ] T003 [P] `config.ts`を実装する（エラー率閾値`IMPORT_ERROR_THRESHOLD_RATIO = 0.3`、定期実行頻度の定数。Constitution原則V「事実の単一情報源化」対応）: `src/lib/product-import/config.ts`
-- [ ] T004 [P] 統一データ形式`UnifiedProductRecord`の型を実装する（contracts/unified-product-schema.md準拠）: `src/lib/product-import/unified-product-schema.ts`
-- [ ] T005 [P] `dedupe.ts`の失敗するユニットテストを書く（JANコード一致を優先、JANコードが無い場合は商品名+ブランドの完全一致でフォールバック、いずれも一致しない場合は新規商品と判定。FR-004/005）: `tests/unit/product-import/dedupe.test.ts`（依存: T004）
-- [ ] T006 [P] `validate-and-preview.ts`の失敗するユニットテストを書く（必須項目欠落・不正な価格・ブランド未解決の行をエラーとする、バッチ内JANコード重複を検知する、エラー行の割合が閾値を超えたら中止と判定する。FR-006, FR-020, Edge Cases）: `tests/unit/product-import/validate-and-preview.test.ts`（依存: T003, T004）
-- [ ] T007 `dedupe.ts`を実装しT005を通す: `src/lib/product-import/dedupe.ts`（依存: T005）
-- [ ] T008 `validate-and-preview.ts`を実装しT006を通す: `src/lib/product-import/validate-and-preview.ts`（依存: T006, T007）
-- [ ] T009 [P] `product`スキーマに`jan_code`（string, 任意）・`source_vendor`（reference→vendor, 任意）フィールドを追加する（FR-003, data-model.md）: `src/sanity/schemas/product.ts`
-- [ ] T010 [P] `vendor`スキーマを新規作成する（`name`, `data_source_type`, `is_contracted`, `csv_column_mapping`, `scrape_target_url`, `scrape_adapter_id`。data-model.md準拠）: `src/sanity/schemas/vendor.ts`
-- [ ] T011 [P] `productImportRun`スキーマを新規作成する（`vendor`, `triggered_by`, `started_at`, `finished_at`, `outcome`, `success_count`, `failure_count`, `needs_review_count`, `error_details`。FR-015, FR-018, FR-023）: `src/sanity/schemas/product-import-run.ts`
-- [ ] T012 新規スキーマ（`vendor`, `productImportRun`）を登録する: `src/sanity/schemas/index.ts`（依存: T009, T010, T011）
-- [ ] T013 `apply-import.ts`を実装する（検証済み`UnifiedProductRecord[]`とdedupe結果を受け取り、Sanityへ`product`の`createOrReplace`と`productImportRun`ドキュメントの作成を行う）: `src/lib/product-import/apply-import.ts`（依存: T007, T008, T012）
+- [x] T003 [P] `config.ts`を実装する（エラー率閾値`IMPORT_ERROR_THRESHOLD_RATIO = 0.3`、定期実行頻度の定数。Constitution原則V「事実の単一情報源化」対応）: `src/lib/product-import/config.ts`
+- [x] T004 [P] 統一データ形式`UnifiedProductRecord`の型を実装する（contracts/unified-product-schema.md準拠）: `src/lib/product-import/unified-product-schema.ts`
+- [x] T005 [P] `dedupe.ts`の失敗するユニットテストを書く（JANコード一致を優先、JANコードが無い場合は商品名+ブランドの完全一致でフォールバック、いずれも一致しない場合は新規商品と判定。FR-004/005）: `tests/unit/product-import/dedupe.test.ts`（依存: T004）
+- [x] T006 [P] `validate-and-preview.ts`の失敗するユニットテストを書く（必須項目欠落・不正な価格・ブランド未解決の行をエラーとする、バッチ内JANコード重複を検知する、エラー行の割合が閾値を超えたら中止と判定する。FR-006, FR-020, Edge Cases）: `tests/unit/product-import/validate-and-preview.test.ts`（依存: T003, T004）
+- [x] T007 `dedupe.ts`を実装しT005を通す: `src/lib/product-import/dedupe.ts`（依存: T005）
+- [x] T008 `validate-and-preview.ts`を実装しT006を通す: `src/lib/product-import/validate-and-preview.ts`（依存: T006, T007）
+- [x] T009 [P] `product`スキーマに`jan_code`（string, 任意）・`source_vendor`（reference→vendor, 任意）フィールドを追加する（FR-003, data-model.md）: `src/sanity/schemas/product.ts`
+- [x] T010 [P] `vendor`スキーマを新規作成する（`name`, `data_source_type`, `is_contracted`, `csv_column_mapping`, `scrape_target_url`, `scrape_adapter_id`。data-model.md準拠）: `src/sanity/schemas/vendor.ts`
+- [x] T011 [P] `productImportRun`スキーマを新規作成する（`vendor`, `triggered_by`, `started_at`, `finished_at`, `outcome`, `success_count`, `failure_count`, `needs_review_count`, `error_details`。FR-015, FR-018, FR-023）: `src/sanity/schemas/product-import-run.ts`
+- [x] T012 新規スキーマ（`vendor`, `productImportRun`）を登録する: `src/sanity/schemas/index.ts`（依存: T009, T010, T011）
+- [x] T013 `apply-import.ts`を実装する（検証済み`UnifiedProductRecord[]`とdedupe結果を受け取り、Sanityへ`product`の`createOrReplace`と`productImportRun`ドキュメントの作成を行う）: `src/lib/product-import/apply-import.ts`（依存: T007, T008, T012）
 
 **チェックポイント**: 共有ロジック・Sanityスキーマ基盤が完成。以降の3つのUser Storyへ並行着手できる
 

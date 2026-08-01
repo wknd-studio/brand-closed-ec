@@ -1,0 +1,166 @@
+import type { SanityClient } from "@sanity/client";
+
+import {
+  computeRankPrices,
+  pickEffectivePriceSettingsRates,
+} from "@/sanity/schemas/product-price-calculator";
+
+import { findMatchingProduct, type ExistingProductRef } from "./dedupe";
+import type { UnifiedProductRecord } from "./unified-product-schema";
+
+type RateMap = Partial<Record<string, number>>;
+
+export interface ApplyImportErrorDetail {
+  target: string;
+  reason: string;
+}
+
+export interface ApplyImportOptions {
+  client: SanityClient;
+  vendorId: string;
+  triggeredBy: "scheduled" | "on_demand" | "manual_csv";
+  startedAt: Date;
+  outcome: "completed" | "aborted_error_threshold" | "failed";
+  validRecords: UnifiedProductRecord[];
+  failureCount: number;
+  needsReviewCount?: number;
+  errorDetails?: ApplyImportErrorDetail[];
+}
+
+export interface ApplyImportResult {
+  createdCount: number;
+  updatedCount: number;
+  importRunId: string;
+}
+
+/**
+ * 検証済みのUnifiedProductRecordをSanityの`product`へcreate/updateし、
+ * `productImportRun`として実行結果を記録する（FR-001, FR-004/005, FR-015, FR-023）。
+ * Sanity Studioカスタムツール（ブラウザの認証済みクライアント）・GitHub Actions上の
+ * スクリプト（Node製クライアント）のどちらから呼ばれても同じロジックで動作する
+ * （research.md #1参照）。
+ */
+export async function applyImport(
+  options: ApplyImportOptions
+): Promise<ApplyImportResult> {
+  const { client, validRecords } = options;
+
+  const [existingProducts, brandContext] = await Promise.all([
+    fetchExistingProducts(client),
+    fetchBrandPricingContext(client),
+  ]);
+
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const record of validRecords) {
+    const brandId = brandContext.brandIdByName[record.brandName];
+    if (!brandId) {
+      // validate-and-preview.tsで既存ブランドとの一致を検証済みのため、
+      // ここに到達する場合はブランドマスタが検証後に変更された等の想定外ケース
+      throw new Error(`ブランドIDが見つかりません: ${record.brandName}`);
+    }
+
+    const effectiveDefaultRates = pickEffectivePriceSettingsRates({
+      ownRates: undefined,
+      brandRates:
+        brandContext.priceSettingsRatesById[
+          brandContext.brandPriceSettingsRefById[brandId] ?? ""
+        ],
+      defaultRates: brandContext.defaultPriceSettingsRates,
+    });
+    const prices = computeRankPrices(
+      record.retailPrice,
+      record.rankPrices ?? {},
+      effectiveDefaultRates
+    );
+
+    const doc = {
+      name: record.name,
+      brand: { _type: "reference" as const, _ref: brandId },
+      retail_price: record.retailPrice,
+      is_negotiable: false,
+      price_rates: record.rankPrices ?? {},
+      prices,
+      min_rank: record.minRank ?? "starter",
+      availability: record.availability,
+      jan_code: record.janCode,
+      source_vendor: { _type: "reference" as const, _ref: options.vendorId },
+    };
+
+    const match = findMatchingProduct(record, existingProducts);
+    if (match.matched) {
+      await client.patch(match.productId).set(doc).commit();
+      updatedCount += 1;
+    } else {
+      await client.create({ _type: "product", ...doc });
+      createdCount += 1;
+    }
+  }
+
+  const importRun = await client.create({
+    _type: "productImportRun",
+    vendor: { _type: "reference", _ref: options.vendorId },
+    triggered_by: options.triggeredBy,
+    started_at: options.startedAt.toISOString(),
+    finished_at: new Date().toISOString(),
+    outcome: options.outcome,
+    success_count: createdCount + updatedCount,
+    failure_count: options.failureCount,
+    needs_review_count: options.needsReviewCount ?? 0,
+    error_details: options.errorDetails ?? [],
+  });
+
+  return { createdCount, updatedCount, importRunId: importRun._id };
+}
+
+async function fetchExistingProducts(
+  client: SanityClient
+): Promise<ExistingProductRef[]> {
+  return client.fetch(
+    `*[_type == "product"]{ _id, "janCode": jan_code, name, "brandName": brand->name }`
+  );
+}
+
+interface BrandPricingContext {
+  brandIdByName: Record<string, string>;
+  brandPriceSettingsRefById: Record<string, string | undefined>;
+  priceSettingsRatesById: Record<string, RateMap>;
+  defaultPriceSettingsRates: RateMap;
+}
+
+async function fetchBrandPricingContext(
+  client: SanityClient
+): Promise<BrandPricingContext> {
+  const [brands, priceSettingsDocs] = await Promise.all([
+    client.fetch<{ _id: string; name: string; priceSettingsRef?: string }[]>(
+      `*[_type == "brand"]{ _id, name, "priceSettingsRef": price_settings._ref }`
+    ),
+    client.fetch<
+      { _id: string; is_default?: boolean; default_rates?: RateMap }[]
+    >(`*[_type == "priceSettings"]{ _id, is_default, default_rates }`),
+  ]);
+
+  const brandIdByName: Record<string, string> = {};
+  const brandPriceSettingsRefById: Record<string, string | undefined> = {};
+  for (const brand of brands) {
+    brandIdByName[brand.name] = brand._id;
+    brandPriceSettingsRefById[brand._id] = brand.priceSettingsRef;
+  }
+
+  const priceSettingsRatesById: Record<string, RateMap> = {};
+  let defaultPriceSettingsRates: RateMap = {};
+  for (const settings of priceSettingsDocs) {
+    priceSettingsRatesById[settings._id] = settings.default_rates ?? {};
+    if (settings.is_default) {
+      defaultPriceSettingsRates = settings.default_rates ?? {};
+    }
+  }
+
+  return {
+    brandIdByName,
+    brandPriceSettingsRefById,
+    priceSettingsRatesById,
+    defaultPriceSettingsRates,
+  };
+}

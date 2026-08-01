@@ -175,6 +175,20 @@ export const product = defineType({
       initialValue: "available",
       validation: (r) => r.required(),
     }),
+    defineField({
+      name: "jan_code",
+      title: "JANコード",
+      description:
+        "業者商品データインポートでの重複判定キー（specs/004-product-data-import）。提供されない業者もあるため任意項目",
+      type: "string",
+    }),
+    defineField({
+      name: "source_vendor",
+      title: "データ取得元業者",
+      description: "業者商品データインポートで作成・更新された場合の取得元業者",
+      type: "reference",
+      to: [{ type: "vendor" }],
+    }),
   ],
   preview: {
     select: {
