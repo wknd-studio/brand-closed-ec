@@ -7,9 +7,10 @@ import { createPlaceholderTextInput } from "./placeholder-text-input";
  * スクレイピングは業者サイトごとにHTML構造が異なり、開発者が専用のコード
  * （scripts/product-import/vendors/<scrape_adapter_id>/scraper.ts）を実装しないと成立しない。
  * そのため、このドキュメントは開発者がコードと一緒に用意することを想定し、
- * Sanity Studio上では運営者が新規作成・削除できないようロックしている
- * （sanity.config.tsのdocument.actions / newDocumentOptions参照）。
- * 運営者は実行結果の確認や、デフォルトブランドの調整程度の関わりに留まる。
+ * Sanity Studio上では文字通りの「定数」として扱う。運営者は新規作成・編集・削除の
+ * いずれもできず、閲覧のみ（sanity.config.tsのdocument.actions / newDocumentOptions
+ * でpublish・delete・duplicate・新規作成をブロックし、加えて全フィールドをreadOnlyにする
+ * 二重の防御）。内容の変更が必要な場合は開発者がコード（シードスクリプト等）で更新する。
  */
 export const scrapingCatalog = defineType({
   name: "scrapingCatalog",
@@ -26,6 +27,7 @@ export const scrapingCatalog = defineType({
         input: createPlaceholderTextInput("例: B社サイト スクレイピング"),
       },
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "default_brand",
@@ -34,6 +36,7 @@ export const scrapingCatalog = defineType({
         "収集したデータにブランドが分かる情報が無い場合に、商品へ設定する既定のブランド",
       type: "reference",
       to: [{ type: "brand" }],
+      readOnly: true,
     }),
     defineField({
       name: "scrape_target_url",
@@ -46,6 +49,7 @@ export const scrapingCatalog = defineType({
         ),
       },
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "scrape_adapter_id",
@@ -57,6 +61,7 @@ export const scrapingCatalog = defineType({
         input: createPlaceholderTextInput("例: vendor-example"),
       },
       validation: (r) => r.required(),
+      readOnly: true,
     }),
   ],
   preview: {

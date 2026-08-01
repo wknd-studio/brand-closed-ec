@@ -19,9 +19,11 @@ const tools = [
 ];
 
 // scrapingCatalogは開発者がスクレイピングコード(scrape_adapter_id)と一緒に
-// 用意するドキュメントであり、運営者がStudio上で新規作成・削除すべきではない
-// （specs/004-product-data-import）。UIレベルでの誤操作防止であり、
-// データセットへの書き込み権限を持つ場合はAPI経由で操作できてしまう点に注意。
+// 用意するドキュメントであり、Studio上では文字通りの「定数」として扱う
+// （specs/004-product-data-import、ユーザーとの協議）。運営者は新規作成・編集・
+// 削除のいずれもできず閲覧のみとし、内容変更はコード（シードスクリプト等）で行う。
+// UIレベルでの誤操作防止であり、データセットへの書き込み権限を持つ場合は
+// API経由で操作できてしまう点に注意（スキーマ側のreadOnlyと合わせた二重の防御）。
 const document = {
   actions: (
     prev: import("sanity").DocumentActionComponent[],
@@ -29,16 +31,14 @@ const document = {
   ) =>
     context.schemaType === "scrapingCatalog"
       ? prev.filter(
-          ({ action }) => action !== "delete" && action !== "duplicate"
+          ({ action }) =>
+            action !== "publish" &&
+            action !== "delete" &&
+            action !== "duplicate"
         )
       : prev,
-  newDocumentOptions: (
-    prev: import("sanity").TemplateItem[],
-    context: { creationContext: { type: string } }
-  ) =>
-    context.creationContext.type === "global"
-      ? prev.filter((item) => item.templateId !== "scrapingCatalog")
-      : prev,
+  newDocumentOptions: (prev: import("sanity").TemplateItem[]) =>
+    prev.filter((item) => item.templateId !== "scrapingCatalog"),
 };
 
 export default defineConfig([
