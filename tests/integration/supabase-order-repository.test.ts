@@ -18,7 +18,9 @@ const supabase = createClient<Database>(
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000020";
 const TEST_ORDER_ID = "00000000-0000-0000-0000-000000000001";
+const TEST_ORDER_ID_2 = "00000000-0000-0000-0000-000000000002";
 const TEST_STRIPE_SESSION_ID = "cs_test_infra_001";
+const TEST_SPLIT_GROUP_ID = "00000000-0000-0000-0000-0000000000ab";
 
 const snapshotProps = {
   recipientLastName: "テスト",
@@ -43,6 +45,7 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
     monthlyLimitAtOrder: Money.of(1_000_000),
     stripeCheckoutSessionId: TEST_STRIPE_SESSION_ID,
     stripeInvoiceId: null,
+    splitGroupId: null,
     items: [
       OrderItem.of({
         id: "00000000-0000-0000-0000-000000000031",
@@ -54,7 +57,7 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
         negotiatedUnitPrice: null,
       }),
     ],
-    createdAt: new Date(2026, 5, 1),
+    createdAt: new Date(2026, 5, 12),
     ...overrides,
   });
 }
@@ -75,7 +78,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await supabase.from("order_items").delete().eq("order_id", TEST_ORDER_ID);
+  await supabase.from("order_items").delete().eq("order_id", TEST_ORDER_ID_2);
   await supabase.from("orders").delete().eq("id", TEST_ORDER_ID);
+  await supabase.from("orders").delete().eq("id", TEST_ORDER_ID_2);
   await supabase.from("users").delete().eq("id", TEST_USER_ID);
 });
 
@@ -156,6 +161,60 @@ describe("SupabaseOrderRepository", () => {
         period
       );
       expect(total).toBe(0);
+    });
+  });
+
+  describe("split_group_id の永続化", () => {
+    it("save()・findById()でsplitGroupIdを読み書きできる", async () => {
+      const order = await repo.findById(TEST_ORDER_ID);
+      await repo.save(order!.with({ splitGroupId: TEST_SPLIT_GROUP_ID }));
+
+      const reloaded = await repo.findById(TEST_ORDER_ID);
+      expect(reloaded!.splitGroupId).toBe(TEST_SPLIT_GROUP_ID);
+    });
+  });
+
+  describe("findBySplitGroupId()", () => {
+    it("同一splitGroupIdを持つOrderを全件返す", async () => {
+      await repo.save(
+        makeOrder({
+          id: TEST_ORDER_ID_2,
+          paymentFlow: "invoice",
+          status: OrderStatus.of("confirming"),
+          stripeCheckoutSessionId: null,
+          splitGroupId: TEST_SPLIT_GROUP_ID,
+          items: [
+            OrderItem.of({
+              id: "00000000-0000-0000-0000-000000000032",
+              sanityProductId: "prod-002",
+              productNameSnapshot: "テスト商品2",
+              unitPriceSnapshot: Money.of(30_000),
+              quantity: 1,
+              isNegotiable: false,
+              negotiatedUnitPrice: null,
+            }),
+          ],
+        })
+      );
+
+      const orders = await repo.findBySplitGroupId(TEST_SPLIT_GROUP_ID);
+      const ids = orders.map((o) => o.id).sort();
+      expect(ids).toEqual([TEST_ORDER_ID, TEST_ORDER_ID_2].sort());
+    });
+
+    it("該当するOrderがなければ空配列を返す", async () => {
+      const orders = await repo.findBySplitGroupId(
+        "00000000-0000-0000-0000-000000000000"
+      );
+      expect(orders).toEqual([]);
+    });
+  });
+
+  describe("delete()", () => {
+    it("指定したOrderを削除する", async () => {
+      await repo.delete(TEST_ORDER_ID_2);
+      const order = await repo.findById(TEST_ORDER_ID_2);
+      expect(order).toBeNull();
     });
   });
 });

@@ -132,6 +132,7 @@ export async function placeOrder(
     monthlyLimitAtOrder: user.getMonthlyLimit(),
     stripeCheckoutSessionId: null,
     stripeInvoiceId: null,
+    splitGroupId: null, // TODO(T018): 分割チェックアウト実装時に設定する
     items: orderItems,
     createdAt: new Date(),
   });

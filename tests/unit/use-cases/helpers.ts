@@ -93,6 +93,7 @@ export function makeOrder(overrides?: {
   items?: OrderItem[];
   stripeCheckoutSessionId?: string | null;
   stripeInvoiceId?: string | null;
+  splitGroupId?: string | null;
 }) {
   return Order.of({
     id: "00000000-0000-0000-0000-000000000001",
@@ -105,6 +106,7 @@ export function makeOrder(overrides?: {
     monthlyLimitAtOrder: Money.of(5_000_000),
     stripeCheckoutSessionId: overrides?.stripeCheckoutSessionId ?? null,
     stripeInvoiceId: overrides?.stripeInvoiceId ?? null,
+    splitGroupId: overrides?.splitGroupId ?? null,
     items: overrides?.items ?? [makeOrderItem()],
     createdAt: new Date(2026, 5, 1),
   });
@@ -141,6 +143,8 @@ export function makeOrderRepo(order?: Order): OrderRepository {
     findByStripeInvoiceId: vi.fn().mockResolvedValue(order ?? null),
     sumConfirmedAmountByUserId: vi.fn().mockResolvedValue(0),
     save: vi.fn().mockResolvedValue(undefined),
+    findBySplitGroupId: vi.fn().mockResolvedValue([]),
+    delete: vi.fn().mockResolvedValue(undefined),
     findActiveByUserId: vi.fn().mockResolvedValue([]),
     findActiveOrdersWithUser: vi.fn().mockResolvedValue([]),
     findByIdWithUser: vi.fn().mockResolvedValue(null),

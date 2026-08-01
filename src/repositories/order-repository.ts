@@ -34,6 +34,16 @@ export interface OrderRepository {
 
   save(order: Order): Promise<void>;
 
+  /** チェックアウト分割によって関連付けられたOrderを全件取得 */
+  findBySplitGroupId(splitGroupId: string): Promise<Order[]>;
+
+  /**
+   * Orderを物理削除する。分割チェックアウトでOrder A・Order Bの一方の保存が
+   * 失敗した場合の補償処理（compensating delete）専用。通常のキャンセル等では
+   * 使用しない（既存通りstatusの更新を使う）
+   */
+  delete(orderId: string): Promise<void>;
+
   /** 退会ゲートチェック用: ユーザーの非ターミナル注文（進行中）を取得 */
   findActiveByUserId(userId: string): Promise<Order[]>;
 
