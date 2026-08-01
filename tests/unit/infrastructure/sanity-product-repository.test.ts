@@ -19,6 +19,7 @@ describe("SanityProductRepository", () => {
         is_negotiable: false,
         prices: { standard: 5000 },
         min_rank: "starter",
+        payment_timing: "at_order",
       },
     ]);
 
@@ -26,6 +27,7 @@ describe("SanityProductRepository", () => {
     const result = await repo.findByIds(["prod-1"], "standard");
 
     expect(result[0].unitPrice.amount).toBe(5000);
+    expect(result[0].paymentTiming).toBe("at_order");
   });
 
   it("交渉商品は価格未設定でも0円として扱う", async () => {
@@ -36,6 +38,7 @@ describe("SanityProductRepository", () => {
         is_negotiable: true,
         prices: null,
         min_rank: "starter",
+        payment_timing: "after_order",
       },
     ]);
 
@@ -43,6 +46,7 @@ describe("SanityProductRepository", () => {
     const result = await repo.findByIds(["prod-2"], "standard");
 
     expect(result[0].unitPrice.amount).toBe(0);
+    expect(result[0].paymentTiming).toBe("after_order");
   });
 
   it("固定価格商品で該当ランクの価格が未設定の場合はProductPriceNotSetErrorを投げる", async () => {
@@ -53,6 +57,7 @@ describe("SanityProductRepository", () => {
         is_negotiable: false,
         prices: { starter: 1000 },
         min_rank: "starter",
+        payment_timing: "at_order",
       },
     ]);
 

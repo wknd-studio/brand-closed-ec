@@ -49,6 +49,7 @@ function makeDeps() {
         unitPrice: Money.zero(),
         isNegotiable: true,
         minRank: "starter",
+        paymentTiming: "after_order",
       },
     ]),
   };

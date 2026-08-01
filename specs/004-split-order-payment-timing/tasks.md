@@ -67,18 +67,18 @@
 
 ### Tests for User Story 2
 
-- [ ] T010 [P] [US2] `splitCartByPaymentTiming`（カートを`at_order`/`after_order`の2グループに分割する純粋関数）のユニットテストを `tests/unit/order-flow-selector.test.ts` に作成（既存の`selectOrderFlow`テストを置き換え）
-- [ ] T011 [P] [US2] `place-order.ts`の分割ロジック（単一タイミング時は1件のみ作成という後方互換、混在時は2件作成し同一`splitGroupId`を持つこと、`redirectUrl`がCheckout優先で決定されること）のユニットテストを `tests/unit/use-cases/place-order.test.ts` に追加
-- [ ] T012 [P] [US2] 分割保存の原子性（Order Bの保存が失敗した場合、保存済みのOrder Aが削除されること）のユニットテストを同ファイルに追加（quickstart.md シナリオ7）
-- [ ] T013 [P] [US2] `paymentTiming`の分割判定がサーバー側`ProductSnapshot`のみを根拠にすること（`PlaceOrderInput`に`paymentTiming`を含めても無視されること）を確認するユニットテストを同ファイルに追加（research.md 決定9）
-- [ ] T014 [US2] 実Supabaseで2件のOrderが`split_group_id`付きで作成されることを検証する統合テストを `tests/integration/use-cases/place-order.test.ts` に追加
+- [x] T010 [P] [US2] `splitCartByPaymentTiming`（カートを`at_order`/`after_order`の2グループに分割する純粋関数）のユニットテストを `tests/unit/order-flow-selector.test.ts` に作成（既存の`selectOrderFlow`テストを置き換え）
+- [x] T011 [P] [US2] `place-order.ts`の分割ロジック（単一タイミング時は1件のみ作成という後方互換、混在時は2件作成し同一`splitGroupId`を持つこと、`redirectUrl`がCheckout優先で決定されること）のユニットテストを `tests/unit/use-cases/place-order.test.ts` に追加
+- [x] T012 [P] [US2] 分割保存の原子性（Order Bの保存が失敗した場合、保存済みのOrder Aが削除されること）のユニットテストを同ファイルに追加（quickstart.md シナリオ7）
+- [x] T013 [P] [US2] `paymentTiming`の分割判定がサーバー側`ProductSnapshot`のみを根拠にすること（`PlaceOrderInput`に`paymentTiming`を含めても無視されること）を確認するユニットテストを同ファイルに追加（research.md 決定9）
+- [x] T014 [US2] 実Supabaseで2件のOrderが`split_group_id`付きで作成されることを検証する統合テストを `tests/integration/use-cases/place-order.test.ts` に追加
 
 ### Implementation for User Story 2
 
-- [ ] T015 [P] [US2] `ProductSnapshot`に`paymentTiming`を追加 in `src/repositories/product-repository.ts`、GROQ射影に含める in `src/infrastructure/sanity/sanity-product-repository.ts`
-- [ ] T016 [P] [US2] `CartItem`値オブジェクトに`paymentTiming`を追加 in `src/domain/value-objects/cart-item.ts`
-- [ ] T017 [US2] `src/domain/services/order-flow-selector.ts`の`selectOrderFlow`を`splitCartByPaymentTiming`に置き換え（T010・T016に依存）
-- [ ] T018 [US2] `place-order.ts`を書き換え: 分割前の合算での月次上限チェック維持、カート分割、Order A/B構築、両方成功/両方不成立の原子性保証（`orderRepo.delete`使用）、`splitGroupId`発行、`redirectUrl`決定ロジックを実装 in `src/use-cases/place-order.ts`（T005・T011〜T017に依存）
+- [x] T015 [P] [US2] `ProductSnapshot`に`paymentTiming`を追加 in `src/repositories/product-repository.ts`、GROQ射影に含める in `src/infrastructure/sanity/sanity-product-repository.ts`
+- [x] T016 [P] [US2] `CartItem`値オブジェクトに`paymentTiming`を追加 in `src/domain/value-objects/cart-item.ts`
+- [x] T017 [US2] `src/domain/services/order-flow-selector.ts`の`selectOrderFlow`を`splitCartByPaymentTiming`に置き換え（T010・T016に依存）
+- [x] T018 [US2] `place-order.ts`を書き換え: 分割前の合算での月次上限チェック維持、カート分割、Order A/B構築、両方成功/両方不成立の原子性保証（`orderRepo.delete`使用）、`splitGroupId`発行、`redirectUrl`決定ロジックを実装 in `src/use-cases/place-order.ts`（T005・T011〜T017に依存）
 
 **Checkpoint**: 混在カートのチェックアウトが分割注文として正しく機能する。この時点でMVPとして動作確認可能（カート画面のグループ表示・関連注文の可視化はまだ未実装）
 
