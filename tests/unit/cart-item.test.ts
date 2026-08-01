@@ -9,6 +9,7 @@ describe("CartItem", () => {
     quantity: 2,
     unitPrice: Money.of(10_000),
     isNegotiable: false,
+    paymentTiming: "at_order" as const,
   };
 
   describe("of()", () => {
@@ -16,6 +17,11 @@ describe("CartItem", () => {
       const item = CartItem.of(base);
       expect(item.sanityProductId).toBe("prod-001");
       expect(item.quantity).toBe(2);
+    });
+
+    it("paymentTiming を保持する", () => {
+      const item = CartItem.of({ ...base, paymentTiming: "after_order" });
+      expect(item.paymentTiming).toBe("after_order");
     });
 
     it("数量 0 はエラー", () => {
