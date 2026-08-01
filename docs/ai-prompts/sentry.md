@@ -31,19 +31,27 @@ try {
 
 参考実装: `src/app/api/webhooks/stripe/route.ts`（署名検証失敗の400パスは送らない。catchブロック内の例外のみ送る）
 
-## `Sentry.setUser()`について: グローバルに呼ばない
+## `Sentry.setUser()`について: `middleware.ts`では呼ばない、共通ヘルパーに1箇所だけ書く
 
-このプロジェクトはCloudflare Workers（`@cloudflare/next-on-pages`）上で動く。CloudflareのisolateはHTTPリクエストをまたいで使い回されることがあるため、`src/middleware.ts`のようなグローバルスコープで`Sentry.setUser()`を呼ぶと、**別のリクエストのユーザー情報が混ざるリスクがある**。
+Sentryは「現在アクティブなリクエストのスコープ」を自動的に分離する仕組みを持っており、通常のリクエスト処理中（Server Action・Route Handler・Server Component）であれば、`setUser()`はどこで呼んでもそのリクエストだけに閉じる。**Server Actionごとに毎回書く必要はない**。
 
-`Sentry.setUser()`を呼ぶ場合は、必ず`auth()`を呼んでいる各Server Action・use-caseの入り口で、そのリクエストのスコープ内に閉じて呼ぶこと。
+ただし`src/middleware.ts`だけは例外。Next.jsのmiddlewareは実行コンテキストとして最初から独立しており、middleware内で`Sentry.setUser()`を呼んでも、後続の実際のServer Action・Route Handlerには一切引き継がれない（[Sentry公式ブログ](https://blog.sentry.io/2023/02/21/support-for-next-js-middleware-and-edge-routes/)）。そのため`middleware.ts`では呼ばない。
+
+このプロジェクトは`await auth()`（Clerk）を15箇所以上のServer Action・use-caseで直接呼んでおり、共通の認証ヘルパーが存在しない。`setUser()`は各呼び出し箇所に書き足すのではなく、認証を解決する共通ヘルパーを1つ作り、その中に埋め込むことで重複を避ける。
 
 ```ts
-export async function someServerAction(...) {
+// src/lib/auth/current-user.ts
+import { auth } from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/nextjs";
+
+export async function requireAuth() {
   const { userId } = await auth();
-  Sentry.setUser({ id: userId ?? undefined });
-  // ...
+  if (userId) Sentry.setUser({ id: userId });
+  return { userId };
 }
 ```
+
+既存の`const { userId } = await auth();`という呼び出し箇所を`await requireAuth()`に置き換えていく。
 
 ## 冪等性とSentryは別問題
 
