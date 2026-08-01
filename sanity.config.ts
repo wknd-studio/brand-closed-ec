@@ -6,6 +6,7 @@ import { structureTool } from "sanity/structure";
 
 import { schemaTypes } from "./src/sanity/schemas";
 import { structure } from "./src/sanity/structure";
+import { ManualTool } from "./src/sanity/tools/manual/manual-tool";
 import { ProductImportTool } from "./src/sanity/tools/product-import/product-import-tool";
 
 const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ?? "0syeievd";
@@ -19,6 +20,11 @@ const plugins = [
 ];
 const schema = { types: schemaTypes };
 const tools = [
+  {
+    name: "manual",
+    title: "使い方ガイド",
+    component: ManualTool,
+  },
   {
     name: "product-import",
     title: "商品CSVインポート",
