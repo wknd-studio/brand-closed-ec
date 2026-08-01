@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { OrderOperatorNotificationEmail } from "./templates/order-operator-notification";
 import { getResend } from "./index";
@@ -40,6 +41,10 @@ export async function sendOrderOperatorNotification({
   });
 
   if (error) {
+    Sentry.captureException(error, {
+      tags: { email: "order-operator-notification" },
+      extra: { orderId, customerEmail },
+    });
     console.error("[運営者通知メール] 送信失敗:", error);
   }
 }

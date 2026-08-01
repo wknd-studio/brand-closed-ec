@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { LimitExceededMemberEmail } from "./templates/limit-exceeded-member";
 import { getResend } from "./index";
@@ -21,6 +22,10 @@ export async function sendLimitExceededEmail({
   });
 
   if (error) {
+    Sentry.captureException(error, {
+      tags: { email: "limit-exceeded" },
+      extra: { orderId, to },
+    });
     console.error("[上限超過メール] 送信失敗:", error);
   }
 }

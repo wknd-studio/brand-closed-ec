@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { InvoicePaidOperatorEmail } from "./templates/invoice-paid-operator";
 import { getResend } from "./index";
@@ -29,5 +30,11 @@ export async function sendInvoicePaidEmail({
     html,
   });
 
-  if (error) console.error("[Invoice入金メール/運営者] 送信失敗:", error);
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { email: "invoice-paid" },
+      extra: { orderId, memberEmail },
+    });
+    console.error("[Invoice入金メール/運営者] 送信失敗:", error);
+  }
 }
