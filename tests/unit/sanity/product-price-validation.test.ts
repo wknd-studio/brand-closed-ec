@@ -52,4 +52,54 @@ describe("validatePrices", () => {
 
     expect(result).toBe(true);
   });
+
+  it("仕入れ掛け率(vendor_cost_rate)を下回るランクがあればNG（specs/004-product-data-import）", () => {
+    // 定価10,000円・仕入れ掛け率70% => 仕入れ値7,000円。starterは6,000円で原価割れ
+    const result = validatePrices(
+      {
+        starter: 6000,
+        basic: 7500,
+        standard: 8000,
+        pro: 8500,
+        advanced: 9000,
+        premium: 9500,
+      },
+      { is_negotiable: false, retail_price: 10000, vendor_cost_rate: 70 }
+    );
+
+    expect(result).not.toBe(true);
+    expect(result).toContain("starter");
+  });
+
+  it("全ランクが仕入れ掛け率以上であればOK", () => {
+    const result = validatePrices(
+      {
+        starter: 7000,
+        basic: 7500,
+        standard: 8000,
+        pro: 8500,
+        advanced: 9000,
+        premium: 9500,
+      },
+      { is_negotiable: false, retail_price: 10000, vendor_cost_rate: 70 }
+    );
+
+    expect(result).toBe(true);
+  });
+
+  it("vendor_cost_rateが未設定なら下限チェックは行わない", () => {
+    const result = validatePrices(
+      {
+        starter: 100,
+        basic: 200,
+        standard: 300,
+        pro: 400,
+        advanced: 500,
+        premium: 600,
+      },
+      { is_negotiable: false }
+    );
+
+    expect(result).toBe(true);
+  });
 });

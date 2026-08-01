@@ -23,8 +23,16 @@ export interface UnifiedProductRecord {
 
   retailPrice: number;
 
-  /** 未指定のランクはproduct側のデフォルト掛け率設定に委ねる */
-  rankPrices?: Partial<Record<MemberRankValue, number>>;
+  /**
+   * 業者から提示された、定価に対する仕入れ支払い比率（%）。
+   * 会員向けランク別価格（price_rates/prices）の計算には使わない。
+   * product.vendor_cost_rateに保存し、赤字価格になっていないかのチェック（下限）にのみ使う
+   * （会員向けの実際の価格は、常にブランド・全体のデフォルト掛け率設定から計算される）
+   */
+  vendorCostRate?: number;
+
+  /** 1梱包あたりの数量。商品情報として保持するだけで価格計算には関与しない */
+  caseQuantity?: number;
 
   availability: ProductAvailability;
 

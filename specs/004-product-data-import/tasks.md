@@ -43,6 +43,16 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 - [x] T012 新規スキーマ（`vendor`, `productImportRun`）を登録する: `src/sanity/schemas/index.ts`（依存: T009, T010, T011）
 - [x] T013 `apply-import.ts`を実装する（検証済み`UnifiedProductRecord[]`とdedupe結果を受け取り、Sanityへ`product`の`createOrReplace`と`productImportRun`ドキュメントの作成を行う）: `src/lib/product-import/apply-import.ts`（依存: T007, T008, T012）
 
+### Phase 2 補足（業者の具体例検証で判明した修正。FR-024〜027）
+
+業者Cの実際のCSV列構成（商品ID・入数・掛け率・卸値等）を例に仕様を検証した結果、業者の仕入れ掛け率をそのまま会員向けランク価格に使うと原価割れのリスクがあると判明。ユーザーと協議し、仕入れ掛け率は運営者専用の参照情報として保持し、会員向け価格計算には使わない方針に修正した。
+
+- [x] T013a `product`スキーマに`vendor_cost_rate`（運営者専用の仕入れ掛け率）・`case_quantity`（入数、任意）フィールドを追加する（FR-024, FR-026）: `src/sanity/schemas/product.ts`
+- [x] T013b `validatePrices`に、`vendor_cost_rate`を下回るランク価格がある場合エラーとする下限チェックを追加する（FR-025）: `src/sanity/schemas/product.ts`, `tests/unit/sanity/product-price-validation.test.ts`
+- [x] T013c `apply-import.ts`で会員向けランク価格を常にブランド/デフォルト掛け率設定のみから計算するよう修正し（業者の掛け率は使わない）、`validatePrices`を書き込み前に呼び出して下限違反を書き込まずエラーとして記録するようにする: `src/lib/product-import/apply-import.ts`, `tests/unit/product-import/apply-import.test.ts`
+- [x] T013d `vendor`スキーマに`default_brand`（CSVにブランド列が無い業者向けの固定ブランド）、`csv_column_mapping`に`vendor_cost_rate`・`case_quantity`の列マッピング項目を追加する（FR-027）: `src/sanity/schemas/vendor.ts`
+- [x] T013e `UnifiedProductRecord`から`rankPrices`を削除し、`vendorCostRate`・`caseQuantity`を追加する: `src/lib/product-import/unified-product-schema.ts`
+
 **チェックポイント**: 共有ロジック・Sanityスキーマ基盤が完成。以降の3つのUser Storyへ並行着手できる
 
 ---

@@ -34,6 +34,15 @@ export const vendor = defineType({
       initialValue: false,
     }),
     defineField({
+      name: "default_brand",
+      title: "デフォルトブランド",
+      description:
+        "この業者のCSVにブランド名の列が無い場合に使う固定のブランド。" +
+        "CSVにブランド列（csv_column_mapping.brand_name）があればそちらが優先される",
+      type: "reference",
+      to: [{ type: "brand" }],
+    }),
+    defineField({
       name: "csv_column_mapping",
       title: "CSV列マッピング",
       description:
@@ -49,6 +58,8 @@ export const vendor = defineType({
         defineField({
           name: "brand_name",
           title: "ブランド名列名",
+          description:
+            "列が無い業者は空欄のままにし、デフォルトブランドを設定する",
           type: "string",
         }),
         defineField({
@@ -59,6 +70,18 @@ export const vendor = defineType({
         defineField({
           name: "availability",
           title: "在庫状況列名",
+          type: "string",
+        }),
+        defineField({
+          name: "vendor_cost_rate",
+          title: "仕入れ掛け率列名",
+          description:
+            "定価に対する仕入れ支払い比率（%）。業者により「掛け率」等の名称で提供される任意項目",
+          type: "string",
+        }),
+        defineField({
+          name: "case_quantity",
+          title: "入数列名",
           type: "string",
         }),
       ],

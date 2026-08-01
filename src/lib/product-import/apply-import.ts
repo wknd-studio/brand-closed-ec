@@ -1,12 +1,16 @@
 import type { SanityClient } from "@sanity/client";
 
+import { validatePrices } from "@/sanity/schemas/product";
 import {
   computeRankPrices,
   pickEffectivePriceSettingsRates,
 } from "@/sanity/schemas/product-price-calculator";
 
 import { findMatchingProduct, type ExistingProductRef } from "./dedupe";
-import type { UnifiedProductRecord } from "./unified-product-schema";
+import type {
+  UnifiedProductRecord,
+  UnifiedProductRecordOrigin,
+} from "./unified-product-schema";
 
 type RateMap = Partial<Record<string, number>>;
 
@@ -52,6 +56,7 @@ export async function applyImport(
 
   let createdCount = 0;
   let updatedCount = 0;
+  const costFloorErrors: ApplyImportErrorDetail[] = [];
 
   for (const record of validRecords) {
     const brandId = brandContext.brandIdByName[record.brandName];
@@ -61,6 +66,9 @@ export async function applyImport(
       throw new Error(`ブランドIDが見つかりません: ${record.brandName}`);
     }
 
+    // 会員向けのランク別価格は、業者の仕入れ掛け率(vendorCostRate)には一切影響されず、
+    // 常にブランド・全体のデフォルト掛け率設定から計算する（インポートのたびに担当者が
+    // Studio上で手動調整した price_rates を上書きしないため。この対話で合意した方針）
     const effectiveDefaultRates = pickEffectivePriceSettingsRates({
       ownRates: undefined,
       brandRates:
@@ -71,20 +79,37 @@ export async function applyImport(
     });
     const prices = computeRankPrices(
       record.retailPrice,
-      record.rankPrices ?? {},
+      {},
       effectiveDefaultRates
     );
+
+    // Sanityのフィールドバリデーションはapiからの直接書き込みには効かないため、
+    // 同じチェック(validatePrices)をここでも実行し、仕入れ値を下回る場合は
+    // 書き込みを行わずエラーとして扱う（この対話で合意した方針: 保存をブロック）
+    const priceCheck = validatePrices(prices, {
+      is_negotiable: false,
+      retail_price: record.retailPrice,
+      vendor_cost_rate: record.vendorCostRate,
+    });
+    if (priceCheck !== true) {
+      costFloorErrors.push({
+        target: describeOrigin(record.origin, record.name),
+        reason: priceCheck,
+      });
+      continue;
+    }
 
     const doc = {
       name: record.name,
       brand: { _type: "reference" as const, _ref: brandId },
       retail_price: record.retailPrice,
       is_negotiable: false,
-      price_rates: record.rankPrices ?? {},
       prices,
       min_rank: record.minRank ?? "starter",
       availability: record.availability,
       jan_code: record.janCode,
+      vendor_cost_rate: record.vendorCostRate,
+      case_quantity: record.caseQuantity,
       source_vendor: { _type: "reference" as const, _ref: options.vendorId },
     };
 
@@ -106,12 +131,21 @@ export async function applyImport(
     finished_at: new Date().toISOString(),
     outcome: options.outcome,
     success_count: createdCount + updatedCount,
-    failure_count: options.failureCount,
+    failure_count: options.failureCount + costFloorErrors.length,
     needs_review_count: options.needsReviewCount ?? 0,
-    error_details: options.errorDetails ?? [],
+    error_details: [...(options.errorDetails ?? []), ...costFloorErrors],
   });
 
   return { createdCount, updatedCount, importRunId: importRun._id };
+}
+
+function describeOrigin(
+  origin: UnifiedProductRecordOrigin,
+  fallbackName: string
+): string {
+  if (origin.kind === "csv")
+    return `${origin.rowNumber}行目（${fallbackName}）`;
+  return `${origin.sourceUrl}（${fallbackName}）`;
 }
 
 async function fetchExistingProducts(
