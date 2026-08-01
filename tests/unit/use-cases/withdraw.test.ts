@@ -1,4 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@sentry/nextjs", () => ({
+  captureException: vi.fn(),
+}));
+
+import * as Sentry from "@sentry/nextjs";
 import { withdraw } from "@/use-cases/withdraw";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import {
@@ -132,5 +138,31 @@ describe("withdraw", () => {
 
     expect(consoleSpy).toHaveBeenCalledOnce();
     consoleSpy.mockRestore();
+  });
+
+  it("Clerk削除失敗時にSentry.captureExceptionを呼ぶ", async () => {
+    const user = makeUser({ rank: "basic" }).with({
+      stripeSubscriptionId: "sub_123",
+    });
+    const userRepo = makeUserRepo(user);
+    const orderRepo = makeOrderRepo();
+    const subscriptionGateway = makeSubscriptionGateway();
+    const accountGateway = makeAccountGateway();
+    const error = new Error("Clerk error");
+    vi.mocked(accountGateway.deleteUser).mockRejectedValue(error);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(Sentry.captureException).mockClear();
+
+    await withdraw(
+      { clerkUserId: "clerk-1" },
+      { userRepo, orderRepo, subscriptionGateway, accountGateway }
+    );
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        tags: expect.objectContaining({ useCase: "withdraw" }),
+      })
+    );
   });
 });

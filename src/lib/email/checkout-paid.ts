@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { CheckoutPaidMemberEmail } from "./templates/checkout-paid-member";
 import { CheckoutPaidOperatorEmail } from "./templates/checkout-paid-operator";
@@ -49,7 +50,13 @@ export async function sendCheckoutPaidEmails({
         html: memberHtml,
       })
       .then(({ error }) => {
-        if (error) console.error("[Checkout入金メール/会員] 送信失敗:", error);
+        if (error) {
+          Sentry.captureException(error, {
+            tags: { email: "checkout-paid-member" },
+            extra: { orderId, memberEmail },
+          });
+          console.error("[Checkout入金メール/会員] 送信失敗:", error);
+        }
       }),
     resend.emails
       .send({
@@ -59,8 +66,13 @@ export async function sendCheckoutPaidEmails({
         html: operatorHtml,
       })
       .then(({ error }) => {
-        if (error)
+        if (error) {
+          Sentry.captureException(error, {
+            tags: { email: "checkout-paid-operator" },
+            extra: { orderId, memberEmail },
+          });
           console.error("[Checkout入金メール/運営者] 送信失敗:", error);
+        }
       }),
   ]);
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { auth } from "@clerk/nextjs/server";
@@ -59,6 +60,10 @@ export async function placeOrder(
         error: `月次仕入れ上限（¥${err.limit.toLocaleString()}）を超えるため注文できません`,
       };
     }
+    Sentry.captureException(err, {
+      tags: { useCase: "placeOrder" },
+      extra: { clerkUserId: userId },
+    });
     console.error("[placeOrder] 予期しないエラー:", err);
     return { error: "注文の処理中にエラーが発生しました" };
   }
