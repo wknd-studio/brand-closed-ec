@@ -131,7 +131,10 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
                       />
                       {isSelected && <Badge tone="primary">ヘッダー</Badge>}
                     </Flex>
-                    <Box style={{ overflowX: "auto" }}>
+                    <Box
+                      paddingY={1}
+                      style={{ overflowX: "auto", lineHeight: 1.6 }}
+                    >
                       <Text size={1} muted style={{ whiteSpace: "nowrap" }}>
                         {row.filter(Boolean).join(" / ") || "(空行)"}
                       </Text>
