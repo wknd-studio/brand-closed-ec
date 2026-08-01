@@ -14,6 +14,10 @@ import {
 
 type RateMap = Partial<Record<string, number>>;
 
+interface ExistingProductWithPrices extends ExistingProductRef {
+  prices?: RateMap;
+}
+
 export interface ApplyImportErrorDetail {
   target: string;
   reason: string;
@@ -66,27 +70,40 @@ export async function applyImport(
       throw new Error(`ブランドIDが見つかりません: ${record.brandName}`);
     }
 
-    // 会員向けのランク別価格は、業者の仕入れ掛け率(vendorCostRate)には一切影響されず、
-    // 常にブランド・全体のデフォルト掛け率設定から計算する（インポートのたびに担当者が
-    // Studio上で手動調整した price_rates を上書きしないため。この対話で合意した方針）
-    const effectiveDefaultRates = pickEffectivePriceSettingsRates({
-      ownRates: undefined,
-      brandRates:
-        brandContext.priceSettingsRatesById[
-          brandContext.brandPriceSettingsRefById[brandId] ?? ""
-        ],
-      defaultRates: brandContext.defaultPriceSettingsRates,
-    });
-    const prices = computeRankPrices(
-      record.retailPrice,
-      {},
-      effectiveDefaultRates
-    );
+    const match = findMatchingProduct(record, existingProducts);
+
+    // 新規作成時だけランク別仕入れ価格を計算する。更新時は運営者が商品ごとに
+    // 手動調整した価格（price_rates由来のprices）を尊重し、既存の保存済みprices
+    // をそのまま原価割れチェックの基準にする（新規作成時だけデフォルト値を設定し、
+    // 更新時は既存値を上書きしない方針。ユーザーとの合意）
+    let priceCheckSubject: RateMap | undefined;
+    if (match.matched) {
+      const existing = existingProducts.find(
+        (p) => p._id === match.productId
+      ) as ExistingProductWithPrices | undefined;
+      priceCheckSubject = existing?.prices;
+    } else {
+      // 会員向けのランク別価格は、業者の仕入れ掛け率(vendorCostRate)には一切影響されず、
+      // 常にブランド・全体のデフォルト掛け率設定から計算する
+      const effectiveDefaultRates = pickEffectivePriceSettingsRates({
+        ownRates: undefined,
+        brandRates:
+          brandContext.priceSettingsRatesById[
+            brandContext.brandPriceSettingsRefById[brandId] ?? ""
+          ],
+        defaultRates: brandContext.defaultPriceSettingsRates,
+      });
+      priceCheckSubject = computeRankPrices(
+        record.retailPrice,
+        {},
+        effectiveDefaultRates
+      );
+    }
 
     // Sanityのフィールドバリデーションはapiからの直接書き込みには効かないため、
     // 同じチェック(validatePrices)をここでも実行し、仕入れ値を下回る場合は
     // 書き込みを行わずエラーとして扱う（この対話で合意した方針: 保存をブロック）
-    const priceCheck = validatePrices(prices, {
+    const priceCheck = validatePrices(priceCheckSubject, {
       is_negotiable: false,
       retail_price: record.retailPrice,
       vendor_cost_rate: record.vendorCostRate,
@@ -104,12 +121,6 @@ export async function applyImport(
       brand: { _type: "reference" as const, _ref: brandId },
       retail_price: record.retailPrice,
       is_negotiable: false,
-      // schemaのinitialValueはStudioのフォーム入力時のみ適用され、client.create()に
-      // よるAPI経由の書き込みには効かないため、ここで明示的に既定値を設定する。
-      // 未設定のままだとインポート後に商品ごとの手動設定が必要になり運用負荷が高い
-      payment_timing: "at_order" as const,
-      prices,
-      min_rank: record.minRank ?? "starter",
       availability: record.availability,
       jan_code: record.janCode,
       vendor_cost_rate: record.vendorCostRate,
@@ -120,12 +131,19 @@ export async function applyImport(
       },
     };
 
-    const match = findMatchingProduct(record, existingProducts);
     if (match.matched) {
       await client.patch(match.productId).set(doc).commit();
       updatedCount += 1;
     } else {
-      await client.create({ _type: "product", ...doc });
+      await client.create({
+        _type: "product",
+        ...doc,
+        // schemaのinitialValueはStudioのフォーム入力時のみ適用され、client.create()に
+        // よるAPI経由の書き込みには効かないため、新規作成時のみここで既定値を設定する
+        payment_timing: "at_order" as const,
+        prices: priceCheckSubject,
+        min_rank: record.minRank ?? "starter",
+      });
       createdCount += 1;
     }
   }
@@ -148,9 +166,9 @@ export async function applyImport(
 
 async function fetchExistingProducts(
   client: SanityClient
-): Promise<ExistingProductRef[]> {
+): Promise<ExistingProductWithPrices[]> {
   return client.fetch(
-    `*[_type == "product"]{ _id, "janCode": jan_code, name, "brandName": brand->name }`
+    `*[_type == "product"]{ _id, "janCode": jan_code, name, "brandName": brand->name, prices }`
   );
 }
 

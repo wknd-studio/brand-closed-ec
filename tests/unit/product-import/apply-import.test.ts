@@ -31,6 +31,7 @@ function createFakeClient({
     janCode?: string;
     name: string;
     brandName: string;
+    prices?: Record<string, number>;
   }[],
   brands = [
     { _id: "brand-1", name: "ブランドA", priceSettingsRef: undefined },
@@ -131,6 +132,7 @@ describe("applyImport", () => {
           janCode: "999",
           name: "旧名称",
           brandName: "ブランドA",
+          prices: FULL_DEFAULT_RATES,
         },
       ],
     });
@@ -148,7 +150,79 @@ describe("applyImport", () => {
     expect(result.updatedCount).toBe(1);
     expect(patched).toHaveLength(1);
     expect(patched[0].id).toBe("prod-1");
+    expect(patched[0].doc.name).toBe("商品A");
     expect(created.find((d) => d._type === "product")).toBeUndefined();
+  });
+
+  it("更新時は支払いタイミング・ランク別仕入れ価格・最低閲覧ランクを上書きしない", async () => {
+    // 運営者が商品ごとに手動調整した値（後払い設定・個別price_rates由来のprices・
+    // 絞り込みランク）が、同じCSVの再インポートのたびに消えてしまう問題への対応。
+    // 「新規作成時だけデフォルト値を設定し、更新時は既存値を尊重する」方針（ユーザーとの合意）
+    const { client, patched } = createFakeClient({
+      existingProducts: [
+        {
+          _id: "prod-1",
+          janCode: "999",
+          name: "旧名称",
+          brandName: "ブランドA",
+          prices: FULL_DEFAULT_RATES,
+        },
+      ],
+    });
+
+    await applyImport({
+      client,
+      catalogId: "catalog-1",
+      triggeredBy: "manual_csv",
+      startedAt: new Date(),
+      outcome: "completed",
+      validRecords: [record({ janCode: "999" })],
+      failureCount: 0,
+    });
+
+    expect(patched).toHaveLength(1);
+    expect(patched[0].doc).not.toHaveProperty("payment_timing");
+    expect(patched[0].doc).not.toHaveProperty("prices");
+    expect(patched[0].doc).not.toHaveProperty("min_rank");
+    // 一方、業者データ由来のフィールドは引き続き更新される
+    expect(patched[0].doc).toHaveProperty("retail_price", 10000);
+    expect(patched[0].doc).toHaveProperty("availability", "available");
+  });
+
+  it("更新時の原価割れチェックは、再計算した価格ではなく既存の保存済み価格を基準にする", async () => {
+    // 既存商品のprices(starterランク=6000円)に対し、再インポートで仕入れ掛け率が
+    // 70%に変わった場合、仕入れ値は10000*0.7=7000円となりstarterの6000円を上回るため
+    // 原価割れとして書き込みをブロックする。prices自体は更新時に触らないため、
+    // チェックの基準は「既存の保存済みprices」でなければならない
+    const { client, created } = createFakeClient({
+      existingProducts: [
+        {
+          _id: "prod-1",
+          janCode: "999",
+          name: "旧名称",
+          brandName: "ブランドA",
+          prices: FULL_DEFAULT_RATES,
+        },
+      ],
+    });
+
+    const result = await applyImport({
+      client,
+      catalogId: "catalog-1",
+      triggeredBy: "manual_csv",
+      startedAt: new Date(),
+      outcome: "completed",
+      validRecords: [record({ janCode: "999", vendorCostRate: 70 })],
+      failureCount: 0,
+    });
+
+    expect(result.updatedCount).toBe(0);
+    const importRun = created.find((d) => d._type === "productImportRun") as {
+      failure_count: number;
+      error_details: { reason: string }[];
+    };
+    expect(importRun.failure_count).toBe(1);
+    expect(importRun.error_details[0].reason).toContain("仕入れ掛け率");
   });
 
   it("仕入れ掛け率を下回るランクがある場合、商品を書き込まずエラーとして記録する", async () => {

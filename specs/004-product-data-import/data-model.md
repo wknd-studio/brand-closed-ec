@@ -17,6 +17,8 @@
 
 **`prices`のバリデーション拡張**: 既存の`validatePrices`（`src/sanity/schemas/product.ts`）に、`vendor_cost_rate`が設定されている場合の下限チェックを追加する。`retail_price × vendor_cost_rate / 100`（仕入れ値）を下回るランクが1つでもあれば保存をエラーとしてブロックする（FR-025）。このチェックはSanity StudioでのUI編集だけでなく、`apply-import.ts`がAPI経由で書き込む際にも同じ関数（`validatePrices`）を呼び出して適用する（Sanityのフィールドバリデーションはスキーマ経由のAPI書き込みには効かないため）。
 
+**再インポート時のフィールド所有権**: `apply-import.ts`は既存商品（JAN/名前+ブランドが一致）を更新する際、`name`・`retail_price`・`availability`・`jan_code`・`vendor_cost_rate`・`case_quantity`・`source_catalog`は業者データを正として毎回上書きする一方、`payment_timing`・`prices`・`min_rank`は**新規作成時にだけ既定値を設定し、更新時は書き込まない**（既存値をそのまま維持する）。これは、他社事例調査（Shopifyの部分更新方式・ERP/PIM連携の「フィールド所有権」パターン）を踏まえ、運営者が商品ごとに手動調整した値（後払い設定・個別掛け率由来の価格・絞り込みランク）が同じCSVの再インポートのたびに消えてしまう問題を避けるため（ユーザーとの協議）。原価割れチェック（`validatePrices`）は、更新時は再計算した価格ではなく既存の保存済み`prices`を基準に行う（`prices`自体は更新時に触らないため）。
+
 ## 新規エンティティ
 
 ### 商品データソース（`vendor`型を廃止し2つのドキュメントタイプに再設計）
