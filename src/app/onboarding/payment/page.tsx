@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getStripe, STRIPE_PRICE_IDS, type PaidRank } from "@/lib/stripe";
@@ -42,6 +43,10 @@ export default async function OnboardingPaymentPage({
       locale: "ja",
     });
   } catch (err) {
+    Sentry.captureException(err, {
+      tags: { page: "onboarding-payment" },
+      extra: { clerkUserId: userId, plan: paidRank },
+    });
     console.error("[Stripe] Checkout Session 作成失敗:", err);
     return (
       <main className="flex min-h-screen items-center justify-center p-8">

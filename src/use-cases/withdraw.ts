@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
@@ -42,6 +43,10 @@ export async function withdraw(
   try {
     await accountGateway.deleteUser(input.clerkUserId);
   } catch (err) {
+    Sentry.captureException(err, {
+      tags: { useCase: "withdraw" },
+      extra: { clerkUserId: input.clerkUserId },
+    });
     console.error(
       "[退会] Clerk アカウント削除失敗（deleted_at でアクセス遮断済み）:",
       err
