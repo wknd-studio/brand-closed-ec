@@ -19,14 +19,20 @@ import type { NotificationService } from "@/repositories/notification-service";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
 
-export function makeUser(overrides?: Partial<{ rank: string }>) {
+export function makeUser(
+  overrides?: Partial<{
+    rank: string;
+    onboardingCompleted: boolean;
+    subscribedAt: Date | null;
+  }>
+) {
   return User.of({
     id: "00000000-0000-0000-0000-000000000001",
     clerkUserId: "clerk-1",
     email: "test@example.com",
     rank: MemberRank.of(overrides?.rank ?? "standard"),
-    subscribedAt: new Date(2026, 0, 1),
-    onboardingCompleted: true,
+    subscribedAt: overrides?.subscribedAt ?? new Date(2026, 0, 1),
+    onboardingCompleted: overrides?.onboardingCompleted ?? true,
     deletedAt: null,
     termsAgreedAt: null,
     termsVersion: null,
