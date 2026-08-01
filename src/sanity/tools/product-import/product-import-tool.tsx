@@ -36,6 +36,7 @@ type Phase = "idle" | "previewing" | "previewed" | "applying" | "applied";
 export function ProductImportTool() {
   const { client, preview, isLoading, runPreview, reset } = useImportPreview();
   const [vendors, setVendors] = useState<VendorOption[]>([]);
+  const [vendorsLoaded, setVendorsLoaded] = useState(false);
   const [selectedVendorId, setSelectedVendorId] = useState<string>("");
   const [csvText, setCsvText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
@@ -54,7 +55,10 @@ export function ProductImportTool() {
         }`
       )
       .then((result) => {
-        if (!cancelled) setVendors(result);
+        if (!cancelled) {
+          setVendors(result);
+          setVendorsLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -115,9 +119,44 @@ export function ProductImportTool() {
     <Container width={2} padding={4}>
       <Stack space={4}>
         <Heading size={2}>CSVインポート（業者商品データ）</Heading>
-        <Text muted size={1}>
-          業者から提供されたCSVをアップロードすると、書き込み前に成功見込み・エラー見込み件数のプレビューが表示されます。内容を確認してから実行を確定してください。
-        </Text>
+
+        <Card padding={3} radius={2} shadow={1} tone="primary">
+          <Stack space={3}>
+            <Text weight="semibold" size={1}>
+              使い方
+            </Text>
+            <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
+              <Text size={1} as="li">
+                商品のブランドが未登録の場合は、先に「商品管理 →
+                ブランド」で作成する
+              </Text>
+              <Text size={1} as="li">
+                「商品管理 →
+                業者」で、CSVを提供してくれる業者ごとにドキュメントを作成する。データ提供区分は「CSV提供」、CSV列マッピングに実際のCSVのヘッダー名を入力する（例:
+                商品名列が「品名」なら商品名列名に「品名」と入力）。CSVにブランド列が無い業者は「デフォルトブランド」も設定する
+              </Text>
+              <Text size={1} as="li">
+                列名がマッピングと一致するCSVファイルを用意する
+              </Text>
+              <Text size={1} as="li">
+                下の「1. 業者を選択」〜「4.
+                実行を確定する」の手順に沿って実行する
+              </Text>
+              <Text size={1} as="li">
+                実行結果は「商品管理 → インポート実行結果」から後で確認できる
+              </Text>
+            </Stack>
+          </Stack>
+        </Card>
+
+        {vendorsLoaded && vendors.length === 0 && (
+          <Card padding={3} radius={2} shadow={1} tone="caution">
+            <Text size={1}>
+              CSV提供業者がまだ登録されていません。上記の手順2に従って「商品管理
+              → 業者」から先に業者を作成してください。
+            </Text>
+          </Card>
+        )}
 
         <Card padding={3} radius={2} shadow={1}>
           <Stack space={3}>
@@ -126,6 +165,7 @@ export function ProductImportTool() {
             </Text>
             <Select
               value={selectedVendorId}
+              disabled={vendors.length === 0}
               onChange={(event) => {
                 setSelectedVendorId(event.currentTarget.value);
                 setPhase("idle");
@@ -156,12 +196,19 @@ export function ProductImportTool() {
               </Text>
             )}
 
+            <Text weight="semibold" size={1}>
+              3. 検証プレビューを表示する
+            </Text>
             <Button
               text="検証プレビューを表示する"
               tone="primary"
               disabled={!csvText || !selectedVendorId || isLoading}
               onClick={handlePreview}
             />
+            <Text muted size={1}>
+              クリックすると、書き込み前に成功見込み・エラー見込み件数が表示されます（下記「4.
+              実行を確定する」を押すまで、Sanity上の商品データは変更されません）。
+            </Text>
           </Stack>
         </Card>
 
@@ -208,12 +255,17 @@ export function ProductImportTool() {
 
               {preview.outcome === "ok" && (
                 <Box>
-                  <Button
-                    text="実行を確定する"
-                    tone="positive"
-                    disabled={phase === "applying"}
-                    onClick={handleConfirm}
-                  />
+                  <Text weight="semibold" size={1}>
+                    4. 実行を確定する
+                  </Text>
+                  <Box marginTop={2}>
+                    <Button
+                      text="実行を確定する"
+                      tone="positive"
+                      disabled={phase === "applying"}
+                      onClick={handleConfirm}
+                    />
+                  </Box>
                 </Box>
               )}
             </Stack>
