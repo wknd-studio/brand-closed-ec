@@ -36,6 +36,16 @@ export const csvCatalog = defineType({
       to: [{ type: "brand" }],
     }),
     defineField({
+      name: "header_row_number",
+      title: "ヘッダー行の行番号",
+      description:
+        "CSVの先頭に案内文や空行があり、項目名（ヘッダー）が1行目でない場合に指定する（1始まり）。" +
+        "下の「CSV列マッピング」でサンプルCSVをアップロードすると、プレビューから選択できる。通常は1のままでよい",
+      type: "number",
+      initialValue: 1,
+      validation: (r) => r.min(1).integer(),
+    }),
+    defineField({
       name: "csv_column_mapping",
       title: "CSV列マッピング",
       description:

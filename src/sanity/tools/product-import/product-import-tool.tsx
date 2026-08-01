@@ -24,6 +24,7 @@ interface CsvCatalogOption {
   label: string;
   csv_column_mapping?: CsvAdapterCatalog["columnMapping"];
   defaultBrandName?: string;
+  header_row_number?: number;
 }
 
 type Phase = "idle" | "previewing" | "previewed" | "applying" | "applied";
@@ -51,7 +52,8 @@ export function ProductImportTool() {
     client
       .fetch<CsvCatalogOption[]>(
         `*[_type == "csvCatalog"]{
-          _id, label, csv_column_mapping, "defaultBrandName": default_brand->name
+          _id, label, csv_column_mapping, header_row_number,
+          "defaultBrandName": default_brand->name
         }`
       )
       .then((result) => {
@@ -91,6 +93,7 @@ export function ProductImportTool() {
       catalogId: selectedCatalog._id,
       defaultBrandName: selectedCatalog.defaultBrandName,
       columnMapping: selectedCatalog.csv_column_mapping,
+      headerRowNumber: selectedCatalog.header_row_number,
     });
     setPhase("previewed");
   }, [csvText, selectedCatalog, runPreview]);

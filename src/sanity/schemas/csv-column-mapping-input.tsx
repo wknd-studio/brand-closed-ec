@@ -1,8 +1,20 @@
 import { useCallback, useState } from "react";
 import Papa from "papaparse";
-import { Box, Card, Flex, Select, Stack, Text, TextInput } from "@sanity/ui";
-import { set, unset } from "sanity";
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Flex,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from "@sanity/ui";
+import { set, unset, useClient, useFormValue } from "sanity";
 import type { ObjectInputProps } from "sanity";
+
+const API_VERSION = "2026-05-17";
 
 type MappingValue = Partial<Record<string, string>>;
 
@@ -16,18 +28,27 @@ const TARGET_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "case_quantity", label: "入数" },
 ];
 
+const PREVIEW_ROW_COUNT = 10;
+
 /**
  * CSV列マッピングの入力を、業者名の手打ちではなく表形式で行えるようにするカスタム入力（FR-002）。
- * サンプルCSVをアップロードすると実際のヘッダー行を検出し、プルダウンから選べるようにする
- * （タイプミス防止・どの列が何にマッピングされているかを一目で分かるようにするため。
- * アップロードしたファイル自体は保存しない）。
+ * サンプルCSVをアップロードすると、先頭数行のプレビューからヘッダー行を選択でき（案内文や
+ * 空行が先頭にあるCSVに対応するため。実際の業者CSVで判明した課題）、選んだヘッダー行の
+ * 実際の列名をプルダウンから選べるようにする（タイプミス防止・どの列が何にマッピングされて
+ * いるかを一目で分かるようにするため。アップロードしたファイル自体は保存しない）。
  */
 export function CsvColumnMappingInput(props: ObjectInputProps) {
   const { value, onChange } = props;
-  const [headers, setHeaders] = useState<string[] | null>(null);
+  const client = useClient({ apiVersion: API_VERSION });
+  const documentId = useFormValue(["_id"]) as string | undefined;
+  const headerRowNumber =
+    (useFormValue(["header_row_number"]) as number | undefined) ?? 1;
+
+  const [previewRows, setPreviewRows] = useState<string[][] | null>(null);
   const [fileName, setFileName] = useState("");
 
   const currentMapping = (value as MappingValue | undefined) ?? {};
+  const headers = previewRows ? (previewRows[headerRowNumber - 1] ?? []) : null;
 
   const handleSampleFile = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,12 +58,26 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result ?? "");
-        const parsed = Papa.parse<string[]>(text, { preview: 1 });
-        setHeaders((parsed.data[0] as string[] | undefined) ?? []);
+        const parsed = Papa.parse<string[]>(text, { skipEmptyLines: false });
+        setPreviewRows((parsed.data as string[][]).slice(0, PREVIEW_ROW_COUNT));
       };
       reader.readAsText(file);
     },
     []
+  );
+
+  const handleHeaderRowSelect = useCallback(
+    (rowNumber: number) => {
+      if (!documentId) return;
+      // header_row_numberはcsv_column_mappingの兄弟フィールドのため、
+      // このフィールドのonChangeでは更新できずclientから直接patchする
+      // （ProductPriceRateInputが兄弟フィールドpricesを更新するのと同じパターン）
+      client
+        .patch(documentId)
+        .set({ header_row_number: rowNumber })
+        .commit({ autoGenerateArrayKeys: true });
+    },
+    [client, documentId]
   );
 
   const handleMappingChange = useCallback(
@@ -67,8 +102,49 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
         <input type="file" accept=".csv,text/csv" onChange={handleSampleFile} />
         {fileName && (
           <Text size={1} muted>
-            読み込み済み: {fileName}（{headers?.length ?? 0}列を検出）
+            読み込み済み: {fileName}
           </Text>
+        )}
+
+        {previewRows && previewRows.length > 0 && (
+          <Stack space={2}>
+            <Text size={1} weight="semibold">
+              ヘッダー行を選択
+            </Text>
+            <Text size={1} muted>
+              案内文や空行が先頭にあるCSVもあるため、実際に項目名が並んでいる行を選んでください。
+            </Text>
+            <Stack space={1}>
+              {previewRows.map((row, index) => {
+                const rowNumber = index + 1;
+                const isSelected = rowNumber === headerRowNumber;
+                return (
+                  <Flex key={rowNumber} align="center" gap={2}>
+                    <Button
+                      fontSize={1}
+                      padding={2}
+                      mode={isSelected ? "default" : "ghost"}
+                      tone={isSelected ? "primary" : "default"}
+                      text={`${rowNumber}行目`}
+                      onClick={() => handleHeaderRowSelect(rowNumber)}
+                    />
+                    {isSelected && <Badge tone="primary">ヘッダー</Badge>}
+                    <Text
+                      size={1}
+                      muted
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.filter(Boolean).join(" / ") || "(空行)"}
+                    </Text>
+                  </Flex>
+                );
+              })}
+            </Stack>
+          </Stack>
         )}
 
         <Stack space={2}>
@@ -89,11 +165,14 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
                     }
                   >
                     <option value="">（この項目は無い）</option>
-                    {headers.map((header) => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
+                    {headers.map(
+                      (header, index) =>
+                        header && (
+                          <option key={`${header}-${index}`} value={header}>
+                            {header}
+                          </option>
+                        )
+                    )}
                   </Select>
                 ) : (
                   <TextInput

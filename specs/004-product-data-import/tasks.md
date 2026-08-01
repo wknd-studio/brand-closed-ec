@@ -84,6 +84,7 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
   - コード内の`vendorId`/`CsvAdapterVendor`等を`catalogId`/`CsvAdapterCatalog`に統一: `src/lib/product-import/csv-adapter.ts`, `src/lib/product-import/apply-import.ts`, `src/lib/product-import/unified-product-schema.ts`, `src/sanity/tools/product-import/use-import-preview.ts`, `src/sanity/tools/product-import/product-import-tool.tsx`
   - `validate-and-preview.ts`に`preExistingErrors`が無くてもエラー率分母を正しく計算する既存修正は維持しつつ、テストのcatalogId化を実施: `tests/unit/product-import/*.test.ts`
 - [x] T018f CSV列マッピングの入力をテキスト手打ちから表形式（サンプルCSVアップロード→実際の列名をプルダウンで選択）に変更する: `src/sanity/schemas/csv-column-mapping-input.tsx`, `src/sanity/schemas/csv-catalog.ts`
+- [x] T018g 実際の業者CSV（先頭に案内文・複数行見出し・区切り空行を含むもの）で検証し、`csv-adapter.ts`を実データに対応させる。`header_row_number`（ヘッダー行の指定、csvCatalogに追加）、区切り空行のスキップ、「N掛」表記（N×10%）の仕入れ掛け率パースに対応。マッピング入力UIにヘッダー行選択機能を追加: `src/lib/product-import/csv-adapter.ts`, `src/sanity/schemas/csv-catalog.ts`, `src/sanity/schemas/csv-column-mapping-input.tsx`, `src/sanity/tools/product-import/product-import-tool.tsx`, `tests/unit/product-import/csv-adapter.test.ts`
 
 **チェックポイント**: User Story 1（MVP）が独立して機能・検証可能
 

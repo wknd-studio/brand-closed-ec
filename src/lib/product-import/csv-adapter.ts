@@ -22,6 +22,12 @@ export interface CsvAdapterCatalog {
   /** CSVにbrand_name列が無いデータ向けの固定ブランド名（catalog.default_brand参照先の名前） */
   defaultBrandName?: string;
   columnMapping: CsvColumnMapping;
+  /**
+   * 実際に項目名（ヘッダー）が並んでいる行番号（1始まり）。省略時は1。
+   * 業者のCSVによっては、先頭に案内文や空行が入っていて1行目がヘッダーでない場合がある
+   * （例: 「1万円以上で送料無料」等の案内文が1〜2行目、ヘッダーは4行目、というケース）。
+   */
+  headerRowNumber?: number;
 }
 
 export interface CsvRowError {
@@ -48,26 +54,33 @@ const OUT_OF_STOCK_TOKENS = new Set([
  * マッピングされなかった列は読み捨てる。行単位のエラーは他の行の変換に影響しない（FR-007）。
  * ブランドは行ごとのデータであり、1つのcatalogに複数ブランドの行が混ざっていてもよい
  * （CSVにブランド列があれば行ごとにそれを使い、無ければcatalogの既定ブランドで穴埋めする）。
+ * ヘッダー行より前の案内文・空行、データ中の区切り用の空行は、エラーにせず読み飛ばす。
  */
 export function mapCsvToUnifiedRecords(
   csvText: string,
   catalog: CsvAdapterCatalog
 ): { records: UnifiedProductRecord[]; errors: CsvRowError[] } {
-  const parsed = Papa.parse<Record<string, string>>(csvText, {
-    header: true,
-    skipEmptyLines: true,
-  });
+  // header: trueは使わず配列のまま取得する。案内文等が1行目に来るCSVに対応するため、
+  // ヘッダー行の位置を自由に指定できるようにする必要があるため
+  const parsed = Papa.parse<string[]>(csvText, { skipEmptyLines: false });
 
   const errors: CsvRowError[] = parsed.errors.map((e) => ({
-    rowNumber: (e.row ?? 0) + 2,
+    rowNumber: (e.row ?? 0) + 1,
     reason: e.message,
   }));
 
-  const records: UnifiedProductRecord[] = [];
+  const headerRowIndex = Math.max((catalog.headerRowNumber ?? 1) - 1, 0);
+  const headerRow = parsed.data[headerRowIndex] ?? [];
   const mapping = catalog.columnMapping;
 
-  parsed.data.forEach((row, index) => {
-    const rowNumber = index + 2; // 1行目はヘッダー、データは2行目から
+  const records: UnifiedProductRecord[] = [];
+
+  for (let i = headerRowIndex + 1; i < parsed.data.length; i++) {
+    const rowNumber = i + 1; // 1始まりの実ファイル行番号
+    const cells = parsed.data[i];
+    if (isBlankRow(cells)) continue; // 区切り用の空行はエラーにせず読み飛ばす
+
+    const row = toRowObject(headerRow, cells);
 
     const name = readColumn(row, mapping.name);
     const brandName =
@@ -76,7 +89,7 @@ export function mapCsvToUnifiedRecords(
 
     if (!name) {
       errors.push({ rowNumber, reason: "商品名が読み取れません" });
-      return;
+      continue;
     }
     if (!brandName) {
       errors.push({
@@ -84,11 +97,11 @@ export function mapCsvToUnifiedRecords(
         reason:
           "ブランド名が読み取れません（CSVに列が無く、デフォルトブランドも未設定です）",
       });
-      return;
+      continue;
     }
     if (retailPrice == null) {
       errors.push({ rowNumber, reason: "定価が数値として読み取れません" });
-      return;
+      continue;
     }
 
     records.push({
@@ -97,7 +110,8 @@ export function mapCsvToUnifiedRecords(
       brandName,
       retailPrice,
       vendorCostRate:
-        parseNumber(readColumn(row, mapping.vendor_cost_rate)) ?? undefined,
+        parseVendorCostRate(readColumn(row, mapping.vendor_cost_rate)) ??
+        undefined,
       caseQuantity:
         parseNumber(readColumn(row, mapping.case_quantity)) ?? undefined,
       availability: normalizeAvailability(
@@ -106,9 +120,24 @@ export function mapCsvToUnifiedRecords(
       catalogId: catalog.catalogId,
       origin: { kind: "csv", rowNumber },
     });
-  });
+  }
 
   return { records, errors };
+}
+
+function isBlankRow(cells: string[]): boolean {
+  return cells.every((cell) => !cell || cell.trim() === "");
+}
+
+function toRowObject(
+  headerRow: string[],
+  cells: string[]
+): Record<string, string> {
+  const row: Record<string, string> = {};
+  headerRow.forEach((header, index) => {
+    if (header) row[header] = cells[index] ?? "";
+  });
+  return row;
 }
 
 function readColumn(
@@ -127,6 +156,21 @@ function parseNumber(raw: string | undefined): number | undefined {
   if (cleaned === "" || cleaned === "-" || cleaned === ".") return undefined;
   const numeric = Number(cleaned);
   return Number.isNaN(numeric) ? undefined : numeric;
+}
+
+/**
+ * 仕入れ掛け率の値を解釈する。日本の卸取引でよく使われる「N掛（け）」表記
+ * （例: 「6掛」＝定価の60%、「4.9掛」＝49%）は、Nが1桁の掛け率を表す慣習のため
+ * ×10して%に変換する。それ以外（素の数値・「60%」等）は通常通り%として扱う
+ * （実際の業者CSVで「N掛」表記が判明したため対応）。
+ */
+function parseVendorCostRate(raw: string | undefined): number | undefined {
+  if (raw == null) return undefined;
+  const kakeMatch = raw.trim().match(/^(\d+(?:\.\d+)?)\s*掛け?$/);
+  if (kakeMatch) {
+    return Number(kakeMatch[1]) * 10;
+  }
+  return parseNumber(raw);
 }
 
 function normalizeAvailability(

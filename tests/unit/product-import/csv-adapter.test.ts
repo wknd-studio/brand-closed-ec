@@ -148,4 +148,99 @@ describe("mapCsvToUnifiedRecords", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].rowNumber).toBe(3);
   });
+
+  it("先頭に案内文・空行があるCSVでも、headerRowNumberで実際のヘッダー行を指定できる", () => {
+    // 実際の業者CSV（KINUJO様式）を模したもの: 1行目が案内文（セル内改行を含むが、
+    // ダブルクォートで囲まれているため論理的には1行＝Excel上の1行として扱われる）、
+    // 2行目が空行、3行目が本当のヘッダー、4行目が空行、5行目以降がデータ
+    const csv =
+      '"1万円以上で送料無料。\n1点～から注文可能です。",,,\n' +
+      ",,,\n" +
+      "商品ID,商品名,JAN,上代\n" +
+      ",,,\n" +
+      "KH301,KINUJO Hair Dryer White,4589946770766,32000\n";
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-kinujo",
+      headerRowNumber: 3,
+      defaultBrandName: "KINUJO",
+      columnMapping: { jan_code: "JAN", name: "商品名", retail_price: "上代" },
+    };
+
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
+
+    expect(errors).toHaveLength(0);
+    expect(records).toEqual([
+      {
+        janCode: "4589946770766",
+        name: "KINUJO Hair Dryer White",
+        brandName: "KINUJO",
+        retailPrice: 32000,
+        vendorCostRate: undefined,
+        caseQuantity: undefined,
+        availability: "available",
+        catalogId: "catalog-kinujo",
+        origin: { kind: "csv", rowNumber: 5 },
+      },
+    ]);
+  });
+
+  it("headerRowNumber省略時は従来通り1行目をヘッダーとして扱う", () => {
+    const csv = "商品名,ブランド,定価\n商品A,ブランドA,1000";
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-a",
+      columnMapping: {
+        name: "商品名",
+        brand_name: "ブランド",
+        retail_price: "定価",
+      },
+    };
+
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
+
+    expect(errors).toHaveLength(0);
+    expect(records[0].name).toBe("商品A");
+    expect(records[0].origin).toEqual({ kind: "csv", rowNumber: 2 });
+  });
+
+  it("仕入れ掛け率が「N掛」表記の場合、N×10%として読み取る（実際の業者CSVで判明）", () => {
+    const csv =
+      "商品名,ブランド,上代,提示\n" +
+      "商品A,ブランドA,32000,6掛\n" +
+      "商品B,ブランドA,42000,4.9掛\n" +
+      "商品C,ブランドA,25000,10掛";
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-kinujo",
+      columnMapping: {
+        name: "商品名",
+        brand_name: "ブランド",
+        retail_price: "上代",
+        vendor_cost_rate: "提示",
+      },
+    };
+
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
+
+    expect(errors).toHaveLength(0);
+    expect(records[0].vendorCostRate).toBe(60);
+    expect(records[1].vendorCostRate).toBe(49);
+    expect(records[2].vendorCostRate).toBe(100);
+  });
+
+  it("仕入れ掛け率が素の数値（%表記）の場合は従来通り読み取る", () => {
+    const csv = "商品名,ブランド,上代,掛け率\n商品A,ブランドA,10000,60";
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-a",
+      columnMapping: {
+        name: "商品名",
+        brand_name: "ブランド",
+        retail_price: "上代",
+        vendor_cost_rate: "掛け率",
+      },
+    };
+
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
+
+    expect(errors).toHaveLength(0);
+    expect(records[0].vendorCostRate).toBe(60);
+  });
 });
