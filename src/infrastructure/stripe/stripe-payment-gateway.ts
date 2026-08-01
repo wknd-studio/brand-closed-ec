@@ -12,30 +12,36 @@ export class StripePaymentGateway implements PaymentGateway {
     lineItems: CheckoutLineItem[],
     baseUrl: string
   ): Promise<CheckoutSession> {
-    const session = await getStripe().checkout.sessions.create({
-      mode: "payment",
-      customer_email: undefined,
-      line_items: lineItems.map((i) => ({
-        price_data: {
-          currency: "jpy",
-          unit_amount: i.unitPrice,
-          product_data: { name: i.productName },
-        },
-        quantity: i.quantity,
-      })),
-      success_url: `${baseUrl}/order/complete?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/order/checkout`,
-      metadata: { order_id: order.id },
-    });
+    const session = await getStripe().checkout.sessions.create(
+      {
+        mode: "payment",
+        customer_email: undefined,
+        line_items: lineItems.map((i) => ({
+          price_data: {
+            currency: "jpy",
+            unit_amount: i.unitPrice,
+            product_data: { name: i.productName },
+          },
+          quantity: i.quantity,
+        })),
+        success_url: `${baseUrl}/order/complete?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/order/checkout`,
+        metadata: { order_id: order.id },
+      },
+      { idempotencyKey: `checkout-session-${order.id}` }
+    );
 
     return { sessionId: session.id, url: session.url! };
   }
 
   async ensureCustomer(email: string, userId: string): Promise<string> {
-    const customer = await getStripe().customers.create({
-      email,
-      metadata: { supabase_user_id: userId },
-    });
+    const customer = await getStripe().customers.create(
+      {
+        email,
+        metadata: { supabase_user_id: userId },
+      },
+      { idempotencyKey: `ensure-customer-${userId}` }
+    );
     return customer.id;
   }
 
@@ -43,22 +49,28 @@ export class StripePaymentGateway implements PaymentGateway {
     order: Order,
     stripeCustomerId: string
   ): Promise<string> {
-    const invoice = await getStripe().invoices.create({
-      customer: stripeCustomerId,
-      collection_method: "send_invoice",
-      days_until_due: 7,
-      metadata: { order_id: order.id },
-    });
+    const invoice = await getStripe().invoices.create(
+      {
+        customer: stripeCustomerId,
+        collection_method: "send_invoice",
+        days_until_due: 7,
+        metadata: { order_id: order.id },
+      },
+      { idempotencyKey: `invoice-${order.id}` }
+    );
 
     for (const item of order.items) {
       const unitPrice = item.negotiatedUnitPrice ?? item.unitPriceSnapshot;
-      await getStripe().invoiceItems.create({
-        customer: stripeCustomerId,
-        invoice: invoice.id,
-        description: item.productNameSnapshot,
-        amount: unitPrice.amount * item.quantity,
-        currency: "jpy",
-      });
+      await getStripe().invoiceItems.create(
+        {
+          customer: stripeCustomerId,
+          invoice: invoice.id,
+          description: item.productNameSnapshot,
+          amount: unitPrice.amount * item.quantity,
+          currency: "jpy",
+        },
+        { idempotencyKey: `invoice-item-${order.id}-${item.id}` }
+      );
     }
 
     await getStripe().invoices.finalizeInvoice(invoice.id);
