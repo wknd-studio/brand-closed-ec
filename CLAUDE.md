@@ -29,6 +29,7 @@ Next.js 16 App Router + TypeScript strict / Cloudflare Pages + Workers (`@cloudf
 
 - **Next.js**: `docs/ai-prompts/nextjs.md`を必ず参照すること
 - **Clerk**: `docs/ai-prompts/clerk.md` を必ず参照すること（非推奨APIの使用禁止・`<Show>` コンポーネントの使用など重要なルールあり）
+- **Sentry**: `docs/ai-prompts/sentry.md` を必ず参照すること（catchブロックでの`Sentry.captureException`送信・`setUser`のスコープに関する重要なルールあり）
 
 ## Gitブランチ戦略（厳守）
 
