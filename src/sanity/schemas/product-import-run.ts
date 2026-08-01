@@ -6,8 +6,8 @@ import { ImportErrorLogDisplay } from "./import-error-log-display";
  * インポート実行結果は apply-import.ts がAPI経由で書き込む監査ログであり、
  * Studio上での手動編集を認めない（誤って実績値を書き換えられると監査の意味が
  * なくなるため）。全フィールドをreadOnlyにし、加えてsanity.config.tsの
- * document.actions / newDocumentOptionsで新規作成・publish・削除もブロックする
- * （二重の防御。scrapingCatalogと同じ考え方）。
+ * document.actions / newDocumentOptionsで新規作成・publishもブロックする
+ * （二重の防御）。古いログの削除（deleteアクション）のみ運営者に許可している。
  */
 export const productImportRun = defineType({
   name: "productImportRun",
