@@ -1,5 +1,6 @@
 import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
 import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
@@ -47,6 +48,10 @@ export async function POST(req: Request) {
           deps
         );
       } catch (err) {
+        Sentry.captureException(err, {
+          tags: { webhook: "stripe", eventType: event.type },
+          extra: { stripeCheckoutSessionId: session.id, eventId: event.id },
+        });
         console.error("[Checkout Webhook] 処理失敗:", err);
         return NextResponse.json(
           { error: "処理に失敗しました" },
@@ -78,6 +83,14 @@ export async function POST(req: Request) {
           }
         );
       } catch (err) {
+        Sentry.captureException(err, {
+          tags: { webhook: "stripe", eventType: event.type },
+          extra: {
+            stripeCheckoutSessionId: session.id,
+            eventId: event.id,
+            clerkUserId,
+          },
+        });
         console.error("[Stripe Webhook] サブスクリプション更新失敗:", err);
         return NextResponse.json(
           { error: "処理に失敗しました" },
@@ -98,6 +111,10 @@ export async function POST(req: Request) {
     try {
       await markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id }, deps);
     } catch (err) {
+      Sentry.captureException(err, {
+        tags: { webhook: "stripe", eventType: event.type },
+        extra: { stripeInvoiceId: invoice.id, eventId: event.id },
+      });
       console.error("[Invoice Webhook] 処理失敗:", err);
       return NextResponse.json(
         { error: "処理に失敗しました" },
