@@ -20,8 +20,8 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] 依存関係を追加する（`papaparse`・`cheerio`。research.md #2, #4参照）: `package.json`
-- [ ] T002 [P] ディレクトリ雛形を作成する: `src/lib/product-import/`, `src/sanity/tools/product-import/`, `scripts/product-import/vendors/`, `tests/unit/product-import/`
+- [x] T001 [P] 依存関係を追加する（`papaparse`・`cheerio`。research.md #2, #4参照）: `package.json`
+- [x] T002 [P] ディレクトリ雛形を作成する: `src/lib/product-import/`, `src/sanity/tools/product-import/`, `scripts/product-import/vendors/`, `tests/unit/product-import/`
 
 ---
 
