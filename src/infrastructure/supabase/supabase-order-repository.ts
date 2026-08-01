@@ -35,6 +35,7 @@ type OrderRow = {
   monthly_limit_at_order: number;
   stripe_checkout_session_id: string | null;
   stripe_invoice_id: string | null;
+  split_group_id: string | null;
   created_at: string;
   order_items: OrderItemRow[];
 };
@@ -90,6 +91,7 @@ function toOrder(row: OrderRow): Order {
     monthlyLimitAtOrder: Money.of(row.monthly_limit_at_order),
     stripeCheckoutSessionId: row.stripe_checkout_session_id,
     stripeInvoiceId: row.stripe_invoice_id,
+    splitGroupId: row.split_group_id,
     items: (row.order_items ?? []).map(toOrderItem),
     createdAt: new Date(row.created_at),
   });
@@ -210,6 +212,19 @@ export class SupabaseOrderRepository implements OrderRepository {
     );
   }
 
+  async findBySplitGroupId(splitGroupId: string): Promise<Order[]> {
+    const { data } = await this.db
+      .from("orders")
+      .select(ORDER_SELECT)
+      .eq("split_group_id", splitGroupId);
+    return (data ?? []).map((row) => toOrder(row as unknown as OrderRow));
+  }
+
+  async delete(orderId: string): Promise<void> {
+    await this.db.from("order_items").delete().eq("order_id", orderId);
+    await this.db.from("orders").delete().eq("id", orderId);
+  }
+
   async findActiveByUserId(userId: string): Promise<Order[]> {
     const { data } = await this.db
       .from("orders")
@@ -266,7 +281,7 @@ export class SupabaseOrderRepository implements OrderRepository {
         phoneNumber: s.phoneNumber,
       }) as Json;
 
-    await this.db.from("orders").upsert({
+    const { error: orderError } = await this.db.from("orders").upsert({
       id: order.id,
       user_id: order.userId,
       payment_flow: order.paymentFlow,
@@ -277,10 +292,13 @@ export class SupabaseOrderRepository implements OrderRepository {
       monthly_limit_at_order: order.monthlyLimitAtOrder.amount,
       stripe_checkout_session_id: order.stripeCheckoutSessionId,
       stripe_invoice_id: order.stripeInvoiceId,
+      split_group_id: order.splitGroupId,
+      created_at: order.createdAt.toISOString(),
     });
+    if (orderError) throw new Error(`Order保存に失敗: ${orderError.message}`);
 
     if (order.items.length > 0) {
-      await this.db.from("order_items").upsert(
+      const { error: itemsError } = await this.db.from("order_items").upsert(
         order.items.map((item) => ({
           id: item.id,
           order_id: order.id,
@@ -294,6 +312,8 @@ export class SupabaseOrderRepository implements OrderRepository {
           negotiated_unit_price: item.negotiatedUnitPrice?.amount ?? null,
         }))
       );
+      if (itemsError)
+        throw new Error(`OrderItem保存に失敗: ${itemsError.message}`);
     }
   }
 }

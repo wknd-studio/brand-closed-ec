@@ -210,6 +210,7 @@ export type Database = {
           payment_flow: Database["public"]["Enums"]["order_payment_flow"];
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
+          split_group_id: string | null;
           status: Database["public"]["Enums"]["order_status"];
           stripe_checkout_session_id: string | null;
           stripe_invoice_id: string | null;
@@ -224,6 +225,7 @@ export type Database = {
           payment_flow: Database["public"]["Enums"]["order_payment_flow"];
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
+          split_group_id?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
           stripe_checkout_session_id?: string | null;
           stripe_invoice_id?: string | null;
@@ -238,6 +240,7 @@ export type Database = {
           payment_flow?: Database["public"]["Enums"]["order_payment_flow"];
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot?: Json;
+          split_group_id?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
           stripe_checkout_session_id?: string | null;
           stripe_invoice_id?: string | null;

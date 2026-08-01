@@ -55,6 +55,7 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
     monthlyLimitAtOrder: Money.of(1_000_000),
     stripeCheckoutSessionId: "cs_test_001",
     stripeInvoiceId: null,
+    splitGroupId: null,
     items: [makeItem()],
     createdAt: new Date(2026, 5, 1),
     ...overrides,
@@ -126,6 +127,24 @@ describe("Order", () => {
         items: [makeItem({ isNegotiable: true, unitPrice: 50_000 })],
       });
       expect(order.getFixedTotal().amount).toBe(0);
+    });
+  });
+
+  describe("splitGroupId", () => {
+    it("未指定の場合はnullを保持する", () => {
+      expect(makeOrder().splitGroupId).toBeNull();
+    });
+
+    it("指定した値をそのまま保持する", () => {
+      const order = makeOrder({ splitGroupId: "group-001" });
+      expect(order.splitGroupId).toBe("group-001");
+    });
+
+    it("with()でsplitGroupIdだけを更新できる", () => {
+      const order = makeOrder({ splitGroupId: null });
+      const updated = order.with({ splitGroupId: "group-002" });
+      expect(updated.splitGroupId).toBe("group-002");
+      expect(order.splitGroupId).toBeNull();
     });
   });
 });

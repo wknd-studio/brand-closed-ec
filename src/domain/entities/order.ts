@@ -17,6 +17,8 @@ interface OrderProps {
   monthlyLimitAtOrder: Money;
   stripeCheckoutSessionId: string | null;
   stripeInvoiceId: string | null;
+  /** チェックアウト分割によって同時生成されたOrder同士を関連付けるID。分割されない場合はnull */
+  splitGroupId: string | null;
   items: OrderItem[];
   createdAt: Date;
 }
@@ -32,6 +34,7 @@ export class Order {
   readonly monthlyLimitAtOrder: Money;
   readonly stripeCheckoutSessionId: string | null;
   readonly stripeInvoiceId: string | null;
+  readonly splitGroupId: string | null;
   readonly items: OrderItem[];
   readonly createdAt: Date;
 
@@ -46,6 +49,7 @@ export class Order {
     this.monthlyLimitAtOrder = props.monthlyLimitAtOrder;
     this.stripeCheckoutSessionId = props.stripeCheckoutSessionId;
     this.stripeInvoiceId = props.stripeInvoiceId;
+    this.splitGroupId = props.splitGroupId;
     this.items = props.items;
     this.createdAt = props.createdAt;
   }
@@ -70,6 +74,7 @@ export class Order {
       monthlyLimitAtOrder: this.monthlyLimitAtOrder,
       stripeCheckoutSessionId: this.stripeCheckoutSessionId,
       stripeInvoiceId: this.stripeInvoiceId,
+      splitGroupId: this.splitGroupId,
       items: this.items,
       createdAt: this.createdAt,
     };
