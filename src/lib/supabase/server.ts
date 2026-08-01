@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
 export async function createServerClient() {
-  const { getToken } = await auth();
+  const { getToken } = await requireAuth();
   const token = await getToken();
 
   return createClient<Database>(

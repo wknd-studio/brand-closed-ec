@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
-  const { userId, sessionClaims } = await auth();
+  const { userId, sessionClaims } = await requireAuth();
   if (userId) {
     const role = (sessionClaims?.metadata as { role?: string } | undefined)
       ?.role;

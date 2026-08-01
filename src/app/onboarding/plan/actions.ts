@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
@@ -28,7 +29,7 @@ export async function selectPlan(
     return { error: "無効なプランです" };
   }
 
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
   const user = await currentUser();

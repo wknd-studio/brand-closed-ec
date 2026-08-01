@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
 import PlanSelector from "./plan-selector";
 
 export default async function OnboardingPlanPage() {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
   return (

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import {
   fetchProducts,
@@ -12,7 +12,7 @@ export async function fetchMoreProducts(
   offset: number,
   brand: string
 ): Promise<Product[]> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return [];
 
   const supabase = createAdminClient();
