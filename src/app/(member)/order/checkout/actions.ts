@@ -1,6 +1,7 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
+import { withServerActionSpan } from "@/lib/observability/span";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireAuth } from "@/lib/auth/current-user";
@@ -32,30 +33,28 @@ export async function placeOrder(
 
   let redirectUrl: string;
   try {
-    const result = await Sentry.startSpan(
-      { name: "placeOrder", op: "server-action.process" },
-      () =>
-        placeOrderUseCase(
-          {
-            clerkUserId: userId,
-            cartItems: cart.items.map((item) => ({
-              sanityProductId: item.productId,
-              quantity: item.quantity,
-              productName: item.productName,
-            })),
-            shippingAddressId,
-            billingAddressId,
-            baseUrl,
-          },
-          {
-            userRepo: new SupabaseUserRepository(createAdminClient()),
-            orderRepo: new SupabaseOrderRepository(createAdminClient()),
-            addressRepo: new SupabaseAddressRepository(createAdminClient()),
-            productRepo: new SanityProductRepository(),
-            paymentGateway: new StripePaymentGateway(),
-            notificationService: new ResendNotificationService(),
-          }
-        )
+    const result = await withServerActionSpan("placeOrder", () =>
+      placeOrderUseCase(
+        {
+          clerkUserId: userId,
+          cartItems: cart.items.map((item) => ({
+            sanityProductId: item.productId,
+            quantity: item.quantity,
+            productName: item.productName,
+          })),
+          shippingAddressId,
+          billingAddressId,
+          baseUrl,
+        },
+        {
+          userRepo: new SupabaseUserRepository(createAdminClient()),
+          orderRepo: new SupabaseOrderRepository(createAdminClient()),
+          addressRepo: new SupabaseAddressRepository(createAdminClient()),
+          productRepo: new SanityProductRepository(),
+          paymentGateway: new StripePaymentGateway(),
+          notificationService: new ResendNotificationService(),
+        }
+      )
     );
     redirectUrl = result.redirectUrl;
   } catch (err) {
