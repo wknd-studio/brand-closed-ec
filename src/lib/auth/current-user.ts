@@ -6,8 +6,11 @@ import * as Sentry from "@sentry/nextjs";
 // 各Server Action・use-caseで個別にsetUserを呼ぶ代わりに、既存の
 // auth()呼び出し箇所をこの関数に置き換えることで一元化する。
 // 詳細はdocs/ai-prompts/sentry.mdを参照。
-export async function requireAuth(): Promise<{ userId: string | null }> {
-  const { userId } = await auth();
-  if (userId) Sentry.setUser({ id: userId });
-  return { userId };
+//
+// auth()の戻り値（userId・sessionClaims・getToken等）はそのまま透過する。
+// 呼び出し元がuserId以外のフィールドを必要とするケースがあるため。
+export async function requireAuth(): ReturnType<typeof auth> {
+  const result = await auth();
+  if (result.userId) Sentry.setUser({ id: result.userId });
+  return result;
 }

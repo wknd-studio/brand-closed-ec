@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import OrderCompleteClient from "./order-complete-client";
@@ -12,7 +12,7 @@ export default async function OrderCompletePage({ searchParams }: Props) {
   const { session_id } = await searchParams;
   if (!session_id) redirect("/shop");
 
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
   const supabase = await createServerClient();
