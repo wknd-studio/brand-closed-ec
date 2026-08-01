@@ -70,6 +70,21 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 - [x] T018 [US1] カスタムツールをStudioに登録する（pluginsへの追加、商品管理配下へのナビゲーション項目追加）: `sanity.config.ts`, `src/sanity/structure.ts`（依存: T017）
 - [ ] T019 [US1] quickstart.md「User Story 1」「User Story 1: エラー行・閾値超過」の手順を手動検証する（依存: T018）
 
+### Phase 3 補足（手動検証・設計対話で判明した修正）
+
+- [x] T018a `sanity.cli.ts`のvite設定にtsconfigの`@/* -> src/*`エイリアスを追加する（Sanity StudioはNext.jsとは別のVite設定のため、手動起動時に`@/lib/product-import/...`の解決エラーが発生した）: `sanity.cli.ts`
+- [x] T018b CSVインポートツールに使い方ガイド（ブランド作成→データソース作成→アップロード→確認→確定の手順）と、データソースが1件も無い場合の案内を追加する: `src/sanity/tools/product-import/product-import-tool.tsx`
+- [x] T018c `vendor.is_contracted`フラグを削除する（vendorドキュメントが存在すること自体が取引関係を意味するため冗長と判断。ユーザーとの協議）: `src/sanity/schemas/vendor.ts`, data-model.md, contracts/trigger-api.md
+- [x] T018d 業者ドキュメントの入力しやすさを改善する（URL・CSV列名等にプレースホルダーを表示する`createPlaceholderTextInput`を追加）: `src/sanity/schemas/placeholder-text-input.tsx`, `src/sanity/schemas/vendor.ts`
+- [x] T018e **`vendor`型を廃止し`csvCatalog`/`scrapingCatalog`の2型に再設計する**（ユーザーとの協議。詳細はdata-model.md「商品データソース」参照）:
+  - ブランドは行（商品）ごとのデータであり「1業者/1データソース=1ブランド」を前提にできないため、`default_brand`は「データにブランド情報が無い行への穴埋め」としてのみ位置づける
+  - CSVは運営者がStudio上でデータのみで完結できるが、スクレイピングは開発者がコード（`scrape_adapter_id`に対応する`scraper.ts`）を書かないと成立しないため、Studio上での操作可否（作成・削除の可否）を型として分離する
+  - `csvCatalog`（運営者がStudio上で自由にCRUD）・`scrapingCatalog`（開発者がコードと一緒に用意。`sanity.config.ts`の`document.actions`/`newDocumentOptions`で新規作成・削除をUIレベルでロック）を新規作成: `src/sanity/schemas/csv-catalog.ts`, `src/sanity/schemas/scraping-catalog.ts`, `src/sanity/schemas/vendor.ts`（削除）
+  - `product.source_vendor`→`source_catalog`、`productImportRun.vendor`→`catalog`にリネーム（両catalog型を参照）: `src/sanity/schemas/product.ts`, `src/sanity/schemas/product-import-run.ts`
+  - コード内の`vendorId`/`CsvAdapterVendor`等を`catalogId`/`CsvAdapterCatalog`に統一: `src/lib/product-import/csv-adapter.ts`, `src/lib/product-import/apply-import.ts`, `src/lib/product-import/unified-product-schema.ts`, `src/sanity/tools/product-import/use-import-preview.ts`, `src/sanity/tools/product-import/product-import-tool.tsx`
+  - `validate-and-preview.ts`に`preExistingErrors`が無くてもエラー率分母を正しく計算する既存修正は維持しつつ、テストのcatalogId化を実施: `tests/unit/product-import/*.test.ts`
+- [x] T018f CSV列マッピングの入力をテキスト手打ちから表形式（サンプルCSVアップロード→実際の列名をプルダウンで選択）に変更する: `src/sanity/schemas/csv-column-mapping-input.tsx`, `src/sanity/schemas/csv-catalog.ts`
+
 **チェックポイント**: User Story 1（MVP）が独立して機能・検証可能
 
 ---
@@ -80,14 +95,14 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 **Independent Test**: quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」のシナリオ
 
-- [ ] T020 [P] [US2] `VendorScraper`インターフェースを定義する（contracts/vendor-adapter-interface.md準拠）: `src/lib/product-import/vendor-scraper.ts`
+- [ ] T020 [P] [US2] `CatalogScraper`インターフェースを定義する（contracts/vendor-adapter-interface.md準拠）: `src/lib/product-import/catalog-scraper.ts`
 - [ ] T021 [P] [US2] 固定HTMLフィクスチャに対する失敗するユニットテストを書く（cheerioベースのアダプター実装がHTMLを統一データ形式へ正しく変換できることを検証）: `tests/unit/product-import/vendors/fixture-vendor.test.ts`（依存: T004, T020）
 - [ ] T022 [US2] フィクスチャ向けの参照実装アダプターを実装しT021を通す（今後の実業者アダプター実装のひな形とする）: `scripts/product-import/vendors/__fixture__/scraper.ts`（依存: T021）
-- [ ] T023 [US2] `run-on-demand.ts`を実装する（Sanityから対象`vendor`を取得→スクレイパー実行→`validate-and-preview`→`apply-import`→`productImportRun`（`triggered_by: "on_demand"`）記録。ページ構造想定外時は例外を投げ担当者に通知。FR-008, FR-010, FR-022）: `scripts/product-import/run-on-demand.ts`（依存: T022, T008, T013）
-- [ ] T024 [US2] GitHub Actionsワークフローを新規作成する（`workflow_dispatch`で`vendorId`を受け取り`run-on-demand.ts`を実行。research.md #3参照）: `.github/workflows/product-data-sync.yml`（依存: T023）
-- [ ] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象業者が`scraping`区分でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
-- [ ] T026 [US2] トリガーAPIエンドポイントを実装しT025を通す（`X-Product-Import-Token`検証→`vendor`ドキュメント確認→GitHub `workflow_dispatch`呼び出し。FR-021, contracts/trigger-api.md）: `src/app/api/admin/product-import/trigger/route.ts`（依存: T024, T025）
-- [ ] T027 [US2] Studioの「今すぐ実行」ボタンを実装し、`vendor`ドキュメント画面に組み込む: `src/sanity/tools/product-import/on-demand-trigger-button.tsx`（依存: T026）
+- [ ] T023 [US2] `run-on-demand.ts`を実装する（Sanityから対象`scrapingCatalog`を取得→スクレイパー実行→`validate-and-preview`→`apply-import`→`productImportRun`（`triggered_by: "on_demand"`）記録。ページ構造想定外時は例外を投げ担当者に通知。FR-008, FR-010, FR-022）: `scripts/product-import/run-on-demand.ts`（依存: T022, T008, T013）
+- [ ] T024 [US2] GitHub Actionsワークフローを新規作成する（`workflow_dispatch`で`catalogId`を受け取り`run-on-demand.ts`を実行。research.md #3参照）: `.github/workflows/product-data-sync.yml`（依存: T023）
+- [ ] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象が`scrapingCatalog`型でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
+- [ ] T026 [US2] トリガーAPIエンドポイントを実装しT025を通す（`X-Product-Import-Token`検証→`scrapingCatalog`ドキュメント確認→GitHub `workflow_dispatch`呼び出し。FR-021, contracts/trigger-api.md）: `src/app/api/admin/product-import/trigger/route.ts`（依存: T024, T025）
+- [ ] T027 [US2] Studioの「今すぐ実行」ボタンを実装し、`scrapingCatalog`ドキュメント画面に組み込む: `src/sanity/tools/product-import/on-demand-trigger-button.tsx`（依存: T026）
 - [ ] T028 [US2] quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」の手順を手動検証する（依存: T027）
 
 **チェックポイント**: User Story 2が独立して機能・検証可能
@@ -100,10 +115,10 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 **Independent Test**: quickstart.md「User Story 3: 定期実行と要確認キュー」のシナリオ
 
-- [ ] T029 [P] [US3] `productAvailabilityReview`スキーマを新規作成し登録する（`product`, `vendor`, `detected_at`, `import_run`, `status`, `reviewed_at`。FR-014, data-model.md）: `src/sanity/schemas/product-availability-review.ts`, `src/sanity/schemas/index.ts`
+- [ ] T029 [P] [US3] `productAvailabilityReview`スキーマを新規作成し登録する（`product`, `catalog`, `detected_at`, `import_run`, `status`, `reviewed_at`。FR-014, data-model.md）: `src/sanity/schemas/product-availability-review.ts`, `src/sanity/schemas/index.ts`
 - [ ] T030 [P] [US3] 消失商品検知ロジックの失敗するユニットテストを書く（前回実行時の商品集合と今回の商品集合を比較し、今回存在しないものを検出する。FR-013）: `tests/unit/product-import/detect-disappeared-products.test.ts`
 - [ ] T031 [US3] `detect-disappeared-products.ts`を実装しT030を通す: `src/lib/product-import/detect-disappeared-products.ts`（依存: T030）
-- [ ] T032 [US3] `run-scheduled-sync.ts`を実装する（契約済みスクレイピング業者を全件処理、業者単位のエラーはスキップして他業者の処理を継続、エラー率閾値超過時はその回の実行をスキップし担当者に通知、`detect-disappeared-products`で消失商品を検知し`productAvailabilityReview`（`status: "pending"`）を作成。FR-009, FR-010, FR-013, FR-014, FR-020）: `scripts/product-import/run-scheduled-sync.ts`（依存: T022, T029, T031, T013）
+- [ ] T032 [US3] `run-scheduled-sync.ts`を実装する（`scrapingCatalog`を全件処理、catalog単位のエラーはスキップして他catalogの処理を継続、エラー率閾値超過時はその回の実行をスキップし担当者に通知、`detect-disappeared-products`で消失商品を検知し`productAvailabilityReview`（`status: "pending"`）を作成。FR-009, FR-010, FR-013, FR-014, FR-020）: `scripts/product-import/run-scheduled-sync.ts`（依存: T022, T029, T031, T013）
 - [ ] T033 [US3] GitHub Actionsワークフローに日次`schedule`（cron）トリガーを追加し`run-scheduled-sync.ts`を実行する（FR-012）: `.github/workflows/product-data-sync.yml`（依存: T032, T024）
 - [ ] T034 [US3] `productAvailabilityReview`に対するSanity Studioドキュメントアクションを実装する（承認→対象`product.availability`を`discontinued`に更新し`status: "approved_discontinued"`に、却下→`status: "dismissed"`に。FR-014）: `src/sanity/tools/product-import/product-availability-review-actions.ts`（依存: T029）
 - [ ] T035 [US3] 「要確認」一覧を商品管理配下に追加する（`status: "pending"`の`productAvailabilityReview`を表示。FR-018）: `src/sanity/structure.ts`（依存: T029, T034）

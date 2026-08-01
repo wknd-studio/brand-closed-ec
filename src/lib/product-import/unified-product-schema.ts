@@ -38,8 +38,8 @@ export interface UnifiedProductRecord {
 
   minRank?: MemberRankValue;
 
-  /** どの業者由来かの記録。ProductImportRun・product.source_vendorに使う */
-  vendorId: string;
+  /** どのデータソース由来かの記録。ProductImportRun・product.source_catalogに使う */
+  catalogId: string;
 
   /** エラー報告時に「何行目/どの商品か」を示すための出所情報。Sanityへは書き込まない */
   origin: UnifiedProductRecordOrigin;

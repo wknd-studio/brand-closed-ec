@@ -3,7 +3,7 @@ import { useClient } from "sanity";
 
 import {
   mapCsvToUnifiedRecords,
-  type CsvAdapterVendor,
+  type CsvAdapterCatalog,
 } from "@/lib/product-import/csv-adapter";
 import {
   validateAndPreview,
@@ -24,12 +24,12 @@ export function useImportPreview() {
   const [isLoading, setIsLoading] = useState(false);
 
   const runPreview = useCallback(
-    async (csvText: string, vendor: CsvAdapterVendor) => {
+    async (csvText: string, catalog: CsvAdapterCatalog) => {
       setIsLoading(true);
       try {
         const { records, errors: csvErrors } = mapCsvToUnifiedRecords(
           csvText,
-          vendor
+          catalog
         );
         const knownBrandNames = await client.fetch<string[]>(
           `*[_type == "brand"].name`

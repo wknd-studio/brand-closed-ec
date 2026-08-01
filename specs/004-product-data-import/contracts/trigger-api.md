@@ -18,7 +18,7 @@ POST /api/admin/product-import/trigger
 
 ```json
 {
-  "vendorId": "vendor-b"
+  "catalogId": "scraping-catalog-b"
 }
 ```
 
@@ -26,14 +26,14 @@ POST /api/admin/product-import/trigger
 
 - `202 Accepted`: GitHub Actionsへのディスパッチ要求を受け付けた（実行自体は非同期。完了後の結果は`ProductImportRun`ドキュメントとしてSanity上に記録され、Studio側はそれをポーリング・購読して表示する）
 - `401 Unauthorized`: トークン不正
-- `400 Bad Request`: `vendorId`が存在しない、または対象業者の`data_source_type`が`scraping`でない
+- `400 Bad Request`: `catalogId`が存在しない、または対象が`scrapingCatalog`型でない
 
 ### 内部処理
 
 1. `X-Product-Import-Token`を検証する
-2. `vendorId`に対応する`vendor`ドキュメントをSanityから取得し、`data_source_type === "scraping"`であることを確認する
-3. GitHub REST API（`POST /repos/{owner}/{repo}/actions/workflows/product-data-sync.yml/dispatches`）を、サーバーサイドにのみ保持するGitHub PATを使って呼び出す。`inputs`に`vendorId`と`triggeredBy: "on_demand"`を渡す
-4. `run-on-demand.ts`（GitHub Actions側）が`vendorId`を受け取り、該当業者のみを対象にスクレイピング→検証プレビュー→（担当者確認後）書き込みを実行する
+2. `catalogId`に対応する`scrapingCatalog`ドキュメントをSanityから取得する（`csvCatalog`が指定された場合は400エラー）
+3. GitHub REST API（`POST /repos/{owner}/{repo}/actions/workflows/product-data-sync.yml/dispatches`）を、サーバーサイドにのみ保持するGitHub PATを使って呼び出す。`inputs`に`catalogId`と`triggeredBy: "on_demand"`を渡す
+4. `run-on-demand.ts`（GitHub Actions側）が`catalogId`を受け取り、該当データソースのみを対象にスクレイピング→検証プレビュー→（担当者確認後）書き込みを実行する
 
 ### 検証プレビューとの関係
 

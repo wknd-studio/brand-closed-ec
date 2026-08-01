@@ -243,11 +243,12 @@ export const product = defineType({
       type: "string",
     }),
     defineField({
-      name: "source_vendor",
-      title: "データ取得元業者",
-      description: "業者商品データインポートで作成・更新された場合の取得元業者",
+      name: "source_catalog",
+      title: "データ取得元",
+      description:
+        "業者商品データインポートで作成・更新された場合の取得元データソース（CSV/スクレイピング）",
       type: "reference",
-      to: [{ type: "vendor" }],
+      to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
     }),
     defineField({
       name: "vendor_cost_rate",

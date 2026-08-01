@@ -19,7 +19,7 @@ function record(
     brandName: "ブランドA",
     retailPrice: 10000,
     availability: "available",
-    vendorId: "vendor-1",
+    catalogId: "catalog-1",
     origin: { kind: "csv", rowNumber: 1 },
     ...overrides,
   };
@@ -83,7 +83,7 @@ describe("applyImport", () => {
 
     const result = await applyImport({
       client,
-      vendorId: "vendor-1",
+      catalogId: "catalog-1",
       triggeredBy: "manual_csv",
       startedAt: new Date("2026-08-01T00:00:00Z"),
       outcome: "completed",
@@ -115,7 +115,7 @@ describe("applyImport", () => {
 
     const result = await applyImport({
       client,
-      vendorId: "vendor-1",
+      catalogId: "catalog-1",
       triggeredBy: "manual_csv",
       startedAt: new Date(),
       outcome: "completed",
@@ -135,7 +135,7 @@ describe("applyImport", () => {
 
     const result = await applyImport({
       client,
-      vendorId: "vendor-1",
+      catalogId: "catalog-1",
       triggeredBy: "manual_csv",
       startedAt: new Date(),
       outcome: "completed",
@@ -159,7 +159,7 @@ describe("applyImport", () => {
 
     const result = await applyImport({
       client,
-      vendorId: "vendor-1",
+      catalogId: "catalog-1",
       triggeredBy: "manual_csv",
       startedAt: new Date(),
       outcome: "completed",

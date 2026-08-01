@@ -57,7 +57,12 @@ export const structure: StructureResolver = (S) =>
               ),
               S.documentTypeListItem("designTheme").title("デザインテーマ"),
               S.divider(),
-              S.documentTypeListItem("vendor").title("業者"),
+              S.documentTypeListItem("csvCatalog").title(
+                "商品データソース（CSV）"
+              ),
+              S.documentTypeListItem("scrapingCatalog").title(
+                "商品データソース（スクレイピング）"
+              ),
               S.documentTypeListItem("productImportRun").title(
                 "インポート実行結果"
               ),

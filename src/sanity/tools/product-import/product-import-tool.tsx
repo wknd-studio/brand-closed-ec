@@ -14,15 +14,15 @@ import {
 } from "@sanity/ui";
 
 import { applyImport } from "@/lib/product-import/apply-import";
-import type { CsvAdapterVendor } from "@/lib/product-import/csv-adapter";
+import type { CsvAdapterCatalog } from "@/lib/product-import/csv-adapter";
 import { describeOrigin } from "@/lib/product-import/unified-product-schema";
 
 import { useImportPreview } from "./use-import-preview";
 
-interface VendorOption {
+interface CsvCatalogOption {
   _id: string;
-  name: string;
-  csv_column_mapping?: CsvAdapterVendor["columnMapping"];
+  label: string;
+  csv_column_mapping?: CsvAdapterCatalog["columnMapping"];
   defaultBrandName?: string;
 }
 
@@ -35,9 +35,9 @@ type Phase = "idle" | "previewing" | "previewed" | "applying" | "applied";
  */
 export function ProductImportTool() {
   const { client, preview, isLoading, runPreview, reset } = useImportPreview();
-  const [vendors, setVendors] = useState<VendorOption[]>([]);
-  const [vendorsLoaded, setVendorsLoaded] = useState(false);
-  const [selectedVendorId, setSelectedVendorId] = useState<string>("");
+  const [catalogs, setCatalogs] = useState<CsvCatalogOption[]>([]);
+  const [catalogsLoaded, setCatalogsLoaded] = useState(false);
+  const [selectedCatalogId, setSelectedCatalogId] = useState<string>("");
   const [csvText, setCsvText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -49,15 +49,15 @@ export function ProductImportTool() {
   useEffect(() => {
     let cancelled = false;
     client
-      .fetch<VendorOption[]>(
-        `*[_type == "vendor" && data_source_type == "csv"]{
-          _id, name, csv_column_mapping, "defaultBrandName": default_brand->name
+      .fetch<CsvCatalogOption[]>(
+        `*[_type == "csvCatalog"]{
+          _id, label, csv_column_mapping, "defaultBrandName": default_brand->name
         }`
       )
       .then((result) => {
         if (!cancelled) {
-          setVendors(result);
-          setVendorsLoaded(true);
+          setCatalogs(result);
+          setCatalogsLoaded(true);
         }
       });
     return () => {
@@ -65,7 +65,7 @@ export function ProductImportTool() {
     };
   }, [client]);
 
-  const selectedVendor = vendors.find((v) => v._id === selectedVendorId);
+  const selectedCatalog = catalogs.find((c) => c._id === selectedCatalogId);
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,22 +85,22 @@ export function ProductImportTool() {
   );
 
   const handlePreview = useCallback(async () => {
-    if (!csvText || !selectedVendor?.csv_column_mapping) return;
+    if (!csvText || !selectedCatalog?.csv_column_mapping) return;
     setPhase("previewing");
     await runPreview(csvText, {
-      vendorId: selectedVendor._id,
-      defaultBrandName: selectedVendor.defaultBrandName,
-      columnMapping: selectedVendor.csv_column_mapping,
+      catalogId: selectedCatalog._id,
+      defaultBrandName: selectedCatalog.defaultBrandName,
+      columnMapping: selectedCatalog.csv_column_mapping,
     });
     setPhase("previewed");
-  }, [csvText, selectedVendor, runPreview]);
+  }, [csvText, selectedCatalog, runPreview]);
 
   const handleConfirm = useCallback(async () => {
-    if (!preview || preview.outcome !== "ok" || !selectedVendor) return;
+    if (!preview || preview.outcome !== "ok" || !selectedCatalog) return;
     setPhase("applying");
     const result = await applyImport({
       client,
-      vendorId: selectedVendor._id,
+      catalogId: selectedCatalog._id,
       triggeredBy: "manual_csv",
       startedAt: new Date(),
       outcome: "completed",
@@ -113,12 +113,12 @@ export function ProductImportTool() {
     });
     setApplyResult(result);
     setPhase("applied");
-  }, [client, preview, selectedVendor]);
+  }, [client, preview, selectedCatalog]);
 
   return (
     <Container width={2} padding={4}>
       <Stack space={4}>
-        <Heading size={2}>CSVインポート（業者商品データ）</Heading>
+        <Heading size={2}>CSVインポート（商品データ）</Heading>
 
         <Card padding={3} radius={2} shadow={1} tone="primary">
           <Stack space={3}>
@@ -132,14 +132,13 @@ export function ProductImportTool() {
               </Text>
               <Text size={1} as="li">
                 「商品管理 →
-                業者」で、CSVを提供してくれる業者ごとにドキュメントを作成する。データ提供区分は「CSV提供」、CSV列マッピングに実際のCSVのヘッダー名を入力する（例:
-                商品名列が「品名」なら商品名列名に「品名」と入力）。CSVにブランド列が無い業者は「デフォルトブランド」も設定する
+                商品データソース（CSV）」で、CSVファイル1本ごとにドキュメントを作成する。CSV列マッピングでサンプルCSVをアップロードすると、実際の列名をプルダウンから選べる。CSVにブランド列が無いデータは「デフォルトブランド」も設定する
               </Text>
               <Text size={1} as="li">
                 列名がマッピングと一致するCSVファイルを用意する
               </Text>
               <Text size={1} as="li">
-                下の「1. 業者を選択」〜「4.
+                下の「1. 商品データソースを選択」〜「4.
                 実行を確定する」の手順に沿って実行する
               </Text>
               <Text size={1} as="li">
@@ -149,11 +148,11 @@ export function ProductImportTool() {
           </Stack>
         </Card>
 
-        {vendorsLoaded && vendors.length === 0 && (
+        {catalogsLoaded && catalogs.length === 0 && (
           <Card padding={3} radius={2} shadow={1} tone="caution">
             <Text size={1}>
-              CSV提供業者がまだ登録されていません。上記の手順2に従って「商品管理
-              → 業者」から先に業者を作成してください。
+              CSV商品データソースがまだ登録されていません。上記の手順2に従って「商品管理
+              → 商品データソース（CSV）」から先に作成してください。
             </Text>
           </Card>
         )}
@@ -161,22 +160,22 @@ export function ProductImportTool() {
         <Card padding={3} radius={2} shadow={1}>
           <Stack space={3}>
             <Text weight="semibold" size={1}>
-              1. 業者を選択
+              1. 商品データソースを選択
             </Text>
             <Select
-              value={selectedVendorId}
-              disabled={vendors.length === 0}
+              value={selectedCatalogId}
+              disabled={catalogs.length === 0}
               onChange={(event) => {
-                setSelectedVendorId(event.currentTarget.value);
+                setSelectedCatalogId(event.currentTarget.value);
                 setPhase("idle");
                 setApplyResult(null);
                 reset();
               }}
             >
               <option value="">選択してください</option>
-              {vendors.map((v) => (
-                <option key={v._id} value={v._id}>
-                  {v.name}
+              {catalogs.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.label}
                 </option>
               ))}
             </Select>
@@ -188,7 +187,7 @@ export function ProductImportTool() {
               type="file"
               accept=".csv,text/csv"
               onChange={handleFileChange}
-              disabled={!selectedVendorId}
+              disabled={!selectedCatalogId}
             />
             {fileName && (
               <Text size={1} muted>
@@ -202,7 +201,7 @@ export function ProductImportTool() {
             <Button
               text="検証プレビューを表示する"
               tone="primary"
-              disabled={!csvText || !selectedVendorId || isLoading}
+              disabled={!csvText || !selectedCatalogId || isLoading}
               onClick={handlePreview}
             />
             <Text muted size={1}>

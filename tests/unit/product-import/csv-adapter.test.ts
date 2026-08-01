@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { mapCsvToUnifiedRecords } from "@/lib/product-import/csv-adapter";
-import type { CsvAdapterVendor } from "@/lib/product-import/csv-adapter";
+import type { CsvAdapterCatalog } from "@/lib/product-import/csv-adapter";
 
 describe("mapCsvToUnifiedRecords", () => {
   it("業者Aの列構成（日本語ヘッダー、JANあり、在庫は「あり/なし」）を統一データ形式へ変換する", () => {
     const csv =
       "商品名,ブランド,JAN,定価,在庫\nプレミアムトート,ACME,4901234567894,45000,あり";
-    const vendor: CsvAdapterVendor = {
-      vendorId: "vendor-a",
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-a",
       columnMapping: {
         jan_code: "JAN",
         name: "商品名",
@@ -17,7 +17,7 @@ describe("mapCsvToUnifiedRecords", () => {
       },
     };
 
-    const { records, errors } = mapCsvToUnifiedRecords(csv, vendor);
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
 
     expect(errors).toHaveLength(0);
     expect(records).toEqual([
@@ -29,7 +29,7 @@ describe("mapCsvToUnifiedRecords", () => {
         vendorCostRate: undefined,
         caseQuantity: undefined,
         availability: "available",
-        vendorId: "vendor-a",
+        catalogId: "catalog-a",
         origin: { kind: "csv", rowNumber: 2 },
       },
     ]);
@@ -38,8 +38,8 @@ describe("mapCsvToUnifiedRecords", () => {
   it("業者Bの列構成（英語ヘッダー、JAN無し）を統一データ形式へ変換する", () => {
     const csv =
       "SKU,ItemName,Brand,MSRP,Stock\n,クラシックデニム,BETA,12000,in_stock";
-    const vendor: CsvAdapterVendor = {
-      vendorId: "vendor-b",
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-b",
       columnMapping: {
         name: "ItemName",
         brand_name: "Brand",
@@ -48,7 +48,7 @@ describe("mapCsvToUnifiedRecords", () => {
       },
     };
 
-    const { records, errors } = mapCsvToUnifiedRecords(csv, vendor);
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
 
     expect(errors).toHaveLength(0);
     expect(records[0].janCode).toBeUndefined();
@@ -62,8 +62,8 @@ describe("mapCsvToUnifiedRecords", () => {
     const csv =
       "商品ID,商品名,上代(税別),JAN,入数,掲示(掛け率),卸値(税別),備考\n" +
       "C-1029,ヴィンテージシャツ,18000,4912345678901,6,55,9900,数量限定";
-    const vendor: CsvAdapterVendor = {
-      vendorId: "vendor-c",
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-c",
       defaultBrandName: "業者C専属ブランド",
       columnMapping: {
         jan_code: "JAN",
@@ -76,7 +76,7 @@ describe("mapCsvToUnifiedRecords", () => {
       },
     };
 
-    const { records, errors } = mapCsvToUnifiedRecords(csv, vendor);
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
 
     expect(errors).toHaveLength(0);
     expect(records).toEqual([
@@ -88,7 +88,7 @@ describe("mapCsvToUnifiedRecords", () => {
         vendorCostRate: 55,
         caseQuantity: 6,
         availability: "available",
-        vendorId: "vendor-c",
+        catalogId: "catalog-c",
         origin: { kind: "csv", rowNumber: 2 },
       },
     ]);
@@ -96,12 +96,12 @@ describe("mapCsvToUnifiedRecords", () => {
 
   it("ブランド列が無くdefaultBrandNameも未設定の場合、エラーとして報告する", () => {
     const csv = "商品名,定価\nテスト商品,1000";
-    const vendor: CsvAdapterVendor = {
-      vendorId: "vendor-d",
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-d",
       columnMapping: { name: "商品名", retail_price: "定価" },
     };
 
-    const { records, errors } = mapCsvToUnifiedRecords(csv, vendor);
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
 
     expect(records).toHaveLength(0);
     expect(errors).toHaveLength(1);
@@ -111,8 +111,8 @@ describe("mapCsvToUnifiedRecords", () => {
 
   it("定価が数値として読み取れない行はエラーとして報告する", () => {
     const csv = "商品名,ブランド,定価\nテスト商品,ブランドA,不明";
-    const vendor: CsvAdapterVendor = {
-      vendorId: "vendor-a",
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-a",
       columnMapping: {
         name: "商品名",
         brand_name: "ブランド",
@@ -120,7 +120,7 @@ describe("mapCsvToUnifiedRecords", () => {
       },
     };
 
-    const { records, errors } = mapCsvToUnifiedRecords(csv, vendor);
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
 
     expect(records).toHaveLength(0);
     expect(errors).toHaveLength(1);
@@ -133,8 +133,8 @@ describe("mapCsvToUnifiedRecords", () => {
       "商品A,ブランドA,1000\n" +
       ",ブランドA,2000\n" +
       "商品C,ブランドA,3000";
-    const vendor: CsvAdapterVendor = {
-      vendorId: "vendor-a",
+    const catalog: CsvAdapterCatalog = {
+      catalogId: "catalog-a",
       columnMapping: {
         name: "商品名",
         brand_name: "ブランド",
@@ -142,7 +142,7 @@ describe("mapCsvToUnifiedRecords", () => {
       },
     };
 
-    const { records, errors } = mapCsvToUnifiedRecords(csv, vendor);
+    const { records, errors } = mapCsvToUnifiedRecords(csv, catalog);
 
     expect(records).toHaveLength(2);
     expect(errors).toHaveLength(1);

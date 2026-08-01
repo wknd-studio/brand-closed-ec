@@ -1,6 +1,6 @@
 # Contract: 統一商品データ形式（UnifiedProductRecord）
 
-業者から提供されたCSV、またはスクレイピングで収集したデータは、Sanityへの書き込み（`apply-import.ts`）に渡る前に、必ずこの形式に変換されていなければならない。CSVアダプター（`csv-adapter.ts`）とスクレイピングアダプター（`scripts/product-import/vendors/<vendor-id>/scraper.ts`）は、どちらもこの形式の配列を返す責務を持つ。
+業者から提供されたCSV、またはスクレイピングで収集したデータは、Sanityへの書き込み（`apply-import.ts`）に渡る前に、必ずこの形式に変換されていなければならない。CSVアダプター（`csv-adapter.ts`）とスクレイピングアダプター（`scripts/product-import/vendors/<scrape_adapter_id>/scraper.ts`）は、どちらもこの形式の配列を返す責務を持つ。
 
 ## 型定義（TypeScript）
 
@@ -31,8 +31,8 @@ interface UnifiedProductRecord {
 
   minRank?: RankKey;
 
-  /** どの業者由来かの記録。ProductImportRun・product.source_vendorに使う */
-  vendorId: string;
+  /** どのデータソース由来かの記録。ProductImportRun・product.source_catalogに使う */
+  catalogId: string;
 
   /** エラー報告時に「何行目/どの商品か」を示すための出所情報。Sanityへは書き込まない */
   origin:
@@ -54,7 +54,7 @@ interface UnifiedProductRecord {
 
 ## 使われ方
 
-- `csv-adapter.ts`: 業者のCSV（任意の列構成）→ `UnifiedProductRecord[]`
-- `scripts/product-import/vendors/<vendor-id>/scraper.ts`: 業者サイトのHTML → `UnifiedProductRecord[]`
+- `csv-adapter.ts`: データソースのCSV（任意の列構成）→ `UnifiedProductRecord[]`
+- `scripts/product-import/vendors/<scrape_adapter_id>/scraper.ts`: 業者サイトのHTML → `UnifiedProductRecord[]`
 - `validate-and-preview.ts`: `UnifiedProductRecord[]` → 検証結果（成功見込み/エラー見込み、エラー詳細）
 - `apply-import.ts`: 検証済み`UnifiedProductRecord[]` → Sanity `product`ドキュメントへの`createOrReplace`（JANコード優先、フォールバック完全一致でのdedupe後。仕入れ掛け率の下限チェックもここで実施）

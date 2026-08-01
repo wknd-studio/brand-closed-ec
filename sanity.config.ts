@@ -18,6 +18,29 @@ const tools = [
   },
 ];
 
+// scrapingCatalogは開発者がスクレイピングコード(scrape_adapter_id)と一緒に
+// 用意するドキュメントであり、運営者がStudio上で新規作成・削除すべきではない
+// （specs/004-product-data-import）。UIレベルでの誤操作防止であり、
+// データセットへの書き込み権限を持つ場合はAPI経由で操作できてしまう点に注意。
+const document = {
+  actions: (
+    prev: import("sanity").DocumentActionComponent[],
+    context: { schemaType: string }
+  ) =>
+    context.schemaType === "scrapingCatalog"
+      ? prev.filter(
+          ({ action }) => action !== "delete" && action !== "duplicate"
+        )
+      : prev,
+  newDocumentOptions: (
+    prev: import("sanity").TemplateItem[],
+    context: { creationContext: { type: string } }
+  ) =>
+    context.creationContext.type === "global"
+      ? prev.filter((item) => item.templateId !== "scrapingCatalog")
+      : prev,
+};
+
 export default defineConfig([
   {
     name: "staging",
@@ -28,6 +51,7 @@ export default defineConfig([
     plugins,
     schema,
     tools,
+    document,
   },
   {
     name: "production",
@@ -38,5 +62,6 @@ export default defineConfig([
     plugins,
     schema,
     tools,
+    document,
   },
 ]);

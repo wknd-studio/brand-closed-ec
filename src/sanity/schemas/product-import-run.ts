@@ -6,10 +6,10 @@ export const productImportRun = defineType({
   type: "document",
   fields: [
     defineField({
-      name: "vendor",
-      title: "対象業者",
+      name: "catalog",
+      title: "対象データソース",
       type: "reference",
-      to: [{ type: "vendor" }],
+      to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
       validation: (r) => r.required(),
     }),
     defineField({
@@ -84,12 +84,12 @@ export const productImportRun = defineType({
   ],
   preview: {
     select: {
-      title: "vendor.name",
+      title: "catalog.label",
       subtitle: "started_at",
     },
     prepare({ title, subtitle }) {
       return {
-        title: title ?? "（業者未設定）",
+        title: title ?? "（データソース未設定）",
         subtitle: subtitle
           ? new Date(subtitle).toLocaleString("ja-JP")
           : undefined,

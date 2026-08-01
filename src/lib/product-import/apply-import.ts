@@ -21,7 +21,7 @@ export interface ApplyImportErrorDetail {
 
 export interface ApplyImportOptions {
   client: SanityClient;
-  vendorId: string;
+  catalogId: string;
   triggeredBy: "scheduled" | "on_demand" | "manual_csv";
   startedAt: Date;
   outcome: "completed" | "aborted_error_threshold" | "failed";
@@ -110,7 +110,10 @@ export async function applyImport(
       jan_code: record.janCode,
       vendor_cost_rate: record.vendorCostRate,
       case_quantity: record.caseQuantity,
-      source_vendor: { _type: "reference" as const, _ref: options.vendorId },
+      source_catalog: {
+        _type: "reference" as const,
+        _ref: options.catalogId,
+      },
     };
 
     const match = findMatchingProduct(record, existingProducts);
@@ -125,7 +128,7 @@ export async function applyImport(
 
   const importRun = await client.create({
     _type: "productImportRun",
-    vendor: { _type: "reference", _ref: options.vendorId },
+    catalog: { _type: "reference", _ref: options.catalogId },
     triggered_by: options.triggeredBy,
     started_at: options.startedAt.toISOString(),
     finished_at: new Date().toISOString(),
