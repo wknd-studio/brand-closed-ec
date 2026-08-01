@@ -114,33 +114,29 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
             <Text size={1} muted>
               案内文や空行が先頭にあるCSVもあるため、実際に項目名が並んでいる行を選んでください。
             </Text>
-            <Stack space={1}>
+            <Stack space={3}>
               {previewRows.map((row, index) => {
                 const rowNumber = index + 1;
                 const isSelected = rowNumber === headerRowNumber;
                 return (
-                  <Flex key={rowNumber} align="center" gap={2}>
-                    <Button
-                      fontSize={1}
-                      padding={2}
-                      mode={isSelected ? "default" : "ghost"}
-                      tone={isSelected ? "primary" : "default"}
-                      text={`${rowNumber}行目`}
-                      onClick={() => handleHeaderRowSelect(rowNumber)}
-                    />
-                    {isSelected && <Badge tone="primary">ヘッダー</Badge>}
-                    <Text
-                      size={1}
-                      muted
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {row.filter(Boolean).join(" / ") || "(空行)"}
-                    </Text>
-                  </Flex>
+                  <Stack key={rowNumber} space={2}>
+                    <Flex align="center" gap={2}>
+                      <Button
+                        fontSize={1}
+                        padding={2}
+                        mode={isSelected ? "default" : "ghost"}
+                        tone={isSelected ? "primary" : "default"}
+                        text={`${rowNumber}行目`}
+                        onClick={() => handleHeaderRowSelect(rowNumber)}
+                      />
+                      {isSelected && <Badge tone="primary">ヘッダー</Badge>}
+                    </Flex>
+                    <Box style={{ overflowX: "auto" }}>
+                      <Text size={1} muted style={{ whiteSpace: "nowrap" }}>
+                        {row.filter(Boolean).join(" / ") || "(空行)"}
+                      </Text>
+                    </Box>
+                  </Stack>
                 );
               })}
             </Stack>
