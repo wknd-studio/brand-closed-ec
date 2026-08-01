@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
 import { issueInvoice as issueInvoiceUseCase } from "@/use-cases/issue-invoice";
 import { advanceOrderStatus as advanceOrderStatusUseCase } from "@/use-cases/advance-order-status";
@@ -14,7 +14,7 @@ import { ResendNotificationService } from "@/infrastructure/resend/resend-notifi
 type ActionResult = { error: string };
 
 async function requireAdmin(): Promise<{ error: string } | null> {
-  const { sessionClaims } = await auth();
+  const { sessionClaims } = await requireAuth();
   const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
   if (role !== "admin") return { error: "権限がありません" };
   return null;

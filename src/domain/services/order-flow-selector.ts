@@ -1,6 +1,18 @@
 import type { CartItem } from "@/domain/value-objects/cart-item";
-import type { PaymentFlow } from "@/domain/entities/order";
 
-export function selectOrderFlow(cartItems: CartItem[]): PaymentFlow {
-  return cartItems.some((item) => item.isNegotiable) ? "invoice" : "checkout";
+export type SplitCartResult = {
+  atOrderItems: CartItem[];
+  afterOrderItems: CartItem[];
+};
+
+export function splitCartByPaymentTiming(
+  cartItems: CartItem[]
+): SplitCartResult {
+  const atOrderItems = cartItems.filter(
+    (item) => item.paymentTiming === "at_order" && !item.isNegotiable
+  );
+  const afterOrderItems = cartItems.filter(
+    (item) => item.paymentTiming === "after_order" || item.isNegotiable
+  );
+  return { atOrderItems, afterOrderItems };
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { revalidatePath } from "next/cache";
 import { withdraw } from "@/use-cases/withdraw";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
@@ -22,7 +22,7 @@ export async function setDefaultAddressAction(
   addressId: string,
   type: AddressType
 ): Promise<ActionResult> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   try {
@@ -43,7 +43,7 @@ export async function setDefaultAddressAction(
 export async function createAddressAction(
   formData: FormData
 ): Promise<ActionResult> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   try {
@@ -76,7 +76,7 @@ export async function updateAddressAction(
   addressId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   try {
@@ -104,7 +104,7 @@ export async function updateAddressAction(
 export async function deleteAddressAction(
   addressId: string
 ): Promise<ActionResult> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   try {
@@ -122,7 +122,7 @@ export async function deleteAddressAction(
 type DeleteAccountResult = { success: true } | { error: string };
 
 export async function deleteAccount(): Promise<DeleteAccountResult> {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   try {

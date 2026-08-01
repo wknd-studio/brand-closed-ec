@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { getStripe, STRIPE_PRICE_IDS, type PaidRank } from "@/lib/stripe";
 import Link from "next/link";
 
@@ -19,7 +20,7 @@ export default async function OnboardingPaymentPage({
 
   const paidRank = plan as PaidRank;
 
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
   let user;

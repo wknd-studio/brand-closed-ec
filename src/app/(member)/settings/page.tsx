@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
@@ -6,7 +6,7 @@ import WithdrawalDialog from "./withdrawal-dialog";
 import AddressList from "./address-list";
 
 export default async function SettingsPage() {
-  const { userId } = await auth();
+  const { userId } = await requireAuth();
   const supabase = await createServerClient();
   const userRepo = new SupabaseUserRepository(supabase);
   const addressRepo = new SupabaseAddressRepository(supabase);
