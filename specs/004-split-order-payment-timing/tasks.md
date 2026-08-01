@@ -92,16 +92,16 @@
 
 ### Tests for User Story 3
 
-- [ ] T019 [P] [US3] カートアイテムを`paymentTiming`でグループ化する関数（両方非空の場合のみグループを返す）のユニットテストを `tests/unit/cart-payment-grouping.test.ts` に作成
+- [x] T019 [P] [US3] カートアイテムを`paymentTiming`でグループ化する関数（両方非空の場合のみグループを返す）のユニットテストを `tests/unit/cart-payment-grouping.test.ts` に作成
 
 ### Implementation for User Story 3
 
-- [ ] T020 [P] [US3] クッキー保存`CartItem`型に`paymentTiming`を追加 in `src/lib/cart/types.ts`
-- [ ] T021 [US3] 商品詳細取得(`ProductDetail`/`fetchProductById`)に`payment_timing`を追加 in `src/lib/sanity/products.ts`
-- [ ] T022 [US3] カート追加時に`paymentTiming`をコピーする処理を実装 in `src/app/(member)/shop/[brand]/[id]/add-to-cart-button.tsx`（T020・T021に依存）
-- [ ] T023 [US3] カートアイテムのグループ化関数を実装 in `src/lib/cart/types.ts`（T019に依存、T019がFAILすることを確認してから実装）
-- [ ] T024 [US3] `cart-sidebar.tsx`でグループ見出し・小計を表示するUIを実装 in `src/components/cart-sidebar.tsx`（T020・T023に依存）
-- [ ] T025 [US3] チェックアウト画面（`src/app/(member)/order/checkout/`配下）でも同様のグループ表示を確認・実装（既存実装を調査した上でT023の関数を再利用）
+- [x] T020 [P] [US3] クッキー保存`CartItem`型に`paymentTiming`を追加 in `src/lib/cart/types.ts`
+- [x] T021 [US3] 商品詳細取得(`ProductDetail`/`fetchProductById`)に`payment_timing`を追加 in `src/lib/sanity/products.ts`
+- [x] T022 [US3] カート追加時に`paymentTiming`をコピーする処理を実装 in `src/app/(member)/shop/[brand]/[id]/add-to-cart-button.tsx`（T020・T021に依存）
+- [x] T023 [US3] カートアイテムのグループ化関数を実装 in `src/lib/cart/types.ts`（T019に依存、T019がFAILすることを確認してから実装）
+- [x] T024 [US3] `cart-sidebar.tsx`でグループ見出し・小計を表示するUIを実装 in `src/components/cart-sidebar.tsx`（T020・T023に依存）
+- [x] T025 [US3] チェックアウト画面（`src/app/(member)/order/checkout/`配下）でも同様のグループ表示を確認・実装（既存実装を調査した上でT023の関数を再利用）
 
 **Checkpoint**: 会員はチェックアウト前にカート画面で分割の事実を把握できる。US1〜US3でP1の全Storyが完了
 

@@ -6,8 +6,61 @@ import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
+import { groupCartItemsByPaymentTiming } from "@/lib/cart/types";
 import { fetchProductsByIds, type MemberRank } from "@/lib/sanity/products";
 import CheckoutForm from "./checkout-form";
+
+type LineItem = {
+  productId: string;
+  productName: string;
+  thumbnail: string | null;
+  quantity: number;
+  unitPrice: number | null;
+  isOutOfStock: boolean;
+};
+
+function LineItemList({ items }: { items: LineItem[] }) {
+  return (
+    <ul className="divide-y rounded-lg border">
+      {items.map((item) => (
+        <li key={item.productId} className="flex gap-4 px-4 py-3">
+          <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+            {item.thumbnail ? (
+              <Image
+                src={item.thumbnail}
+                alt={item.productName}
+                fill
+                className="object-cover"
+                sizes="56px"
+              />
+            ) : (
+              <div className="h-full w-full bg-gray-100" />
+            )}
+          </div>
+          <div className="flex flex-1 items-start justify-between">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">{item.productName}</p>
+              <p className="text-xs text-gray-500">
+                {item.unitPrice !== null
+                  ? `¥${item.unitPrice.toLocaleString()}`
+                  : "価格要相談"}{" "}
+                × {item.quantity}
+              </p>
+              {item.isOutOfStock && (
+                <p className="text-xs font-medium text-red-500">在庫切れ</p>
+              )}
+            </div>
+            <p className="text-sm font-medium tabular-nums">
+              {item.unitPrice !== null
+                ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
+                : "—"}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default async function CheckoutPage() {
   const [{ userId }, cookieStore] = await Promise.all([auth(), cookies()]);
@@ -59,6 +112,9 @@ export default async function CheckoutPage() {
       isOutOfStock,
       productName: product?.name ?? item.productName,
       thumbnail: product?.thumbnail ?? item.thumbnail,
+      // 表示用のグループ分けはサーバー側の最新payment_timingを根拠にする
+      // （unitPriceと同様、カートCookieの値は表示のキャッシュとしてのみ扱う）
+      paymentTiming: product?.payment_timing ?? "at_order",
     };
   });
 
@@ -68,6 +124,7 @@ export default async function CheckoutPage() {
     return sum + item.unitPrice * item.quantity;
   }, 0);
   const hasNegotiable = lineItems.some((i) => i.unitPrice === null);
+  const paymentTimingGroups = groupCartItemsByPaymentTiming(lineItems);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
@@ -77,46 +134,24 @@ export default async function CheckoutPage() {
         {/* 商品一覧 */}
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-gray-700">注文内容</h2>
-          <ul className="divide-y rounded-lg border">
-            {lineItems.map((item) => (
-              <li key={item.productId} className="flex gap-4 px-4 py-3">
-                <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-                  {item.thumbnail ? (
-                    <Image
-                      src={item.thumbnail}
-                      alt={item.productName}
-                      fill
-                      className="object-cover"
-                      sizes="56px"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-gray-100" />
-                  )}
-                </div>
-                <div className="flex flex-1 items-start justify-between">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">{item.productName}</p>
-                    <p className="text-xs text-gray-500">
-                      {item.unitPrice !== null
-                        ? `¥${item.unitPrice.toLocaleString()}`
-                        : "価格要相談"}{" "}
-                      × {item.quantity}
-                    </p>
-                    {item.isOutOfStock && (
-                      <p className="text-xs font-medium text-red-500">
-                        在庫切れ
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-sm font-medium tabular-nums">
-                    {item.unitPrice !== null
-                      ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
-                      : "—"}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {paymentTimingGroups ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-gray-500">
+                  注文時に支払う商品
+                </h3>
+                <LineItemList items={paymentTimingGroups.atOrder} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-gray-500">
+                  注文後に請求される商品
+                </h3>
+                <LineItemList items={paymentTimingGroups.afterOrder} />
+              </div>
+            </div>
+          ) : (
+            <LineItemList items={lineItems} />
+          )}
 
           {/* 合計 */}
           <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">

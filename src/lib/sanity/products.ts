@@ -37,6 +37,7 @@ export type Product = {
   min_rank: string;
   availability: string;
   thumbnail: string | null;
+  payment_timing: "at_order" | "after_order" | null;
 };
 export type ProductDetail = {
   _id: string;
@@ -51,6 +52,7 @@ export type ProductDetail = {
   availability: string;
   images: string[] | null;
   files: { label: string | null; url: string }[] | null;
+  payment_timing: "at_order" | "after_order" | null;
 };
 
 export async function fetchBrands(
@@ -79,7 +81,7 @@ export async function fetchProductById(
   id: string
 ): Promise<ProductDetail | null> {
   return sanityClient.fetch<ProductDetail | null>(
-    `*[_type=="product"&&_id==$id][0]{_id,name,"brand":brand->name,"categories":categories[]->name,description,retail_price,is_negotiable,prices,min_rank,availability,"images":images[].asset->url,"files":files[]{label,"url":asset->url}}`,
+    `*[_type=="product"&&_id==$id][0]{_id,name,"brand":brand->name,"categories":categories[]->name,description,retail_price,is_negotiable,prices,min_rank,availability,"images":images[].asset->url,"files":files[]{label,"url":asset->url},payment_timing}`,
     { id }
   );
 }
@@ -87,7 +89,7 @@ export async function fetchProductById(
 export async function fetchProductsByIds(ids: string[]): Promise<Product[]> {
   if (ids.length === 0) return [];
   return sanityClient.fetch<Product[]>(
-    `*[_type=="product"&&_id in $ids]{_id,name,"brand":brand->name,retail_price,is_negotiable,prices,min_rank,availability,"thumbnail":images[0].asset->url}`,
+    `*[_type=="product"&&_id in $ids]{_id,name,"brand":brand->name,retail_price,is_negotiable,prices,min_rank,availability,"thumbnail":images[0].asset->url,payment_timing}`,
     { ids }
   );
 }

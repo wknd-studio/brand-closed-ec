@@ -5,6 +5,169 @@ import Link from "next/link";
 import { useState } from "react";
 import { useCart } from "@/lib/cart/context";
 import { calcCartFixedTotal } from "@/lib/cart/cookie";
+import { groupCartItemsByPaymentTiming, type CartItem } from "@/lib/cart/types";
+
+type ItemRowProps = {
+  item: CartItem;
+  errors: Record<string, string>;
+  setErrors: (
+    updater: (prev: Record<string, string>) => Record<string, string>
+  ) => void;
+  updateItemQuantity: (
+    productId: string,
+    quantity: number
+  ) => { error?: string };
+  removeFromCart: (productId: string) => void;
+};
+
+function CartItemRow({
+  item,
+  errors,
+  setErrors,
+  updateItemQuantity,
+  removeFromCart,
+}: ItemRowProps) {
+  return (
+    <li className="flex gap-4 px-6 py-4">
+      {/* サムネイル */}
+      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+        {item.thumbnail ? (
+          <Image
+            src={item.thumbnail}
+            alt={item.productName}
+            fill
+            className="object-cover"
+            sizes="64px"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-gray-300">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* 商品情報 */}
+      <div className="flex flex-1 flex-col gap-1">
+        <p className="text-sm font-medium leading-snug">{item.productName}</p>
+        <p className="text-xs text-gray-500">
+          {item.unitPrice !== null
+            ? `¥${item.unitPrice.toLocaleString()}`
+            : "価格要相談"}
+        </p>
+        {/* 数量変更 */}
+        <div className="flex items-center gap-1 pt-1">
+          <button
+            onClick={() => {
+              setErrors((prev) => ({ ...prev, [item.productId]: "" }));
+              updateItemQuantity(item.productId, item.quantity - 1);
+            }}
+            disabled={item.quantity <= 1}
+            className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
+            aria-label="数量を減らす"
+          >
+            −
+          </button>
+          <span className="w-7 text-center text-sm tabular-nums">
+            {item.quantity}
+          </span>
+          <button
+            onClick={() => {
+              const result = updateItemQuantity(
+                item.productId,
+                item.quantity + 1
+              );
+              setErrors((prev) => ({
+                ...prev,
+                [item.productId]: result.error ?? "",
+              }));
+            }}
+            disabled={item.availability === "out_of_stock"}
+            className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
+            aria-label="数量を増やす"
+          >
+            ＋
+          </button>
+        </div>
+        {errors[item.productId] && (
+          <p className="text-xs text-red-600">{errors[item.productId]}</p>
+        )}
+      </div>
+
+      {/* 小計＋削除 */}
+      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+        <p className="text-sm font-medium tabular-nums">
+          {item.unitPrice !== null
+            ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
+            : "—"}
+        </p>
+        <button
+          onClick={() => removeFromCart(item.productId)}
+          className="text-xs text-gray-400 hover:text-red-500"
+          aria-label={`${item.productName}を削除`}
+        >
+          削除
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function calcGroupSubtotal(items: CartItem[]): number {
+  return items.reduce(
+    (sum, item) => sum + (item.unitPrice ?? 0) * item.quantity,
+    0
+  );
+}
+
+type ItemGroupProps = {
+  title: string;
+  items: CartItem[];
+} & Omit<ItemRowProps, "item">;
+
+function CartItemGroup({
+  title,
+  items,
+  errors,
+  setErrors,
+  updateItemQuantity,
+  removeFromCart,
+}: ItemGroupProps) {
+  return (
+    <div>
+      <div className="flex items-center justify-between bg-gray-50 px-6 py-2">
+        <h3 className="text-xs font-semibold text-gray-600">{title}</h3>
+        <span className="text-xs font-medium tabular-nums text-gray-600">
+          小計 ¥{calcGroupSubtotal(items).toLocaleString()}
+        </span>
+      </div>
+      <ul className="divide-y">
+        {items.map((item) => (
+          <CartItemRow
+            key={item.productId}
+            item={item}
+            errors={errors}
+            setErrors={setErrors}
+            updateItemQuantity={updateItemQuantity}
+            removeFromCart={removeFromCart}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default function CartSidebar() {
   const {
@@ -22,6 +185,7 @@ export default function CartSidebar() {
   const items = cart.items;
   const cartFixedTotal = calcCartFixedTotal(cart);
   const remaining = monthlyLimit - totalUsed;
+  const groups = groupCartItemsByPaymentTiming(items);
 
   return (
     <>
@@ -124,111 +288,41 @@ export default function CartSidebar() {
         ) : (
           <>
             {/* アイテムリスト */}
-            <ul className="flex-1 divide-y overflow-y-auto">
-              {items.map((item) => (
-                <li key={item.productId} className="flex gap-4 px-6 py-4">
-                  {/* サムネイル */}
-                  <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-                    {item.thumbnail ? (
-                      <Image
-                        src={item.thumbnail}
-                        alt={item.productName}
-                        fill
-                        className="object-cover"
-                        sizes="64px"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-gray-300">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-6 w-6"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 商品情報 */}
-                  <div className="flex flex-1 flex-col gap-1">
-                    <p className="text-sm font-medium leading-snug">
-                      {item.productName}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {item.unitPrice !== null
-                        ? `¥${item.unitPrice.toLocaleString()}`
-                        : "価格要相談"}
-                    </p>
-                    {/* 数量変更 */}
-                    <div className="flex items-center gap-1 pt-1">
-                      <button
-                        onClick={() => {
-                          setErrors((prev) => ({
-                            ...prev,
-                            [item.productId]: "",
-                          }));
-                          updateItemQuantity(item.productId, item.quantity - 1);
-                        }}
-                        disabled={item.quantity <= 1}
-                        className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
-                        aria-label="数量を減らす"
-                      >
-                        −
-                      </button>
-                      <span className="w-7 text-center text-sm tabular-nums">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => {
-                          const result = updateItemQuantity(
-                            item.productId,
-                            item.quantity + 1
-                          );
-                          setErrors((prev) => ({
-                            ...prev,
-                            [item.productId]: result.error ?? "",
-                          }));
-                        }}
-                        disabled={item.availability === "out_of_stock"}
-                        className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
-                        aria-label="数量を増やす"
-                      >
-                        ＋
-                      </button>
-                    </div>
-                    {errors[item.productId] && (
-                      <p className="text-xs text-red-600">
-                        {errors[item.productId]}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 小計＋削除 */}
-                  <div className="flex flex-shrink-0 flex-col items-end gap-1">
-                    <p className="text-sm font-medium tabular-nums">
-                      {item.unitPrice !== null
-                        ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
-                        : "—"}
-                    </p>
-                    <button
-                      onClick={() => removeFromCart(item.productId)}
-                      className="text-xs text-gray-400 hover:text-red-500"
-                      aria-label={`${item.productName}を削除`}
-                    >
-                      削除
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="flex-1 divide-y overflow-y-auto">
+              {groups ? (
+                <>
+                  <CartItemGroup
+                    title="注文時に支払う商品"
+                    items={groups.atOrder}
+                    errors={errors}
+                    setErrors={setErrors}
+                    updateItemQuantity={updateItemQuantity}
+                    removeFromCart={removeFromCart}
+                  />
+                  <CartItemGroup
+                    title="注文後に請求される商品"
+                    items={groups.afterOrder}
+                    errors={errors}
+                    setErrors={setErrors}
+                    updateItemQuantity={updateItemQuantity}
+                    removeFromCart={removeFromCart}
+                  />
+                </>
+              ) : (
+                <ul className="divide-y">
+                  {items.map((item) => (
+                    <CartItemRow
+                      key={item.productId}
+                      item={item}
+                      errors={errors}
+                      setErrors={setErrors}
+                      updateItemQuantity={updateItemQuantity}
+                      removeFromCart={removeFromCart}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
 
             {/* フッター */}
             <div className="border-t px-6 py-5 space-y-4">

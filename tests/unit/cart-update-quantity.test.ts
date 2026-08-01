@@ -11,6 +11,7 @@ const cart: Cart = {
       quantity: 2,
       unitPrice: 10_000,
       availability: "available",
+      paymentTiming: "at_order",
     },
     {
       productId: "p2",
@@ -19,6 +20,7 @@ const cart: Cart = {
       quantity: 1,
       unitPrice: 5_000,
       availability: "available",
+      paymentTiming: "at_order",
     },
   ],
 };
@@ -60,6 +62,7 @@ describe("calcItemUpdateError", () => {
           quantity: 1,
           unitPrice: null,
           availability: "available",
+          paymentTiming: "at_order",
         },
       ],
     };
