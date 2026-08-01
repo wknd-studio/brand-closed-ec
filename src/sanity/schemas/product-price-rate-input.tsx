@@ -72,29 +72,30 @@ export function ProductPriceRateInput(props: ObjectInputProps) {
         nextRates[rank] = clamped;
       }
       onChange(set(nextRates));
-
-      if (!documentId) return;
-      const computedPrices = computeRankPrices(
-        retailPrice,
-        nextRates,
-        defaultRates
-      );
-      // enterprise等、掛け率対象外で既に入力済みの価格は上書きしない
-      const nextPrices: RateMap = { ...currentPrices, ...computedPrices };
-      client.patch(documentId).set({ prices: nextPrices }).commit({
-        autoGenerateArrayKeys: true,
-      });
     },
-    [
-      value,
-      retailPrice,
-      defaultRates,
-      currentPrices,
-      documentId,
-      client,
-      onChange,
-    ]
+    [value, onChange]
   );
+
+  // ランク別仕入れ価格（prices）は掛け率入力欄の直接編集だけでなく、定価の変更や
+  // 掛け率設定ファイルのアタッチ（defaultRatesの変化）でも再計算が必要なため、
+  // 依存値の変化を1箇所で監視して自動的にpatchする（片方だけ更新して不整合になる不具合の修正）
+  useEffect(() => {
+    if (!documentId) return;
+    const computedPrices = computeRankPrices(retailPrice, rates, defaultRates);
+    // enterprise等、掛け率対象外で既に入力済みの価格は上書きしない
+    const nextPrices: RateMap = { ...currentPrices, ...computedPrices };
+    const isUnchanged = Object.keys(computedPrices).every(
+      (rank) => (currentPrices?.[rank] ?? null) === (nextPrices[rank] ?? null)
+    );
+    if (isUnchanged) return;
+    client
+      .patch(documentId)
+      .set({ prices: nextPrices })
+      .commit({ autoGenerateArrayKeys: true });
+    // currentPricesは意図的に依存から外す: このeffect自身のpatchでも更新されるため、
+    // 含めるとisUnchangedがtrueになった時点で自然に落ち着く再帰的な依存になり読みにくくなる
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, retailPrice, value, defaultRates, client]);
 
   return (
     <Card padding={3} radius={2} shadow={1} tone="transparent">
