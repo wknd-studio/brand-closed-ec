@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { DeliveryNotificationEmail } from "./templates/delivery-notification";
 import { getResend } from "./index";
@@ -26,5 +27,11 @@ export async function sendDeliveryNotificationEmail({
     html,
   });
 
-  if (error) console.error("[配送完了通知メール] 送信失敗:", error);
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { email: "delivery-notification" },
+      extra: { orderId, memberEmail },
+    });
+    console.error("[配送完了通知メール] 送信失敗:", error);
+  }
 }

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { OrderConfirmingEmail } from "./templates/order-confirming";
 import { getResend } from "./index";
@@ -30,6 +31,10 @@ export async function sendOrderConfirmingEmail({
   });
 
   if (error) {
+    Sentry.captureException(error, {
+      tags: { email: "order-confirming" },
+      extra: { orderId, to },
+    });
     console.error("[注文受付メール] 送信失敗:", error);
   }
 }
