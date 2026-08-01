@@ -110,6 +110,7 @@ export default async function ProductDetailPage({
                   | "available"
                   | "out_of_stock"
                   | "discontinued",
+                paymentTiming: product.payment_timing ?? "at_order",
               }}
               isOutOfStock={isOutOfStock}
             />

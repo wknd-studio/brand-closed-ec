@@ -21,6 +21,7 @@ const withItems: Cart = {
       quantity: 2,
       unitPrice: 10_000,
       availability: "available",
+      paymentTiming: "at_order",
     },
     {
       productId: "p2",
@@ -29,6 +30,7 @@ const withItems: Cart = {
       quantity: 1,
       unitPrice: null,
       availability: "available",
+      paymentTiming: "at_order",
     },
   ],
 };
@@ -57,6 +59,7 @@ describe("addItem", () => {
       thumbnail: null,
       unitPrice: 10_000,
       availability: "available",
+      paymentTiming: "at_order",
     });
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual({
@@ -66,6 +69,7 @@ describe("addItem", () => {
       quantity: 1,
       unitPrice: 10_000,
       availability: "available",
+      paymentTiming: "at_order",
     });
   });
 
@@ -76,6 +80,7 @@ describe("addItem", () => {
       thumbnail: null,
       unitPrice: 10_000,
       availability: "available",
+      paymentTiming: "at_order",
     });
     expect(result.items.find((i) => i.productId === "p1")?.quantity).toBe(3);
     expect(result.items).toHaveLength(2);
@@ -90,6 +95,7 @@ describe("addItem", () => {
         thumbnail: null,
         unitPrice: 10_000,
         availability: "available",
+        paymentTiming: "at_order",
       },
       3
     );
@@ -105,6 +111,7 @@ describe("addItem", () => {
         thumbnail: null,
         unitPrice: 5_000,
         availability: "available",
+        paymentTiming: "at_order",
       },
       4
     );
@@ -118,6 +125,7 @@ describe("addItem", () => {
       thumbnail: null,
       unitPrice: null,
       availability: "available",
+      paymentTiming: "at_order",
     });
     expect(result.items[0].unitPrice).toBeNull();
   });
@@ -179,6 +187,7 @@ describe("calcCartFixedTotal", () => {
           quantity: 3,
           unitPrice: null,
           availability: "available",
+          paymentTiming: "at_order",
         },
       ],
     };
