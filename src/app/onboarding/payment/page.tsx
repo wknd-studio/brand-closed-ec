@@ -39,21 +39,24 @@ export default async function OnboardingPaymentPage({
 
   let session;
   try {
-    session = await getStripe().checkout.sessions.create({
-      mode: "subscription",
-      line_items: [
-        { price: STRIPE_PRICE_IDS[paidRank].monthly, quantity: 1 },
-        { price: STRIPE_PRICE_IDS[paidRank].initialFee, quantity: 1 },
-      ],
-      customer_email: email,
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/cancel?plan=${paidRank}`,
-      metadata: {
-        clerk_user_id: userId,
-        plan: paidRank,
+    session = await getStripe().checkout.sessions.create(
+      {
+        mode: "subscription",
+        line_items: [
+          { price: STRIPE_PRICE_IDS[paidRank].monthly, quantity: 1 },
+          { price: STRIPE_PRICE_IDS[paidRank].initialFee, quantity: 1 },
+        ],
+        customer_email: email,
+        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/cancel?plan=${paidRank}`,
+        metadata: {
+          clerk_user_id: userId,
+          plan: paidRank,
+        },
+        locale: "ja",
       },
-      locale: "ja",
-    });
+      { idempotencyKey: `onboarding-checkout-session-${userId}-${paidRank}` }
+    );
   } catch (err) {
     Sentry.captureException(err, {
       tags: { page: "onboarding-payment" },
