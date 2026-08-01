@@ -21,7 +21,7 @@ describe("completeSubscriptionOnboarding", () => {
   });
 
   it("rankとStripe情報とonboarding_completedを更新する", async () => {
-    const user = makeUser({ rank: "starter" });
+    const user = makeUser({ rank: "starter", onboardingCompleted: false });
     const userRepo = makeUserRepo(user);
     const accountGateway = makeAccountGateway();
 
@@ -44,7 +44,9 @@ describe("completeSubscriptionOnboarding", () => {
   });
 
   it("accountGateway.updateOnboardingMetadataをtrueで呼ぶ", async () => {
-    const userRepo = makeUserRepo(makeUser({ rank: "starter" }));
+    const userRepo = makeUserRepo(
+      makeUser({ rank: "starter", onboardingCompleted: false })
+    );
     const accountGateway = makeAccountGateway();
 
     await completeSubscriptionOnboarding(
@@ -61,5 +63,28 @@ describe("completeSubscriptionOnboarding", () => {
       "clerk-1",
       true
     );
+  });
+
+  it("既にonboarding完了済みの場合は何もしない（Webhook再配信時の冪等性）", async () => {
+    const originalSubscribedAt = new Date(2026, 0, 15);
+    const user = makeUser({
+      onboardingCompleted: true,
+      subscribedAt: originalSubscribedAt,
+    });
+    const userRepo = makeUserRepo(user);
+    const accountGateway = makeAccountGateway();
+
+    await completeSubscriptionOnboarding(
+      {
+        clerkUserId: "clerk-1",
+        plan: "basic",
+        stripeCustomerId: "cus_1",
+        stripeSubscriptionId: "sub_1",
+      },
+      { userRepo, accountGateway }
+    );
+
+    expect(userRepo.save).not.toHaveBeenCalled();
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
 });

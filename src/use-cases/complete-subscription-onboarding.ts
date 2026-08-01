@@ -24,6 +24,10 @@ export async function completeSubscriptionOnboarding(
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
   if (!user) throw new Error("ユーザーが見つかりません");
 
+  // Stripe Webhookは同一イベントを複数回配信することがある。再配信時に
+  // subscribedAt等を再度書き換えないよう、既に完了済みなら何もしない
+  if (user.hasCompletedOnboarding()) return;
+
   const updated = user.with({
     rank: MemberRank.of(input.plan),
     stripeCustomerId: input.stripeCustomerId,
