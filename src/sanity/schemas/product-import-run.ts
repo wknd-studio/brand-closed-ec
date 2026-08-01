@@ -1,6 +1,38 @@
 import { defineField, defineType } from "sanity";
 
 import { ImportErrorLogDisplay } from "./import-error-log-display";
+import {
+  createReadOnlyValueDisplay,
+  ReadOnlyDatetimeDisplay,
+} from "./read-only-value-display";
+
+const TRIGGERED_BY_OPTIONS = [
+  { title: "定期実行", value: "scheduled" },
+  { title: "オンデマンド実行", value: "on_demand" },
+  { title: "手動CSVインポート", value: "manual_csv" },
+];
+
+const OUTCOME_OPTIONS = [
+  { title: "完了", value: "completed" },
+  { title: "エラー率閾値超過で中止", value: "aborted_error_threshold" },
+  { title: "異常終了", value: "failed" },
+];
+
+const TriggeredByDisplay = createReadOnlyValueDisplay({
+  labelByValue: Object.fromEntries(
+    TRIGGERED_BY_OPTIONS.map((o) => [o.value, o.title])
+  ),
+});
+
+const OutcomeDisplay = createReadOnlyValueDisplay({
+  labelByValue: Object.fromEntries(
+    OUTCOME_OPTIONS.map((o) => [o.value, o.title])
+  ),
+});
+
+const CountDisplay = createReadOnlyValueDisplay({
+  formatValue: (value) => `${value}件`,
+});
 
 /**
  * インポート実行結果は apply-import.ts がAPI経由で書き込む監査ログであり、
@@ -26,15 +58,10 @@ export const productImportRun = defineType({
       name: "triggered_by",
       title: "実行契機",
       type: "string",
-      options: {
-        list: [
-          { title: "定期実行", value: "scheduled" },
-          { title: "オンデマンド実行", value: "on_demand" },
-          { title: "手動CSVインポート", value: "manual_csv" },
-        ],
-      },
+      options: { list: TRIGGERED_BY_OPTIONS },
       validation: (r) => r.required(),
       readOnly: true,
+      components: { input: TriggeredByDisplay },
     }),
     defineField({
       name: "started_at",
@@ -42,26 +69,23 @@ export const productImportRun = defineType({
       type: "datetime",
       validation: (r) => r.required(),
       readOnly: true,
+      components: { input: ReadOnlyDatetimeDisplay },
     }),
     defineField({
       name: "finished_at",
       title: "実行終了日時",
       type: "datetime",
       readOnly: true,
+      components: { input: ReadOnlyDatetimeDisplay },
     }),
     defineField({
       name: "outcome",
       title: "結果",
       type: "string",
-      options: {
-        list: [
-          { title: "完了", value: "completed" },
-          { title: "エラー率閾値超過で中止", value: "aborted_error_threshold" },
-          { title: "異常終了", value: "failed" },
-        ],
-      },
+      options: { list: OUTCOME_OPTIONS },
       validation: (r) => r.required(),
       readOnly: true,
+      components: { input: OutcomeDisplay },
     }),
     defineField({
       name: "success_count",
@@ -69,6 +93,7 @@ export const productImportRun = defineType({
       type: "number",
       validation: (r) => r.required().min(0),
       readOnly: true,
+      components: { input: CountDisplay },
     }),
     defineField({
       name: "failure_count",
@@ -76,6 +101,7 @@ export const productImportRun = defineType({
       type: "number",
       validation: (r) => r.required().min(0),
       readOnly: true,
+      components: { input: CountDisplay },
     }),
     defineField({
       name: "needs_review_count",
@@ -83,6 +109,7 @@ export const productImportRun = defineType({
       type: "number",
       validation: (r) => r.required().min(0),
       readOnly: true,
+      components: { input: CountDisplay },
     }),
     defineField({
       name: "error_details",

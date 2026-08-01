@@ -16,6 +16,7 @@ import {
 import { applyImport } from "@/lib/product-import/apply-import";
 import type { CsvAdapterCatalog } from "@/lib/product-import/csv-adapter";
 import { describeOrigin } from "@/lib/product-import/unified-product-schema";
+import { FileSelectButton } from "@/sanity/components/file-select-button";
 
 import { useImportPreview } from "./use-import-preview";
 
@@ -70,9 +71,7 @@ export function ProductImportTool() {
   const selectedCatalog = catalogs.find((c) => c._id === selectedCatalogId);
 
   const handleFileChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
+    (file: File) => {
       setFileName(file.name);
       const reader = new FileReader();
       reader.onload = () => {
@@ -186,11 +185,11 @@ export function ProductImportTool() {
             <Text weight="semibold" size={1}>
               2. CSVファイルを選択
             </Text>
-            <input
-              type="file"
+            <FileSelectButton
+              label="CSVファイルを選択"
               accept=".csv,text/csv"
-              onChange={handleFileChange}
               disabled={!selectedCatalogId}
+              onFileSelected={handleFileChange}
             />
             {fileName && (
               <Text size={1} muted>

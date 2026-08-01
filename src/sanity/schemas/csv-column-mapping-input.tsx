@@ -14,6 +14,8 @@ import {
 import { set, unset, useClient, useFormValue } from "sanity";
 import type { ObjectInputProps } from "sanity";
 
+import { FileSelectButton } from "../components/file-select-button";
+
 const API_VERSION = "2026-05-17";
 
 type MappingValue = Partial<Record<string, string>>;
@@ -50,21 +52,16 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
   const currentMapping = (value as MappingValue | undefined) ?? {};
   const headers = previewRows ? (previewRows[headerRowNumber - 1] ?? []) : null;
 
-  const handleSampleFile = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const text = String(reader.result ?? "");
-        const parsed = Papa.parse<string[]>(text, { skipEmptyLines: false });
-        setPreviewRows((parsed.data as string[][]).slice(0, PREVIEW_ROW_COUNT));
-      };
-      reader.readAsText(file);
-    },
-    []
-  );
+  const handleSampleFile = useCallback((file: File) => {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      const parsed = Papa.parse<string[]>(text, { skipEmptyLines: false });
+      setPreviewRows((parsed.data as string[][]).slice(0, PREVIEW_ROW_COUNT));
+    };
+    reader.readAsText(file);
+  }, []);
 
   const handleHeaderRowSelect = useCallback(
     (rowNumber: number) => {
@@ -99,7 +96,11 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
         <Text size={1} muted>
           サンプルCSVをアップロードすると、実際の列名をプルダウンから選べます（アップロードしたファイル自体は保存されません）。アップロードしなくても列名を直接入力できます。
         </Text>
-        <input type="file" accept=".csv,text/csv" onChange={handleSampleFile} />
+        <FileSelectButton
+          label="サンプルCSVを選択"
+          accept=".csv,text/csv"
+          onFileSelected={handleSampleFile}
+        />
         {fileName && (
           <Text size={1} muted>
             読み込み済み: {fileName}

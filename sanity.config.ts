@@ -1,4 +1,5 @@
 import { colorInput } from "@sanity/color-input";
+import { jaJPLocale } from "@sanity/locale-ja-jp";
 import { visionTool } from "@sanity/vision";
 import { defineConfig } from "sanity";
 import { structureTool } from "sanity/structure";
@@ -8,7 +9,14 @@ import { structure } from "./src/sanity/structure";
 import { ProductImportTool } from "./src/sanity/tools/product-import/product-import-tool";
 
 const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ?? "0syeievd";
-const plugins = [structureTool({ structure }), visionTool(), colorInput()];
+// Studio標準UI（Publish・Discard・Choose optionsダイアログ等）を日本語化する。
+// カスタムで作成しているスキーマ・ツールの文言はもともと日本語で書いているため対象外
+const plugins = [
+  structureTool({ structure }),
+  visionTool(),
+  colorInput(),
+  jaJPLocale(),
+];
 const schema = { types: schemaTypes };
 const tools = [
   {
