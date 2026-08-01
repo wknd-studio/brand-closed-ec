@@ -7,9 +7,9 @@ import {
 } from "@/sanity/schemas/product-price-calculator";
 
 import { findMatchingProduct, type ExistingProductRef } from "./dedupe";
-import type {
-  UnifiedProductRecord,
-  UnifiedProductRecordOrigin,
+import {
+  describeOrigin,
+  type UnifiedProductRecord,
 } from "./unified-product-schema";
 
 type RateMap = Partial<Record<string, number>>;
@@ -137,15 +137,6 @@ export async function applyImport(
   });
 
   return { createdCount, updatedCount, importRunId: importRun._id };
-}
-
-function describeOrigin(
-  origin: UnifiedProductRecordOrigin,
-  fallbackName: string
-): string {
-  if (origin.kind === "csv")
-    return `${origin.rowNumber}行目（${fallbackName}）`;
-  return `${origin.sourceUrl}（${fallbackName}）`;
 }
 
 async function fetchExistingProducts(

@@ -56,6 +56,11 @@ export const structure: StructureResolver = (S) =>
                 "価格設定（デフォルト掛け率）"
               ),
               S.documentTypeListItem("designTheme").title("デザインテーマ"),
+              S.divider(),
+              S.documentTypeListItem("vendor").title("業者"),
+              S.documentTypeListItem("productImportRun").title(
+                "インポート実行結果"
+              ),
             ])
         ),
       S.divider(),

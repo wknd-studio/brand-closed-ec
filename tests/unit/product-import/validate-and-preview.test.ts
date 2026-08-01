@@ -105,4 +105,53 @@ describe("validateAndPreview", () => {
     expect(result.errorCount).toBe(1);
     expect(result.validRecords).toHaveLength(3);
   });
+
+  it("csv-adapter等より前段のエラー(preExistingErrors)も分母に含めてエラー率を判定する", () => {
+    // 正常な行は1件だが、CSVパース段階で3件が既にエラーになっている場合、
+    // records.lengthだけで分母を計算すると見かけ上エラー率0%になってしまうため、
+    // preExistingErrorsを分母・分子の両方に含めて正しく閾値判定する必要がある
+    const preExistingErrors = [
+      {
+        origin: { kind: "csv" as const, rowNumber: 1 },
+        reason: "ブランド列が読み取れません",
+      },
+      {
+        origin: { kind: "csv" as const, rowNumber: 2 },
+        reason: "定価が読み取れません",
+      },
+      {
+        origin: { kind: "csv" as const, rowNumber: 3 },
+        reason: "商品名が読み取れません",
+      },
+    ];
+
+    const result = validateAndPreview(
+      [record({}, 4)],
+      knownBrandNames,
+      preExistingErrors
+    );
+
+    expect(result.outcome).toBe("aborted_error_threshold");
+    expect(result.errorCount).toBe(3);
+    expect(result.validRecords).toHaveLength(0);
+  });
+
+  it("preExistingErrorsがあってもエラー率が閾値以下であれば通常通り反映する", () => {
+    const preExistingErrors = [
+      {
+        origin: { kind: "csv" as const, rowNumber: 1 },
+        reason: "商品名が読み取れません",
+      },
+    ];
+
+    const result = validateAndPreview(
+      [record({}, 2), record({}, 3), record({}, 4)],
+      knownBrandNames,
+      preExistingErrors
+    );
+
+    expect(result.outcome).toBe("ok");
+    expect(result.errorCount).toBe(1);
+    expect(result.validRecords).toHaveLength(3);
+  });
 });

@@ -63,11 +63,11 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 **Independent Test**: quickstart.md「User Story 1」「User Story 1: エラー行・閾値超過」のシナリオ
 
-- [ ] T014 [P] [US1] `csv-adapter.ts`の失敗するユニットテストを書く（複数の業者別CSV列構成パターンを、`vendor.csv_column_mapping`を使って統一データ形式へ変換できることを検証。FR-002, contracts/vendor-adapter-interface.md）: `tests/unit/product-import/csv-adapter.test.ts`（依存: T004）
-- [ ] T015 [US1] `csv-adapter.ts`を実装しT014を通す: `src/lib/product-import/csv-adapter.ts`（依存: T014）
-- [ ] T016 [US1] 検証プレビュー計算をStudioツールから呼び出すフック`use-import-preview.ts`を実装する（`validate-and-preview.ts`のラップ）: `src/sanity/tools/product-import/use-import-preview.ts`（依存: T008）
-- [ ] T017 [US1] Sanity Studioカスタムツール本体を実装する（CSVアップロード→`csv-adapter`で変換→検証プレビュー表示→担当者の確定操作で`apply-import`を呼び出し書き込み。FR-016, FR-019）: `src/sanity/tools/product-import/product-import-tool.tsx`（依存: T015, T016, T013）
-- [ ] T018 [US1] カスタムツールをStudioに登録する（pluginsへの追加、商品管理配下へのナビゲーション項目追加）: `sanity.config.ts`, `src/sanity/structure.ts`（依存: T017）
+- [x] T014 [P] [US1] `csv-adapter.ts`の失敗するユニットテストを書く（複数の業者別CSV列構成パターンを、`vendor.csv_column_mapping`を使って統一データ形式へ変換できることを検証。FR-002, contracts/vendor-adapter-interface.md）: `tests/unit/product-import/csv-adapter.test.ts`（依存: T004）
+- [x] T015 [US1] `csv-adapter.ts`を実装しT014を通す: `src/lib/product-import/csv-adapter.ts`（依存: T014）
+- [x] T016 [US1] 検証プレビュー計算をStudioツールから呼び出すフック`use-import-preview.ts`を実装する（`validate-and-preview.ts`のラップ）: `src/sanity/tools/product-import/use-import-preview.ts`（依存: T008）
+- [x] T017 [US1] Sanity Studioカスタムツール本体を実装する（CSVアップロード→`csv-adapter`で変換→検証プレビュー表示→担当者の確定操作で`apply-import`を呼び出し書き込み。FR-016, FR-019）: `src/sanity/tools/product-import/product-import-tool.tsx`（依存: T015, T016, T013）
+- [x] T018 [US1] カスタムツールをStudioに登録する（pluginsへの追加、商品管理配下へのナビゲーション項目追加）: `sanity.config.ts`, `src/sanity/structure.ts`（依存: T017）
 - [ ] T019 [US1] quickstart.md「User Story 1」「User Story 1: エラー行・閾値超過」の手順を手動検証する（依存: T018）
 
 **チェックポイント**: User Story 1（MVP）が独立して機能・検証可能

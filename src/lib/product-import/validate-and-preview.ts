@@ -22,9 +22,15 @@ export interface PreviewResult {
  */
 export function validateAndPreview(
   records: UnifiedProductRecord[],
-  knownBrandNames: string[]
+  knownBrandNames: string[],
+  /**
+   * csv-adapter等、このバッチに渡ってくる前段の処理で既にエラーとして弾かれた行
+   * （例: ブランド列が読み取れない等）。エラー率の分母・分子の両方に含めないと、
+   * 実際のCSV全体に対するエラー率を過小評価してしまう（FR-020）
+   */
+  preExistingErrors: ValidationError[] = []
 ): PreviewResult {
-  const errors: ValidationError[] = [];
+  const errors: ValidationError[] = [...preExistingErrors];
   const candidates: UnifiedProductRecord[] = [];
 
   for (const record of records) {
@@ -39,7 +45,7 @@ export function validateAndPreview(
   const { valid, duplicateErrors } = resolveDuplicateJanCodes(candidates);
   errors.push(...duplicateErrors);
 
-  const totalCount = records.length;
+  const totalCount = records.length + preExistingErrors.length;
   const errorRatio = totalCount === 0 ? 0 : errors.length / totalCount;
 
   if (errorRatio > IMPORT_ERROR_THRESHOLD_RATIO) {
