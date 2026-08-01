@@ -1,5 +1,6 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
 import { issueInvoice as issueInvoiceUseCase } from "@/use-cases/issue-invoice";
@@ -45,14 +46,18 @@ export async function issueInvoice(
     negotiatedPrices[item.id] = price;
   }
 
-  const result = await issueInvoiceUseCase(
-    { orderId, negotiatedPrices },
-    {
-      orderRepo,
-      userRepo: new SupabaseUserRepository(createAdminClient()),
-      paymentGateway: new StripePaymentGateway(),
-      notificationService: new ResendNotificationService(),
-    }
+  const result = await Sentry.startSpan(
+    { name: "issueInvoice", op: "server-action.process" },
+    () =>
+      issueInvoiceUseCase(
+        { orderId, negotiatedPrices },
+        {
+          orderRepo,
+          userRepo: new SupabaseUserRepository(createAdminClient()),
+          paymentGateway: new StripePaymentGateway(),
+          notificationService: new ResendNotificationService(),
+        }
+      )
   );
 
   if ("limitExceeded" in result) {
