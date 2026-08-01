@@ -30,10 +30,10 @@
 
 **⚠️ CRITICAL**: このフェーズが終わるまでUS2・US4の実装には着手できない（US1・US3はこのフェーズに依存しないため並行着手可）
 
-- [ ] T002 [P] Supabaseマイグレーション: `orders`テーブルに`split_group_id UUID`（nullable）列と部分インデックスを追加する新規ファイルを`supabase/migrations/<timestamp>_add_split_group_id_to_orders.sql`に作成（data-model.md参照）
-- [ ] T003 [P] `Order`エンティティに`splitGroupId: string | null`を追加 in `src/domain/entities/order.ts`（`OrderProps`・コンストラクタ・`toProps()`・`with()`を更新）
-- [ ] T004 [P] `OrderRepository`インターフェースに`findBySplitGroupId(splitGroupId: string): Promise<Order[]>`と`delete(orderId: string): Promise<void>`を追加 in `src/repositories/order-repository.ts`（contracts/internal-interfaces.md セクション6）
-- [ ] T005 `SupabaseOrderRepository`で`split_group_id`列の読み書き、`findBySplitGroupId`・`delete`を実装 in `src/infrastructure/supabase/supabase-order-repository.ts`（T002・T003・T004に依存）
+- [x] T002 [P] Supabaseマイグレーション: `orders`テーブルに`split_group_id UUID`（nullable）列と部分インデックスを追加する新規ファイルを`supabase/migrations/<timestamp>_add_split_group_id_to_orders.sql`に作成（data-model.md参照）
+- [x] T003 [P] `Order`エンティティに`splitGroupId: string | null`を追加 in `src/domain/entities/order.ts`（`OrderProps`・コンストラクタ・`toProps()`・`with()`を更新）
+- [x] T004 [P] `OrderRepository`インターフェースに`findBySplitGroupId(splitGroupId: string): Promise<Order[]>`と`delete(orderId: string): Promise<void>`を追加 in `src/repositories/order-repository.ts`（contracts/internal-interfaces.md セクション6）
+- [x] T005 `SupabaseOrderRepository`で`split_group_id`列の読み書き、`findBySplitGroupId`・`delete`を実装 in `src/infrastructure/supabase/supabase-order-repository.ts`（T002・T003・T004に依存）
 
 **Checkpoint**: Order集約が分割注文の関連付けに対応した状態。US2・US4の実装に進める
 
@@ -47,13 +47,13 @@
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] `validatePaymentTiming`（`is_negotiable=true`かつ`payment_timing=at_order`の矛盾を検出）のユニットテストを `tests/unit/sanity/product-payment-timing-validation.test.ts` に作成
-- [ ] T007 [P] [US1] `price_rates`・`prices`フィールドの`hidden`条件（`is_negotiable=true`で非表示）を検証するユニットテストを同ファイルに追加
+- [x] T006 [P] [US1] `validatePaymentTiming`（`is_negotiable=true`かつ`payment_timing=at_order`の矛盾を検出）のユニットテストを `tests/unit/sanity/product-payment-timing-validation.test.ts` に作成
+- [x] T007 [P] [US1] `price_rates`・`prices`フィールドの`hidden`条件（`is_negotiable=true`で非表示）を検証するユニットテストを同ファイルに追加
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] `payment_timing`フィールド（`at_order`/`after_order`、既定値`at_order`）と`validatePaymentTiming`を `src/sanity/schemas/product.ts` に実装（T006がFAILすることを確認してから実装）
-- [ ] T009 [US1] `price_rates`・`prices`フィールドに`hidden: ({document}) => document?.is_negotiable === true`を追加 in `src/sanity/schemas/product.ts`（T007がFAILすることを確認してから実装）
+- [x] T008 [US1] `payment_timing`フィールド（`at_order`/`after_order`、既定値`at_order`）と`validatePaymentTiming`を `src/sanity/schemas/product.ts` に実装（T006がFAILすることを確認してから実装）
+- [x] T009 [US1] `price_rates`・`prices`フィールドに`hidden: ({document}) => document?.is_negotiable === true`を追加 in `src/sanity/schemas/product.ts`（T007がFAILすることを確認してから実装）
 
 **Checkpoint**: Sanity Studio上で支払いタイミングを設定・保存できる。この時点でNext.js側は未対応のため、実際の注文フローにはまだ影響しない
 

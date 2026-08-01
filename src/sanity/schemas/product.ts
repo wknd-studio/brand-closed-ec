@@ -25,6 +25,16 @@ export function validatePrices(
   return true;
 }
 
+export function validatePaymentTiming(
+  paymentTiming: "at_order" | "after_order" | undefined,
+  document: { is_negotiable?: boolean } | undefined
+): string | true {
+  if (document?.is_negotiable && paymentTiming === "at_order") {
+    return "要相談商品（価格未確定）は注文時払いに設定できません";
+  }
+  return true;
+}
+
 export const product = defineType({
   name: "product",
   title: "商品",
@@ -100,6 +110,29 @@ export const product = defineType({
       initialValue: false,
     }),
     defineField({
+      name: "payment_timing",
+      title: "支払いタイミング",
+      description:
+        "注文時払い（Stripe Checkout即時決済）か注文後払い（運営者確認後にInvoice発行）かを商品ごとに設定します。要相談商品は注文後払いに固定されます",
+      type: "string",
+      options: {
+        list: [
+          { title: "注文時払い", value: "at_order" },
+          { title: "注文後払い", value: "after_order" },
+        ],
+      },
+      initialValue: "at_order",
+      validation: (r) =>
+        r
+          .required()
+          .custom((paymentTiming, { document }) =>
+            validatePaymentTiming(
+              paymentTiming as "at_order" | "after_order" | undefined,
+              document as { is_negotiable?: boolean } | undefined
+            )
+          ),
+    }),
+    defineField({
       name: "price_settings",
       title: "掛け率設定",
       description:
@@ -121,6 +154,7 @@ export const product = defineType({
           validation: (r) => r.min(0).max(100),
         })
       ),
+      hidden: ({ document }) => document?.is_negotiable === true,
       components: { input: ProductPriceRateInput },
     }),
     defineField({
@@ -150,6 +184,7 @@ export const product = defineType({
             document as { is_negotiable?: boolean } | undefined
           )
         ),
+      hidden: ({ document }) => document?.is_negotiable === true,
       components: { input: ProductPricesDisplay },
     }),
     defineField({
