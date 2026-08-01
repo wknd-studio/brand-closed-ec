@@ -31,7 +31,7 @@ POST /api/admin/product-import/trigger
 ### 内部処理
 
 1. `X-Product-Import-Token`を検証する
-2. `vendorId`に対応する`vendor`ドキュメントをSanityから取得し、`data_source_type === "scraping"`かつ`is_contracted === true`であることを確認する（FR-009のガードをAPI層でも二重に効かせる）
+2. `vendorId`に対応する`vendor`ドキュメントをSanityから取得し、`data_source_type === "scraping"`であることを確認する
 3. GitHub REST API（`POST /repos/{owner}/{repo}/actions/workflows/product-data-sync.yml/dispatches`）を、サーバーサイドにのみ保持するGitHub PATを使って呼び出す。`inputs`に`vendorId`と`triggeredBy: "on_demand"`を渡す
 4. `run-on-demand.ts`（GitHub Actions側）が`vendorId`を受け取り、該当業者のみを対象にスクレイピング→検証プレビュー→（担当者確認後）書き込みを実行する
 

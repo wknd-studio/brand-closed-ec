@@ -85,7 +85,7 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 - [ ] T022 [US2] フィクスチャ向けの参照実装アダプターを実装しT021を通す（今後の実業者アダプター実装のひな形とする）: `scripts/product-import/vendors/__fixture__/scraper.ts`（依存: T021）
 - [ ] T023 [US2] `run-on-demand.ts`を実装する（Sanityから対象`vendor`を取得→スクレイパー実行→`validate-and-preview`→`apply-import`→`productImportRun`（`triggered_by: "on_demand"`）記録。ページ構造想定外時は例外を投げ担当者に通知。FR-008, FR-010, FR-022）: `scripts/product-import/run-on-demand.ts`（依存: T022, T008, T013）
 - [ ] T024 [US2] GitHub Actionsワークフローを新規作成する（`workflow_dispatch`で`vendorId`を受け取り`run-on-demand.ts`を実行。research.md #3参照）: `.github/workflows/product-data-sync.yml`（依存: T023）
-- [ ] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象業者が`scraping`区分でない/`is_contracted`でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
+- [ ] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象業者が`scraping`区分でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
 - [ ] T026 [US2] トリガーAPIエンドポイントを実装しT025を通す（`X-Product-Import-Token`検証→`vendor`ドキュメント確認→GitHub `workflow_dispatch`呼び出し。FR-021, contracts/trigger-api.md）: `src/app/api/admin/product-import/trigger/route.ts`（依存: T024, T025）
 - [ ] T027 [US2] Studioの「今すぐ実行」ボタンを実装し、`vendor`ドキュメント画面に組み込む: `src/sanity/tools/product-import/on-demand-trigger-button.tsx`（依存: T026）
 - [ ] T028 [US2] quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」の手順を手動検証する（依存: T027）

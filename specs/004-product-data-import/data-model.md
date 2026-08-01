@@ -27,11 +27,12 @@
 | -------------------- | --------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
 | `name`               | string                                        | 必須 | 業者名                                                                                                                  |
 | `data_source_type`   | string（`"csv"` \| `"scraping"`）             | 必須 | CSV提供業者か、スクレイピング対象業者かの区分（FR-001 / FR-008の分岐）                                                  |
-| `is_contracted`      | boolean                                       | 必須 | 取引契約の有無。`false`の業者は自動収集の対象にしない（FR-009のガード）                                                 |
 | `default_brand`      | reference(`brand`)                            | 任意 | CSVにブランド列が無い業者向けの固定ブランド。CSV側にブランド列があればそちらを優先（FR-027）                            |
 | `csv_column_mapping` | object（任意, `data_source_type=csv`時）      | 任意 | 業者のCSV列名 → 統一データ形式フィールドのマッピング定義（JAN・商品名・ブランド名・定価・在庫状況・仕入れ掛け率・入数） |
 | `scrape_target_url`  | url（任意, `data_source_type=scraping`時）    | 任意 | スクレイピング対象のトップページ等                                                                                      |
 | `scrape_adapter_id`  | string（任意, `data_source_type=scraping`時） | 任意 | `scripts/product-import/vendors/<vendor-id>/`に対応するアダプター識別子                                                 |
+
+**取引契約の扱いについて**: 当初は`is_contracted`フラグでFR-009（自動収集対象を取引契約のある業者に限定する）を保証する設計だったが、`vendor`ドキュメントが存在すること自体が取引関係の存在を意味するため、専用フラグは冗長と判断し削除した（ユーザーとの協議）。FR-009は運用プロセス（取引のある業者のみ`vendor`ドキュメントを作成する）で担保する。将来「契約終了後も過去の参照は残しつつ自動収集だけ止めたい」というニーズが生じた場合は、改めて有効/無効フラグの追加を検討する。
 
 ### ProductImportRun（`src/sanity/schemas/product-import-run.ts`）
 
