@@ -18,18 +18,20 @@ const tools = [
   },
 ];
 
-// scrapingCatalogは開発者がスクレイピングコード(scrape_adapter_id)と一緒に
-// 用意するドキュメントであり、Studio上では文字通りの「定数」として扱う
-// （specs/004-product-data-import、ユーザーとの協議）。運営者は新規作成・編集・
-// 削除のいずれもできず閲覧のみとし、内容変更はコード（シードスクリプト等）で行う。
+// scrapingCatalog（開発者がスクレイピングコードと一緒に用意する設定）と
+// productImportRun（apply-import.tsがAPI経由で書き込む監査ログ）は、
+// いずれもStudio上では運営者が新規作成・編集・削除できない「定数/ログ」として扱う
+// （specs/004-product-data-import、ユーザーとの協議）。内容変更はコード側で行う。
 // UIレベルでの誤操作防止であり、データセットへの書き込み権限を持つ場合は
 // API経由で操作できてしまう点に注意（スキーマ側のreadOnlyと合わせた二重の防御）。
+const STUDIO_LOCKED_TYPES = ["scrapingCatalog", "productImportRun"];
+
 const document = {
   actions: (
     prev: import("sanity").DocumentActionComponent[],
     context: { schemaType: string }
   ) =>
-    context.schemaType === "scrapingCatalog"
+    STUDIO_LOCKED_TYPES.includes(context.schemaType)
       ? prev.filter(
           ({ action }) =>
             action !== "publish" &&
@@ -38,7 +40,7 @@ const document = {
         )
       : prev,
   newDocumentOptions: (prev: import("sanity").TemplateItem[]) =>
-    prev.filter((item) => item.templateId !== "scrapingCatalog"),
+    prev.filter((item) => !STUDIO_LOCKED_TYPES.includes(item.templateId)),
 };
 
 export default defineConfig([

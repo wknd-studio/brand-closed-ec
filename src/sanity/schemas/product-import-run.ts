@@ -1,5 +1,14 @@
 import { defineField, defineType } from "sanity";
 
+import { ImportErrorLogDisplay } from "./import-error-log-display";
+
+/**
+ * インポート実行結果は apply-import.ts がAPI経由で書き込む監査ログであり、
+ * Studio上での手動編集を認めない（誤って実績値を書き換えられると監査の意味が
+ * なくなるため）。全フィールドをreadOnlyにし、加えてsanity.config.tsの
+ * document.actions / newDocumentOptionsで新規作成・publish・削除もブロックする
+ * （二重の防御。scrapingCatalogと同じ考え方）。
+ */
 export const productImportRun = defineType({
   name: "productImportRun",
   title: "商品インポート実行結果",
@@ -11,6 +20,7 @@ export const productImportRun = defineType({
       type: "reference",
       to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "triggered_by",
@@ -24,17 +34,20 @@ export const productImportRun = defineType({
         ],
       },
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "started_at",
       title: "実行開始日時",
       type: "datetime",
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "finished_at",
       title: "実行終了日時",
       type: "datetime",
+      readOnly: true,
     }),
     defineField({
       name: "outcome",
@@ -48,24 +61,28 @@ export const productImportRun = defineType({
         ],
       },
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "success_count",
       title: "成功件数",
       type: "number",
       validation: (r) => r.required().min(0),
+      readOnly: true,
     }),
     defineField({
       name: "failure_count",
       title: "失敗件数",
       type: "number",
       validation: (r) => r.required().min(0),
+      readOnly: true,
     }),
     defineField({
       name: "needs_review_count",
       title: "要確認件数",
       type: "number",
       validation: (r) => r.required().min(0),
+      readOnly: true,
     }),
     defineField({
       name: "error_details",
@@ -80,6 +97,8 @@ export const productImportRun = defineType({
           ],
         },
       ],
+      readOnly: true,
+      components: { input: ImportErrorLogDisplay },
     }),
   ],
   preview: {
