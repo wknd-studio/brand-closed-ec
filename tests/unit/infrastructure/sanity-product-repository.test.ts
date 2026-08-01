@@ -49,6 +49,24 @@ describe("SanityProductRepository", () => {
     expect(result[0].paymentTiming).toBe("after_order");
   });
 
+  it("payment_timing未設定の既存商品はat_order扱いになる（後方互換）", async () => {
+    fetchMock.mockResolvedValue([
+      {
+        _id: "prod-legacy",
+        name: "既存商品（payment_timing未設定）",
+        is_negotiable: false,
+        prices: { standard: 8000 },
+        min_rank: "starter",
+        payment_timing: null,
+      },
+    ]);
+
+    const repo = new SanityProductRepository();
+    const result = await repo.findByIds(["prod-legacy"], "standard");
+
+    expect(result[0].paymentTiming).toBe("at_order");
+  });
+
   it("固定価格商品で該当ランクの価格が未設定の場合はProductPriceNotSetErrorを投げる", async () => {
     fetchMock.mockResolvedValue([
       {

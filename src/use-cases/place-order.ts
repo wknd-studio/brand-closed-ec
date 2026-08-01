@@ -85,7 +85,7 @@ export async function placeOrder(
         ? Money.zero()
         : (product?.unitPrice ?? Money.zero()),
       isNegotiable: product?.isNegotiable ?? false,
-      paymentTiming: product?.paymentTiming ?? "after_order",
+      paymentTiming: product?.paymentTiming ?? "at_order",
     });
   });
 
