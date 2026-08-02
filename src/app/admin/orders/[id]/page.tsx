@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { pickRelatedOrder } from "@/lib/order/related-order";
 import InvoiceForm from "./invoice-form";
 import StatusStepper from "./status-stepper";
 
@@ -23,6 +24,11 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "キャンセル",
 };
 
+const PAYMENT_FLOW_LABEL: Record<string, string> = {
+  checkout: "先払い（Checkout）",
+  invoice: "後払い（Invoice）",
+};
+
 export default async function AdminOrderDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = createAdminClient();
@@ -30,6 +36,17 @@ export default async function AdminOrderDetailPage({ params }: Props) {
 
   const order = await orderRepo.findByIdWithUser(id);
   if (!order) notFound();
+
+  const relatedOrder = order.splitGroupId
+    ? pickRelatedOrder(
+        order.id,
+        (await orderRepo.findBySplitGroupId(order.splitGroupId)).map((o) => ({
+          id: o.id,
+          paymentFlow: o.paymentFlow,
+          status: o.status.value,
+        }))
+      )
+    : null;
 
   const fixedItems = order.items.filter((i) => !i.isNegotiable);
   const negotiableItems = order.items.filter((i) => i.isNegotiable);
@@ -56,6 +73,25 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       </div>
 
       <div className="space-y-6">
+        {/* 分割注文の関連付け */}
+        {relatedOrder && (
+          <section className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+            <p className="text-sm font-medium text-blue-800">
+              この注文は分割チェックアウトにより、関連する注文があります。
+            </p>
+            <Link
+              href={`/admin/orders/${relatedOrder.id}`}
+              className="mt-2 inline-flex items-center gap-2 text-sm text-blue-700 underline underline-offset-2 hover:text-blue-900"
+            >
+              関連注文 {relatedOrder.id.slice(0, 8).toUpperCase()}（
+              {PAYMENT_FLOW_LABEL[relatedOrder.paymentFlow] ??
+                relatedOrder.paymentFlow}
+              ・{STATUS_LABEL[relatedOrder.status] ?? relatedOrder.status}
+              ）を見る
+            </Link>
+          </section>
+        )}
+
         {/* ステータスステッパー */}
         <section className="rounded-lg border p-5">
           <h2 className="mb-4 text-sm font-medium text-gray-700">
@@ -158,8 +194,9 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </section>
         )}
 
-        {/* Invoice発行フォーム（confirming かつ要相談商品ありの場合のみ） */}
-        {order.status === "confirming" && negotiableItems.length > 0 && (
+        {/* Invoice発行フォーム（confirming の場合。要相談商品が0件でも、
+            固定価格×後払いのみの注文として発行できる必要がある） */}
+        {order.status === "confirming" && (
           <section className="rounded-lg border p-5">
             <InvoiceForm
               orderId={order.id}

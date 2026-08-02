@@ -75,4 +75,20 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
     expect(redirect).toHaveBeenCalledWith("/sign-in");
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
+
+  it("Checkout Session作成にuserId・planベースのidempotencyKeyを付与する", async () => {
+    createCheckoutSessionMock.mockResolvedValue({
+      url: "https://checkout.stripe.com/cs_1",
+    });
+
+    await expect(
+      OnboardingPaymentPage({
+        searchParams: Promise.resolve({ plan: "starter" }),
+      })
+    ).rejects.toThrow("NEXT_REDIRECT:https://checkout.stripe.com/cs_1");
+
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(expect.any(Object), {
+      idempotencyKey: "onboarding-checkout-session-clerk-1-starter",
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { getStripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
+import { SPAN_OP } from "@/lib/observability/span";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
 import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
@@ -43,9 +44,13 @@ export async function POST(req: Request) {
       };
 
       try {
-        await markCheckoutOrderAsPaid(
-          { stripeCheckoutSessionId: session.id },
-          deps
+        await Sentry.startSpan(
+          { name: "markCheckoutOrderAsPaid", op: SPAN_OP.webhook },
+          () =>
+            markCheckoutOrderAsPaid(
+              { stripeCheckoutSessionId: session.id },
+              deps
+            )
         );
       } catch (err) {
         Sentry.captureException(err, {
@@ -70,17 +75,21 @@ export async function POST(req: Request) {
       }
 
       try {
-        await completeSubscriptionOnboarding(
-          {
-            clerkUserId,
-            plan,
-            stripeCustomerId: session.customer as string,
-            stripeSubscriptionId: session.subscription as string,
-          },
-          {
-            userRepo: new SupabaseUserRepository(createAdminClient()),
-            accountGateway: new ClerkAccountGateway(),
-          }
+        await Sentry.startSpan(
+          { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
+          () =>
+            completeSubscriptionOnboarding(
+              {
+                clerkUserId,
+                plan,
+                stripeCustomerId: session.customer as string,
+                stripeSubscriptionId: session.subscription as string,
+              },
+              {
+                userRepo: new SupabaseUserRepository(createAdminClient()),
+                accountGateway: new ClerkAccountGateway(),
+              }
+            )
         );
       } catch (err) {
         Sentry.captureException(err, {
@@ -109,7 +118,10 @@ export async function POST(req: Request) {
     };
 
     try {
-      await markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id }, deps);
+      await Sentry.startSpan(
+        { name: "markInvoiceOrderAsPaid", op: SPAN_OP.webhook },
+        () => markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id }, deps)
+      );
     } catch (err) {
       Sentry.captureException(err, {
         tags: { webhook: "stripe", eventType: event.type },

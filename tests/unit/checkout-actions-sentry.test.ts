@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
   setUser: vi.fn(),
+  startSpan: vi.fn((_options: unknown, callback: () => unknown) => callback()),
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -92,5 +93,18 @@ describe("placeOrder Server Action - Sentry例外送信", () => {
     await placeOrder("addr-1", "addr-1");
 
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("Sentry.startSpanでラップして実行する", async () => {
+    vi.mocked(placeOrderUseCase).mockResolvedValue({
+      redirectUrl: "https://checkout.stripe.com/cs_1",
+    });
+
+    await placeOrder("addr-1", "addr-1");
+
+    expect(Sentry.startSpan).toHaveBeenCalledWith(
+      { name: "placeOrder", op: "server-action.process" },
+      expect.any(Function)
+    );
   });
 });

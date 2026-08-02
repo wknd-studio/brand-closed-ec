@@ -4,6 +4,7 @@ const constructEventMock = vi.fn();
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
+  startSpan: vi.fn((_options: unknown, callback: () => unknown) => callback()),
 }));
 
 vi.mock("@/lib/stripe", () => ({
@@ -158,5 +159,61 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
 
     expect(res.status).toBe(200);
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("checkout.session.completed(mode: payment)の処理をSentry.startSpanでラップする", async () => {
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: { id: "cs_4", object: "checkout.session", mode: "payment" },
+      },
+    });
+    vi.mocked(markCheckoutOrderAsPaid).mockResolvedValue(undefined);
+
+    await POST(makeRequest());
+
+    expect(Sentry.startSpan).toHaveBeenCalledWith(
+      { name: "markCheckoutOrderAsPaid", op: "webhook.process" },
+      expect.any(Function)
+    );
+  });
+
+  it("checkout.session.completed(mode: subscription)の処理をSentry.startSpanでラップする", async () => {
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_5",
+          object: "checkout.session",
+          mode: "subscription",
+          customer: "cus_1",
+          subscription: "sub_1",
+          metadata: { clerk_user_id: "clerk_1", plan: "starter" },
+        },
+      },
+    });
+    vi.mocked(completeSubscriptionOnboarding).mockResolvedValue(undefined);
+
+    await POST(makeRequest());
+
+    expect(Sentry.startSpan).toHaveBeenCalledWith(
+      { name: "completeSubscriptionOnboarding", op: "webhook.process" },
+      expect.any(Function)
+    );
+  });
+
+  it("invoice.paidの処理をSentry.startSpanでラップする", async () => {
+    constructEventMock.mockReturnValue({
+      type: "invoice.paid",
+      data: { object: { id: "in_2" } },
+    });
+    vi.mocked(markInvoiceOrderAsPaid).mockResolvedValue(undefined);
+
+    await POST(makeRequest());
+
+    expect(Sentry.startSpan).toHaveBeenCalledWith(
+      { name: "markInvoiceOrderAsPaid", op: "webhook.process" },
+      expect.any(Function)
+    );
   });
 });

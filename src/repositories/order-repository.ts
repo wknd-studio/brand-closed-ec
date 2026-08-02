@@ -6,6 +6,7 @@ export type OrderWithUser = {
   createdAt: Date;
   status: string;
   paymentFlow: "checkout" | "invoice";
+  splitGroupId: string | null;
   user: {
     lastName: string;
     firstName: string;
