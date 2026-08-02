@@ -92,19 +92,27 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 ## Phase 4: User Story 2 - サイト注文専用業者の商品データ自動収集 (Priority: P2)
 
-**Goal**: 契約済みでCSV提供のない業者について、担当者が業者単位で「今すぐ実行」すると、スクレイピング→統一データ形式への変換→検証プレビュー→確定という流れでSanityへ反映される
+**Goal**: 契約済みでCSV提供のない業者について、技術者が手元でスクレイピングを実行してCSVを生成し、運営者が既存のCSVインポート画面（User Story 1）から検証プレビュー→確定する
 
-**Independent Test**: quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」のシナリオ
+**設計変更（ユーザーとの協議、当初のcontracts/trigger-api.mdから変更）**: 当初はSanity Studioの「今すぐ実行」ボタン→トリガーAPI→GitHub Actions `workflow_dispatch`という非同期パイプラインを実装したが、以下の理由で廃止し、技術者がCLIを手元で実行してCSVを生成する方式に変更した。
+
+1. スクレイピングの実行主体は技術者であり、ブラウザ（Sanity Studio）から非技術者が自由に起動できる必要性が薄い。技術者は元々リポジトリ・Dopplerへのアクセス権を持っており、CLIを直接叩けば済む
+2. ボタン方式は「StudioがNext.jsアプリと別ドメインにデプロイされる」ことに起因するCORS対応、ブラウザに渡さないためのGitHub PATの保管・プロキシAPI等、この機能の価値に対して複雑さが見合わなかった
+3. CSV経由にすることで、既存のCSVインポート画面が持つ「書き込み前の検証プレビュー→人間による確定」という安全機構をそのまま再利用でき、FR-022の意図（書き込み前のレビュー担保）にもむしろ合致する
+
+この変更に伴い、`src/app/api/admin/product-import/trigger/route.ts`・`on-demand-trigger-button.tsx`・`run-on-demand.ts`・`.github/workflows/product-data-sync.yml`（`workflow_dispatch`）は削除した。`CatalogScraper`インターフェース・アダプター実装（T020〜T022）はそのまま再利用する。`contracts/trigger-api.md`はPR前のドキュメント整理時に合わせて更新・削除する。
+
+**Independent Test**: quickstart.md「User Story 2」のシナリオ（PR前に更新する）
 
 - [x] T020 [P] [US2] `CatalogScraper`インターフェースを定義する（contracts/vendor-adapter-interface.md準拠）: `src/lib/product-import/catalog-scraper.ts`
 - [x] T021 [P] [US2] 固定HTMLフィクスチャに対する失敗するユニットテストを書く（cheerioベースのアダプター実装がHTMLを統一データ形式へ正しく変換できることを検証）: `tests/unit/product-import/vendors/fixture-vendor.test.ts`（依存: T004, T020）
 - [x] T022 [US2] フィクスチャ向けの参照実装アダプターを実装しT021を通す（今後の実業者アダプター実装のひな形とする）: `scripts/product-import/vendors/__fixture__/scraper.ts`（依存: T021）
-- [x] T023 [US2] `run-on-demand.ts`を実装する（Sanityから対象`scrapingCatalog`を取得→スクレイパー実行→`validate-and-preview`→`apply-import`→`productImportRun`（`triggered_by: "on_demand"`）記録。ページ構造想定外時は例外を投げ担当者に通知。FR-008, FR-010, FR-022）: `scripts/product-import/run-on-demand.ts`（依存: T022, T008, T013）
-- [x] T024 [US2] GitHub Actionsワークフローを新規作成する（`workflow_dispatch`で`catalogId`を受け取り`run-on-demand.ts`を実行。research.md #3参照）: `.github/workflows/product-data-sync.yml`（依存: T023）
-- [x] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象が`scrapingCatalog`型でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
-- [x] T026 [US2] トリガーAPIエンドポイントを実装しT025を通す（`X-Product-Import-Token`検証→`scrapingCatalog`ドキュメント確認→GitHub `workflow_dispatch`呼び出し。FR-021, contracts/trigger-api.md）: `src/app/api/admin/product-import/trigger/route.ts`（依存: T024, T025）
-- [x] T027 [US2] Studioの「今すぐ実行」ボタンを実装し、`scrapingCatalog`ドキュメント画面に組み込む: `src/sanity/tools/product-import/on-demand-trigger-button.tsx`（依存: T026）
-- [x] T028 [US2] quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」の手順を手動検証する（依存: T027）。**補足**: staging Sanityに対する`run-on-demand.ts --dry-run`（catalog取得→アダプター動的import→エラー時の異常終了までの配線）は一時的なテスト用`scrapingCatalog`を作成・削除して自動検証済み。「オンデマンド実行（Studio経由）」（実際のGitHub Actions `workflow_dispatch`起動を伴う）はユーザー側での実施待ち
+- [x] T023 [US2] （設計変更により再定義）`unifiedRecordsToCsv`の失敗するユニットテスト→実装、および`export-csv.ts`（技術者向けCLI: スクレイパー実行→CSV書き出し）を実装する。既存の`mapCsvToUnifiedRecords`でのラウンドトリップも検証する: `src/lib/product-import/csv-export.ts`, `scripts/product-import/export-csv.ts`, `tests/unit/product-import/csv-export.test.ts`（依存: T022, T004）
+- [x] ~~T024~~ （廃止）GitHub Actions `workflow_dispatch`ワークフローは不要になったため作成しない。日次`schedule`のみのワークフローはPhase 5（T033）で新規作成する
+- [x] ~~T025~~ （廃止）トリガーAPIのテストは不要
+- [x] ~~T026~~ （廃止）トリガーAPIエンドポイントは不要
+- [x] ~~T027~~ （廃止）Studioの「今すぐ実行」ボタンは不要
+- [x] T028 [US2] quickstart.mdのUser Story 2手順（更新後）を手動検証する（依存: T023）。**補足**: `export-csv.ts`のCLI配線（引数解析→アダプター動的import→scrape呼び出し→エラー伝播）は`--adapter=__fixture__`実行で確認済み（`__fixture__`のURLはダミーのため取得自体は404で失敗するのが期待動作）。生成CSVが既存のCSVインポート画面（`mapCsvToUnifiedRecords`）で正しく読み戻せることは`csv-export.test.ts`のラウンドトリップテストで自動検証済み。実業者アダプター実装後、実データでのStudio UI経由アップロードの通し確認が別途必要
 
 **チェックポイント**: User Story 2が独立して機能・検証可能
 
@@ -172,10 +180,9 @@ Task: "productImportRunスキーマを新規作成する: src/sanity/schemas/pro
 1. PR1: Phase 1 + T003〜T008（依存関係追加、共有ロジック: config・統一データ形式・dedupe・validate-and-preview）
 2. PR2: T009〜T013（Sanityスキーマ拡張・新設: product/vendor/productImportRun、apply-import実装）
 3. PR3: Phase 3 全体（T014〜T019） — User Story 1（CSVインポート、MVP）
-4. PR4: T020〜T024（VendorScraperインターフェース・フィクスチャアダプター・run-on-demand・GitHub Actionsワークフロー新設）
-5. PR5: T025〜T028（オンデマンド実行トリガーAPI・Studioの「今すぐ実行」ボタン）
-6. PR6: Phase 5 全体（T029〜T036） — User Story 3（定期実行・要確認キュー）
-7. PR7: Phase 6 全体（T037〜T039） — 仕上げ
+4. PR4: Phase 4 全体（T020〜T023, T028） — User Story 2（`CatalogScraper`インターフェース・フィクスチャアダプター・CSV書き出しCLI。設計変更によりトリガーAPI・Studioボタンは廃止）
+5. PR6: Phase 5 全体（T029〜T036） — User Story 3（定期実行・要確認キュー）
+6. PR7: Phase 6 全体（T037〜T039） — 仕上げ
 
 PR2・PR6はファイル数が5を超える可能性があるため、実装時に差分規模を見てさらに分割してよい（分割しない場合はPR説明にその理由を明記する。CLAUDE.md準拠）。
 
