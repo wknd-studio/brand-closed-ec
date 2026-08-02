@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { pickRelatedOrder } from "@/lib/order/related-order";
 import OrderCompleteClient from "./order-complete-client";
 
 type Props = {
@@ -21,6 +22,17 @@ export default async function OrderCompletePage({ searchParams }: Props) {
   const order = await orderRepo.findByStripeCheckoutSessionId(session_id);
   if (!order) redirect("/shop");
 
+  const relatedOrder = order.splitGroupId
+    ? pickRelatedOrder(
+        order.id,
+        (await orderRepo.findBySplitGroupId(order.splitGroupId)).map((o) => ({
+          id: o.id,
+          paymentFlow: o.paymentFlow,
+          status: o.status.value,
+        }))
+      )
+    : null;
+
   return (
     <OrderCompleteClient
       orderId={order.id}
@@ -34,6 +46,7 @@ export default async function OrderCompletePage({ searchParams }: Props) {
           : item.unitPriceSnapshot.amount,
         isNegotiable: item.isNegotiable,
       }))}
+      relatedOrder={relatedOrder}
     />
   );
 }

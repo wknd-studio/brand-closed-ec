@@ -115,12 +115,14 @@
 
 ### Tests for User Story 4
 
-- [ ] T026 [P] [US4] `/order/complete`ページが`splitGroupId`を介して関連注文を取得し状態を表示するロジックのユニットテスト（コンポーネント/データ取得部分）を作成
+- [x] T026 [P] [US4] `/order/complete`ページが`splitGroupId`を介して関連注文を取得し状態を表示するロジックのユニットテスト（コンポーネント/データ取得部分）を作成
 
 ### Implementation for User Story 4
 
-- [ ] T027 [US4] `/order/complete`ページで、Order取得後に`splitGroupId`があれば`orderRepo.findBySplitGroupId`で関連注文を取得し状態を表示 in `src/app/(member)/order/complete/`配下（T005に依存）
-- [ ] T028 [US4] 管理画面の注文詳細ページで、関連注文へのリンク・案内を表示 in `src/app/admin/orders/[id]/`配下（T005に依存）
+- [x] T027 [US4] `/order/complete`ページで、Order取得後に`splitGroupId`があれば`orderRepo.findBySplitGroupId`で関連注文を取得し状態を表示 in `src/app/(member)/order/complete/`配下（T005に依存）
+- [x] T028 [US4] 管理画面の注文詳細ページで、関連注文へのリンク・案内を表示 in `src/app/admin/orders/[id]/`配下（T005に依存）
+  - 付随修正: `OrderWithUser`に`splitGroupId`を追加（`findByIdWithUser`/`findActiveOrdersWithUser`のSELECT・マッピングを更新）
+  - 付随バグ修正: Invoice発行フォームが「要相談商品が1件以上ある場合のみ」表示される条件になっており、固定価格×`after_order`のみの注文でInvoiceを発行する手段が存在しなかった問題を修正
 
 **Checkpoint**: 分割注文が運営者・会員双方から追跡可能になる
 
