@@ -97,6 +97,49 @@ describe("placeOrder", () => {
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
   });
 
+  it("支払いタイミングが混在するカートでも、分割前の合計で上限超過ならOrderが1件も作成されない", async () => {
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockResolvedValue(
+      4_000_000
+    );
+
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      // standardランクの月次上限は5,000,000円。confirmedAmount(4,000,000) +
+      // at_order(2,000,000) + after_order(2,000,000) = 8,000,000 > 5,000,000
+      productRepo: makeProductRepo([
+        { ...fixedProduct, unitPrice: Money.of(2_000_000) },
+        { ...afterOrderFixedProduct, unitPrice: Money.of(2_000_000) },
+      ]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+    };
+
+    await expect(
+      placeOrder(
+        {
+          ...baseInput,
+          cartItems: [
+            { sanityProductId: "prod-1", quantity: 1, productName: "固定商品" },
+            {
+              sanityProductId: "prod-3",
+              quantity: 1,
+              productName: "後払い固定商品",
+            },
+          ],
+        },
+        deps
+      )
+    ).rejects.toThrow(LimitExceededError);
+
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(orderRepo.delete).not.toHaveBeenCalled();
+    expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
+    expect(deps.notificationService.sendOrderConfirming).not.toHaveBeenCalled();
+  });
+
   it("カートに存在しない商品IDが含まれる場合はエラーを投げる（カート改竄対策）", async () => {
     const deps = {
       userRepo: makeUserRepo(),
