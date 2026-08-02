@@ -114,6 +114,10 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 - [x] ~~T027~~ （廃止）Studioの「今すぐ実行」ボタンは不要
 - [x] T028 [US2] quickstart.mdのUser Story 2手順（更新後）を手動検証する（依存: T023）。**補足**: `export-csv.ts`のCLI配線（引数解析→アダプター動的import→scrape呼び出し→エラー伝播）は`--adapter=__fixture__`実行で確認済み（`__fixture__`のURLはダミーのため取得自体は404で失敗するのが期待動作）。生成CSVが既存のCSVインポート画面（`mapCsvToUnifiedRecords`）で正しく読み戻せることは`csv-export.test.ts`のラウンドトリップテストで自動検証済み。実業者アダプター実装後、実データでのStudio UI経由アップロードの通し確認が別途必要
 
+### Phase 4 補足（Phase 5設計対話で判明した修正）
+
+- [x] T028a **`csvCatalog`/`scrapingCatalog`を1つの型（商品CSVカタログ、`csvCatalog`のまま存続）へ統合し`scrapingCatalog`を廃止する**（ユーザーとの協議）。理由: (1) スクレイピングも結局CSV生成を経由して同じCSVインポート画面から取り込むため、Sanityの書き込み処理としては業者CSV提供と完全に同一で型を分ける意味がなかった (2) `scrape_target_url`/`scrape_adapter_id`は実行時にSanityから読まれておらず、アダプターコード（`scripts/product-import/vendors/<id>/scraper.ts`内の`CATALOG_ID`/`SOURCE_URL`定数）に既に重複して直書きされていた、純粋な重複情報だった。ステージングの既存ドキュメントは`scrapingCatalog`が0件・`csvCatalog`が1件（必要な4フィールドのみ）だったため、実データ移行は不要だった。アダプターの`CATALOG_ID`は対応する`csvCatalog`ドキュメントの`_id`と一致させる: `src/sanity/schemas/scraping-catalog.ts`（削除）, `src/sanity/schemas/csv-catalog.ts`, `src/sanity/schemas/index.ts`, `src/sanity/structure.ts`, `src/sanity/schemas/product.ts`, `src/sanity/schemas/product-import-run.ts`, `src/lib/product-import/catalog-scraper.ts`
+
 **チェックポイント**: User Story 2が独立して機能・検証可能
 
 ---
@@ -127,7 +131,7 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 - [ ] T029 [P] [US3] `productAvailabilityReview`スキーマを新規作成し登録する（`product`, `catalog`, `detected_at`, `import_run`, `status`, `reviewed_at`。FR-014, data-model.md）: `src/sanity/schemas/product-availability-review.ts`, `src/sanity/schemas/index.ts`
 - [ ] T030 [P] [US3] 消失商品検知ロジックの失敗するユニットテストを書く（前回実行時の商品集合と今回の商品集合を比較し、今回存在しないものを検出する。FR-013）: `tests/unit/product-import/detect-disappeared-products.test.ts`
 - [ ] T031 [US3] `detect-disappeared-products.ts`を実装しT030を通す: `src/lib/product-import/detect-disappeared-products.ts`（依存: T030）
-- [ ] T032 [US3] `run-scheduled-sync.ts`を実装する（`scrapingCatalog`を全件処理、catalog単位のエラーはスキップして他catalogの処理を継続、エラー率閾値超過時はその回の実行をスキップし担当者に通知、`detect-disappeared-products`で消失商品を検知し`productAvailabilityReview`（`status: "pending"`）を作成。FR-009, FR-010, FR-013, FR-014, FR-020）: `scripts/product-import/run-scheduled-sync.ts`（依存: T022, T029, T031, T013）
+- [ ] T032 [US3] `run-scheduled-sync.ts`を実装する（`scripts/product-import/vendors/`配下のスクレイピングアダプターを全件処理、catalog単位のエラーはスキップして他catalogの処理を継続、エラー率閾値超過時はその回の実行をスキップし担当者に通知、`detect-disappeared-products`で消失商品を検知し`productAvailabilityReview`（`status: "pending"`）を作成。FR-009, FR-010, FR-013, FR-014, FR-020）: `scripts/product-import/run-scheduled-sync.ts`（依存: T022, T029, T031, T013）
 - [ ] T033 [US3] GitHub Actionsワークフローに日次`schedule`（cron）トリガーを追加し`run-scheduled-sync.ts`を実行する（FR-012）: `.github/workflows/product-data-sync.yml`（依存: T032, T024）
 - [ ] T034 [US3] `productAvailabilityReview`に対するSanity Studioドキュメントアクションを実装する（承認→対象`product.availability`を`discontinued`に更新し`status: "approved_discontinued"`に、却下→`status: "dismissed"`に。FR-014）: `src/sanity/tools/product-import/product-availability-review-actions.ts`（依存: T029）
 - [ ] T035 [US3] 「要確認」一覧を商品管理配下に追加する（`status: "pending"`の`productAvailabilityReview`を表示。FR-018）: `src/sanity/structure.ts`（依存: T029, T034）

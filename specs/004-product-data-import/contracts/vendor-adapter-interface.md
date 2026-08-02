@@ -38,7 +38,7 @@ interface CatalogScraper {
 }
 ```
 
-- `scripts/product-import/vendors/<scrape_adapter_id>/scraper.ts`は、この`CatalogScraper`を実装したオブジェクトをデフォルトエクスポートする
-- このスクリプトの実装と合わせて、対応する`scrapingCatalog`ドキュメント（`scrape_adapter_id`にこのディレクトリ名を設定したもの）を開発者がコード側（シードスクリプト等）で用意する。運営者がSanity Studio上でこのドキュメントを新規作成することは想定しない（`sanity.config.ts`の`document.actions`/`newDocumentOptions`でUIレベルの作成・削除をロックしている）
-- ページ構造の想定外の変化（FR-010）は、スクレイピング処理内で検知した時点で例外を投げることとし、呼び出し元（`run-scheduled-sync.ts` / `run-on-demand.ts`）がcatalog単位でキャッチしてスキップ・通知する。他のcatalogの処理は継続する（Edge Cases）
+- `scripts/product-import/vendors/<adapter-id>/scraper.ts`は、この`CatalogScraper`を実装したオブジェクトをデフォルトエクスポートする
+- 対象URL・実行コードはSanityドキュメントではなくこのアダプターコード側で管理する（`scrapingCatalog`は廃止し`csvCatalog`へ統合済み）。`catalogId`は、対応する商品CSVカタログ（`csvCatalog`）ドキュメントの`_id`と一致させる
+- ページ構造の想定外の変化（FR-010）は、スクレイピング処理内で検知した時点で例外を投げることとし、呼び出し元（`run-scheduled-sync.ts` / `export-csv.ts`）がcatalog単位でキャッチしてスキップ・通知する。他のcatalogの処理は継続する（Edge Cases）
 - HTML取得・パースの実装手段（`fetch` + `cheerio`か`playwright`か）はアダプター内部の実装詳細であり、`CatalogScraper`インターフェースの外からは意識しない
