@@ -149,7 +149,7 @@ function readColumn(
   return value ? value : undefined;
 }
 
-function parseNumber(raw: string | undefined): number | undefined {
+export function parseNumber(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
   const cleaned = raw.replace(/[^\d.-]/g, "");
   // "不明"等、数字を一切含まない文字列はNumber("")===0になってしまうため明示的に弾く
@@ -173,7 +173,7 @@ function parseVendorCostRate(raw: string | undefined): number | undefined {
   return parseNumber(raw);
 }
 
-function normalizeAvailability(
+export function normalizeAvailability(
   raw: string | undefined
 ): "available" | "out_of_stock" {
   if (!raw) return "available";

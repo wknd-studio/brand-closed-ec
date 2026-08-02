@@ -7,6 +7,7 @@ import { structureTool } from "sanity/structure";
 import { schemaTypes } from "./src/sanity/schemas";
 import { structure } from "./src/sanity/structure";
 import { ManualTool } from "./src/sanity/tools/manual/manual-tool";
+import { OnDemandTriggerAction } from "./src/sanity/tools/product-import/on-demand-trigger-button";
 import { ProductImportTool } from "./src/sanity/tools/product-import/product-import-tool";
 
 const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ?? "0syeievd";
@@ -47,8 +48,8 @@ const document = {
   actions: (
     prev: import("sanity").DocumentActionComponent[],
     context: { schemaType: string }
-  ) =>
-    prev.filter(({ action }) => {
+  ) => {
+    const filtered = prev.filter(({ action }) => {
       if (STUDIO_NO_CREATE_EDIT_TYPES.includes(context.schemaType)) {
         if (action === "publish" || action === "duplicate") return false;
       }
@@ -56,7 +57,14 @@ const document = {
         if (action === "delete") return false;
       }
       return true;
-    }),
+    });
+    // scrapingCatalogは新規作成・編集をブロックしている（上記フィルタ）ため、
+    // その代わりにこのデータソースへの唯一の操作として「今すぐ実行」を追加する
+    if (context.schemaType === "scrapingCatalog") {
+      return [...filtered, OnDemandTriggerAction];
+    }
+    return filtered;
+  },
   newDocumentOptions: (prev: import("sanity").TemplateItem[]) =>
     prev.filter(
       (item) => !STUDIO_NO_CREATE_EDIT_TYPES.includes(item.templateId)

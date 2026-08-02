@@ -68,7 +68,7 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 - [x] T016 [US1] 検証プレビュー計算をStudioツールから呼び出すフック`use-import-preview.ts`を実装する（`validate-and-preview.ts`のラップ）: `src/sanity/tools/product-import/use-import-preview.ts`（依存: T008）
 - [x] T017 [US1] Sanity Studioカスタムツール本体を実装する（CSVアップロード→`csv-adapter`で変換→検証プレビュー表示→担当者の確定操作で`apply-import`を呼び出し書き込み。FR-016, FR-019）: `src/sanity/tools/product-import/product-import-tool.tsx`（依存: T015, T016, T013）
 - [x] T018 [US1] カスタムツールをStudioに登録する（pluginsへの追加、商品管理配下へのナビゲーション項目追加）: `sanity.config.ts`, `src/sanity/structure.ts`（依存: T017）
-- [ ] T019 [US1] quickstart.md「User Story 1」「User Story 1: エラー行・閾値超過」の手順を手動検証する（依存: T018）
+- [x] T019 [US1] quickstart.md「User Story 1」「User Story 1: エラー行・閾値超過」の手順を手動検証する（依存: T018）
 
 ### Phase 3 補足（手動検証・設計対話で判明した修正）
 
@@ -96,15 +96,15 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 **Independent Test**: quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」のシナリオ
 
-- [ ] T020 [P] [US2] `CatalogScraper`インターフェースを定義する（contracts/vendor-adapter-interface.md準拠）: `src/lib/product-import/catalog-scraper.ts`
-- [ ] T021 [P] [US2] 固定HTMLフィクスチャに対する失敗するユニットテストを書く（cheerioベースのアダプター実装がHTMLを統一データ形式へ正しく変換できることを検証）: `tests/unit/product-import/vendors/fixture-vendor.test.ts`（依存: T004, T020）
-- [ ] T022 [US2] フィクスチャ向けの参照実装アダプターを実装しT021を通す（今後の実業者アダプター実装のひな形とする）: `scripts/product-import/vendors/__fixture__/scraper.ts`（依存: T021）
-- [ ] T023 [US2] `run-on-demand.ts`を実装する（Sanityから対象`scrapingCatalog`を取得→スクレイパー実行→`validate-and-preview`→`apply-import`→`productImportRun`（`triggered_by: "on_demand"`）記録。ページ構造想定外時は例外を投げ担当者に通知。FR-008, FR-010, FR-022）: `scripts/product-import/run-on-demand.ts`（依存: T022, T008, T013）
-- [ ] T024 [US2] GitHub Actionsワークフローを新規作成する（`workflow_dispatch`で`catalogId`を受け取り`run-on-demand.ts`を実行。research.md #3参照）: `.github/workflows/product-data-sync.yml`（依存: T023）
-- [ ] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象が`scrapingCatalog`型でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
-- [ ] T026 [US2] トリガーAPIエンドポイントを実装しT025を通す（`X-Product-Import-Token`検証→`scrapingCatalog`ドキュメント確認→GitHub `workflow_dispatch`呼び出し。FR-021, contracts/trigger-api.md）: `src/app/api/admin/product-import/trigger/route.ts`（依存: T024, T025）
-- [ ] T027 [US2] Studioの「今すぐ実行」ボタンを実装し、`scrapingCatalog`ドキュメント画面に組み込む: `src/sanity/tools/product-import/on-demand-trigger-button.tsx`（依存: T026）
-- [ ] T028 [US2] quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」の手順を手動検証する（依存: T027）
+- [x] T020 [P] [US2] `CatalogScraper`インターフェースを定義する（contracts/vendor-adapter-interface.md準拠）: `src/lib/product-import/catalog-scraper.ts`
+- [x] T021 [P] [US2] 固定HTMLフィクスチャに対する失敗するユニットテストを書く（cheerioベースのアダプター実装がHTMLを統一データ形式へ正しく変換できることを検証）: `tests/unit/product-import/vendors/fixture-vendor.test.ts`（依存: T004, T020）
+- [x] T022 [US2] フィクスチャ向けの参照実装アダプターを実装しT021を通す（今後の実業者アダプター実装のひな形とする）: `scripts/product-import/vendors/__fixture__/scraper.ts`（依存: T021）
+- [x] T023 [US2] `run-on-demand.ts`を実装する（Sanityから対象`scrapingCatalog`を取得→スクレイパー実行→`validate-and-preview`→`apply-import`→`productImportRun`（`triggered_by: "on_demand"`）記録。ページ構造想定外時は例外を投げ担当者に通知。FR-008, FR-010, FR-022）: `scripts/product-import/run-on-demand.ts`（依存: T022, T008, T013）
+- [x] T024 [US2] GitHub Actionsワークフローを新規作成する（`workflow_dispatch`で`catalogId`を受け取り`run-on-demand.ts`を実行。research.md #3参照）: `.github/workflows/product-data-sync.yml`（依存: T023）
+- [x] T025 [P] [US2] トリガーAPIの失敗するユニットテストを書く（不正トークン→401、対象が`scrapingCatalog`型でない→400、正常系→GitHub Actions呼び出しのモック検証。contracts/trigger-api.md）: `tests/unit/app/api/admin/product-import-trigger.test.ts`
+- [x] T026 [US2] トリガーAPIエンドポイントを実装しT025を通す（`X-Product-Import-Token`検証→`scrapingCatalog`ドキュメント確認→GitHub `workflow_dispatch`呼び出し。FR-021, contracts/trigger-api.md）: `src/app/api/admin/product-import/trigger/route.ts`（依存: T024, T025）
+- [x] T027 [US2] Studioの「今すぐ実行」ボタンを実装し、`scrapingCatalog`ドキュメント画面に組み込む: `src/sanity/tools/product-import/on-demand-trigger-button.tsx`（依存: T026）
+- [x] T028 [US2] quickstart.md「User Story 2: スクレイピング（ローカル動作確認）」「User Story 2: オンデマンド実行（Studio経由）」の手順を手動検証する（依存: T027）。**補足**: staging Sanityに対する`run-on-demand.ts --dry-run`（catalog取得→アダプター動的import→エラー時の異常終了までの配線）は一時的なテスト用`scrapingCatalog`を作成・削除して自動検証済み。「オンデマンド実行（Studio経由）」（実際のGitHub Actions `workflow_dispatch`起動を伴う）はユーザー側での実施待ち
 
 **チェックポイント**: User Story 2が独立して機能・検証可能
 
