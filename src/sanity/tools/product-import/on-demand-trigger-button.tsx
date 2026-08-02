@@ -10,6 +10,8 @@ import type { DocumentActionComponent, DocumentActionProps } from "sanity";
  * トークンはSanity Studio（Viteビルド）の慣例に従い`SANITY_STUDIO_`接頭辞の
  * 環境変数（`process.env`経由でビルド時にクライアントバンドルへ埋め込まれる）から取得する
  * （GitHub PAT自体はサーバーサイドのみに保持）。
+ * StudioはNext.jsアプリとは別ドメインにデプロイされる（`sanity deploy`）ため、
+ * APIの呼び出し先は相対パスではなく`SANITY_STUDIO_APP_URL`が指す絶対URLを使う。
  */
 export const OnDemandTriggerAction: DocumentActionComponent = (
   props: DocumentActionProps
@@ -31,7 +33,8 @@ export const OnDemandTriggerAction: DocumentActionComponent = (
     onHandle: async () => {
       setStatus("loading");
       try {
-        const res = await fetch("/api/admin/product-import/trigger", {
+        const appUrl = process.env.SANITY_STUDIO_APP_URL ?? "";
+        const res = await fetch(`${appUrl}/api/admin/product-import/trigger`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

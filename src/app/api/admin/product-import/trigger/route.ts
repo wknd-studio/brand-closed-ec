@@ -4,6 +4,23 @@ import { sanityClient } from "@/lib/sanity/client";
 
 const GITHUB_REPO = "wknd-studio/brand-closed-ec";
 
+// Sanity StudioはNext.jsアプリとは別ドメイン（`sanity deploy`先の*.sanity.studio）で動くため、
+// このAPIへのリクエストはブラウザから見て常にクロスオリジンになる。許可元は既知の
+// Studioデプロイ先（本番）とローカルの`sanity dev`のみに限定する
+const ALLOWED_ORIGINS = [
+  "https://brand-closed-ec.sanity.studio",
+  "http://localhost:3333",
+];
+
+function corsHeaders(origin: string | null): HeadersInit {
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Product-Import-Token",
+  };
+}
+
 /**
  * Sanity Studioの「今すぐ実行」ボタンから呼び出される、GitHub Actionsの
  * workflow_dispatchを起動するプロキシエンドポイント（contracts/trigger-api.md, FR-021）。
@@ -11,17 +28,29 @@ const GITHUB_REPO = "wknd-studio/brand-closed-ec";
  * このエンドポイント専用のスコープ限定シークレット（X-Product-Import-Token）で認証する。
  * GitHub PATはこのサーバーサイドにのみ保持し、ブラウザには渡さない（research.md #5）。
  */
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders(req.headers.get("origin")),
+  });
+}
+
 export async function POST(req: Request) {
+  const headers = corsHeaders(req.headers.get("origin"));
+
   const token = req.headers.get("X-Product-Import-Token");
   if (!token || token !== process.env.PRODUCT_IMPORT_TRIGGER_TOKEN) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers }
+    );
   }
 
   const { catalogId } = await req.json();
   if (!catalogId) {
     return NextResponse.json(
       { error: "catalogId is required" },
-      { status: 400 }
+      { status: 400, headers }
     );
   }
 
@@ -32,7 +61,7 @@ export async function POST(req: Request) {
   if (!catalog) {
     return NextResponse.json(
       { error: "catalogId does not correspond to a scrapingCatalog" },
-      { status: 400 }
+      { status: 400, headers }
     );
   }
 
@@ -55,9 +84,9 @@ export async function POST(req: Request) {
   if (!dispatchResponse.ok) {
     return NextResponse.json(
       { error: "GitHub Actionsの起動に失敗しました" },
-      { status: 502 }
+      { status: 502, headers }
     );
   }
 
-  return NextResponse.json({ accepted: true }, { status: 202 });
+  return NextResponse.json({ accepted: true }, { status: 202, headers });
 }

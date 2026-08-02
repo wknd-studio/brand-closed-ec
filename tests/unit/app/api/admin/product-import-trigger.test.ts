@@ -114,4 +114,63 @@ describe("POST /api/admin/product-import/trigger", () => {
 
     expect(res.status).toBe(502);
   });
+
+  it("StudioのデプロイURLからのリクエストにCORSヘッダーを付与する", async () => {
+    sanityFetchMock.mockResolvedValueOnce({ _id: "scraping-catalog-b" });
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const { POST } =
+      await import("@/app/api/admin/product-import/trigger/route");
+
+    const res = await POST(
+      new Request("http://localhost/api/admin/product-import/trigger", {
+        method: "POST",
+        headers: {
+          "X-Product-Import-Token": VALID_TOKEN,
+          Origin: "https://brand-closed-ec.sanity.studio",
+        },
+        body: JSON.stringify({ catalogId: "scraping-catalog-b" }),
+      })
+    );
+
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://brand-closed-ec.sanity.studio"
+    );
+  });
+
+  it("許可されていないOriginにはCORSヘッダーを付与しない", async () => {
+    sanityFetchMock.mockResolvedValueOnce({ _id: "scraping-catalog-b" });
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const { POST } =
+      await import("@/app/api/admin/product-import/trigger/route");
+
+    const res = await POST(
+      new Request("http://localhost/api/admin/product-import/trigger", {
+        method: "POST",
+        headers: {
+          "X-Product-Import-Token": VALID_TOKEN,
+          Origin: "https://evil.example.com",
+        },
+        body: JSON.stringify({ catalogId: "scraping-catalog-b" }),
+      })
+    );
+
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("OPTIONSプリフライトに204とCORSヘッダーを返す", async () => {
+    const { OPTIONS } =
+      await import("@/app/api/admin/product-import/trigger/route");
+
+    const res = await OPTIONS(
+      new Request("http://localhost/api/admin/product-import/trigger", {
+        method: "OPTIONS",
+        headers: { Origin: "http://localhost:3333" },
+      })
+    );
+
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:3333"
+    );
+  });
 });
