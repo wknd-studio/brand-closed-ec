@@ -24,6 +24,7 @@
     "@portabletext/react": "^6.2.0",
     "@react-email/components": "^1.0.12",
     "@sanity/client": "^7.22.0",
+    "@sanity/locale-ja-jp": "^1.1.36",
     "@sentry/nextjs": "^10.52.0",
     "@supabase/supabase-js": "^2.105.3",
     "cheerio": "^1.2.0",

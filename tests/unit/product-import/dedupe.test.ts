@@ -11,7 +11,7 @@ function record(
     brandName: "テストブランド",
     retailPrice: 10000,
     availability: "available",
-    vendorId: "vendor-a",
+    catalogId: "catalog-a",
     origin: { kind: "csv", rowNumber: 1 },
     ...overrides,
   };

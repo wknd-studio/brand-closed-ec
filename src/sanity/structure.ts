@@ -13,42 +13,12 @@ export const structure: StructureResolver = (S) =>
             .id("product-management-list")
             .title("商品管理")
             .items([
+              // 在庫状況・ブランド・カテゴリごとの固定リストは用意しない。
+              // Sanity Studioの標準ドキュメントリストには絞り込み機能（一覧右上の
+              // フィルタアイコン）が組み込まれており、availability・brand・categories等
+              // 任意のフィールドでその場で絞り込める。固定リストを増やすより
+              // シンプルで、新しい絞り込み軸が欲しくなってもコード変更が不要
               S.documentTypeListItem("product").title("すべての商品"),
-              S.divider(),
-              S.listItem()
-                .id("product-available")
-                .title("取り扱い中")
-                .child(
-                  S.documentList()
-                    .id("product-available-list")
-                    .title("取り扱い中の商品")
-                    .schemaType("product")
-                    .filter('_type == "product" && availability == "available"')
-                ),
-              S.listItem()
-                .id("product-out-of-stock")
-                .title("在庫切れ")
-                .child(
-                  S.documentList()
-                    .id("product-out-of-stock-list")
-                    .title("在庫切れの商品")
-                    .schemaType("product")
-                    .filter(
-                      '_type == "product" && availability == "out_of_stock"'
-                    )
-                ),
-              S.listItem()
-                .id("product-discontinued")
-                .title("取り扱い終了")
-                .child(
-                  S.documentList()
-                    .id("product-discontinued-list")
-                    .title("取り扱い終了の商品")
-                    .schemaType("product")
-                    .filter(
-                      '_type == "product" && availability == "discontinued"'
-                    )
-                ),
               S.divider(),
               S.documentTypeListItem("brand").title("ブランド"),
               S.documentTypeListItem("category").title("カテゴリ"),
@@ -56,6 +26,16 @@ export const structure: StructureResolver = (S) =>
                 "価格設定（デフォルト掛け率）"
               ),
               S.documentTypeListItem("designTheme").title("デザインテーマ"),
+              S.divider(),
+              S.documentTypeListItem("csvCatalog").title(
+                "商品データソース（CSV）"
+              ),
+              S.documentTypeListItem("scrapingCatalog").title(
+                "商品データソース（スクレイピング）"
+              ),
+              S.documentTypeListItem("productImportRun").title(
+                "インポート実行結果"
+              ),
             ])
         ),
       S.divider(),

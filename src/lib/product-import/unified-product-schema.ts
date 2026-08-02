@@ -38,9 +38,19 @@ export interface UnifiedProductRecord {
 
   minRank?: MemberRankValue;
 
-  /** どの業者由来かの記録。ProductImportRun・product.source_vendorに使う */
-  vendorId: string;
+  /** どのデータソース由来かの記録。ProductImportRun・product.source_catalogに使う */
+  catalogId: string;
 
   /** エラー報告時に「何行目/どの商品か」を示すための出所情報。Sanityへは書き込まない */
   origin: UnifiedProductRecordOrigin;
+}
+
+/** エラー詳細・実行結果表示で「何行目/どのURLか」を人間可読な文字列にする */
+export function describeOrigin(
+  origin: UnifiedProductRecordOrigin,
+  label?: string
+): string {
+  const position =
+    origin.kind === "csv" ? `${origin.rowNumber}行目` : origin.sourceUrl;
+  return label ? `${position}（${label}）` : position;
 }

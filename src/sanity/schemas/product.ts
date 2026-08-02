@@ -239,15 +239,20 @@ export const product = defineType({
       name: "jan_code",
       title: "JANコード",
       description:
-        "業者商品データインポートでの重複判定キー（specs/004-product-data-import）。提供されない業者もあるため任意項目",
+        "業者商品データインポートでの重複判定キー（specs/004-product-data-import）。提供されない業者もあるため任意項目。" +
+        "インポート由来の商品（データ取得元が設定されている）は、突合キーの整合性を保つため編集不可。修正が必要な場合は再インポートで上書きする",
       type: "string",
+      readOnly: ({ document }) => Boolean(document?.source_catalog),
     }),
     defineField({
-      name: "source_vendor",
-      title: "データ取得元業者",
-      description: "業者商品データインポートで作成・更新された場合の取得元業者",
+      name: "source_catalog",
+      title: "データ取得元",
+      description:
+        "業者商品データインポートで作成・更新された場合の取得元データソース（CSV/スクレイピング）。" +
+        "インポート処理のみが書き込む来歴情報のため常に編集不可",
       type: "reference",
-      to: [{ type: "vendor" }],
+      to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
+      readOnly: true,
     }),
     defineField({
       name: "vendor_cost_rate",
@@ -255,9 +260,11 @@ export const product = defineType({
       description:
         "業者から提示された、定価に対する仕入れ支払い比率（例: 60なら定価の60%で仕入れ）。" +
         "会員向けのランク別価格計算には使わず、赤字価格になっていないかのチェック（下限）にのみ使う。" +
-        "会員向け画面には表示されない",
+        "会員向け画面には表示されない。" +
+        "インポート由来の商品（データ取得元が設定されている）は編集不可。修正が必要な場合は再インポートで上書きする",
       type: "number",
       validation: (r) => r.min(0).max(100),
+      readOnly: ({ document }) => Boolean(document?.source_catalog),
     }),
     defineField({
       name: "case_quantity",

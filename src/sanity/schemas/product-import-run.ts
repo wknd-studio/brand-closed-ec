@@ -1,71 +1,115 @@
 import { defineField, defineType } from "sanity";
 
+import { ImportErrorLogDisplay } from "./import-error-log-display";
+import {
+  createReadOnlyValueDisplay,
+  ReadOnlyDatetimeDisplay,
+} from "./read-only-value-display";
+
+const TRIGGERED_BY_OPTIONS = [
+  { title: "定期実行", value: "scheduled" },
+  { title: "オンデマンド実行", value: "on_demand" },
+  { title: "手動CSVインポート", value: "manual_csv" },
+];
+
+const OUTCOME_OPTIONS = [
+  { title: "完了", value: "completed" },
+  { title: "エラー率閾値超過で中止", value: "aborted_error_threshold" },
+  { title: "異常終了", value: "failed" },
+];
+
+const TriggeredByDisplay = createReadOnlyValueDisplay({
+  labelByValue: Object.fromEntries(
+    TRIGGERED_BY_OPTIONS.map((o) => [o.value, o.title])
+  ),
+});
+
+const OutcomeDisplay = createReadOnlyValueDisplay({
+  labelByValue: Object.fromEntries(
+    OUTCOME_OPTIONS.map((o) => [o.value, o.title])
+  ),
+});
+
+const CountDisplay = createReadOnlyValueDisplay({
+  formatValue: (value) => `${value}件`,
+});
+
+/**
+ * インポート実行結果は apply-import.ts がAPI経由で書き込む監査ログであり、
+ * Studio上での手動編集を認めない（誤って実績値を書き換えられると監査の意味が
+ * なくなるため）。全フィールドをreadOnlyにし、加えてsanity.config.tsの
+ * document.actions / newDocumentOptionsで新規作成・publishもブロックする
+ * （二重の防御）。古いログの削除（deleteアクション）のみ運営者に許可している。
+ */
 export const productImportRun = defineType({
   name: "productImportRun",
   title: "商品インポート実行結果",
   type: "document",
   fields: [
     defineField({
-      name: "vendor",
-      title: "対象業者",
+      name: "catalog",
+      title: "対象データソース",
       type: "reference",
-      to: [{ type: "vendor" }],
+      to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
       validation: (r) => r.required(),
+      readOnly: true,
     }),
     defineField({
       name: "triggered_by",
       title: "実行契機",
       type: "string",
-      options: {
-        list: [
-          { title: "定期実行", value: "scheduled" },
-          { title: "オンデマンド実行", value: "on_demand" },
-          { title: "手動CSVインポート", value: "manual_csv" },
-        ],
-      },
+      options: { list: TRIGGERED_BY_OPTIONS },
       validation: (r) => r.required(),
+      readOnly: true,
+      components: { input: TriggeredByDisplay },
     }),
     defineField({
       name: "started_at",
       title: "実行開始日時",
       type: "datetime",
       validation: (r) => r.required(),
+      readOnly: true,
+      components: { input: ReadOnlyDatetimeDisplay },
     }),
     defineField({
       name: "finished_at",
       title: "実行終了日時",
       type: "datetime",
+      readOnly: true,
+      components: { input: ReadOnlyDatetimeDisplay },
     }),
     defineField({
       name: "outcome",
       title: "結果",
       type: "string",
-      options: {
-        list: [
-          { title: "完了", value: "completed" },
-          { title: "エラー率閾値超過で中止", value: "aborted_error_threshold" },
-          { title: "異常終了", value: "failed" },
-        ],
-      },
+      options: { list: OUTCOME_OPTIONS },
       validation: (r) => r.required(),
+      readOnly: true,
+      components: { input: OutcomeDisplay },
     }),
     defineField({
       name: "success_count",
       title: "成功件数",
       type: "number",
       validation: (r) => r.required().min(0),
+      readOnly: true,
+      components: { input: CountDisplay },
     }),
     defineField({
       name: "failure_count",
       title: "失敗件数",
       type: "number",
       validation: (r) => r.required().min(0),
+      readOnly: true,
+      components: { input: CountDisplay },
     }),
     defineField({
       name: "needs_review_count",
       title: "要確認件数",
       type: "number",
       validation: (r) => r.required().min(0),
+      readOnly: true,
+      components: { input: CountDisplay },
     }),
     defineField({
       name: "error_details",
@@ -80,16 +124,18 @@ export const productImportRun = defineType({
           ],
         },
       ],
+      readOnly: true,
+      components: { input: ImportErrorLogDisplay },
     }),
   ],
   preview: {
     select: {
-      title: "vendor.name",
+      title: "catalog.label",
       subtitle: "started_at",
     },
     prepare({ title, subtitle }) {
       return {
-        title: title ?? "（業者未設定）",
+        title: title ?? "（データソース未設定）",
         subtitle: subtitle
           ? new Date(subtitle).toLocaleString("ja-JP")
           : undefined,

@@ -21,12 +21,30 @@ tasks:
   dev:next:
     desc: Next.js 開発サーバー
     cmds:
-      - pnpm next dev --turbo
+      - doppler run -- pnpm next dev --turbo
 
   dev:stripe:
     desc: Stripe Webhook を localhost:3000 へ転送
     cmds:
-      - stripe listen --forward-to localhost:3000/api/webhooks/stripe
+      - doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe
+
+  test:e2e:
+    desc: E2Eテストをローカルで実行（Dopplerからシークレットを注入）
+    cmds:
+      - doppler run -- pnpm test:e2e
+
+  test:integration:
+    desc: 統合テストをローカルで実行（Dopplerからシークレットを注入、実DBに接続）
+    cmds:
+      - doppler run -- pnpm test:integration
+
+  preview:
+    desc: Cloudflare Workers本番相当ビルドをローカルでプレビュー（wrangler dev）
+    cmds:
+      # NEXT_PUBLIC_*はビルド時にクライアントバンドルへ埋め込まれるため、
+      # ビルドもdoppler runで正しい環境変数がある状態で実行する必要がある
+      - doppler run -- pnpm run build:cloudflare
+      - doppler run -- env CLOUDFLARE_INCLUDE_PROCESS_ENV=true pnpm exec wrangler dev --port 3000
 
   dev:ngrok:
     desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost:3000）
@@ -42,19 +60,19 @@ tasks:
   supabase:seed-users:
     desc: Supabase ローカルDBに開発用ユーザーをシード（Clerkに存在するユーザーのみ）
     cmds:
-      - pnpm tsx scripts/seed-users.ts
+      - doppler run -- pnpm tsx scripts/seed-users.ts
 
   sanity:seed:
     desc: Sanity にダミー商品を登録する（開発用・べき等）
     cmds:
-      - pnpm tsx scripts/seed-products.ts
+      - doppler run -- pnpm tsx scripts/seed-products.ts
 
   sanity:dev:
     desc: Sanity Studio をローカルで起動する（動作確認用。公開URLには影響しない）
     cmds:
-      - pnpm sanity dev
+      - doppler run -- pnpm sanity dev
 
   sanity:deploy:
     desc: Sanity Studio をホスティングサービスにデプロイする
     cmds:
-      - pnpm sanity deploy
+      - doppler run -- pnpm sanity deploy
