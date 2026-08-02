@@ -1,0 +1,21 @@
+name: Product Data Sync
+
+on:
+  schedule:
+    # 毎日 03:00 UTC（日本時間 正午12:00）に実行する
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  scheduled-sync:
+    name: Run scheduled scraping sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - run: doppler run -- pnpm tsx scripts/product-import/run-scheduled-sync.ts
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}

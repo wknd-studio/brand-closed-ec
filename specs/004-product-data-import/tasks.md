@@ -124,18 +124,20 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 ## Phase 5: User Story 3 - 定期実行による商品情報の継続的な同期 (Priority: P3)
 
-**Goal**: 収集・インポート処理が日次で無人実行され、情報源から消えた商品は自動でdiscontinuedにせず「要確認」状態として担当者の確認・承認を経て反映される
+**Goal**: 収集処理が日次で無人実行され、取り込み待ちCSVとして自動生成される。商品データへの反映は引き続き人間の確定操作（CSVインポート画面）を経由する
 
-**Independent Test**: quickstart.md「User Story 3: 定期実行と要確認キュー」のシナリオ
+**設計変更（ユーザーとの協議）**: 当初計画していた「情報源から消えた商品を検知し`productAvailabilityReview`として要確認キューに上げる」機能（FR-013, FR-014）は不要と判断し廃止した。理由: 運用上の価値に対して、商品ごとの消失検知・専用の承認ワークフローという実装コストが見合わなかった。定期実行は「スクレイピング→CSV自動生成→取り込み待ちCSVとして保存」までとし、それ以降の判断（廃盤にするかどうか等）は運営者が通常のCSVインポート運用の中で行う。
 
-- [ ] T029 [P] [US3] `productAvailabilityReview`スキーマを新規作成し登録する（`product`, `catalog`, `detected_at`, `import_run`, `status`, `reviewed_at`。FR-014, data-model.md）: `src/sanity/schemas/product-availability-review.ts`, `src/sanity/schemas/index.ts`
-- [ ] T030 [P] [US3] 消失商品検知ロジックの失敗するユニットテストを書く（前回実行時の商品集合と今回の商品集合を比較し、今回存在しないものを検出する。FR-013）: `tests/unit/product-import/detect-disappeared-products.test.ts`
-- [ ] T031 [US3] `detect-disappeared-products.ts`を実装しT030を通す: `src/lib/product-import/detect-disappeared-products.ts`（依存: T030）
-- [ ] T032 [US3] `run-scheduled-sync.ts`を実装する（`scripts/product-import/vendors/`配下のスクレイピングアダプターを全件処理、catalog単位のエラーはスキップして他catalogの処理を継続、エラー率閾値超過時はその回の実行をスキップし担当者に通知、`detect-disappeared-products`で消失商品を検知し`productAvailabilityReview`（`status: "pending"`）を作成。FR-009, FR-010, FR-013, FR-014, FR-020）: `scripts/product-import/run-scheduled-sync.ts`（依存: T022, T029, T031, T013）
-- [ ] T033 [US3] GitHub Actionsワークフローに日次`schedule`（cron）トリガーを追加し`run-scheduled-sync.ts`を実行する（FR-012）: `.github/workflows/product-data-sync.yml`（依存: T032, T024）
-- [ ] T034 [US3] `productAvailabilityReview`に対するSanity Studioドキュメントアクションを実装する（承認→対象`product.availability`を`discontinued`に更新し`status: "approved_discontinued"`に、却下→`status: "dismissed"`に。FR-014）: `src/sanity/tools/product-import/product-availability-review-actions.ts`（依存: T029）
-- [ ] T035 [US3] 「要確認」一覧を商品管理配下に追加する（`status: "pending"`の`productAvailabilityReview`を表示。FR-018）: `src/sanity/structure.ts`（依存: T029, T034）
-- [ ] T036 [US3] quickstart.md「User Story 3: 定期実行と要確認キュー」の手順を手動検証する（依存: T033, T034, T035）
+**Independent Test**: quickstart.md「User Story 3: 定期実行」のシナリオ
+
+- [x] ~~T029~~ （廃止）`productAvailabilityReview`スキーマは要確認キュー機能の廃止に伴い不要
+- [x] ~~T030~~ （廃止）消失商品検知ロジックのテストは同上の理由で不要
+- [x] ~~T031~~ （廃止）`detect-disappeared-products.ts`は同上の理由で不要
+- [x] T032 [US3] `run-scheduled-sync.ts`を実装する（`scripts/product-import/vendors/`配下の`__`接頭辞を除く全アダプターディレクトリを処理、catalog単位の失敗（アダプター読み込み失敗・スクレイプ失敗）はスキップして他catalogの処理を継続しつつ`productImportRun`に`outcome: "failed"`として記録、成功時はCSV化してSanity file assetへアップロードし`productCsvUpload`（`source: "scheduled_scrape"`, `status: "pending"`）として保存する。**商品データへの直接書き込み（apply-import呼び出し）は行わない**——書き込み前の人間による確認を、定期実行でも必ず担保するため（Phase4で確立した方針をPhase5にも適用。ユーザーとの協議）。FR-009, FR-010, FR-012）: `scripts/product-import/run-scheduled-sync.ts`, `src/lib/product-import/filter-adapter-directories.ts`（依存: T022, T013）
+- [x] T033 [US3] GitHub Actionsワークフローに日次`schedule`（cron）トリガーを追加し`run-scheduled-sync.ts`を実行する（FR-012）: `.github/workflows/product-data-sync.yml`（依存: T032）
+- [x] ~~T034~~ （廃止）`productAvailabilityReview`ドキュメントアクションは要確認キュー機能の廃止に伴い不要
+- [x] ~~T035~~ （廃止）「要確認」一覧は同上の理由で不要
+- [ ] T036 [US3] quickstart.md「User Story 3: 定期実行」の手順を手動検証する（依存: T033）
 
 **チェックポイント**: 全User Storyが独立して機能する
 
@@ -185,7 +187,7 @@ Task: "productImportRunスキーマを新規作成する: src/sanity/schemas/pro
 2. PR2: T009〜T013（Sanityスキーマ拡張・新設: product/vendor/productImportRun、apply-import実装）
 3. PR3: Phase 3 全体（T014〜T019） — User Story 1（CSVインポート、MVP）
 4. PR4: Phase 4 全体（T020〜T023, T028） — User Story 2（`CatalogScraper`インターフェース・フィクスチャアダプター・CSV書き出しCLI。設計変更によりトリガーAPI・Studioボタンは廃止）
-5. PR6: Phase 5 全体（T029〜T036） — User Story 3（定期実行・要確認キュー）
+5. PR6: Phase 5 全体（T032〜T033, T036） — User Story 3（定期実行。要確認キューは廃止）
 6. PR7: Phase 6 全体（T037〜T039） — 仕上げ
 
 PR2・PR6はファイル数が5を超える可能性があるため、実装時に差分規模を見てさらに分割してよい（分割しない場合はPR説明にその理由を明記する。CLAUDE.md準拠）。
