@@ -156,6 +156,16 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` が未設定の場合、認証済みアクセス・ログインのテストは自動的にスキップされる。`E2E_USER_EMAIL` は Clerk のテスト用メール規約（`+clerk_test` を含むアドレス）で作成すること。
 
+### Resend メール送信の無効化（`DISABLE_EMAIL_SENDING`）
+
+E2E テストはチェックアウト・Invoice発行等でメール送信コードパスを実際に通過するため、`DISABLE_EMAIL_SENDING` が未設定のまま実行すると Resend の送信数使用枠を消費してしまう（`e2e-pr`・`e2e`〈stg〉両方、および stg への通常デプロイでも同様）。
+
+`src/lib/email/index.ts` の `getResend()` は `DISABLE_EMAIL_SENDING=true` の場合、実際の Resend クライアントの代わりに何もしないダミークライアントを返す（`emails.send()` は API を呼ばず `{ error: null }` を返す）。
+
+- `e2e-pr`ジョブはCI内で`next dev`を起動し`staging` Doppler環境の値をそのまま継承するため、Doppler側で設定すればコード変更なしに反映される
+- `e2e`（stg）ジョブは`deploy-stg`でデプロイ済みの実際のCloudflare Workerに対してテストするため、この環境変数はDoppler経由で`wrangler secret bulk`によりデプロイ時に同期される必要がある。つまり**Doppler「staging」プロジェクトの設定に`DISABLE_EMAIL_SENDING=true`を追加すると、E2Eテストだけでなくstg環境全体（手動QA含む）でメール送信が止まる**点に注意（意図した挙動だが、stgで実際のメール文面を目視確認したい場合は一時的に外す必要がある）
+- `production` Doppler環境には設定しない（本番は常に実送信する）
+
 ---
 
 ## ローカル開発での Webhook テスト
