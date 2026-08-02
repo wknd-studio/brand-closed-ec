@@ -115,6 +115,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUBLISHABLE_KEY" \
             SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" \
             NEXT_PUBLIC_APP_URL="http://localhost:3000" \
+            DISABLE_EMAIL_SENDING="true" \
             pnpm test:e2e
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
@@ -246,8 +247,21 @@ jobs:
           '
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Disable Resend email sending on stg for the duration of E2E
+        # E2Eは実際にデプロイ済みのstg Workerに対してテストするため、Doppler側の
+        # 値を変えるとstg環境全体（手動QA含む）でメール送信が止まってしまう。
+        # E2E実行中だけ一時的にシークレットを上書きし、直後のステップで必ず
+        # 元に戻す（下のRe-enableステップはif: always()で失敗時も実行される）
+        run: doppler run -- sh -c 'echo "true" | pnpm exec wrangler secret put DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Run E2E tests
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e'
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Re-enable Resend email sending on stg
+        if: always()
+        run: doppler run -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Upload Playwright report (動画・トレース含む)
