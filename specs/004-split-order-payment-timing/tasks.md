@@ -136,11 +136,12 @@
 
 ### Tests for User Story 5
 
-- [ ] T029 [P] [US5] 分割対象のカートでも、分割前の合計で上限超過と判定されればOrderが1件も作成されないことを検証するユニットテストを `tests/unit/use-cases/place-order.test.ts` に追加
+- [x] T029 [P] [US5] 分割対象のカートでも、分割前の合計で上限超過と判定されればOrderが1件も作成されないことを検証するユニットテストを `tests/unit/use-cases/place-order.test.ts` に追加
 
 ### Implementation for User Story 5
 
-- [ ] T030 [US5] `place-order.ts`内の`checkMonthlyLimit`呼び出しが分割処理より前に実行される順序になっていることを確認する（T018で実装済みのはずのため、本タスクはT029のテストが通ることの確認が中心。順序がずれていれば修正）
+- [x] T030 [US5] `place-order.ts`内の`checkMonthlyLimit`呼び出しが分割処理より前に実行される順序になっていることを確認する（T018で実装済みのはずのため、本タスクはT029のテストが通ることの確認が中心。順序がずれていれば修正）
+  - 確認結果: `checkMonthlyLimit`（分割前の合算判定）→`splitCartByPaymentTiming`の順序で既に正しく実装されており、修正不要だった
 
 **Checkpoint**: 全5 User Storyが完了。分割チェックアウトの主要フローが一通り機能する
 
