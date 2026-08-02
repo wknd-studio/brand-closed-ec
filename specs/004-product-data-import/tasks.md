@@ -128,9 +128,9 @@ CLAUDE.mdのテスト自動選択ルールに従い、CSV変換・重複判定�
 
 **Independent Test**: quickstart.md「User Story 3: 定期実行と要確認キュー」のシナリオ
 
-- [ ] T029 [P] [US3] `productAvailabilityReview`スキーマを新規作成し登録する（`product`, `catalog`, `detected_at`, `import_run`, `status`, `reviewed_at`。FR-014, data-model.md）: `src/sanity/schemas/product-availability-review.ts`, `src/sanity/schemas/index.ts`
-- [ ] T030 [P] [US3] 消失商品検知ロジックの失敗するユニットテストを書く（前回実行時の商品集合と今回の商品集合を比較し、今回存在しないものを検出する。FR-013）: `tests/unit/product-import/detect-disappeared-products.test.ts`
-- [ ] T031 [US3] `detect-disappeared-products.ts`を実装しT030を通す: `src/lib/product-import/detect-disappeared-products.ts`（依存: T030）
+- [x] T029 [P] [US3] `productAvailabilityReview`スキーマを新規作成し登録する（`product`, `catalog`, `detected_at`, `import_run`, `status`, `reviewed_at`。FR-014, data-model.md）: `src/sanity/schemas/product-availability-review.ts`, `src/sanity/schemas/index.ts`
+- [x] T030 [P] [US3] 消失商品検知ロジックの失敗するユニットテストを書く（**Sanity上の既存商品集合**と今回のスクレイプ結果を比較し、今回存在しないものを検出する。FR-013）: `tests/unit/product-import/detect-disappeared-products.test.ts`。**補足**: 当初案の「前回CSVと今回CSVの比較」ではなく「既存商品(Sanity)とスクレイプ結果の比較」にした（ユーザーとの協議）。CSVは人間の確定操作を経るまでSanityに反映されないため、CSV同士の比較では実際にSanity上で販売中の商品集合と一致しない場合があるため
+- [x] T031 [US3] `detect-disappeared-products.ts`を実装しT030を通す: `src/lib/product-import/detect-disappeared-products.ts`（依存: T030）
 - [ ] T032 [US3] `run-scheduled-sync.ts`を実装する（`scripts/product-import/vendors/`配下のスクレイピングアダプターを全件処理、catalog単位のエラーはスキップして他catalogの処理を継続、エラー率閾値超過時はその回の実行をスキップし担当者に通知、`detect-disappeared-products`で消失商品を検知し`productAvailabilityReview`（`status: "pending"`）を作成。FR-009, FR-010, FR-013, FR-014, FR-020）: `scripts/product-import/run-scheduled-sync.ts`（依存: T022, T029, T031, T013）
 - [ ] T033 [US3] GitHub Actionsワークフローに日次`schedule`（cron）トリガーを追加し`run-scheduled-sync.ts`を実行する（FR-012）: `.github/workflows/product-data-sync.yml`（依存: T032, T024）
 - [ ] T034 [US3] `productAvailabilityReview`に対するSanity Studioドキュメントアクションを実装する（承認→対象`product.availability`を`discontinued`に更新し`status: "approved_discontinued"`に、却下→`status: "dismissed"`に。FR-014）: `src/sanity/tools/product-import/product-availability-review-actions.ts`（依存: T029）
@@ -185,10 +185,12 @@ Task: "productImportRunスキーマを新規作成する: src/sanity/schemas/pro
 2. PR2: T009〜T013（Sanityスキーマ拡張・新設: product/vendor/productImportRun、apply-import実装）
 3. PR3: Phase 3 全体（T014〜T019） — User Story 1（CSVインポート、MVP）
 4. PR4: Phase 4 全体（T020〜T023, T028） — User Story 2（`CatalogScraper`インターフェース・フィクスチャアダプター・CSV書き出しCLI。設計変更によりトリガーAPI・Studioボタンは廃止）
-5. PR6: Phase 5 全体（T029〜T036） — User Story 3（定期実行・要確認キュー）
-6. PR7: Phase 6 全体（T037〜T039） — 仕上げ
+5. PR6a: 消失商品検知の基盤（T029〜T031） — `productAvailabilityReview`スキーマ・`detect-disappeared-products`
+6. PR6b: 定期実行本体（T032〜T033） — `run-scheduled-sync.ts`・GitHub Actions日次cron（依存: PR6a）
+7. PR6c: 要確認一覧・承認UI（T034〜T036） — Studioドキュメントアクション・一覧・quickstart検証（依存: PR6a）
+8. PR7: Phase 6 全体（T037〜T039） — 仕上げ
 
-PR2・PR6はファイル数が5を超える可能性があるため、実装時に差分規模を見てさらに分割してよい（分割しない場合はPR説明にその理由を明記する。CLAUDE.md準拠）。
+PR2はファイル数が5を超える可能性があるため、実装時に差分規模を見てさらに分割してよい（分割しない場合はPR説明にその理由を明記する。CLAUDE.md準拠）。
 
 ## Implementation Strategy
 
