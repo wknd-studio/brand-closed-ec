@@ -13,7 +13,7 @@
 | `vendor_cost_rate` | number（0〜100）        | 任意 | 業者提示の仕入れ掛け率（定価に対する仕入れ支払い比率）。運営者専用の参照情報で、会員向けランク価格の自動計算には使わない（FR-024）。`prices`の下限チェックにのみ使う（FR-025） |
 | `case_quantity`    | number                  | 任意 | 入数（1梱包あたりの数量）。価格計算には関与しない、単なる商品情報（FR-026）                                                                                                    |
 
-`availability`の既存の値（`available` / `out_of_stock` / `discontinued`）はそのまま使う。情報源から消えた商品を即座に`discontinued`にはしない（FR-014）ため、値自体の追加は不要で、代わりに`ProductAvailabilityReview`（後述）で保留状態を表現する。
+`availability`の既存の値（`available` / `out_of_stock` / `discontinued`）はそのまま使う。値自体の追加は不要。情報源から消えた商品を自動で`discontinued`にする仕組み（要確認キュー）は運用コストに見合わないと判断し廃止したため、消失商品の扱いは運営者が通常のCSVインポート運用の中で判断する（後述「廃止: ProductAvailabilityReview」参照）。
 
 **`prices`のバリデーション拡張**: 既存の`validatePrices`（`src/sanity/schemas/product.ts`）に、`vendor_cost_rate`が設定されている場合の下限チェックを追加する。`retail_price × vendor_cost_rate / 100`（仕入れ値）を下回るランクが1つでもあれば保存をエラーとしてブロックする（FR-025）。このチェックはSanity StudioでのUI編集だけでなく、`apply-import.ts`がAPI経由で書き込む際にも同じ関数（`validatePrices`）を呼び出して適用する（Sanityのフィールドバリデーションはスキーマ経由のAPI書き込みには効かないため）。
 
@@ -57,34 +57,21 @@
 
 spec.md Key Entity「インポート実行結果」。CSVインポート・スクレイピング収集いずれの経路の実行結果も同じ形で記録する。
 
-| フィールド           | 型                                                                   | 必須 | 説明                                                               |
-| -------------------- | -------------------------------------------------------------------- | ---- | ------------------------------------------------------------------ |
-| `catalog`            | reference(`csvCatalog`)                                              | 必須 | 対象カタログ                                                       |
-| `triggered_by`       | string（`"scheduled"` \| `"on_demand"` \| `"manual_csv"`）           | 必須 | 実行契機（FR-018）                                                 |
-| `started_at`         | datetime                                                             | 必須 | 実行開始日時                                                       |
-| `finished_at`        | datetime                                                             | 任意 | 実行終了日時（中止・失敗の場合も記録）                             |
-| `outcome`            | string（`"completed"` \| `"aborted_error_threshold"` \| `"failed"`） | 必須 | 完了したか、エラー率閾値超過で中止したか（FR-020）、異常終了したか |
-| `success_count`      | number                                                               | 必須 | 成功件数                                                           |
-| `failure_count`      | number                                                               | 必須 | 失敗件数                                                           |
-| `needs_review_count` | number                                                               | 必須 | 要確認件数（情報源から消えた商品の件数、FR-013）                   |
-| `error_details`      | array of object（`{ target: string, reason: string }`）              | 任意 | 行・商品ごとのエラー詳細（FR-023）                                 |
+| フィールド           | 型                                                                   | 必須 | 説明                                                                                                      |
+| -------------------- | -------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| `catalog`            | reference(`csvCatalog`)                                              | 必須 | 対象カタログ                                                                                              |
+| `triggered_by`       | string（`"scheduled"` \| `"on_demand"` \| `"manual_csv"`）           | 必須 | 実行契機（FR-018）                                                                                        |
+| `started_at`         | datetime                                                             | 必須 | 実行開始日時                                                                                              |
+| `finished_at`        | datetime                                                             | 任意 | 実行終了日時（中止・失敗の場合も記録）                                                                    |
+| `outcome`            | string（`"completed"` \| `"aborted_error_threshold"` \| `"failed"`） | 必須 | 完了したか、エラー率閾値超過で中止したか（FR-020）、異常終了したか                                        |
+| `success_count`      | number                                                               | 必須 | 成功件数                                                                                                  |
+| `failure_count`      | number                                                               | 必須 | 失敗件数                                                                                                  |
+| `needs_review_count` | number                                                               | 必須 | 要確認件数（常に0。要確認キュー機能は廃止したため。フィールド自体は既存の実行結果表示との互換のため残す） |
+| `error_details`      | array of object（`{ target: string, reason: string }`）              | 任意 | 行・商品ごとのエラー詳細（FR-023）                                                                        |
 
 検証プレビュー自体（実行前の見込み件数）はこのドキュメントには含めない。使い捨てのため永続化しない（Assumptions参照）。
 
-### ProductAvailabilityReview（`src/sanity/schemas/product-availability-review.ts`）
-
-spec.mdの「要確認」キュー（FR-014）。情報源から消えたことを検知した商品を、担当者が確認・承認するまで保持する。
-
-| フィールド    | 型                                                                  | 必須 | 説明                                                                   |
-| ------------- | ------------------------------------------------------------------- | ---- | ---------------------------------------------------------------------- |
-| `product`     | reference(`product`)                                                | 必須 | 対象商品                                                               |
-| `catalog`     | reference(`csvCatalog`)                                             | 必須 | どのカタログの収集で検知されたか                                       |
-| `detected_at` | datetime                                                            | 必須 | 情報源に存在しないことを検知した日時                                   |
-| `import_run`  | reference(`productImportRun`)                                       | 必須 | 検知した実行回への参照（監査用）                                       |
-| `status`      | string（`"pending"` \| `"approved_discontinued"` \| `"dismissed"`） | 必須 | 未対応／担当者が取り扱い終了として承認／実際は販売継続中だったため却下 |
-| `reviewed_at` | datetime                                                            | 任意 | 担当者が対応した日時                                                   |
-
-`status`が`approved_discontinued`になったタイミングで、Studio側のアクション（カスタムドキュメントアクション）が対象`product`の`availability`を`discontinued`へ更新する。
+**廃止: ProductAvailabilityReview**（`src/sanity/schemas/product-availability-review.ts`は作成しない）: 当初はspec.mdの「要確認」キュー（FR-014、情報源から消えた商品を検知し担当者の確認・承認まで保持する仕組み）を計画していたが、運用上の価値に対して実装コストが見合わないと判断し廃止した（ユーザーとの協議）。定期実行は「スクレイピング→CSV自動生成→取り込み待ちCSVとして保存」までとし、消失商品の扱い（廃盤にするかどうか等）は運営者が通常のCSVインポート運用の中で判断する。
 
 ## Key Entity: UnifiedProductRecord（統一データ形式、Sanityドキュメントではない）
 
@@ -95,8 +82,4 @@ CSV由来・スクレイピング由来のいずれのデータも、Sanityへ�
 ```text
 ProductImportRun.outcome:
   (実行開始) → completed | aborted_error_threshold | failed
-
-ProductAvailabilityReview.status:
-  pending → approved_discontinued   （担当者が承認 → product.availability = discontinued）
-  pending → dismissed               （担当者が「実際は販売継続中」と判断・却下）
 ```
