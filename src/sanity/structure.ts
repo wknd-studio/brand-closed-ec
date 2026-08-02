@@ -33,6 +33,9 @@ export const structure: StructureResolver = (S) =>
               S.documentTypeListItem("scrapingCatalog").title(
                 "商品データソース（スクレイピング）"
               ),
+              S.documentTypeListItem("productCsvUpload").title(
+                "取り込み待ちCSV"
+              ),
               S.documentTypeListItem("productImportRun").title(
                 "インポート実行結果"
               ),

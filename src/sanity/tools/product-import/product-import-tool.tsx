@@ -15,6 +15,10 @@ import {
 
 import { applyImport } from "@/lib/product-import/apply-import";
 import type { CsvAdapterCatalog } from "@/lib/product-import/csv-adapter";
+import {
+  fetchCsvUploadText,
+  markCsvUploadImported,
+} from "@/lib/product-import/csv-upload";
 import { describeOrigin } from "@/lib/product-import/unified-product-schema";
 import { FileSelectButton } from "@/sanity/components/file-select-button";
 
@@ -26,6 +30,13 @@ interface CsvCatalogOption {
   csv_column_mapping?: CsvAdapterCatalog["columnMapping"];
   defaultBrandName?: string;
   header_row_number?: number;
+}
+
+interface PendingCsvUploadOption {
+  _id: string;
+  fileName: string;
+  fileUrl: string;
+  uploadedAt: string;
 }
 
 type Phase = "idle" | "previewing" | "previewed" | "applying" | "applied";
@@ -47,6 +58,11 @@ export function ProductImportTool() {
     createdCount: number;
     updatedCount: number;
   } | null>(null);
+  const [pendingUploads, setPendingUploads] = useState<
+    PendingCsvUploadOption[]
+  >([]);
+  const [selectedUploadId, setSelectedUploadId] = useState<string>("");
+  const [isLoadingUpload, setIsLoadingUpload] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,9 +86,27 @@ export function ProductImportTool() {
 
   const selectedCatalog = catalogs.find((c) => c._id === selectedCatalogId);
 
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .fetch<PendingCsvUploadOption[]>(
+        `*[_type == "productCsvUpload" && catalog._ref == $catalogId && status == "pending"]{
+          _id, "fileName": file.asset->originalFilename, "fileUrl": file.asset->url, uploaded_at
+        }`,
+        { catalogId: selectedCatalogId }
+      )
+      .then((result) => {
+        if (!cancelled) setPendingUploads(selectedCatalogId ? result : []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, selectedCatalogId]);
+
   const handleFileChange = useCallback(
     (file: File) => {
       setFileName(file.name);
+      setSelectedUploadId("");
       const reader = new FileReader();
       reader.onload = () => {
         setCsvText(String(reader.result ?? ""));
@@ -83,6 +117,31 @@ export function ProductImportTool() {
       reader.readAsText(file);
     },
     [reset]
+  );
+
+  const handleSelectPendingUpload = useCallback(
+    async (uploadId: string) => {
+      setSelectedUploadId(uploadId);
+      setPhase("idle");
+      setApplyResult(null);
+      reset();
+      if (!uploadId) {
+        setCsvText(null);
+        setFileName("");
+        return;
+      }
+      const upload = pendingUploads.find((u) => u._id === uploadId);
+      if (!upload) return;
+      setIsLoadingUpload(true);
+      try {
+        const text = await fetchCsvUploadText(upload.fileUrl);
+        setCsvText(text);
+        setFileName(upload.fileName);
+      } finally {
+        setIsLoadingUpload(false);
+      }
+    },
+    [pendingUploads, reset]
   );
 
   const handlePreview = useCallback(async () => {
@@ -113,9 +172,15 @@ export function ProductImportTool() {
         reason: e.reason,
       })),
     });
+    if (selectedUploadId) {
+      await markCsvUploadImported(client, selectedUploadId);
+      setPendingUploads((prev) =>
+        prev.filter((u) => u._id !== selectedUploadId)
+      );
+    }
     setApplyResult(result);
     setPhase("applied");
-  }, [client, preview, selectedCatalog]);
+  }, [client, preview, selectedCatalog, selectedUploadId]);
 
   return (
     <Container width={2} padding={4}>
@@ -185,13 +250,41 @@ export function ProductImportTool() {
             <Text weight="semibold" size={1}>
               2. CSVファイルを選択
             </Text>
+            {pendingUploads.length > 0 && (
+              <>
+                <Text size={1} muted>
+                  取り込み待ちCSV（「取り込み待ちCSV」に保存済みのもの）から選ぶ
+                </Text>
+                <Select
+                  value={selectedUploadId}
+                  onChange={(event) =>
+                    handleSelectPendingUpload(event.currentTarget.value)
+                  }
+                >
+                  <option value="">選択してください</option>
+                  {pendingUploads.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.fileName} ({u.uploadedAt.slice(0, 10)})
+                    </option>
+                  ))}
+                </Select>
+                <Text size={1} muted>
+                  または、ブラウザから直接ファイルを選ぶ
+                </Text>
+              </>
+            )}
             <FileSelectButton
               label="CSVファイルを選択"
               accept=".csv,text/csv"
               disabled={!selectedCatalogId}
               onFileSelected={handleFileChange}
             />
-            {fileName && (
+            {isLoadingUpload && (
+              <Flex align="center" gap={2}>
+                <Spinner /> <Text size={1}>CSVファイルを取得中...</Text>
+              </Flex>
+            )}
+            {fileName && !isLoadingUpload && (
               <Text size={1} muted>
                 選択中: {fileName}
               </Text>
