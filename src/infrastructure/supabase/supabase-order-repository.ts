@@ -105,6 +105,7 @@ type OrderWithUserRow = {
   created_at: string;
   status: string;
   payment_flow: string;
+  split_group_id: string | null;
   users:
     | {
         last_name: string;
@@ -135,6 +136,7 @@ function toOrderWithUser(row: OrderWithUserRow): OrderWithUser {
     createdAt: new Date(row.created_at),
     status: row.status,
     paymentFlow: row.payment_flow as "checkout" | "invoice",
+    splitGroupId: row.split_group_id,
     user: u
       ? {
           lastName: u.last_name,
@@ -248,7 +250,7 @@ export class SupabaseOrderRepository implements OrderRepository {
     const { data } = await this.db
       .from("orders")
       .select(
-        "id, created_at, status, payment_flow, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+        "id, created_at, status, payment_flow, split_group_id, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
       )
       .in("status", ACTIVE_STATUSES)
       .order("created_at", { ascending: true });
@@ -260,7 +262,7 @@ export class SupabaseOrderRepository implements OrderRepository {
     const { data } = await this.db
       .from("orders")
       .select(
-        "id, created_at, status, payment_flow, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+        "id, created_at, status, payment_flow, split_group_id, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
       )
       .eq("id", orderId)
       .single();

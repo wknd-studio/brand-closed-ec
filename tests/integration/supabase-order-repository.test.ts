@@ -172,6 +172,11 @@ describe("SupabaseOrderRepository", () => {
       const reloaded = await repo.findById(TEST_ORDER_ID);
       expect(reloaded!.splitGroupId).toBe(TEST_SPLIT_GROUP_ID);
     });
+
+    it("findByIdWithUser()でもsplitGroupIdを取得できる", async () => {
+      const order = await repo.findByIdWithUser(TEST_ORDER_ID);
+      expect(order!.splitGroupId).toBe(TEST_SPLIT_GROUP_ID);
+    });
   });
 
   describe("findBySplitGroupId()", () => {

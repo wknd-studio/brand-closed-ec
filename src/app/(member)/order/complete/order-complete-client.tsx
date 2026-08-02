@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useCart } from "@/lib/cart/context";
+import type { RelatedOrderSummary } from "@/lib/order/related-order";
 
 type OrderItem = {
   id: string;
@@ -12,16 +13,25 @@ type OrderItem = {
   isNegotiable: boolean;
 };
 
+const RELATED_STATUS_LABEL: Record<string, string> = {
+  confirming: "内容確認中（運営者が確認後、請求書をお送りします）",
+  limit_exceeded: "月間仕入れ上限超過のため保留中",
+  invoice_sent: "請求書送付済み",
+  paid: "お支払い済み",
+};
+
 type Props = {
   orderId: string;
   createdAt: string;
   items: OrderItem[];
+  relatedOrder: RelatedOrderSummary | null;
 };
 
 export default function OrderCompleteClient({
   orderId,
   createdAt,
   items,
+  relatedOrder,
 }: Props) {
   const { emptyCart } = useCart();
 
@@ -49,6 +59,19 @@ export default function OrderCompleteClient({
             </span>
           </p>
         </div>
+
+        {relatedOrder && (
+          <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-800">
+              この注文とは別に、後払いの商品についての注文（注文番号：
+              {relatedOrder.id.slice(0, 8).toUpperCase()}）があります。
+            </p>
+            <p className="mt-1 text-xs text-blue-700">
+              状況：
+              {RELATED_STATUS_LABEL[relatedOrder.status] ?? relatedOrder.status}
+            </p>
+          </section>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-gray-700">注文内容</h2>

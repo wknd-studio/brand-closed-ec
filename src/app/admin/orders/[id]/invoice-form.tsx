@@ -67,6 +67,12 @@ export default function InvoiceForm({ orderId, negotiableItems }: Props) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <h2 className="text-sm font-medium text-gray-700">Invoice発行</h2>
 
+        {negotiableItems.length === 0 && (
+          <p className="text-xs text-gray-500">
+            要相談商品は含まれていません。上記の固定価格商品の内容でInvoiceを発行します。
+          </p>
+        )}
+
         <div className="space-y-3">
           {negotiableItems.map((item) => (
             <div key={item.id} className="flex items-center gap-4">
@@ -118,43 +124,49 @@ export default function InvoiceForm({ orderId, negotiableItems }: Props) {
               Invoiceを発行・送付します。送付後の取り消しはできません。
             </p>
 
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-gray-500">
-                  <th className="pb-1 text-left">商品名</th>
-                  <th className="pb-1 text-right">数量</th>
-                  <th className="pb-1 text-right">単価</th>
-                  <th className="pb-1 text-right">小計</th>
-                </tr>
-              </thead>
-              <tbody>
-                {confirmItems.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <td className="py-1.5">{item.productName}</td>
-                    <td className="py-1.5 text-right">{item.quantity}</td>
-                    <td className="py-1.5 text-right tabular-nums">
-                      ¥{item.unitPrice.toLocaleString()}
+            {confirmItems.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-gray-500">
+                    <th className="pb-1 text-left">商品名</th>
+                    <th className="pb-1 text-right">数量</th>
+                    <th className="pb-1 text-right">単価</th>
+                    <th className="pb-1 text-right">小計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmItems.map((item) => (
+                    <tr key={item.id} className="border-b last:border-0">
+                      <td className="py-1.5">{item.productName}</td>
+                      <td className="py-1.5 text-right">{item.quantity}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        ¥{item.unitPrice.toLocaleString()}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        ¥{(item.unitPrice * item.quantity).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="pt-2 text-right font-medium">
+                      合計
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">
-                      ¥{(item.unitPrice * item.quantity).toLocaleString()}
+                    <td className="pt-2 text-right font-bold tabular-nums">
+                      ¥
+                      {confirmItems
+                        .reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+                        .toLocaleString()}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={3} className="pt-2 text-right font-medium">
-                    合計
-                  </td>
-                  <td className="pt-2 text-right font-bold tabular-nums">
-                    ¥
-                    {confirmItems
-                      .reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
-                      .toLocaleString()}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                </tfoot>
+              </table>
+            ) : (
+              <p className="text-sm text-gray-700">
+                要相談商品は含まれていません。固定価格商品の内容でInvoiceを発行します。
+              </p>
+            )}
 
             <div className="flex gap-3">
               <button
