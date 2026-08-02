@@ -808,13 +808,11 @@ NEXT_PUBLIC_*   クライアントサイドで参照可能（公開情報のみ�
 
 ### 13-3. 管理方法
 
-#### ローカル参照ファイル（すべて `.gitignore` 対象）
+#### ローカル開発（Doppler経由、`.env.local`等は使わない）
 
-| ファイル     | 用途                                                    |
-| ------------ | ------------------------------------------------------- |
-| `.env.local` | ローカル開発。`pnpm dev` 時に自動読み込み               |
-| `.env.stg`   | stg 環境の値を記録する参照ファイル（自動読み込みなし）  |
-| `.env.prod`  | prod 環境の値を記録する参照ファイル（自動読み込みなし） |
+シークレットは`.env.local`/`.env.stg`/`.env.prod`のようなローカル参照ファイルには置かず、Dopplerで一元管理する（`dev`/`stg`/`prod`の3つのDoppler Config）。ローカルでシークレットが必要なコマンドはすべて`doppler run --`でラップして実行する（`Taskfile.yml`の各タスク、または`doppler run -- <command>`を直接実行）。
+
+Doppler Config切り替え例: `doppler run --config stg -- <command>`
 
 #### `NEXT_PUBLIC_*` 変数（ビルド時に JS バンドルへ埋め込まれる）
 

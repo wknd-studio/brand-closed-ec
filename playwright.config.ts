@@ -1,8 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
-import dotenv from "dotenv";
 
-dotenv.config({ path: ".env.local" });
-
+// シークレットは.env.localではなくDopplerで一元管理する。
+// ローカル実行時は`task test:e2e`（内部で`doppler run -- pnpm test:e2e`）を使うこと
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,

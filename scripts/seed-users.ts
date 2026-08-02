@@ -3,11 +3,8 @@
  * Clerkに存在するユーザーのみinsert対象とし、べき等（何度実行しても同じ結果）。
  * ローカルDBのURLとキーは `supabase status` から自動取得する。
  *
- * 実行: pnpm tsx scripts/seed-users.ts
+ * 実行: task supabase:seed-users（内部でdoppler runしシークレットを注入する）
  */
-import { config } from "dotenv";
-config({ path: ".env.local" });
-
 import { execSync } from "child_process";
 import { createClerkClient } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";

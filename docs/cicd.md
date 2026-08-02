@@ -128,9 +128,11 @@ E2E テストを実行するには以下が必要：
 1. **テスト用 Clerk アカウント**
    - Clerk ダッシュボードでテスト用ユーザーを作成
    - `publicMetadata` に `{ "onboarding_completed": false }` を設定
-   - メールアドレスを `E2E_USER_EMAIL`（`.env.local` または GitHub Secret）に設定
+   - メールアドレスを `E2E_USER_EMAIL`（Doppler の `dev` Config）に設定
 
-2. **環境変数**（ローカルの場合は `.env.local`、CI の場合は GitHub Secrets）
+2. **環境変数**（ローカルの場合は Doppler、CI の場合は Doppler + GitHub Secrets）
+
+シークレットは `.env.local` 等のローカルファイルではなく Doppler で一元管理する。ローカルで E2E を実行する場合は `task test:e2e`（内部で `doppler run -- pnpm test:e2e` を実行）を使う。
 
 ```
 E2E_USER_EMAIL=test+clerk_test@example.com

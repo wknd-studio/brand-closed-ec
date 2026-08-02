@@ -1,4 +1,3 @@
-import { config } from "dotenv";
 import { createClient } from "@sanity/client";
 
 import {
@@ -119,8 +118,6 @@ const priceSettingsDefs: {
     },
   },
 ];
-
-config({ path: ".env.local" });
 
 const client = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
