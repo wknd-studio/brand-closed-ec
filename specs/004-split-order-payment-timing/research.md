@@ -127,3 +127,23 @@ spec.mdに[NEEDS CLARIFICATION]マーカーは残っていない（実装前の�
 **Alternatives considered**:
 
 - Cookieに署名（HMAC等）を付与し改竄検知する → 既存の`unitPrice`が既にこの対策なしで運用されており（サーバー側で信頼しない設計で十分に安全なため）、本機能のためだけにCookie署名の仕組みを新設するのは過剰。既存の設計方針（クライアント入力は表示専用、判定は常にサーバー側で再取得）を`paymentTiming`にも一貫して適用すれば追加コストなしで解決する
+
+## 決定10（実装中に判明）: `payment_timing`未設定の既存商品は`at_order`として扱う（後方互換のデフォルト値）
+
+**Decision**: `SanityProductRepository`は、`payment_timing`フィールドが存在しない（`null`/`undefined`の）商品を`"at_order"`として扱う。data-model.mdが定めるスキーマ上の既定値（`initialValue: "at_order"`）と一致させる。
+
+**Rationale**:
+
+- Sanity Studioの`initialValue`は新規作成されるドキュメントにのみ適用され、本機能追加前から存在する既存商品ドキュメントには遡及しない。そのため実際のデータでは`payment_timing`が未設定（`null`）の商品が生じうる
+- 実装当初、`place-order.ts`側でこの未設定値を誤って`"after_order"`にフォールバックしてしまい、既存商品が意図せず後払いフローに倒れ、CIのE2Eテスト（`checkout.spec.ts`）が失敗する形で発覚した。data-model.mdの記載（既定値`at_order`）を正としてこの誤りを修正した
+- この教訓から、今後同様のフィールド追加を行う際は「既存ドキュメントには新フィールドが存在しない」ことを前提に、リポジトリ層でのフォールバック方向をdata-model.mdの既定値と必ず一致させる、という点を明示的に残しておく
+
+## 決定11（実装中に判明）: 管理画面のInvoice発行フォームは、要相談商品の有無に関わらず表示する
+
+**Decision**: 管理画面の注文詳細ページで、Invoice発行フォーム（`InvoiceForm`）は`status === "confirming"`であれば常に表示する。要相談商品（`is_negotiable: true`）が0件の場合も、価格入力欄を出さない簡潔な確認ダイアログでInvoiceを発行できるようにする。
+
+**Rationale**:
+
+- FR-010は「注文後払い」の注文に含まれる価格確定商品についても、送付前に運営者が内容を確認するプロセスを経なければならないと定めており、これは「固定価格商品のみで構成されるafter_order注文」にも当然適用される
+- 実装当初、Invoice発行フォームの表示条件が`negotiableItems.length > 0`（要相談商品が1件以上）になっており、これは本機能追加前（`is_negotiable`のみで後払い判定していた時代）の実装をそのまま引き継いだ条件だった。本機能により「固定価格×`after_order`」という新しい組み合わせが生まれたことで、この条件が漏れとなり、該当注文がInvoice発行手段のないまま`confirming`に永久に留まるバグとして発覚した
+- User Story 4（分割注文の関連表示）の実装過程で発見・修正した（`src/app/admin/orders/[id]/page.tsx`・`src/app/admin/orders/[id]/invoice-form.tsx`）

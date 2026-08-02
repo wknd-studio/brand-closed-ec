@@ -2,9 +2,10 @@ version: "3"
 
 tasks:
   dev:
-    desc: 開発サーバーを起動（Supabase → Next.js + Stripe 並列）※ ngrok は task dev:ngrok で別途起動
+    desc: 開発環境を一括起動（Supabase → ngrokを別ターミナルで起動 → Next.js + Stripe + Sanity Studio 並列）
     cmds:
       - task: supabase:start
+      - task: dev:ngrok:spawn
       - task: dev:services
 
   supabase:start:
@@ -12,11 +13,17 @@ tasks:
     cmds:
       - supabase start
 
+  dev:ngrok:spawn:
+    desc: ngrok を別のTerminalウィンドウで起動する（同一プロセス内で他コマンドと出力を共有するとTUI表示が崩れるため）
+    cmds:
+      - osascript -e 'tell application "Terminal" to do script "cd \"'"$PWD"'\" && task dev:ngrok"'
+
   dev:services:
-    desc: Next.js・Stripe を並列起動
+    desc: Next.js・Stripe・Sanity Studio を並列起動
     deps:
       - dev:next
       - dev:stripe
+      - sanity:dev
 
   dev:next:
     desc: Next.js 開発サーバー
@@ -50,6 +57,21 @@ tasks:
     desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost:3000）
     cmds:
       - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
+
+  dev:clean:
+    desc: task dev で起動した全プロセス（Next.js・Stripe・Sanity Studio・ngrok・Supabaseコンテナ）を停止する
+    cmds:
+      - pkill -f "pnpm next dev --turbo" || true
+      - pkill -f "sanity dev" || true
+      - pkill -f "stripe listen" || true
+      - pkill -f "ngrok start" || true
+      - supabase stop
+
+  dev:re:
+    desc: task dev で起動した全プロセスを停止してから再起動する
+    cmds:
+      - task: dev:clean
+      - task: dev
 
   seed:
     desc: 開発用シードデータを一括投入（Supabaseユーザー → Sanity商品）

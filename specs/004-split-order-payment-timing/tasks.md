@@ -151,10 +151,15 @@
 
 **Purpose**: 手動検証・E2E網羅・デモデータ整備
 
-- [ ] T031 [P] `scripts/seed-products.ts`に`payment_timing`混在のデモ商品データを追加（既存のデザインテーマ・掛け率設定と同様のパターンで、動作確認用に数件アタッチする）
-- [ ] T032 [P] 分割チェックアウトのE2Eテストを `tests/e2e/order/` 配下に追加（既存の`checkout.spec.ts`・`invoice.spec.ts`を参考に、quickstart.md シナリオ4相当を自動化）
-- [ ] T033 quickstart.mdの手動UI確認チェックリスト（Sanity Studio・カート表示・完了画面・管理画面）を実際のブラウザで実施
-- [ ] T034 実装中に判明した仕様の差分があれば、PR作成直前にspec.md/plan.md/research.mdへ一度だけまとめて反映する（CLAUDE.mdのドキュメント更新頻度ルールに従う）
+- [x] T031 [P] `scripts/seed-products.ts`に`payment_timing`混在のデモ商品データを追加（既存のデザインテーマ・掛け率設定と同様のパターンで、動作確認用に数件アタッチする）
+  - ReFa（美容家電、3商品）を`after_order`、GUCCI/LOEWE/HERMÈS/CHANEL（ハイブランド、10商品）を`at_order`に設定
+- [x] T032 [P] 分割チェックアウトのE2Eテストを `tests/e2e/order/` 配下に追加（既存の`checkout.spec.ts`・`invoice.spec.ts`を参考に、quickstart.md シナリオ4相当を自動化）
+  - `tests/e2e/order/split-checkout.spec.ts`を新規作成。テスト専用商品（at_order/after_order各1件）を作成し、両方カートに入れて注文確定→Stripe Checkoutへの遷移、同一`split_group_id`を持つ2件のOrder作成、チェックアウト画面のグループ表示を検証。ローカルで実行し2回連続成功を確認済み
+- [x] T033 quickstart.mdの手動UI確認チェックリスト（Sanity Studio・カート表示・完了画面・管理画面）を実際のブラウザで実施
+  - 実施済み: Playwright経由で実ブラウザ・実Doppler資格情報を使い、カートサイドバー・チェックアウト画面のグループ表示をスクリーンショットで確認（グループ見出し・小計とも明確に表示されることを確認）
+  - 未実施: Sanity Studio商品編集画面のバリデーション表示、`/order/complete`のもう一方の注文案内（実際のStripe決済完了が必要でE2E自動化の対象外）、管理画面の注文一覧・詳細（管理者権限のテストユーザー未整備）。これらは手動での目視確認を推奨
+- [x] T034 実装中に判明した仕様の差分があれば、PR作成直前にspec.md/plan.md/research.mdへ一度だけまとめて反映する（CLAUDE.mdのドキュメント更新頻度ルールに従う）
+  - research.mdに決定10（`payment_timing`未設定の既存商品を`at_order`扱いにする後方互換の教訓）・決定11（Invoice発行フォームは要相談商品0件でも表示する）を追記
 
 ---
 
