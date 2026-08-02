@@ -48,9 +48,9 @@ export const productImportRun = defineType({
   fields: [
     defineField({
       name: "catalog",
-      title: "対象データソース",
+      title: "対象カタログ",
       type: "reference",
-      to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
+      to: [{ type: "csvCatalog" }],
       validation: (r) => r.required(),
       readOnly: true,
     }),

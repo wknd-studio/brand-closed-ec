@@ -13,8 +13,8 @@ import type { UnifiedProductRecord } from "@/lib/product-import/unified-product-
  * .product-listコンテナを持つ想定でHTMLを解析する。
  */
 
+// 実業者アダプターでは、対応する商品CSVカタログ（csvCatalog）ドキュメントの_idと一致させる
 const CATALOG_ID = "__fixture__";
-// 実業者アダプターでは、対応するscrapingCatalogドキュメントのscrape_target_urlと同じ値にする
 const SOURCE_URL = "https://example.com/catalog";
 
 /**

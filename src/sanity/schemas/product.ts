@@ -248,10 +248,10 @@ export const product = defineType({
       name: "source_catalog",
       title: "データ取得元",
       description:
-        "業者商品データインポートで作成・更新された場合の取得元データソース（CSV/スクレイピング）。" +
+        "業者商品データインポートで作成・更新された場合の取得元カタログ。" +
         "インポート処理のみが書き込む来歴情報のため常に編集不可",
       type: "reference",
-      to: [{ type: "csvCatalog" }, { type: "scrapingCatalog" }],
+      to: [{ type: "csvCatalog" }],
       readOnly: true,
     }),
     defineField({

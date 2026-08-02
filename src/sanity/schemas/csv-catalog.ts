@@ -4,16 +4,21 @@ import { createPlaceholderTextInput } from "./placeholder-text-input";
 import { CsvColumnMappingInput } from "./csv-column-mapping-input";
 
 /**
- * CSV提供業者からの商品データソース1本の取り込み設定（specs/004-product-data-import）。
+ * 商品データ1カタログ分のCSV取り込み設定（specs/004-product-data-import）。
+ * CSV提供業者・スクレイピング対象業者のどちらも、書き込み前に必ずCSVを経由する
+ * （スクレイピング側はCSV生成後、既存のCSVインポート画面から取り込む設計。
+ * ユーザーとの協議によりscrapingCatalogを廃止しこの型へ統合）。
+ * スクレイピング対象の場合、対象URL・実行コードはSanityではなく開発者が
+ * 用意するアダプターコード（scripts/product-import/vendors/<id>/scraper.ts）側で
+ * 管理し、このドキュメントの`_id`をアダプターのCATALOG_IDと一致させる。
  * ブランドは行（商品）ごとのデータであり、業者やcatalog単位で決め打ちできるとは限らないため、
  * 「1 catalog = 1 ブランド」という前提は置かない。default_brandはあくまで
  * 「この取り込みのデータにブランド情報が無い行への穴埋め」であり、CSVにブランド列があれば
- * 常にそちらが優先される。運営者がSanity Studio上で自由に作成・編集・削除する
- * （スクレイピング用のscrapingCatalogとは異なり、開発者によるコード実装を必要としない）。
+ * 常にそちらが優先される。
  */
 export const csvCatalog = defineType({
   name: "csvCatalog",
-  title: "商品データソース（CSV）",
+  title: "商品CSVカタログ",
   type: "document",
   fields: [
     defineField({

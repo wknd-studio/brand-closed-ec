@@ -27,12 +27,7 @@ export const structure: StructureResolver = (S) =>
               ),
               S.documentTypeListItem("designTheme").title("デザインテーマ"),
               S.divider(),
-              S.documentTypeListItem("csvCatalog").title(
-                "商品データソース（CSV）"
-              ),
-              S.documentTypeListItem("scrapingCatalog").title(
-                "商品データソース（スクレイピング）"
-              ),
+              S.documentTypeListItem("csvCatalog").title("商品CSVカタログ"),
               S.documentTypeListItem("productCsvUpload").title(
                 "取り込み待ちCSV"
               ),
