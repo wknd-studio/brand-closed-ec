@@ -2,6 +2,7 @@ import { defineField, defineType } from "sanity";
 
 import { createPlaceholderTextInput } from "./placeholder-text-input";
 import { CsvColumnMappingInput } from "./csv-column-mapping-input";
+import { PendingCsvInput } from "./pending-csv-input";
 
 const PENDING_CSV_SOURCE_OPTIONS = [
   { title: "手元のCSVファイルを保存", value: "manual_upload" },
@@ -137,10 +138,10 @@ export const csvCatalog = defineType({
           name: "uploaded_at",
           title: "保存日時",
           type: "datetime",
-          initialValue: () => new Date().toISOString(),
           readOnly: true,
         }),
       ],
+      components: { input: PendingCsvInput },
     }),
   ],
   preview: {
