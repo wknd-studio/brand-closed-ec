@@ -1,97 +1,139 @@
-import { Box, Card, Container, Heading, Stack, Text } from "@sanity/ui";
+import { Box, Card, Container, Heading, Label, Stack, Text } from "@sanity/ui";
 
 interface Section {
   title: string;
   body: React.ReactNode;
 }
 
+/**
+ * 1手順=1行の短い指示のみを書く。例外・理由はStepの外（別のTextやCard）に出す。
+ * サイズ2（本文より一段階大きい）にして、補足（size 0）とのメリハリを付ける
+ */
 function Step({ children }: { children: React.ReactNode }) {
   return (
-    <Text size={1} as="li">
+    <Text size={2} as="li">
       {children}
     </Text>
   );
 }
 
+/**
+ * 指示（1行・やや大きめ）と、その下に補足（1行・小さく薄い注釈）をセットで表示する手順。
+ * 文字サイズの差でメリハリを付け、「読むべき指示」と「読み飛ばしてよい補足」を目で区別できるようにする。
+ * StackにJSXの`li`をそのまま指定すると`display:flex`でリストマーカーが消えるため、
+ * 素の<li>でラップし、その内側だけをStackでフレックス化する
+ */
+function StepWithNote({
+  children,
+  note,
+}: {
+  children: React.ReactNode;
+  note?: React.ReactNode;
+}) {
+  return (
+    <li>
+      <Stack space={2}>
+        <Text size={2}>{children}</Text>
+        {note && (
+          <Text size={0} muted>
+            {note}
+          </Text>
+        )}
+      </Stack>
+    </li>
+  );
+}
+
+function StepList({ children }: { children: React.ReactNode }) {
+  return (
+    <Stack space={4} as="ol" style={{ paddingLeft: "1.25em" }}>
+      {children}
+    </Stack>
+  );
+}
+
+/**
+ * 「事前準備」「手順A」等、手順のまとまりを枠線付きのカードで視覚的に区切る。
+ * 見出しはLabel（小さい大文字風のラベル）にして、本文の手順（size 2）より
+ * はっきり格下に見えるようにする
+ */
+function SubSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card padding={4} radius={2} border tone="transparent">
+      <Stack space={4}>
+        <Label size={1}>{label}</Label>
+        {children}
+      </Stack>
+    </Card>
+  );
+}
+
 const SECTIONS: Section[] = [
   {
-    title: "0. 商品データの2つの登録方法",
+    title: "0. まずはここから",
     body: (
       <Stack space={3}>
-        <Text size={1}>
-          商品データの登録方法は2種類あります。目的に応じて使い分けてください。
-        </Text>
-        <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>
-            <b>1件だけ手動で登録・修正したいとき</b> →「1.
-            商品を1件ずつ手動で登録する」を参照
-          </Step>
-          <Step>
-            <b>業者からもらったCSVファイルでまとめて登録したいとき</b>
-            （新規追加でも、既存商品の一括更新でも同じ手順） →「3.
-            CSVで一括インポートする」を参照
-          </Step>
+        <Text size={2}>商品データの登録方法は2種類です。</Text>
+        <Stack space={3}>
+          <Card padding={4} radius={2} shadow={1}>
+            <Text size={2}>
+              <b>1件だけ登録・修正する</b> →「1. 商品を1件ずつ手動で登録する」
+            </Text>
+          </Card>
+          <Card padding={4} radius={2} shadow={1}>
+            <Text size={2}>
+              <b>CSVでまとめて登録・更新する</b> →「3. CSVで一括インポートする」
+            </Text>
+          </Card>
         </Stack>
-        <Text size={1} muted>
-          迷ったら、まずこのページの目次（0〜6）から該当するセクションを探してください。
-        </Text>
       </Stack>
     ),
   },
   {
     title: "1. 商品を1件ずつ手動で登録する",
     body: (
-      <Stack space={3}>
-        <Text size={1} weight="semibold">
-          事前準備（無ければ先に作成する）
-        </Text>
-        <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>
-            画面左のメニューから「商品管理 → ブランド」を開き、右上の「＋
-            新規作成」ボタンでブランドを作成する。「ブランド名」は必須、ロゴ画像・説明文・デザインテーマは空欄のままでよい。入力後、画面右下の「公開（Publish）」ボタンを押して保存する
-          </Step>
-          <Step>
-            商品をカテゴリで分類したい場合は、同様に「商品管理 →
-            カテゴリ」で作成する（カテゴリが無くても商品は登録できるので、必須ではない）
-          </Step>
-        </Stack>
-        <Text size={1} weight="semibold">
-          商品を1件作成する
-        </Text>
-        <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>
-            画面左のメニューから「商品管理 → すべての商品」を開き、右上の「＋
-            新規作成」ボタンを押す
-          </Step>
-          <Step>
-            以下の3項目は必須のため、必ず入力する。
-            <Stack
-              space={1}
-              as="ul"
-              style={{ paddingLeft: "1.25em", marginTop: "0.25em" }}
-            >
-              <Step>「商品名」: 自由入力</Step>
-              <Step>
-                「ブランド」: プルダウンから、事前に作成したブランドを選ぶ
-              </Step>
-              <Step>「参考小売価格（円）」: 定価を半角数字で入力</Step>
-            </Stack>
-          </Step>
-          <Step>
-            「在庫状況」「最低閲覧ランク」もプルダウンから選択する（未選択のままだと保存できない）
-          </Step>
-          <Step>
-            ランク別の会員向け仕入れ価格は自動計算されるため、直接入力する項目ではない（詳しくは「2.
-            価格・掛け率の仕組み」を参照）
-          </Step>
-          <Step>
-            入力が終わったら、画面右下の「公開（Publish）」ボタンを押して保存する。ボタンが押せない場合は、必須項目の入力漏れがないか画面上部の警告を確認する
-          </Step>
-        </Stack>
-        <Card padding={3} radius={2} tone="primary">
+      <Stack space={4}>
+        <SubSection label="事前準備（ブランドがまだ無い場合のみ）">
+          <StepList>
+            <Step>「商品管理 → ブランド」を開く</Step>
+            <Step>右上の「＋ 新規作成」を押す</Step>
+            <StepWithNote note="ロゴ画像・説明文・デザインテーマは空欄のままでよい">
+              「ブランド名」を入力する（必須）
+            </StepWithNote>
+            <Step>右下の「公開（Publish）」を押して保存する</Step>
+          </StepList>
+        </SubSection>
+
+        <SubSection label="商品を1件作成する">
+          <StepList>
+            <Step>「商品管理 → すべての商品」を開く</Step>
+            <Step>右上の「＋ 新規作成」を押す</Step>
+            <Step>「商品名」を入力する（必須）</Step>
+            <StepWithNote note="事前に作成したブランドの中から選ぶ">
+              「ブランド」をプルダウンから選ぶ（必須）
+            </StepWithNote>
+            <Step>「参考小売価格（円）」に定価を入力する（必須）</Step>
+            <Step>「在庫状況」をプルダウンから選ぶ</Step>
+            <Step>「最低閲覧ランク」をプルダウンから選ぶ</Step>
+            <StepWithNote note="計算の仕組みは「2. 価格・掛け率の仕組み」を参照。この欄は直接入力しない">
+              「ランク別仕入れ価格」は自動計算されるので、そのままにする
+            </StepWithNote>
+            <StepWithNote note="押せない場合は、画面上部の警告に入力漏れの項目が出ている">
+              右下の「公開（Publish）」を押して保存する
+            </StepWithNote>
+          </StepList>
+        </SubSection>
+
+        <Card padding={4} radius={2} tone="primary">
           <Text size={1}>
-            業者からCSVでまとまったデータをもらえる場合は、1件ずつ手動登録するより「3.
-            CSVで一括インポートする」を使うほうが早く、入力ミスも防げます。
+            業者からCSVをもらえる場合は、1件ずつ登録するより「3.
+            CSVで一括インポートする」の方が早く、入力ミスも防げます。
           </Text>
         </Card>
       </Stack>
@@ -100,29 +142,25 @@ const SECTIONS: Section[] = [
   {
     title: "2. 価格・掛け率の仕組み",
     body: (
-      <Stack space={3}>
-        <Text size={1}>
-          会員ランク別の仕入れ価格（「ランク別仕入れ価格」欄）は手入力ではなく、以下の優先順位で自動計算されます。数字が大きいほど優先度は低い（上のルールがあれば、下のルールは無視される）。
+      <Stack space={4}>
+        <Text size={2}>
+          「ランク別仕入れ価格」欄は手入力ではなく自動計算です。以下の優先順位で決まります（上が優先）。
         </Text>
-        <Stack space={1} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>
-            商品自身に設定した「ランク別掛け率」（最優先・商品ごとの個別上書き）
-          </Step>
-          <Step>
-            商品にアタッチした「掛け率設定」（画面上は「掛け率設定」欄）のランク別掛け率
-          </Step>
-          <Step>ブランドにアタッチした「掛け率設定」のランク別掛け率</Step>
+        <StepList>
+          <Step>商品自身に設定した「ランク別掛け率」</Step>
+          <Step>商品にアタッチした「掛け率設定」</Step>
+          <Step>ブランドにアタッチした「掛け率設定」</Step>
           <Step>
             「商品管理 →
-            価格設定（デフォルト掛け率）」の中で「デフォルトにする」がONになっている設定（全商品共通の最終フォールバック）
+            価格設定（デフォルト掛け率）」で「デフォルトにする」がONの設定
           </Step>
-        </Stack>
-        <Text size={1}>
-          定価と掛け率が決まれば、ランク別仕入れ価格は自動的に計算・保存されます（「ランク別仕入れ価格」欄は直接編集できません）。定価や掛け率を変更して保存すれば、そのたびに自動で再計算されます。
+        </StepList>
+        <Text size={0} muted>
+          定価または掛け率を変更して保存すると、そのたびに自動で再計算されます。
         </Text>
-        <Card padding={3} radius={2} tone="caution">
+        <Card padding={4} radius={2} tone="caution">
           <Text size={1}>
-            「仕入れ掛け率（%）※運営者専用」（`vendor_cost_rate`）は、業者から提示された仕入れ値の参考情報であり、会員向けのランク別価格の計算には一切使いません。この値を下回るランク価格を設定して保存しようとすると、赤字防止のためエラーになり保存できません。
+            「仕入れ掛け率（%）※運営者専用」は会員向け価格の計算には使いません。業者の仕入れ値の参考情報です。この値を下回るランク価格は、赤字防止のため保存時にエラーになります。
           </Text>
         </Card>
       </Stack>
@@ -131,82 +169,77 @@ const SECTIONS: Section[] = [
   {
     title: "3. CSVで一括インポートする",
     body: (
-      <Stack space={3}>
-        <Text size={1}>
-          業者から提供されたCSVファイルを一括で商品として取り込めます。新規商品の追加と、既存商品の情報更新のどちらも同じ手順で行います。
-        </Text>
-        <Text size={1} weight="semibold">
-          手順A: 事前準備（初回のみ、または業者のCSV形式が変わったときのみ）
-        </Text>
-        <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>
-            商品のブランドが未登録の場合は、先に「商品管理 →
-            ブランド」で作成しておく（詳しくは「1.
-            商品を1件ずつ手動で登録する」参照）
-          </Step>
-          <Step>
-            画面左のメニューから「商品管理 → 商品CSVカタログ」を開き、右上の「＋
-            新規作成」ボタンで、業者1社・CSV1形式につき1件のドキュメントを作る
-          </Step>
-          <Step>
-            「表示名」に、他のCSVデータソースと区別できる名前を入力する（例:
-            「A社 定期CSV（Nike分）」）
-          </Step>
-          <Step>
-            「CSV列マッピング」の項目で、その業者のサンプルCSVファイルをアップロードすると、CSVの先頭行がプレビュー表示される。各項目（JANコード列・商品名列・ブランド名列・定価列・在庫状況列・仕入れ掛け率列・入数列）ごとに、対応する実際の列名をプルダウンから選ぶ。対応する列が無い項目は空欄のままでよい
-          </Step>
-          <Step>
-            CSVの先頭に送料案内などの説明文や空行があり、項目名（ヘッダー）の行が1行目でない場合は、「ヘッダー行の行番号」にその行番号を入力する（通常はそのまま1でよい）
-          </Step>
-          <Step>
-            CSVにブランド名の列が無い場合は、「デフォルトブランド」にこのCSV全体に適用するブランドを設定する（CSVにブランド列があれば、そちらの値が優先される）
-          </Step>
-          <Step>
-            入力が終わったら、画面右下の「公開（Publish）」ボタンを押して保存する
-          </Step>
-        </Stack>
-        <Text size={1} weight="semibold">
-          手順B: CSVを取り込む（毎回の作業）
-        </Text>
-        <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>画面上部のタブから「商品CSVインポート」を開く</Step>
-          <Step>
-            「1.
-            商品データソースを選択」で、手順Aで作成した商品CSVカタログをプルダウンから選ぶ
-          </Step>
-          <Step>
-            「2.
-            CSVファイルを選択」で、パソコン内のCSVファイルを直接選ぶか、すでにSanity上に保存されている「取り込み待ちCSV」があればそのプルダウンから選ぶ（取り込み待ちCSVについては「4.
-            取り込み待ちCSVについて」を参照）
-          </Step>
-          <Step>
-            「3.
-            検証プレビューを表示する」ボタンを押す。画面にこの時点ではまだ商品データへの書き込みは行われず、「成功見込み:
-            N件 / エラー見込み:
-            N件」という見込み件数と、エラーがあればその内容（対象行・理由）が一覧表示される
-          </Step>
-          <Step>
-            表示された内容を確認し、問題がなければ「4.
-            実行を確定する」ボタンを押す。ここで初めてSanity上の商品データが作成・更新される
-          </Step>
-          <Step>
-            完了すると「新規作成: N件 / 更新:
-            N件」と表示される。あとから結果を見返したい場合は「商品管理 →
-            インポート実行結果」から確認できる（「5.
-            インポート実行結果の見方」参照）
-          </Step>
-        </Stack>
-        <Card padding={3} radius={2} tone="caution">
-          <Text size={1}>
-            同じCSVを再度インポートすると、JANコード（無ければ商品名＋ブランド名の組み合わせ）が一致する既存商品は、業者データ由来の項目（定価・在庫状況・仕入れ掛け率・入数等）が最新のCSVの内容で上書き更新されます。一方、支払いタイミング・ランク別仕入れ価格・最低閲覧ランクは、新規作成時にだけ既定値が設定され、更新時は運営者が手動で調整した値をそのまま維持します（CSVの再取り込みで消えません）。
-          </Text>
+      <Stack space={4}>
+        <Text size={2}>新規追加・既存商品の更新のどちらも同じ手順です。</Text>
+
+        <SubSection label="手順A: カタログを準備する（業者ごとに最初の1回だけ）">
+          <StepList>
+            <StepWithNote note="詳しくは「1. 商品を1件ずつ手動で登録する」参照">
+              ブランドが未登録の場合は先に作成する
+            </StepWithNote>
+            <Step>「商品管理 → 商品CSVカタログ」を開く</Step>
+            <Step>右上の「＋ 新規作成」を押す</Step>
+            <StepWithNote note="例:「A社 定期CSV（Nike分）」">
+              「表示名」に業者名など分かりやすい名前を入力する
+            </StepWithNote>
+            <StepWithNote note="先頭行がプレビュー表示される">
+              「CSV列マッピング」でサンプルCSVをアップロードする
+            </StepWithNote>
+            <StepWithNote note="対応する列が無い項目は空欄でよい">
+              JANコード・商品名・ブランド名・定価・在庫状況・仕入れ掛け率・入数の各列を、プルダウンから選ぶ
+            </StepWithNote>
+            <StepWithNote note="通常はそのまま1でよい">
+              先頭に案内文や空行があるCSVは「ヘッダー行の行番号」を設定する
+            </StepWithNote>
+            <StepWithNote note="CSVにブランド列があれば、そちらが優先される">
+              ブランド列が無いCSVは「デフォルトブランド」を設定する
+            </StepWithNote>
+            <Step>右下の「公開（Publish）」を押して保存する</Step>
+          </StepList>
+        </SubSection>
+
+        <SubSection label="手順B: CSVを取り込む（毎回の作業）">
+          <StepList>
+            <Step>上部タブの「商品CSVインポート」を開く</Step>
+            <Step>「1. 商品データソースを選択」でカタログを選ぶ</Step>
+            <StepWithNote note="Sanity上に保存済みのCSVがあれば「取り込み待ちCSV」からも選べる（「4. 取り込み待ちCSVについて」参照）">
+              「2. CSVファイルを選択」でファイルを選ぶ
+            </StepWithNote>
+            <StepWithNote note="この時点ではまだ商品データは変更されない">
+              「3. 検証プレビューを表示する」を押す
+            </StepWithNote>
+            <Step>
+              表示された「成功見込み／エラー見込み」の件数とエラー内容を確認する
+            </Step>
+            <StepWithNote note="ここで初めて商品データが作成・更新される">
+              問題なければ「4. 実行を確定する」を押す
+            </StepWithNote>
+            <StepWithNote note="あとから見返す場合は「商品管理 → インポート実行結果」（「5. インポート実行結果の見方」参照）">
+              「新規作成／更新」の件数が表示されたら完了
+            </StepWithNote>
+          </StepList>
+        </SubSection>
+
+        <Card padding={4} radius={2} tone="critical">
+          <Stack space={2}>
+            <Text size={1} weight="semibold">
+              確定操作は取り消せません
+            </Text>
+            <Text size={1}>
+              「検証プレビューを表示する」の段階では商品データは変わりません。内容を確認してから「実行を確定する」を押してください。
+            </Text>
+          </Stack>
         </Card>
-        <Card padding={3} radius={2} tone="critical">
-          <Text size={1}>
-            「3.
-            検証プレビューを表示する」を押しただけの段階では、商品データは一切変更されません。内容を確認せずに「4.
-            実行を確定する」を押すと、その場で確定してしまうので注意してください（取り消し操作はありません。誤って確定した場合は、正しいCSVで再度インポートして上書きしてください）。
-          </Text>
+
+        <Card padding={4} radius={2} tone="caution">
+          <Stack space={2}>
+            <Text size={1} weight="semibold">
+              同じCSVを再度取り込むと何が起きるか
+            </Text>
+            <Text size={1}>
+              JANコード（無ければ商品名＋ブランド名）が一致する既存商品は、定価・在庫状況・仕入れ掛け率・入数が最新CSVの内容で上書きされます。支払いタイミング・ランク別仕入れ価格・最低閲覧ランクは、運営者が手動調整した値がそのまま維持されます（消えません）。
+            </Text>
+          </Stack>
         </Card>
       </Stack>
     ),
@@ -214,34 +247,31 @@ const SECTIONS: Section[] = [
   {
     title: "4. 取り込み待ちCSVについて",
     body: (
-      <Stack space={3}>
-        <Text size={1}>
-          「商品管理 → 取り込み待ちCSV」には、まだ「3.
-          CSVで一括インポートする」の手順で確定していないCSVファイルが並びます。ここに並ぶCSVは、以下の2つの経路のどちらかで作られます。
+      <Stack space={4}>
+        <Text size={2}>
+          「商品管理 →
+          取り込み待ちCSV」には、まだインポートを確定していないCSVが並びます。2つの経路で作られます。
         </Text>
-        <Stack space={2} as="ol" style={{ paddingLeft: "1.25em" }}>
-          <Step>
-            <b>自動スクレイピングによる生成</b>:
-            契約済みでCSVの提供が無い業者について、毎日決まった時刻に自動で業者サイトの情報を収集し、CSVファイルとしてここに自動保存されます。運営者側の操作は不要です
-          </Step>
-          <Step>
-            <b>手元のCSVを事前に置いておく</b>:
-            業者からメール等で受け取ったCSVファイルを、インポート作業をする前にあらかじめSanity上に保存しておきたい場合に、「商品管理
-            → 取り込み待ちCSV」から「＋
-            新規作成」で登録できる（対象カタログとCSVファイルを設定して保存する）
-          </Step>
-        </Stack>
-        <Text size={1}>
-          いずれの経路で作られたCSVも、
-          <b>自動で商品データに反映されることはありません</b>
-          。「3.
-          CSVで一括インポートする」の手順Bで、対象の商品CSVカタログを選んだときにプルダウンへ表示されるので、そこから選んで通常のCSVインポートと同じように検証プレビュー→実行の確定を行ってください。確定すると、そのCSVは一覧から消えます（状態が「取り込み済み」になる）。
-        </Text>
-        <Card padding={3} radius={2} tone="primary">
-          <Text size={1}>
-            自動スクレイピングでCSVが生成されても、それだけでは商品データは一切変わりません。必ず担当者が内容を確認し、「3.
-            CSVで一括インポートする」の手順で確定する操作が必要です。無人実行によって誤った内容がそのまま商品データに反映されることを防ぐための仕組みです。
-          </Text>
+        <StepList>
+          <StepWithNote note="運営者側の操作は不要">
+            <b>自動スクレイピング</b>:
+            CSVを提供してくれない業者について、毎日自動で情報を収集しここに保存される
+          </StepWithNote>
+          <StepWithNote note="「商品管理 → 取り込み待ちCSV」→「＋ 新規作成」で登録する">
+            <b>手元のCSVの事前保存</b>: 受け取ったCSVを、取り込み作業の前に
+            Sanity上へ置いておける
+          </StepWithNote>
+        </StepList>
+        <Card padding={4} radius={2} tone="primary">
+          <Stack space={2}>
+            <Text size={1} weight="semibold">
+              自動で商品データに反映されることはありません
+            </Text>
+            <Text size={1}>
+              「3.
+              CSVで一括インポートする」の手順Bで選んで、検証プレビュー→確定の操作を行って初めて商品データに反映されます。無人実行の結果をそのまま反映しないための仕組みです。確定すると一覧から消えます。
+            </Text>
+          </Stack>
         </Card>
       </Stack>
     ),
@@ -249,13 +279,13 @@ const SECTIONS: Section[] = [
   {
     title: "5. インポート実行結果の見方",
     body: (
-      <Stack space={2}>
-        <Text size={1}>
+      <Stack space={3}>
+        <Text size={2}>
           「商品管理 →
-          インポート実行結果」には、CSV手動インポート・自動スクレイピングどちらの実行履歴も同じ形式で記録されます。一覧の各項目をクリックすると、対象カタログ・実行契機（定期実行／オンデマンド実行／手動CSVインポート）・実行日時・成功件数・失敗件数と、失敗した行があればその詳細（対象と理由）を確認できます。
+          インポート実行結果」で、CSV手動インポート・自動スクレイピングどちらの履歴も確認できます。各項目をクリックすると、対象カタログ・実行契機・実行日時・成功件数・失敗件数・エラー詳細が見られます。
         </Text>
-        <Text size={1} muted>
-          この一覧は監査用の記録のため、内容の編集はできません（古い記録の削除のみ可能です）。
+        <Text size={0} muted>
+          監査用の記録のため編集はできません（削除のみ可能です）。
         </Text>
       </Stack>
     ),
@@ -263,10 +293,13 @@ const SECTIONS: Section[] = [
   {
     title: "6. 商品の絞り込み・一括削除",
     body: (
-      <Stack space={2}>
-        <Text size={1}>
+      <Stack space={3}>
+        <Text size={2}>
           「商品管理 →
-          すべての商品」の一覧右上には検索・絞り込み機能（フィルタアイコン）があり、在庫状況・ブランド・カテゴリなど任意の項目で絞り込めます。また一覧上部の「Select」を押すと複数選択モードになり、チェックを付けた商品をまとめて削除できます。
+          すべての商品」の一覧右上のフィルタアイコンから、在庫状況・ブランド・カテゴリなどで絞り込めます。
+        </Text>
+        <Text size={2}>
+          一覧上部の「Select」で複数選択モードになり、まとめて削除できます。
         </Text>
       </Stack>
     ),
@@ -278,6 +311,8 @@ const SECTIONS: Section[] = [
  * Sanity Studioのツールタブ（ユーザーからの要望: 「画面上のタブにマニュアルを」）。
  * ドキュメントの中身ではなく、Studioの使い方そのものを説明するための静的コンテンツなので、
  * 特定のドキュメントに依存しない独立したツールとして実装している。
+ * 各手順は「1行の短い指示」＋「補足は別行の小さい注釈」に分離し、長文の詰め込みを避ける
+ * （ユーザーからのフィードバック: 文字数を増やしても読みやすさにはならない）。
  */
 export function ManualTool() {
   return (
@@ -285,12 +320,12 @@ export function ManualTool() {
       <Stack space={5}>
         <Heading size={3}>運用マニュアル</Heading>
         <Text size={1} muted>
-          商品登録・CSVインポートなどの運用手順をまとめています。開発者に確認しなくてもここを読めば作業できるようにするためのページです。初めて操作する方は、上から順番に読み進めてください。
+          商品登録・CSVインポートなどの運用手順をまとめています。初めて操作する方は、上から順番に読み進めてください。
         </Text>
         {SECTIONS.map((section) => (
           <Card key={section.title} padding={4} radius={3} shadow={1}>
-            <Stack space={3}>
-              <Heading size={1}>{section.title}</Heading>
+            <Stack space={4}>
+              <Heading size={2}>{section.title}</Heading>
               <Box>{section.body}</Box>
             </Stack>
           </Card>
