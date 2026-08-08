@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Papa from "papaparse";
 import {
   Badge,
@@ -7,6 +7,7 @@ import {
   Card,
   Flex,
   Select,
+  Spinner,
   Stack,
   Text,
   TextInput,
@@ -14,7 +15,7 @@ import {
 import { set, unset, useClient, useFormValue } from "sanity";
 import type { ObjectInputProps } from "sanity";
 
-import { FileSelectButton } from "../components/file-select-button";
+import { fetchCsvUploadText } from "@/lib/product-import/csv-upload";
 
 const API_VERSION = "2026-05-17";
 
@@ -34,10 +35,12 @@ const PREVIEW_ROW_COUNT = 10;
 
 /**
  * CSV列マッピングの入力を、業者名の手打ちではなく表形式で行えるようにするカスタム入力（FR-002）。
- * サンプルCSVをアップロードすると、先頭数行のプレビューからヘッダー行を選択でき（案内文や
- * 空行が先頭にあるCSVに対応するため。実際の業者CSVで判明した課題）、選んだヘッダー行の
- * 実際の列名をプルダウンから選べるようにする（タイプミス防止・どの列が何にマッピングされて
- * いるかを一目で分かるようにするため。アップロードしたファイル自体は保存しない）。
+ * プレビューには「保留中のCSV」（pending_csv.file）をそのまま使う。以前は別途「サンプルCSV」を
+ * このフィールド専用にアップロードさせていたが、保留中のCSVは必ず1件ファイルを持つため、
+ * 二重にアップロードさせる意味が無いと判断し統合した（ユーザーとの協議）。
+ * 先頭数行のプレビューからヘッダー行を選択でき（案内文や空行が先頭にあるCSVに対応するため。
+ * 実際の業者CSVで判明した課題）、選んだヘッダー行の実際の列名をプルダウンから選べるようにする
+ * （タイプミス防止・どの列が何にマッピングされているかを一目で分かるようにするため）。
  */
 export function CsvColumnMappingInput(props: ObjectInputProps) {
   const { value, onChange } = props;
@@ -45,23 +48,52 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
   const documentId = useFormValue(["_id"]) as string | undefined;
   const headerRowNumber =
     (useFormValue(["header_row_number"]) as number | undefined) ?? 1;
+  const pendingFileAssetRef = useFormValue([
+    "pending_csv",
+    "file",
+    "asset",
+    "_ref",
+  ]) as string | undefined;
 
   const [previewRows, setPreviewRows] = useState<string[][] | null>(null);
   const [fileName, setFileName] = useState("");
 
   const currentMapping = (value as MappingValue | undefined) ?? {};
   const headers = previewRows ? (previewRows[headerRowNumber - 1] ?? []) : null;
+  // previewRows/fileNameは常にfetch完了後にまとめてセットされるため、
+  // 「保留中のCSVはあるがまだ読み込み中」はfileName未設定から判定できる
+  // （isLoadingという別stateを持たずに済む。専用stateだと空データ取得完了後の値をuseEffect内で
+  // 同期的にsetStateすることになり、react-hooks/set-state-in-effectに抵触するため）
+  const isLoading = Boolean(pendingFileAssetRef) && !fileName && !previewRows;
 
-  const handleSampleFile = useCallback((file: File) => {
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result ?? "");
-      const parsed = Papa.parse<string[]>(text, { skipEmptyLines: false });
-      setPreviewRows((parsed.data as string[][]).slice(0, PREVIEW_ROW_COUNT));
+  useEffect(() => {
+    if (!documentId) return;
+    let cancelled = false;
+    client
+      .fetch<{ fileUrl: string | null; fileName: string | null } | null>(
+        `*[_id == $documentId][0]{
+          "fileUrl": pending_csv.file.asset->url,
+          "fileName": pending_csv.file.asset->originalFilename
+        }`,
+        { documentId }
+      )
+      .then(async (result) => {
+        if (cancelled) return;
+        if (!result?.fileUrl) {
+          setPreviewRows(null);
+          setFileName("");
+          return;
+        }
+        const text = await fetchCsvUploadText(result.fileUrl);
+        if (cancelled) return;
+        const parsed = Papa.parse<string[]>(text, { skipEmptyLines: false });
+        setPreviewRows((parsed.data as string[][]).slice(0, PREVIEW_ROW_COUNT));
+        setFileName(result.fileName ?? "");
+      });
+    return () => {
+      cancelled = true;
     };
-    reader.readAsText(file);
-  }, []);
+  }, [client, documentId, pendingFileAssetRef]);
 
   const handleHeaderRowSelect = useCallback(
     (rowNumber: number) => {
@@ -93,15 +125,17 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
   return (
     <Card padding={3} radius={2} shadow={1} tone="transparent">
       <Stack space={3}>
-        <Text size={1} muted>
-          サンプルCSVをアップロードすると、実際の列名をプルダウンから選べます（アップロードしたファイル自体は保存されません）。アップロードしなくても列名を直接入力できます。
-        </Text>
-        <FileSelectButton
-          label="サンプルCSVを選択"
-          accept=".csv,text/csv"
-          onFileSelected={handleSampleFile}
-        />
-        {fileName && (
+        {!pendingFileAssetRef && (
+          <Text size={1} muted>
+            上の「保留中のCSV」欄にCSVファイルを保存すると、ここに実際の列名がプルダウンで選べるようになります。それまでは列名を直接入力できます。
+          </Text>
+        )}
+        {isLoading && (
+          <Flex align="center" gap={2}>
+            <Spinner /> <Text size={1}>CSVを読み込み中...</Text>
+          </Flex>
+        )}
+        {fileName && !isLoading && (
           <Text size={1} muted>
             読み込み済み: {fileName}
           </Text>
@@ -176,7 +210,7 @@ export function CsvColumnMappingInput(props: ObjectInputProps) {
                   </Select>
                 ) : (
                   <TextInput
-                    placeholder="サンプルCSVをアップロードすると選択式になります"
+                    placeholder="保留中のCSVを保存すると選択式になります"
                     value={currentMapping[field.key] ?? ""}
                     onChange={(event) =>
                       handleMappingChange(field.key, event.currentTarget.value)
