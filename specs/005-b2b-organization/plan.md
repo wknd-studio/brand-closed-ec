@@ -34,15 +34,15 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 Constitution原則Iにより、エンジニアリング制約はCLAUDE.mdを正とする。CLAUDE.mdの各ルールとの整合を確認する。
 
-| ルール | 判定 | 備考 |
-|---|---|---|
-| ブランチ戦略（`feature/*` → `develop`） | ✅ PASS | `feature/b2b-organization-support` として作業中、`develop`最新からworktree作成済み |
-| PRサイズ（差分200行以内・5ファイル以内） | ⚠️ 要分割 | 本機能は単一PRに収まらない規模。`/speckit-tasks` で機能単位に細分化し、各タスクが独立してPRになるよう分割する（違反ではなく、タスク分割で解消する前提） |
-| テスト自動選択ルール | ✅ PASS | Technical Context参照。RLS変更・Webhook・APIルートは統合テスト必須 |
-| 実装順序（理解度確認→テスト→実装→コミット） | ✅ PASS | 各タスク実装時に踏襲する（`/speckit-tasks`生成物にも明記） |
-| コミット形式（`feat(scope): BRAND-XX 説明`） | ⚠️ 保留 | Linear issue番号が必要。`/speckit-tasks`後、tasks-to-linearスキルでissue化してから実装着手する（Constitution 開発ワークフロー） |
-| 事実の単一情報源化（原則V） | ✅ PASS | `organizations.rank`は既存`MemberRank`型を再利用（R3）。ランク別上限額を複製しない |
-| 曖昧さの解消を計画より先に（原則III） | ✅ PASS | spec.mdの[NEEDS CLARIFICATION]は`/speckit-specify`段階でユーザーと協議し解消済み |
+| ルール                                       | 判定      | 備考                                                                                                                                                    |
+| -------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ブランチ戦略（`feature/*` → `develop`）      | ✅ PASS   | `feature/b2b-organization-support` として作業中、`develop`最新からworktree作成済み                                                                      |
+| PRサイズ（差分200行以内・5ファイル以内）     | ⚠️ 要分割 | 本機能は単一PRに収まらない規模。`/speckit-tasks` で機能単位に細分化し、各タスクが独立してPRになるよう分割する（違反ではなく、タスク分割で解消する前提） |
+| テスト自動選択ルール                         | ✅ PASS   | Technical Context参照。RLS変更・Webhook・APIルートは統合テスト必須                                                                                      |
+| 実装順序（理解度確認→テスト→実装→コミット）  | ✅ PASS   | 各タスク実装時に踏襲する（`/speckit-tasks`生成物にも明記）                                                                                              |
+| コミット形式（`feat(scope): BRAND-XX 説明`） | ⚠️ 保留   | Linear issue番号が必要。`/speckit-tasks`後、tasks-to-linearスキルでissue化してから実装着手する（Constitution 開発ワークフロー）                         |
+| 事実の単一情報源化（原則V）                  | ✅ PASS   | `organizations.rank`は既存`MemberRank`型を再利用（R3）。ランク別上限額を複製しない                                                                      |
+| 曖昧さの解消を計画より先に（原則III）        | ✅ PASS   | spec.mdの[NEEDS CLARIFICATION]は`/speckit-specify`段階でユーザーと協議し解消済み                                                                        |
 
 **結論**: Constitution違反なし。PRサイズ・Linear issue化は`/speckit-tasks`フェーズで解消する前提のため、Complexity Trackingへの記載は不要（ルール逸脱ではなく後続フェーズへの委譲）。
 

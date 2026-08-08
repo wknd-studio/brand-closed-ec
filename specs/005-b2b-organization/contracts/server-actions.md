@@ -45,7 +45,13 @@ interface CreateOrganizationParams {
 
 type CreateOrganizationResult =
   | { type: "created"; organizationId: string }
-  | { type: "error"; reason: "duplicate_name" | "invalid_invoice_registration_number" | "clerk_api_error" };
+  | {
+      type: "error";
+      reason:
+        | "duplicate_name"
+        | "invalid_invoice_registration_number"
+        | "clerk_api_error";
+    };
 ```
 
 ## InviteMemberUseCase
@@ -54,14 +60,21 @@ org:adminによる追加メンバー招待（User Story 2）。
 
 ```ts
 interface InviteMemberParams {
-  actingUserId: string;       // 呼び出し元。org:adminであることを検証する
+  actingUserId: string; // 呼び出し元。org:adminであることを検証する
   organizationId: string;
   inviteeEmail: string;
 }
 
 type InviteMemberResult =
   | { type: "invited" }
-  | { type: "error"; reason: "not_admin" | "already_member" | "invitee_already_individual_member" | "clerk_api_error" }; // FR-023
+  | {
+      type: "error";
+      reason:
+        | "not_admin"
+        | "already_member"
+        | "invitee_already_individual_member"
+        | "clerk_api_error";
+    }; // FR-023
 ```
 
 ## PlaceOrderUseCase（拡張）
@@ -88,13 +101,19 @@ org:adminによる承認・却下（User Story 3）。
 
 ```ts
 interface ApproveOrderParams {
-  actingUserId: string;   // org:adminであることを検証する
+  actingUserId: string; // org:adminであることを検証する
   orderId: string;
 }
 
 type ApproveOrderResult =
   | { type: "approved" }
-  | { type: "error"; reason: "not_admin" | "not_pending_approval" | "requester_no_longer_member" }; // FR-018
+  | {
+      type: "error";
+      reason:
+        | "not_admin"
+        | "not_pending_approval"
+        | "requester_no_longer_member";
+    }; // FR-018
 ```
 
 ```ts
@@ -134,6 +153,9 @@ type CompleteProfileResult =
 // withdraw.ts の戻り値を拡張（現状はvoidを返すのみ）
 type WithdrawResult =
   | { type: "left" }
-  | { type: "organization_closed" }               // 自分が唯一のメンバーだった場合（FR-017）
-  | { type: "error"; reason: "active_orders_exist" | "sole_admin_must_promote_another_member" };
+  | { type: "organization_closed" } // 自分が唯一のメンバーだった場合（FR-017）
+  | {
+      type: "error";
+      reason: "active_orders_exist" | "sole_admin_must_promote_another_member";
+    };
 ```
