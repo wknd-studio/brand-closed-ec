@@ -1,27 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import {
-  markCsvUploadImported,
+  markPendingCsvImported,
   fetchCsvUploadText,
 } from "@/lib/product-import/csv-upload";
 
-describe("markCsvUploadImported", () => {
-  it("対象のproductCsvUploadドキュメントのstatusをimportedに更新する", async () => {
-    const patched: { id: string; doc: Record<string, unknown> }[] = [];
+describe("markPendingCsvImported", () => {
+  it("対象csvCatalogのpending_csvフィールドを削除する", async () => {
+    const patched: { id: string; unsetFields: string[] }[] = [];
     const client = {
       patch: (id: string) => ({
-        set: (doc: Record<string, unknown>) => ({
+        unset: (fields: string[]) => ({
           commit: () => {
-            patched.push({ id, doc });
-            return Promise.resolve({ _id: id, ...doc });
+            patched.push({ id, unsetFields: fields });
+            return Promise.resolve({ _id: id });
           },
         }),
       }),
     } as unknown as import("@sanity/client").SanityClient;
 
-    await markCsvUploadImported(client, "upload-1");
+    await markPendingCsvImported(client, "catalog-1");
 
-    expect(patched).toEqual([{ id: "upload-1", doc: { status: "imported" } }]);
+    expect(patched).toEqual([
+      { id: "catalog-1", unsetFields: ["pending_csv"] },
+    ]);
   });
 });
 

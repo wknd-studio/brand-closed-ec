@@ -12,10 +12,12 @@ const VENDORS_DIR = path.join(__dirname, "vendors");
 /**
  * GitHub Actionsの日次cronから実行される、業者サイトの定期スクレイピング（User Story 3）。
  * `scripts/product-import/vendors/`配下の各アダプターを実行し、結果をCSV化して
- * `productCsvUpload`（`status: pending`）として保存するだけで、商品データへの
+ * 対象csvCatalogの`pending_csv`フィールドに保存するだけで、商品データへの
  * 直接書き込み（apply-import呼び出し）は行わない。CSVインポート画面の
  * 検証プレビュー→人間による確定という安全機構を、定期実行でも必ず経由させるため
  * （Phase4で確立した方針をPhase5にも適用。ユーザーとの協議）。
+ * 既に未確定のpending_csvが残っていた場合は、最新のスクレイピング結果で上書きする
+ * （1カタログにつき保留中のCSVは常に最大1件という設計。ユーザーとの協議）。
  * catalog単位の失敗は他catalogの処理を止めずスキップし、productImportRunに
  * 失敗として記録する（Edge Cases）。
  */
@@ -66,13 +68,19 @@ async function runAdapter(client: SanityClient, adapterId: string) {
       }
     );
 
-    await client.create({
-      _type: "productCsvUpload",
-      catalog: { _type: "reference", _ref: scraper.catalogId },
-      file: { _type: "file", asset: { _type: "reference", _ref: asset._id } },
-      source: "scheduled_scrape",
-      status: "pending",
-    });
+    await client
+      .patch(scraper.catalogId)
+      .set({
+        pending_csv: {
+          file: {
+            _type: "file",
+            asset: { _type: "reference", _ref: asset._id },
+          },
+          source: "scheduled_scrape",
+          uploaded_at: new Date().toISOString(),
+        },
+      })
+      .commit();
 
     await client.create({
       _type: "productImportRun",
