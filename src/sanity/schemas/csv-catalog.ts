@@ -53,11 +53,48 @@ export const csvCatalog = defineType({
       to: [{ type: "brand" }],
     }),
     defineField({
+      name: "pending_csv",
+      title: "保留中のCSV",
+      description:
+        "まだ「商品CSVインポート」画面で取り込みが確定していないCSV。" +
+        "手元のCSVを事前に置いておく場合と、自動スクレイピングによる生成の場合がある。" +
+        "取り込みを確定すると自動的にクリアされる。" +
+        "ここに保存したCSVは、下の「CSV列マッピング」でのプレビューにもそのまま使われる",
+      type: "object",
+      fields: [
+        defineField({
+          name: "file",
+          title: "CSVファイル",
+          type: "file",
+          options: { accept: ".csv,text/csv" },
+          validation: (r) => r.required(),
+        }),
+        defineField({
+          name: "source",
+          title: "取得経路",
+          description:
+            "スクレイピングの場合はスクリプトが、手動保存の場合は既定値がそのまま使われる。Studio上での直接編集は想定しない",
+          type: "string",
+          options: { list: PENDING_CSV_SOURCE_OPTIONS },
+          initialValue: "manual_upload",
+          validation: (r) => r.required(),
+          readOnly: true,
+        }),
+        defineField({
+          name: "uploaded_at",
+          title: "保存日時",
+          type: "datetime",
+          readOnly: true,
+        }),
+      ],
+      components: { input: PendingCsvInput },
+    }),
+    defineField({
       name: "header_row_number",
       title: "ヘッダー行の行番号",
       description:
         "CSVの先頭に案内文や空行があり、項目名（ヘッダー）が1行目でない場合に指定する（1始まり）。" +
-        "下の「CSV列マッピング」でサンプルCSVをアップロードすると、プレビューから選択できる。通常は1のままでよい",
+        "上の「保留中のCSV」に保存済みのファイルがあれば、下の「CSV列マッピング」のプレビューから選択できる。通常は1のままでよい",
       type: "number",
       initialValue: 1,
       validation: (r) => r.min(1).integer(),
@@ -106,42 +143,6 @@ export const csvCatalog = defineType({
         }),
       ],
       components: { input: CsvColumnMappingInput },
-    }),
-    defineField({
-      name: "pending_csv",
-      title: "保留中のCSV",
-      description:
-        "まだ「商品CSVインポート」画面で取り込みが確定していないCSV。" +
-        "手元のCSVを事前に置いておく場合と、自動スクレイピングによる生成の場合がある。" +
-        "取り込みを確定すると自動的にクリアされる",
-      type: "object",
-      fields: [
-        defineField({
-          name: "file",
-          title: "CSVファイル",
-          type: "file",
-          options: { accept: ".csv,text/csv" },
-          validation: (r) => r.required(),
-        }),
-        defineField({
-          name: "source",
-          title: "取得経路",
-          description:
-            "スクレイピングの場合はスクリプトが、手動保存の場合は既定値がそのまま使われる。Studio上での直接編集は想定しない",
-          type: "string",
-          options: { list: PENDING_CSV_SOURCE_OPTIONS },
-          initialValue: "manual_upload",
-          validation: (r) => r.required(),
-          readOnly: true,
-        }),
-        defineField({
-          name: "uploaded_at",
-          title: "保存日時",
-          type: "datetime",
-          readOnly: true,
-        }),
-      ],
-      components: { input: PendingCsvInput },
     }),
   ],
   preview: {
