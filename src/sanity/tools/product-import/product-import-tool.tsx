@@ -20,7 +20,6 @@ import {
   markPendingCsvImported,
 } from "@/lib/product-import/csv-upload";
 import { describeOrigin } from "@/lib/product-import/unified-product-schema";
-import { FileSelectButton } from "@/sanity/components/file-select-button";
 
 import { useImportPreview } from "./use-import-preview";
 
@@ -42,11 +41,13 @@ interface CsvCatalogOption {
 type Phase = "idle" | "previewing" | "previewed" | "applying" | "applied";
 
 /**
- * CSVアップロード→検証プレビュー→確定を行うSanity Studioカスタムツール（FR-016, FR-019, User Story 1）。
+ * 検証プレビュー→確定を行うSanity Studioカスタムツール（FR-016, FR-019, User Story 1）。
  * ロジックはsrc/lib/product-import/配下の共有関数（csv-adapter・validate-and-preview・apply-import）を
  * そのまま呼び出す。オンデマンド実行時のプレビュー確認（FR-022）とも同じロジックを共有する。
- * 保留中のCSV（pending_csv）は各csvCatalogドキュメントに1件だけ持つ設計（要確認キュー廃止に伴う
- * ユーザーとの協議による簡素化）のため、カタログ選択と同じクエリで一緒に取得する。
+ * CSVは必ず対象csvCatalogの`pending_csv`（保留中のCSV）に事前保存されている前提のため、
+ * このツール自体にはファイル選択UIを持たない（ユーザーとの協議: 商品CSVカタログ側で
+ * 既にアップロード済みのCSVを、ここでもう一度アップロードし直す意味が無いため）。
+ * カタログを選択すると、そのpending_csvを自動的に読み込む。
  */
 export function ProductImportTool() {
   const { client, preview, isLoading, runPreview, reset } = useImportPreview();
@@ -54,14 +55,11 @@ export function ProductImportTool() {
   const [catalogsLoaded, setCatalogsLoaded] = useState(false);
   const [selectedCatalogId, setSelectedCatalogId] = useState<string>("");
   const [csvText, setCsvText] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [applyResult, setApplyResult] = useState<{
     createdCount: number;
     updatedCount: number;
   } | null>(null);
-  const [usingPendingCsv, setUsingPendingCsv] = useState(false);
-  const [isLoadingUpload, setIsLoadingUpload] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,38 +87,24 @@ export function ProductImportTool() {
   }, [client]);
 
   const selectedCatalog = catalogs.find((c) => c._id === selectedCatalogId);
+  const pendingCsv = selectedCatalog?.pendingCsv;
+  const isFetchingCsv = Boolean(pendingCsv) && csvText === null;
 
-  const handleFileChange = useCallback(
-    (file: File) => {
-      setFileName(file.name);
-      setUsingPendingCsv(false);
-      const reader = new FileReader();
-      reader.onload = () => {
-        setCsvText(String(reader.result ?? ""));
-        setPhase("idle");
-        setApplyResult(null);
-        reset();
-      };
-      reader.readAsText(file);
-    },
-    [reset]
-  );
-
-  const handleUsePendingCsv = useCallback(async () => {
-    if (!selectedCatalog?.pendingCsv) return;
-    setPhase("idle");
-    setApplyResult(null);
-    reset();
-    setIsLoadingUpload(true);
-    try {
-      const text = await fetchCsvUploadText(selectedCatalog.pendingCsv.fileUrl);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(
+      pendingCsv ? fetchCsvUploadText(pendingCsv.fileUrl) : null
+    ).then((text) => {
+      if (cancelled) return;
       setCsvText(text);
-      setFileName(selectedCatalog.pendingCsv.fileName);
-      setUsingPendingCsv(true);
-    } finally {
-      setIsLoadingUpload(false);
-    }
-  }, [selectedCatalog, reset]);
+      setPhase("idle");
+      setApplyResult(null);
+      reset();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingCsv, reset]);
 
   const handlePreview = useCallback(async () => {
     if (!csvText || !selectedCatalog?.csv_column_mapping) return;
@@ -150,18 +134,15 @@ export function ProductImportTool() {
         reason: e.reason,
       })),
     });
-    if (usingPendingCsv) {
-      await markPendingCsvImported(client, selectedCatalog._id);
-      setCatalogs((prev) =>
-        prev.map((c) =>
-          c._id === selectedCatalog._id ? { ...c, pendingCsv: undefined } : c
-        )
-      );
-      setUsingPendingCsv(false);
-    }
+    await markPendingCsvImported(client, selectedCatalog._id);
+    setCatalogs((prev) =>
+      prev.map((c) =>
+        c._id === selectedCatalog._id ? { ...c, pendingCsv: undefined } : c
+      )
+    );
     setApplyResult(result);
     setPhase("applied");
-  }, [client, preview, selectedCatalog, usingPendingCsv]);
+  }, [client, preview, selectedCatalog]);
 
   return (
     <Container width={2} padding={4}>
@@ -180,13 +161,14 @@ export function ProductImportTool() {
               </Text>
               <Text size={1} as="li">
                 「商品管理 →
-                商品CSVカタログ」で、CSVファイル1本ごとにドキュメントを作成する。CSV列マッピングでサンプルCSVをアップロードすると、実際の列名をプルダウンから選べる。CSVにブランド列が無いデータは「デフォルトブランド」も設定する
+                商品CSVカタログ」で、「保留中のCSV」に実際のCSVファイルをアップロードして保存する。CSV列マッピングも合わせて設定する
               </Text>
               <Text size={1} as="li">
-                列名がマッピングと一致するCSVファイルを用意する
+                下の「1.
+                商品データソースを選択」でそのカタログを選ぶと、保留中のCSVが自動的に読み込まれる
               </Text>
               <Text size={1} as="li">
-                下の「1. 商品データソースを選択」〜「4.
+                「2. 検証プレビューを表示する」〜「3.
                 実行を確定する」の手順に沿って実行する
               </Text>
               <Text size={1} as="li">
@@ -215,12 +197,6 @@ export function ProductImportTool() {
               disabled={catalogs.length === 0}
               onChange={(event) => {
                 setSelectedCatalogId(event.currentTarget.value);
-                setUsingPendingCsv(false);
-                setCsvText(null);
-                setFileName("");
-                setPhase("idle");
-                setApplyResult(null);
-                reset();
               }}
             >
               <option value="">選択してください</option>
@@ -231,55 +207,38 @@ export function ProductImportTool() {
               ))}
             </Select>
 
-            <Text weight="semibold" size={1}>
-              2. CSVファイルを選択
-            </Text>
-            {selectedCatalog?.pendingCsv && (
-              <>
-                <Text size={1} muted>
-                  保留中のCSV: {selectedCatalog.pendingCsv.fileName}
-                  {selectedCatalog.pendingCsv.uploadedAt &&
-                    ` (${selectedCatalog.pendingCsv.uploadedAt.slice(0, 10)})`}
+            {selectedCatalogId && !pendingCsv && (
+              <Card padding={3} radius={2} tone="caution">
+                <Text size={1}>
+                  このカタログには保留中のCSVがありません。先に「商品管理 →
+                  商品CSVカタログ」でCSVファイルを保存してください。
                 </Text>
-                <Button
-                  text="この保留中のCSVを使う"
-                  mode="ghost"
-                  disabled={isLoadingUpload}
-                  onClick={handleUsePendingCsv}
-                />
-                <Text size={1} muted>
-                  または、ブラウザから直接ファイルを選ぶ
-                </Text>
-              </>
+              </Card>
             )}
-            <FileSelectButton
-              label="CSVファイルを選択"
-              accept=".csv,text/csv"
-              disabled={!selectedCatalogId}
-              onFileSelected={handleFileChange}
-            />
-            {isLoadingUpload && (
+            {isFetchingCsv && (
               <Flex align="center" gap={2}>
-                <Spinner /> <Text size={1}>CSVファイルを取得中...</Text>
+                <Spinner /> <Text size={1}>CSVを読み込み中...</Text>
               </Flex>
             )}
-            {fileName && !isLoadingUpload && (
+            {pendingCsv && csvText !== null && (
               <Text size={1} muted>
-                選択中: {fileName}
+                対象CSV: {pendingCsv.fileName}
+                {pendingCsv.uploadedAt &&
+                  ` (${pendingCsv.uploadedAt.slice(0, 10)})`}
               </Text>
             )}
 
             <Text weight="semibold" size={1}>
-              3. 検証プレビューを表示する
+              2. 検証プレビューを表示する
             </Text>
             <Button
               text="検証プレビューを表示する"
               tone="primary"
-              disabled={!csvText || !selectedCatalogId || isLoading}
+              disabled={!csvText || isLoading}
               onClick={handlePreview}
             />
             <Text muted size={1}>
-              クリックすると、書き込み前に成功見込み・エラー見込み件数が表示されます（下記「4.
+              クリックすると、書き込み前に成功見込み・エラー見込み件数が表示されます（下記「3.
               実行を確定する」を押すまで、Sanity上の商品データは変更されません）。
             </Text>
           </Stack>
@@ -329,7 +288,7 @@ export function ProductImportTool() {
               {preview.outcome === "ok" && (
                 <Box>
                   <Text weight="semibold" size={1}>
-                    4. 実行を確定する
+                    3. 実行を確定する
                   </Text>
                   <Box marginTop={2}>
                     <Button
