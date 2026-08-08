@@ -3,6 +3,11 @@ import { defineField, defineType } from "sanity";
 import { createPlaceholderTextInput } from "./placeholder-text-input";
 import { CsvColumnMappingInput } from "./csv-column-mapping-input";
 
+const PENDING_CSV_SOURCE_OPTIONS = [
+  { title: "手元のCSVファイルを保存", value: "manual_upload" },
+  { title: "スクレイピングによる自動生成", value: "scheduled_scrape" },
+];
+
 /**
  * 商品データ1カタログ分のCSV取り込み設定（specs/004-product-data-import）。
  * CSV提供業者・スクレイピング対象業者のどちらも、書き込み前に必ずCSVを経由する
@@ -15,6 +20,12 @@ import { CsvColumnMappingInput } from "./csv-column-mapping-input";
  * 「1 catalog = 1 ブランド」という前提は置かない。default_brandはあくまで
  * 「この取り込みのデータにブランド情報が無い行への穴埋め」であり、CSVにブランド列があれば
  * 常にそちらが優先される。
+ *
+ * pending_csv: 当初は`productCsvUpload`という別ドキュメント型で「取り込み待ちCSV」を
+ * 管理していたが、情報源から消えた商品を検知する「要確認キュー」機能を廃止したことで、
+ * カタログをまたいだ経時比較の必要が無くなったため、この1フィールドへ統合した
+ * （ユーザーとの協議）。1カタログにつき保留中のCSVは常に最大1件で十分という前提を置き、
+ * 取り込みが確定すると（apply-import経由で）このフィールドはクリアされる。
  */
 export const csvCatalog = defineType({
   name: "csvCatalog",
@@ -94,6 +105,39 @@ export const csvCatalog = defineType({
         }),
       ],
       components: { input: CsvColumnMappingInput },
+    }),
+    defineField({
+      name: "pending_csv",
+      title: "保留中のCSV",
+      description:
+        "まだ「商品CSVインポート」画面で取り込みが確定していないCSV。" +
+        "手元のCSVを事前に置いておく場合と、自動スクレイピングによる生成の場合がある。" +
+        "取り込みを確定すると自動的にクリアされる",
+      type: "object",
+      fields: [
+        defineField({
+          name: "file",
+          title: "CSVファイル",
+          type: "file",
+          options: { accept: ".csv,text/csv" },
+          validation: (r) => r.required(),
+        }),
+        defineField({
+          name: "source",
+          title: "取得経路",
+          type: "string",
+          options: { list: PENDING_CSV_SOURCE_OPTIONS },
+          initialValue: "manual_upload",
+          validation: (r) => r.required(),
+        }),
+        defineField({
+          name: "uploaded_at",
+          title: "保存日時",
+          type: "datetime",
+          initialValue: () => new Date().toISOString(),
+          readOnly: true,
+        }),
+      ],
     }),
   ],
   preview: {
