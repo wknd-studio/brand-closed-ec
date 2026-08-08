@@ -232,17 +232,17 @@ const SECTIONS: Section[] = [
             <StepWithNote note="例:「A社 定期CSV（Nike分）」">
               「表示名」に業者名など分かりやすい名前を入力する
             </StepWithNote>
-            <StepWithNote note="先頭行がプレビュー表示される">
-              「CSV列マッピング」でサンプルCSVをアップロードする
+            <StepWithNote note="CSVにブランド列があれば、そちらが優先される">
+              ブランド列が無いCSVは「デフォルトブランド」を設定する
             </StepWithNote>
-            <StepWithNote note="対応する列が無い項目は空欄でよい">
-              JANコード・商品名・ブランド名・定価・在庫状況・仕入れ掛け率・入数の各列を、プルダウンから選ぶ
+            <StepWithNote note="このファイルがそのまま下の列マッピングのプレビューにも使われる">
+              「保留中のCSV」欄に、その業者の実際のCSVファイルをアップロードする
             </StepWithNote>
             <StepWithNote note="通常はそのまま1でよい">
               先頭に案内文や空行があるCSVは「ヘッダー行の行番号」を設定する
             </StepWithNote>
-            <StepWithNote note="CSVにブランド列があれば、そちらが優先される">
-              ブランド列が無いCSVは「デフォルトブランド」を設定する
+            <StepWithNote note="対応する列が無い項目は空欄でよい">
+              「CSV列マッピング」で、プレビューされた列名からJANコード・商品名・ブランド名・定価・在庫状況・仕入れ掛け率・入数の各項目を選ぶ
             </StepWithNote>
             <Step>右下の「公開（Publish）」を押して保存する</Step>
           </StepList>
