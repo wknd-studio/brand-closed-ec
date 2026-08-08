@@ -1,8 +1,50 @@
+import { useState } from "react";
 import { Box, Card, Container, Heading, Label, Stack, Text } from "@sanity/ui";
 
 interface Section {
   title: string;
   body: React.ReactNode;
+}
+
+/**
+ * 実際の画面のスクリーンショットを表示する。ファイルは`static/product-import-manual/`配下に
+ * 置く運用で、Sanity Studioの開発サーバーは`static/`をそのまま`/static/`で配信する
+ * （設定不要のデフォルト挙動）。まだファイルが無い場合は壊れた画像アイコンではなく
+ * 「未配置」の枠を表示し、あとからファイルを置けば次回表示時に自動的に反映される
+ * （ビルド時のJSインポートではなく、実行時の<img>読み込みで判定しているため、
+ * 存在しないファイルを参照していてもtypecheck/lint/buildは失敗しない）
+ */
+function Screenshot({ filename, alt }: { filename: string; alt: string }) {
+  const [missing, setMissing] = useState(false);
+  if (missing) {
+    return (
+      <Card
+        padding={3}
+        radius={2}
+        tone="transparent"
+        style={{ border: "1px dashed #999" }}
+      >
+        <Text size={0} muted>
+          画像未配置（{filename}を static/product-import-manual/
+          に置くと自動的に表示されます）
+        </Text>
+      </Card>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- Sanity Studio（Next.jsアプリとは別のVite製アプリ）のコードのためnext/imageは使えない
+    <img
+      src={`/static/product-import-manual/${filename}`}
+      alt={alt}
+      style={{
+        maxWidth: "100%",
+        borderRadius: 4,
+        border: "1px solid #d9d9d9",
+        display: "block",
+      }}
+      onError={() => setMissing(true)}
+    />
+  );
 }
 
 /**
@@ -108,6 +150,10 @@ const SECTIONS: Section[] = [
             </StepWithNote>
             <Step>右下の「公開（Publish）」を押して保存する</Step>
           </StepList>
+          <Screenshot
+            filename="brand-new-form.png"
+            alt="ブランドの新規作成フォーム"
+          />
         </SubSection>
 
         <SubSection label="商品を1件作成する">
@@ -128,6 +174,10 @@ const SECTIONS: Section[] = [
               右下の「公開（Publish）」を押して保存する
             </StepWithNote>
           </StepList>
+          <Screenshot
+            filename="product-new-form.png"
+            alt="商品の新規作成フォーム"
+          />
         </SubSection>
 
         <Card padding={4} radius={2} tone="primary">
@@ -196,6 +246,10 @@ const SECTIONS: Section[] = [
             </StepWithNote>
             <Step>右下の「公開（Publish）」を押して保存する</Step>
           </StepList>
+          <Screenshot
+            filename="csv-catalog-mapping.png"
+            alt="商品CSVカタログのCSV列マッピング設定画面"
+          />
         </SubSection>
 
         <SubSection label="手順B: CSVを取り込む（毎回の作業）">
@@ -218,6 +272,16 @@ const SECTIONS: Section[] = [
               「新規作成／更新」の件数が表示されたら完了
             </StepWithNote>
           </StepList>
+          <Stack space={3}>
+            <Screenshot
+              filename="csv-import-preview.png"
+              alt="検証プレビューの表示画面"
+            />
+            <Screenshot
+              filename="csv-import-result.png"
+              alt="インポート完了メッセージ"
+            />
+          </Stack>
         </SubSection>
 
         <Card padding={4} radius={2} tone="critical">
@@ -286,6 +350,10 @@ const SECTIONS: Section[] = [
         <Text size={0} muted>
           監査用の記録のため編集はできません（削除のみ可能です）。
         </Text>
+        <Screenshot
+          filename="import-run-detail.png"
+          alt="インポート実行結果の詳細画面"
+        />
       </Stack>
     ),
   },
