@@ -237,8 +237,9 @@ export function ProductImportTool() {
             {selectedCatalog?.pendingCsv && (
               <>
                 <Text size={1} muted>
-                  保留中のCSV: {selectedCatalog.pendingCsv.fileName} (
-                  {selectedCatalog.pendingCsv.uploadedAt.slice(0, 10)})
+                  保留中のCSV: {selectedCatalog.pendingCsv.fileName}
+                  {selectedCatalog.pendingCsv.uploadedAt &&
+                    ` (${selectedCatalog.pendingCsv.uploadedAt.slice(0, 10)})`}
                 </Text>
                 <Button
                   text="この保留中のCSVを使う"
