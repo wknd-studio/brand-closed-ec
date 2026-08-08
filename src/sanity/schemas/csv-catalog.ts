@@ -125,10 +125,13 @@ export const csvCatalog = defineType({
         defineField({
           name: "source",
           title: "取得経路",
+          description:
+            "スクレイピングの場合はスクリプトが、手動保存の場合は既定値がそのまま使われる。Studio上での直接編集は想定しない",
           type: "string",
           options: { list: PENDING_CSV_SOURCE_OPTIONS },
           initialValue: "manual_upload",
           validation: (r) => r.required(),
+          readOnly: true,
         }),
         defineField({
           name: "uploaded_at",
