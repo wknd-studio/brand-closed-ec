@@ -53,8 +53,15 @@ test.describe.serial("認証済みアクセス", () => {
     await cleanupTestUser(TEST_EMAIL);
   });
 
-  test("onboarding_completed=false のユーザーは /onboarding/plan へリダイレクトされる", async () => {
+  test("onboarding_completed=false のユーザーは /onboarding/account-type へリダイレクトされる", async () => {
     await page.goto("/shop");
+    await expect(page).toHaveURL(/\/onboarding\/account-type/);
+  });
+
+  test("個人として登録を選ぶと /onboarding/plan に進む", async () => {
+    await page.goto("/onboarding/account-type");
+    await page.getByRole("radio", { name: /個人として登録/ }).check();
+    await page.getByRole("button", { name: /次へ/ }).click();
     await expect(page).toHaveURL(/\/onboarding\/plan/);
   });
 
