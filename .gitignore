@@ -64,3 +64,6 @@ test-results/
 
 # Wrangler
 .wrangler/
+
+*storybook.log
+storybook-static

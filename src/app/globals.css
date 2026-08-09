@@ -16,6 +16,25 @@
   --color-brand-primary: var(--brand-primary, var(--color-foreground));
   --color-brand-accent: var(--brand-accent, var(--color-foreground));
   --font-brand: var(--brand-font, var(--font-sans));
+
+  /* Neutral階調。ボーダー・背景・非活性テキスト等、ブランドに依存しない灰色トーンに使う */
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-200: #e5e5e5;
+  --color-neutral-300: #d4d4d4;
+  --color-neutral-400: #a3a3a3;
+  --color-neutral-500: #737373;
+  --color-neutral-600: #525252;
+  --color-neutral-700: #404040;
+  --color-neutral-800: #262626;
+  --color-neutral-900: #171717;
+
+  /* セマンティックカラー。サイト全体で固定の意味を持つ色（--color-brand-*とは異なりブランドごとに上書きされない） */
+  --color-primary: #171717;
+  --color-secondary: #525252;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
 }
 
 @media (prefers-color-scheme: dark) {
