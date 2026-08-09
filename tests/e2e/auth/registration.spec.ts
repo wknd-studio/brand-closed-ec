@@ -33,6 +33,10 @@ test.describe("実際の登録画面を経由した新規会員登録", () => {
     await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await page.getByRole("button", { name: "Continue" }).click();
 
+    await expect(page).toHaveURL(/\/onboarding\/account-type/);
+    await page.getByRole("radio", { name: /個人として登録/ }).check();
+    await page.getByRole("button", { name: /次へ/ }).click();
+
     await expect(page).toHaveURL(/\/onboarding\/plan/);
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();

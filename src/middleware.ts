@@ -80,7 +80,7 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (!data?.onboarding_completed) {
-    return NextResponse.redirect(new URL("/onboarding/plan", req.url));
+    return NextResponse.redirect(new URL("/onboarding/account-type", req.url));
   }
 });
 

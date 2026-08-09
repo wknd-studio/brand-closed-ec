@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import { RANK_ORDER } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
@@ -32,10 +33,14 @@ export async function selectPlan(
   const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
+  const organizationId = formData.get("organizationId");
+
   const user = await currentUser();
   const email = user?.emailAddresses[0]?.emailAddress ?? "";
   const firstName = user?.firstName ?? "";
   const lastName = user?.lastName ?? "";
+
+  const db = createAdminClient();
 
   try {
     const result = await selectPlanUseCase(
@@ -46,10 +51,12 @@ export async function selectPlan(
         lastName,
         plan,
         termsVersion: TERMS_VERSION,
+        organizationId: organizationId ? String(organizationId) : undefined,
       },
       {
-        userRepo: new SupabaseUserRepository(createAdminClient()),
+        userRepo: new SupabaseUserRepository(db),
         accountGateway: new ClerkAccountGateway(),
+        organizationRepo: new SupabaseOrganizationRepository(db),
       }
     );
     return result;

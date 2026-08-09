@@ -5,9 +5,11 @@ import { SPAN_OP } from "@/lib/observability/span";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
 import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
+import { completeOrganizationSubscriptionOnboarding } from "@/use-cases/complete-organization-subscription-onboarding";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
@@ -66,6 +68,7 @@ export async function POST(req: Request) {
     } else if (session.mode === "subscription") {
       const clerkUserId = session.metadata?.clerk_user_id;
       const plan = session.metadata?.plan as MemberRankValue | undefined;
+      const organizationId = session.metadata?.organization_id;
 
       if (!clerkUserId || !plan) {
         return NextResponse.json(
@@ -75,22 +78,48 @@ export async function POST(req: Request) {
       }
 
       try {
-        await Sentry.startSpan(
-          { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
-          () =>
-            completeSubscriptionOnboarding(
-              {
-                clerkUserId,
-                plan,
-                stripeCustomerId: session.customer as string,
-                stripeSubscriptionId: session.subscription as string,
-              },
-              {
-                userRepo: new SupabaseUserRepository(createAdminClient()),
-                accountGateway: new ClerkAccountGateway(),
-              }
-            )
-        );
+        if (organizationId) {
+          await Sentry.startSpan(
+            {
+              name: "completeOrganizationSubscriptionOnboarding",
+              op: SPAN_OP.webhook,
+            },
+            () =>
+              completeOrganizationSubscriptionOnboarding(
+                {
+                  organizationId,
+                  clerkUserId,
+                  plan,
+                  stripeCustomerId: session.customer as string,
+                  stripeSubscriptionId: session.subscription as string,
+                },
+                {
+                  organizationRepo: new SupabaseOrganizationRepository(
+                    createAdminClient()
+                  ),
+                  userRepo: new SupabaseUserRepository(createAdminClient()),
+                  accountGateway: new ClerkAccountGateway(),
+                }
+              )
+          );
+        } else {
+          await Sentry.startSpan(
+            { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
+            () =>
+              completeSubscriptionOnboarding(
+                {
+                  clerkUserId,
+                  plan,
+                  stripeCustomerId: session.customer as string,
+                  stripeSubscriptionId: session.subscription as string,
+                },
+                {
+                  userRepo: new SupabaseUserRepository(createAdminClient()),
+                  accountGateway: new ClerkAccountGateway(),
+                }
+              )
+          );
+        }
       } catch (err) {
         Sentry.captureException(err, {
           tags: { webhook: "stripe", eventType: event.type },
@@ -98,6 +127,7 @@ export async function POST(req: Request) {
             stripeCheckoutSessionId: session.id,
             eventId: event.id,
             clerkUserId,
+            organizationId,
           },
         });
         console.error("[Stripe Webhook] サブスクリプション更新失敗:", err);
