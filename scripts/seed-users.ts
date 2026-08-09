@@ -9,6 +9,8 @@
  * 実行:
  *   task supabase:seed-users        （dev config → ローカルDB）
  *   doppler run -c stg -- pnpm tsx scripts/seed-users.ts  （stg config → stg Supabase）
+ *
+ * 投入するアカウント一覧: docs/seed-data.md
  */
 import { createClerkClient, type User } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
