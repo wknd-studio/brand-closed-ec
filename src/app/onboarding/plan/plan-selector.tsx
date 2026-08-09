@@ -75,16 +75,22 @@ export default function PlanSelector({
           <p className="text-sm font-medium">ご本人情報</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium">姓</label>
+              <label htmlFor="lastName" className="block text-sm font-medium">
+                姓
+              </label>
               <input
+                id="lastName"
                 name="lastName"
                 required
                 className="mt-1 w-full rounded border p-2"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">名</label>
+              <label htmlFor="firstName" className="block text-sm font-medium">
+                名
+              </label>
               <input
+                id="firstName"
                 name="firstName"
                 required
                 className="mt-1 w-full rounded border p-2"
@@ -92,8 +98,11 @@ export default function PlanSelector({
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium">電話番号</label>
+            <label htmlFor="phoneNumber" className="block text-sm font-medium">
+              電話番号
+            </label>
             <input
+              id="phoneNumber"
               name="phoneNumber"
               required
               placeholder="09012345678"
