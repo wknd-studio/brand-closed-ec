@@ -1,13 +1,14 @@
 # 会員登録フロー
 
-> ⚠️ **現状の実装について**: 本ドキュメントの「Free プラン」分岐は現在のコード実装と一致している。`service-spec.md` は7ランクモデル（STARTER〜ENTERPRISE、Free ランクなし）に更新済みだが、コード側の移行は未着手（[BRAND-97](https://linear.app/wknd-studio/issue/BRAND-97)）。移行完了後に本ドキュメントも更新すること。
+> 本ドキュメントは spec 005（法人会員/B2B対応）のPhase 3実装時点（個人セルフサインアップ〜プラン選択〜Stripe決済、および法人セルフサインアップ〜組織作成〜プラン選択〜Stripe決済）の実装を反映している。7ランクモデル（STARTER〜ENTERPRISE）準拠。
 
 ## 前提
 
-- **招待制**: 管理者が招待メールを送った人のみ会員登録できる
-- **Clerk Restricted signup mode**: 招待リンク経由以外のサインアップをブロック
-- **3フェーズ構成**: 利用規約同意 → Clerk アカウント作成 → オンボーディング（プラン選択）
-- **Webhook による非同期処理**: Clerk の `user.created` イベントを受け取って Supabase にユーザーレコードを作成する
+- **招待制**: 管理者が招待メールを送った人のみ会員登録できる（Clerk Restricted signup mode）
+- **個人/法人の選択**: サインアップ完了直後に個人・法人のどちらとして利用するかを選ぶ（`next.config.ts`の`NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL`で`/onboarding/account-type`へ強制遷移）
+- **個人・法人は排他**: 1ユーザーが個人会員としての会員ランクと法人組織メンバーとしての所属を両方持つことはない（FR-022）
+- **決済は個人・法人で共通**: どちらもStripe Checkoutで初期費用・月額費用を決済する。決済完了はStripe Webhook（`checkout.session.completed`）で非同期に確定する
+- **Webhookによる非同期処理**: Clerkの`user.created`イベントでSupabaseに仮ユーザーレコードを作成する（ベストエフォート配信のため、各Server Action側でも整合性を保証する）
 
 ---
 
@@ -15,30 +16,40 @@
 
 ```mermaid
 flowchart TD
-    A["管理者: /admin/invitations"] --> B["メールアドレスを入力して招待送信"]
-    B --> C["Clerk: createInvitation()\nredirectUrl=/welcome\n招待メールを送信"]
-    C --> D["ユーザー: メールのリンクをクリック"]
-    D --> E["/welcome?__clerk_ticket=xxx\n利用規約を表示"]
-    E --> F{"利用規約に同意する"}
-    F -- 同意しない --> E
-    F -- 同意する --> G["/sign-up?__clerk_ticket=xxx へリダイレクト"]
-    G --> H["Clerk がアカウントを作成\nメール認証済み（__clerk_ticket で保証）"]
-    H --> I["Clerk が user.created を発火"]
-    I --> J["Webhook 処理\nSupabase に仮ユーザーレコードを作成"]
-    H --> K["middleware がオンボーディング未完了を検出"]
-    K --> L["/onboarding/plan へリダイレクト"]
-    L --> M["プランを選択\nfree / entry / standard / pro"]
-    M --> N["selectPlan Server Action"]
-    N --> O["Supabase: users を upsert\nrank, terms_agreed_at, terms_version, onboarding_completed"]
-    O --> P["Clerk publicMetadata を更新\nonboarding_completed を更新"]
-    P --> Q{"プランは free か？"}
-    Q -- はい --> R["/shop へリダイレクト\n登録完了"]
-    Q -- いいえ --> S["/onboarding/payment へリダイレクト\n決済情報登録 フェーズ2"]
+    A["管理者: /admin/invitations"] --> B["招待メール送信"]
+    B --> C["ユーザー: 招待リンクをクリック"]
+    C --> D["/welcome: 利用規約に同意"]
+    D --> E["/sign-up: パスワード設定"]
+    E --> F["Clerkがuser.createdを発火\n（Webhookでusersレコードを仮作成）"]
+    F --> G["/onboarding/account-type\n個人/法人を選択"]
+
+    G -- 個人として登録 --> H["/onboarding/plan\nプラン選択"]
+    H --> I["selectPlan\nusers.rankを仮保存"]
+    I --> J["/onboarding/payment\nStripe Checkout"]
+
+    G -- 法人として登録 --> K["/onboarding/organization\n会社情報・インボイス番号を入力"]
+    K --> L["createOrganization\n組織作成 + Clerk Organizations API\n作成者をorg:adminで登録"]
+    L --> M["/onboarding/plan?organizationId=...\nプラン選択"]
+    M --> N["selectPlan（組織版）\norganizations.rankを仮保存"]
+    N --> O["/onboarding/payment?organizationId=...\nStripe Checkout"]
+
+    J --> P["Stripe Checkout画面で決済"]
+    O --> P
+    P --> Q{"決済完了"}
+    Q -- 成功 --> R["Webhook: checkout.session.completed"]
+    Q -- キャンセル --> S["/onboarding/payment/cancel\nプラン選択に戻る"]
+
+    R --> T{"metadataにorganization_idがあるか"}
+    T -- なし（個人） --> U["completeSubscriptionOnboarding\nusers.onboarding_completed=true"]
+    T -- あり（法人） --> V["completeOrganizationSubscriptionOnboarding\norganizations.onboarding_completed=true\n代表者のusers.onboarding_completed=true"]
+
+    U --> W["/shop へアクセス可能に"]
+    V --> W
 ```
 
 ---
 
-## フェーズ 1: 招待送信（管理者）
+## フェーズ1: 招待送信（管理者）
 
 ```mermaid
 sequenceDiagram
@@ -57,7 +68,7 @@ sequenceDiagram
 
 ---
 
-## フェーズ 2: 利用規約同意 & サインアップ
+## フェーズ2: 利用規約同意・サインアップ・アカウント種別選択
 
 ```mermaid
 sequenceDiagram
@@ -65,20 +76,28 @@ sequenceDiagram
     participant Welcome as /welcome
     participant Signup as /sign-up
     participant Clerk
+    participant AccountType as /onboarding/account-type
 
-    ユーザー->>Welcome: メールの招待リンクをクリック（__clerk_ticket 付き）
+    ユーザー->>Welcome: 招待リンクをクリック（__clerk_ticket付き）
     Welcome-->>ユーザー: 利用規約を表示
-    ユーザー->>Welcome: チェックボックスに同意して送信
+    ユーザー->>Welcome: 同意して送信
     Welcome-->>ユーザー: /sign-up?__clerk_ticket=xxx へリダイレクト
     ユーザー->>Signup: パスワードを入力して登録
-    Signup->>Clerk: サインアップリクエスト（__clerk_ticket で認証済み）
-    Clerk-->>ユーザー: 認証完了・セッション発行
+    Signup->>Clerk: サインアップ完了（__clerk_ticketで認証済み）
     Clerk-->>Clerk: user.created イベントを発火
+    Clerk-->>ユーザー: NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URLに従い/onboarding/account-typeへ
+
+    ユーザー->>AccountType: 個人/法人を選択して送信
+    alt 個人として登録
+        AccountType-->>ユーザー: /onboarding/plan へ
+    else 法人として登録
+        AccountType-->>ユーザー: /onboarding/organization へ
+    end
 ```
 
 ---
 
-## フェーズ 3: Webhook 処理（非同期）
+## フェーズ3: Webhook処理（Clerk user.created、非同期）
 
 ```mermaid
 sequenceDiagram
@@ -87,71 +106,124 @@ sequenceDiagram
     participant DB as Supabase
 
     Clerk->>Webhook: POST user.created
-    Webhook->>Webhook: svix 署名を検証
+    Webhook->>Webhook: svix署名を検証
     alt 署名が不正
         Webhook-->>Clerk: 400 Bad Request
     else 署名が正常
-        Webhook->>DB: users テーブルに INSERT rank=free, onboarding_completed=false
+        Webhook->>DB: usersテーブルにINSERT rank=starter, onboarding_completed=false
         Webhook-->>Clerk: 200 OK
     end
 ```
 
-> **Note:** Webhook はベストエフォート配信のため、`selectPlan` でも `users` を upsert することで整合性を保証している。
+> **Note:** Webhookはベストエフォート配信のため、`selectPlan`・`createOrganization`側でも`users`が存在しなければその場で作成することで整合性を保証している（法人登録はWebhook到達前にusersレコードへアクセスし得るため、特に重要）。
 
 ---
 
-## フェーズ 4: オンボーディング（プラン選択）
+## フェーズ4a: 個人 — プラン選択・決済
 
 ```mermaid
 sequenceDiagram
     actor ユーザー
-    participant MW as middleware
-    participant Onboarding as /onboarding/plan
+    participant Plan as /onboarding/plan
     participant Action as selectPlan
+    participant Payment as /onboarding/payment
+    participant Stripe
+    participant Webhook as /api/webhooks/stripe
     participant DB as Supabase
-    participant Clerk
 
-    ユーザー->>MW: 認証済みページへアクセス
-    MW->>MW: sessionClaims.metadata.onboarding_completed を確認
-    MW-->>ユーザー: /onboarding/plan へリダイレクト
+    ユーザー->>Plan: プランを選択して送信
+    Plan->>Action: selectPlan
+    Action->>DB: users.rankを保存（onboarding_completed=false）
+    Action-->>ユーザー: /onboarding/payment?plan=xxx へ
 
-    ユーザー->>Onboarding: ページを開く
-    Onboarding-->>ユーザー: プラン選択 UI を表示
-    ユーザー->>Onboarding: プランを選択して送信
-    Onboarding->>Action: selectPlan
-    Action->>DB: users を upsert rank, terms_agreed_at=now(), terms_version, onboarding_completed
-    Action->>Clerk: publicMetadata 更新 onboarding_completed=true または false
-    alt Free プラン
-        Action-->>ユーザー: /shop へリダイレクト（登録完了）
-    else 有料プラン
-        Action-->>ユーザー: /onboarding/payment へリダイレクト（フェーズ2）
-    end
+    ユーザー->>Payment: ページを開く
+    Payment->>Stripe: Checkout Session作成\nmetadata: { clerk_user_id, plan }
+    Payment-->>ユーザー: Stripe Checkout画面へリダイレクト
+    ユーザー->>Stripe: 決済情報を入力
+    Stripe-->>ユーザー: /onboarding/payment/success へ
+
+    Stripe->>Webhook: checkout.session.completed
+    Webhook->>Webhook: completeSubscriptionOnboarding
+    Webhook->>DB: users.stripe_customer_id, stripe_subscription_id, onboarding_completed=true
+    Webhook-->>Stripe: 200 OK
 ```
+
+---
+
+## フェーズ4b: 法人 — 組織作成・プラン選択・決済
+
+```mermaid
+sequenceDiagram
+    actor 代表者
+    participant Org as /onboarding/organization
+    participant CreateOrg as createOrganization
+    participant Clerk
+    participant Plan as /onboarding/plan
+    participant Action as selectPlan（組織版）
+    participant Payment as /onboarding/payment
+    participant Stripe
+    participant Webhook as /api/webhooks/stripe
+    participant DB as Supabase
+
+    代表者->>Org: 会社名・代表者名・所在地・電話番号・\nインボイス番号を入力して送信
+    Org->>CreateOrg: createOrganization
+    CreateOrg->>CreateOrg: インボイス番号の形式検証（T+13桁）
+    CreateOrg->>DB: 会社名の重複チェック
+    CreateOrg->>DB: usersレコードが無ければ作成\n（Webhook未到達対策）
+    CreateOrg->>Clerk: 組織作成API
+    CreateOrg->>DB: organizations作成\norganization_membershipsに\norg:adminとして登録
+    CreateOrg-->>代表者: /onboarding/plan?organizationId=xxx へ
+
+    代表者->>Plan: プランを選択して送信
+    Plan->>Action: selectPlan（organizationId指定）
+    Action->>DB: organizations.rankを保存（onboarding_completed=false）
+    Action-->>代表者: /onboarding/payment?plan=xxx&organizationId=yyy へ
+
+    代表者->>Payment: ページを開く
+    Payment->>Stripe: Checkout Session作成\nmetadata: { clerk_user_id, plan, organization_id }
+    Payment-->>代表者: Stripe Checkout画面へリダイレクト
+    代表者->>Stripe: 決済情報を入力
+    Stripe-->>代表者: /onboarding/payment/success へ
+
+    Stripe->>Webhook: checkout.session.completed
+    Webhook->>Webhook: completeOrganizationSubscriptionOnboarding
+    Webhook->>DB: organizations.stripe_customer_id, stripe_subscription_id,\norganizations.onboarding_completed=true
+    Webhook->>DB: 代表者のusers.onboarding_completed=true
+    Webhook-->>Stripe: 200 OK
+```
+
+以降、組織に所属する一般担当者は個人としての会員ランク・月次上限を持たず、組織のランク・月次上限を共有する（`resolveMemberContext`経由、FR-022/FR-024）。
 
 ---
 
 ## ルーティングと公開範囲
 
-| パス                     | 認証                                         | 説明                             |
-| ------------------------ | -------------------------------------------- | -------------------------------- |
-| `/welcome`               | 不要（`__clerk_ticket` で招待を検証）        | 利用規約同意ページ               |
-| `/sign-up`               | 不要（Restricted mode で招待リンクのみ有効） | Clerk サインアップページ         |
-| `/sign-in`               | 不要（公開）                                 | Clerk サインインページ           |
-| `/onboarding/plan`       | 必要                                         | プラン選択                       |
-| `/admin/invitations`     | 必要（admin ロール）                         | 招待送信ページ                   |
-| `/api/admin/invitations` | 必要（admin ロール）                         | 招待送信 API                     |
-| `/api/webhooks/clerk`    | 不要（svix 署名で検証）                      | Clerk Webhook 受信エンドポイント |
-| `/shop`                  | 必要 + onboarding_completed=true             | ショップ本体                     |
+| パス                       | 認証                                        | 説明                                                 |
+| -------------------------- | ------------------------------------------- | ---------------------------------------------------- |
+| `/welcome`                 | 不要（`__clerk_ticket`で招待を検証）        | 利用規約同意ページ                                   |
+| `/sign-up`                 | 不要（Restricted modeで招待リンクのみ有効） | Clerkサインアップページ                              |
+| `/sign-in`                 | 不要（公開）                                | Clerkサインインページ                                |
+| `/onboarding/account-type` | 必要                                        | 個人/法人選択                                        |
+| `/onboarding/plan`         | 必要                                        | プラン選択（個人・法人共通、`organizationId`で分岐） |
+| `/onboarding/organization` | 必要                                        | 法人情報入力                                         |
+| `/onboarding/payment`      | 必要                                        | Stripe Checkoutへのリダイレクト中継                  |
+| `/admin/invitations`       | 必要（adminロール）                         | 招待送信ページ                                       |
+| `/api/admin/invitations`   | 必要（adminロール）                         | 招待送信API                                          |
+| `/api/webhooks/clerk`      | 不要（svix署名で検証）                      | Clerk Webhook受信エンドポイント                      |
+| `/api/webhooks/stripe`     | 不要（Stripe署名で検証）                    | Stripe Webhook受信エンドポイント                     |
+| `/shop`                    | 必要 + `onboarding_completed=true`          | ショップ本体                                         |
 
 ---
 
 ## 設計決定事項
 
-| #   | 項目                                   | 決定内容                                                                                                                                                                                                |
-| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | アクセス制限                           | Clerk の Restricted signup mode で招待リンク以外のサインアップをブロック                                                                                                                                |
-| 2   | 利用規約同意のタイミング               | サインアップ前（`/welcome`）で同意を取得。同意日時を URL パラメータで `/sign-up` へ渡し、オンボーディング完了時に DB へ記録                                                                             |
-| 3   | terms_agreed_at の記録タイミング       | `/welcome` でユーザーが同意し、`selectPlan` 実行時刻を `terms_agreed_at` として DB に記録。Restricted mode により招待フロー（`/welcome`）を経由しないサインアップはブロックされるため整合性を保証できる |
-| 4   | Webhook と Server Action の二重 upsert | Webhook はベストエフォート配信のため、`selectPlan` でも `users` を upsert して整合性を保証                                                                                                              |
-| 5   | onboarding_completed フラグ            | Clerk の `publicMetadata` に保持し middleware で参照。free プランは即 `true`、有料プランは決済完了後に `true`（フェーズ2）                                                                              |
-| 6   | 有料プランの決済                       | `/onboarding/payment` での Stripe 決済フローはフェーズ2で実装                                                                                                                                           |
+| #   | 項目                                 | 決定内容                                                                                                                                                                   |
+| --- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | アクセス制限                         | ClerkのRestricted signup modeで招待リンク以外のサインアップをブロック                                                                                                      |
+| 2   | サインアップ直後の遷移先             | `next.config.ts`の`NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL`で`/onboarding/account-type`を指定（Clerk Dashboardの設定ではない）                                        |
+| 3   | 個人/法人の判定                      | `organization_memberships`に自分のレコードが1件でもあるかで判定。動的な切り替えは発生しない（FR-022）                                                                      |
+| 4   | Webhookと Server Action の二重upsert | Webhookはベストエフォート配信のため、`selectPlan`・`createOrganization`でも`users`をupsert/作成して整合性を保証                                                            |
+| 5   | onboarding_completedフラグ           | 個人・法人ともにStripe決済完了（`checkout.session.completed`）まで`false`のまま。決済前にrankだけ仮保存し、確定はWebhook側で行う                                           |
+| 6   | 法人のStripe決済                     | 個人会員と同じくCheckout Sessionで初期費用・月額費用を決済する。`organizations`テーブルに`stripe_customer_id`/`stripe_subscription_id`を保持                               |
+| 7   | 法人登録時のusersレコード未作成対策  | 法人登録は個人の`selectPlan`を経由しないため、`user.created`Webhook到達前に`createOrganization`が呼ばれる可能性がある。その場でusersレコードを作成するフォールバックを持つ |
+| 8   | Webhook冪等性                        | `completeSubscriptionOnboarding`・`completeOrganizationSubscriptionOnboarding`はいずれも、既に`onboarding_completed=true`なら早期returnし再配信に対して冪等                |
