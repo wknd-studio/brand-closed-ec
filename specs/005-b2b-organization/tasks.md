@@ -31,24 +31,24 @@
 
 **⚠️ CRITICAL**: このフェーズが完了するまで、どのUser Storyの実装にも着手できない
 
-- [ ] T003 Migration: `organizations`テーブル・`organization_memberships`テーブルを作成する in `supabase/migrations/<timestamp>_create_organizations.sql`（data-model.md参照。会社名・代表者名・所在地・電話番号・invoice_registration_number・rank・billing_anchor_day等・onboarding_completedを含む）
-- [ ] T004 [P] Migration: `orders`テーブルに`organization_id`・`requested_by_user_id`・`approval_status`・`approved_by_user_id`・`approved_at`列を追加し、`order_status` ENUMに`pending_approval`を追加する in `supabase/migrations/<timestamp>_add_organization_columns_to_orders.sql`
-- [ ] T005 [P] Migration: `addresses`テーブルに`organization_id`列（nullable）を追加する in `supabase/migrations/<timestamp>_add_organization_id_to_addresses.sql`
-- [ ] T006 [P] Migration: `users`テーブルに`phone_number`・`profile_completed_at`列を追加する in `supabase/migrations/<timestamp>_add_profile_columns_to_users.sql`
-- [ ] T007 Migration: `get_current_org_id()`関数の新設、および`organizations`/`organization_memberships`/`orders`/`addresses`のRLSポリシーを組織スコープに対応させる in `supabase/migrations/<timestamp>_add_organization_rls_policies.sql`（依存: T003-T006）
-- [ ] T008 `supabase db reset`でローカルDBに全マイグレーションを適用し、`supabase gen types typescript --local > src/types/database.types.ts`で型を再生成する（依存: T003-T007）
-- [ ] T009 [P] `User`ドメインエンティティに`firstName`・`lastName`・`phoneNumber`フィールドを追加する in `src/domain/entities/user.ts`（既存不備の是正、research.md R9）
-- [ ] T010 [P] `UserRepository`実装を修正し、`first_name`/`last_name`/`phone_number`のDBマッピングを追加する in `src/infrastructure/supabase/supabase-user-repository.ts`
-- [ ] T011 [P] `Organization`ドメインエンティティを新設する in `src/domain/entities/organization.ts`（`getMonthlyPeriod()`/`getMonthlyLimit()`/`isClosed()`。data-model.md参照）
-- [ ] T012 [P] `OrderStatus`値オブジェクトに`pending_approval`を追加する in `src/domain/value-objects/order-status.ts`
-- [ ] T013 [P] `ApprovalStatus`値オブジェクトを新設する in `src/domain/value-objects/approval-status.ts`（auto_approved/pending_approval/approved/rejected）
-- [ ] T014 [P] 組織関連のドメインエラーを新設する in `src/domain/errors/organization-errors.ts`（`SoleAdminCannotLeaveError`等）と `src/domain/errors/invalid-invoice-registration-number-error.ts`
-- [ ] T015 [P] `OrganizationRepository`・`OrganizationMembershipRepository`インターフェースを新設する in `src/repositories/organization-repository.ts`, `src/repositories/organization-membership-repository.ts`
-- [ ] T016 `SupabaseOrganizationRepository`・`SupabaseOrganizationMembershipRepository`を実装する in `src/infrastructure/supabase/supabase-organization-repository.ts`, `src/infrastructure/supabase/supabase-organization-membership-repository.ts`（依存: T011, T015）
-- [ ] T017 `ClerkOrganizationGateway`を新設する in `src/infrastructure/clerk/clerk-organization-gateway.ts`（`createOrganization`/`inviteMember`等、Clerk Organizations APIラッパー）
-- [ ] T018 ランク参照を一元化する`resolveMemberContext`を新設する in `src/domain/services/member-context-resolver.ts`（依存: T009, T011。research.md R11・contracts/server-actions.md参照）
-- [ ] T019 [P] Unit test: T009-T014のドメイン追加分（`Organization`エンティティ、`ApprovalStatus`、`OrderStatus.pending_approval`、`resolveMemberContext`）in `tests/unit/organization-entity.test.ts`, `tests/unit/approval-status.test.ts`, `tests/unit/member-context-resolver.test.ts`
-- [ ] T020 Integration test: 組織スコープのRLSアクセス制御（実DB。他組織のデータに一切アクセスできないことを検証、FR-014）in `tests/integration/use-cases/organization-scoped-access.test.ts`（依存: T007, T008）
+- [x] T003 Migration: `organizations`テーブル・`organization_memberships`テーブルを作成する in `supabase/migrations/<timestamp>_create_organizations.sql`（data-model.md参照。会社名・代表者名・所在地・電話番号・invoice_registration_number・rank・billing_anchor_day等・onboarding_completedを含む）
+- [x] T004 [P] Migration: `orders`テーブルに`organization_id`・`requested_by_user_id`・`approval_status`・`approved_by_user_id`・`approved_at`列を追加し、`order_status` ENUMに`pending_approval`を追加する in `supabase/migrations/<timestamp>_add_organization_columns_to_orders.sql`
+- [x] T005 [P] Migration: `addresses`テーブルに`organization_id`列（nullable）を追加する in `supabase/migrations/<timestamp>_add_organization_id_to_addresses.sql`
+- [x] T006 [P] Migration: `users`テーブルに`phone_number`・`profile_completed_at`列を追加する in `supabase/migrations/<timestamp>_add_profile_columns_to_users.sql`
+- [x] T007 Migration: `get_current_org_id()`関数の新設、および`organizations`/`organization_memberships`/`orders`/`addresses`のRLSポリシーを組織スコープに対応させる in `supabase/migrations/<timestamp>_add_organization_rls_policies.sql`（依存: T003-T006）
+- [x] T008 `supabase db reset`でローカルDBに全マイグレーションを適用し、`supabase gen types typescript --local > src/types/database.types.ts`で型を再生成する（依存: T003-T007）
+- [x] T009 [P] `User`ドメインエンティティに`firstName`・`lastName`・`phoneNumber`フィールドを追加する in `src/domain/entities/user.ts`（既存不備の是正、research.md R9）
+- [x] T010 [P] `UserRepository`実装を修正し、`first_name`/`last_name`/`phone_number`のDBマッピングを追加する in `src/infrastructure/supabase/supabase-user-repository.ts`
+- [x] T011 [P] `Organization`ドメインエンティティを新設する in `src/domain/entities/organization.ts`（`getMonthlyPeriod()`/`getMonthlyLimit()`/`isClosed()`。data-model.md参照）
+- [x] T012 [P] `OrderStatus`値オブジェクトに`pending_approval`を追加する in `src/domain/value-objects/order-status.ts`
+- [x] T013 [P] `ApprovalStatus`値オブジェクトを新設する in `src/domain/value-objects/approval-status.ts`（auto_approved/pending_approval/approved/rejected）
+- [x] T014 [P] 組織関連のドメインエラーを新設する in `src/domain/errors/organization-errors.ts`（`SoleAdminCannotLeaveError`等）と `src/domain/errors/invalid-invoice-registration-number-error.ts`
+- [x] T015 [P] `OrganizationRepository`・`OrganizationMembershipRepository`インターフェースを新設する in `src/repositories/organization-repository.ts`, `src/repositories/organization-membership-repository.ts`
+- [x] T016 `SupabaseOrganizationRepository`・`SupabaseOrganizationMembershipRepository`を実装する in `src/infrastructure/supabase/supabase-organization-repository.ts`, `src/infrastructure/supabase/supabase-organization-membership-repository.ts`（依存: T011, T015）
+- [x] T017 `ClerkOrganizationGateway`を新設する in `src/infrastructure/clerk/clerk-organization-gateway.ts`（`createOrganization`/`inviteMember`等、Clerk Organizations APIラッパー）
+- [x] T018 ランク参照を一元化する`resolveMemberContext`を新設する in `src/domain/services/member-context-resolver.ts`（依存: T009, T011。research.md R11・contracts/server-actions.md参照）
+- [x] T019 [P] Unit test: T009-T014のドメイン追加分（`Organization`エンティティ、`ApprovalStatus`、`OrderStatus.pending_approval`、`resolveMemberContext`）in `tests/unit/organization-entity.test.ts`, `tests/unit/approval-status.test.ts`, `tests/unit/member-context-resolver.test.ts`
+- [x] T020 Integration test: 組織スコープのRLSアクセス制御（実DB。他組織のデータに一切アクセスできないことを検証、FR-014）in `tests/integration/use-cases/organization-scoped-access.test.ts`（依存: T007, T008）
 
 **Checkpoint**: 基盤完成。以降のUser Storyは並行着手可能
 
@@ -62,13 +62,13 @@
 
 ### Implementation for User Story 1
 
-- [ ] T021 [US1] `CreateOrganizationUseCase`を実装する in `src/use-cases/create-organization.ts`（会社名・代表者名・所在地・電話番号・インボイス番号のバリデーション、組織作成、作成者をorg:adminとして登録。依存: T016, T017, T014）
-- [ ] T022 [US1] サインアップ後の「個人/法人」選択画面を実装する in `src/app/onboarding/account-type/page.tsx`, `src/app/onboarding/account-type/actions.ts`（FR-001）
-- [ ] T023 [US1] 法人情報入力フォームを実装する in `src/app/onboarding/organization/page.tsx`, `src/app/onboarding/organization/actions.ts`（FR-002。依存: T021）
-- [ ] T024 [US1] `select-plan.ts`を拡張し、法人組織のプラン選択時は`organizations.rank`・`organizations.onboarding_completed`を更新するようにする in `src/use-cases/select-plan.ts`（依存: T011, T016）
-- [ ] T025 [US1] Unit test: `CreateOrganizationUseCase`（インボイス番号の形式検証、会社名重複等）in `tests/unit/use-cases/create-organization.test.ts`
-- [ ] T026 [US1] Integration test: 法人組織作成〜プラン選択〜1人での発注までの一連のユースケース（実DB）in `tests/integration/use-cases/organization-onboarding.test.ts`
-- [ ] T027 [US1] E2E test: 法人セルフサインアップ〜組織作成〜プラン選択〜発注（quickstartシナリオ1）in `tests/e2e/order/organization-signup.spec.ts`
+- [x] T021 [US1] `CreateOrganizationUseCase`を実装する in `src/use-cases/create-organization.ts`（会社名・代表者名・所在地・電話番号・インボイス番号のバリデーション、組織作成、作成者をorg:adminとして登録。依存: T016, T017, T014）
+- [x] T022 [US1] サインアップ後の「個人/法人」選択画面を実装する in `src/app/onboarding/account-type/page.tsx`, `src/app/onboarding/account-type/actions.ts`（FR-001）
+- [x] T023 [US1] 法人情報入力フォームを実装する in `src/app/onboarding/organization/page.tsx`, `src/app/onboarding/organization/actions.ts`（FR-002。依存: T021）
+- [x] T024 [US1] `select-plan.ts`を拡張し、法人組織のプラン選択時は`organizations.rank`・`organizations.onboarding_completed`を更新するようにする in `src/use-cases/select-plan.ts`（依存: T011, T016）
+- [x] T025 [US1] Unit test: `CreateOrganizationUseCase`（インボイス番号の形式検証、会社名重複等）in `tests/unit/use-cases/create-organization.test.ts`
+- [x] T026 [US1] Integration test: 法人組織作成〜プラン選択〜1人での発注までの一連のユースケース（実DB）in `tests/integration/use-cases/organization-onboarding.test.ts`
+- [x] T027 [US1] E2E test: 法人セルフサインアップ〜組織作成〜プラン選択〜発注（quickstartシナリオ1）in `tests/e2e/order/organization-signup.spec.ts`
 
 **Checkpoint**: 法人組織を1人で作成〜発注まで完結できる状態（MVP）
 
