@@ -7,9 +7,9 @@ const sections = [
     description: "注文一覧の確認・ステータス更新・Invoice発行",
   },
   {
-    href: "/admin/invitations",
-    label: "招待管理",
-    description: "招待リンクの発行・使用状況の確認",
+    href: "/admin/waitlist",
+    label: "Waitlist管理",
+    description: "参加希望の承認・却下",
   },
 ];
 
