@@ -250,7 +250,7 @@ export class SupabaseOrderRepository implements OrderRepository {
     const { data } = await this.db
       .from("orders")
       .select(
-        "id, created_at, status, payment_flow, split_group_id, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+        "id, created_at, status, payment_flow, split_group_id, users!orders_user_id_fkey(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
       )
       .in("status", ACTIVE_STATUSES)
       .order("created_at", { ascending: true });
@@ -262,7 +262,7 @@ export class SupabaseOrderRepository implements OrderRepository {
     const { data } = await this.db
       .from("orders")
       .select(
-        "id, created_at, status, payment_flow, split_group_id, users(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
+        "id, created_at, status, payment_flow, split_group_id, users!orders_user_id_fkey(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable)"
       )
       .eq("id", orderId)
       .single();
