@@ -84,6 +84,11 @@ tasks:
     cmds:
       - doppler run -- pnpm tsx scripts/seed-users.ts
 
+  supabase:seed-users:stg:
+    desc: stg Supabaseに開発用ユーザーをシード（Clerkに存在するユーザーのみ。Clerk/Sanityはlocalと共用のためユーザーのみ対象）
+    cmds:
+      - doppler run -c stg -- pnpm tsx scripts/seed-users.ts
+
   sanity:seed:
     desc: Sanity にダミー商品を登録する（開発用・べき等）
     cmds:

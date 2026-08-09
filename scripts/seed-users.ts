@@ -1,34 +1,25 @@
 /**
- * Supabase ローカルDBに開発用ユーザーをシードする。
+ * Supabaseに開発用ユーザーをシードする。
  * Clerkに存在するユーザーのみinsert対象とし、べき等（何度実行しても同じ結果）。
- * ローカルDBのURLとキーは `supabase status` から自動取得する。
+ * Clerk/Sanityはlocal/stgで共用のため環境分岐は不要だが、Supabaseはlocal/stgで
+ * プロジェクトが分かれているため、doppler configの切り替えで接続先を変える。
  *
- * 実行: task supabase:seed-users（内部でdoppler runしシークレットを注入する）
+ * 実行:
+ *   task supabase:seed-users        （dev config → ローカルDB）
+ *   doppler run -c stg -- pnpm tsx scripts/seed-users.ts  （stg config → stg Supabase）
  */
-import { execSync } from "child_process";
 import { createClerkClient } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
 
 const SEED_USERS = [{ email: "info+test_admin@wknd-studio.com" }] as const;
-
-function getLocalSupabase(): { url: string; serviceKey: string } {
-  const output = execSync("supabase status 2>/dev/null").toString();
-  const urlMatch = output.match(/Project URL\s+│\s+(http:\/\/[^\s|]+)/);
-  const keyMatch = output.match(/Secret\s+│\s+(sb_secret_\S+)/);
-  if (!urlMatch || !keyMatch) {
-    throw new Error(
-      "supabase status からURLまたはキーを取得できませんでした。`supabase start` を実行してください。"
-    );
-  }
-  return { url: urlMatch[1].trim(), serviceKey: keyMatch[1].trim() };
-}
 
 async function main() {
   const clerk = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY!,
   });
 
-  const { url, serviceKey } = getLocalSupabase();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   console.log(`接続先: ${url}`);
 
   const supabase = createClient(url, serviceKey, {
