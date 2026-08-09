@@ -1,3 +1,7 @@
+/**
+ * Sanityに開発用のブランド・カテゴリ・商品等をシードする。
+ * 投入するデータの一覧: docs/seed-data.md
+ */
 import { createClient } from "@sanity/client";
 
 import {
