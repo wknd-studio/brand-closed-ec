@@ -5,7 +5,6 @@ import { csvCatalog } from "./csv-catalog";
 import { designTheme } from "./design-theme";
 import { priceSettings } from "./price-settings";
 import { product } from "./product";
-import { productCsvUpload } from "./product-csv-upload";
 import { productImportRun } from "./product-import-run";
 
 export const schemaTypes = [
@@ -16,6 +15,5 @@ export const schemaTypes = [
   designTheme,
   announcement,
   csvCatalog,
-  productCsvUpload,
   productImportRun,
 ];

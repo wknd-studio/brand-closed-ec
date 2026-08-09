@@ -80,9 +80,14 @@ tasks:
       - task: sanity:seed
 
   supabase:seed-users:
-    desc: Supabase ローカルDBに開発用ユーザーをシード（Clerkに存在するユーザーのみ）
+    desc: ローカルDBに各ランク+管理者の開発用ユーザーをシード（Clerkに無ければ新規作成）
     cmds:
       - doppler run -- pnpm tsx scripts/seed-users.ts
+
+  supabase:seed-users:stg:
+    desc: stg Supabaseに各ランク+管理者の開発用ユーザーをシード（Clerk/Sanityはlocalと共用）
+    cmds:
+      - doppler run -c stg -- pnpm tsx scripts/seed-users.ts
 
   sanity:seed:
     desc: Sanity にダミー商品を登録する（開発用・べき等）
