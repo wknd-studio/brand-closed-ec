@@ -85,6 +85,8 @@ export async function signUpViaInvitation(
 /**
  * `signUpViaInvitation`に加え、個人/法人選択画面で「個人として登録」を選び
  * /onboarding/planまで進める（個人向けの各E2Eテストの共通前段）。
+ * 個人登録時のプラン選択画面には氏名・電話番号の必須入力欄があるため、
+ * ここで埋めておき、以降のプラン選択を即座に送信できる状態にする。
  */
 export async function signUpAsIndividual(
   page: Page,
@@ -97,6 +99,10 @@ export async function signUpAsIndividual(
   await page.getByRole("button", { name: /次へ/ }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/plan/);
+
+  await page.getByLabel("姓").fill("テスト");
+  await page.getByLabel("名").fill("太郎");
+  await page.getByLabel("電話番号").fill("09012345678");
 }
 
 /**

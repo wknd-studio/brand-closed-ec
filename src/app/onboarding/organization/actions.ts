@@ -11,6 +11,7 @@ import { SupabaseOrganizationMembershipRepository } from "@/infrastructure/supab
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ClerkOrganizationGateway } from "@/infrastructure/clerk/clerk-organization-gateway";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
+import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 
 export type CreateOrganizationFormResult =
   | { redirectTo: string }
@@ -30,7 +31,12 @@ export async function createOrganizationAction(
     : null;
 
   const organizationName = String(formData.get("organizationName") ?? "");
-  const representativeName = String(formData.get("representativeName") ?? "");
+  const representativeLastName = String(
+    formData.get("representativeLastName") ?? ""
+  );
+  const representativeFirstName = String(
+    formData.get("representativeFirstName") ?? ""
+  );
   const phoneNumber = String(formData.get("phoneNumber") ?? "");
   const postalCode = String(formData.get("postalCode") ?? "");
   const prefecture = String(formData.get("prefecture") ?? "");
@@ -50,7 +56,8 @@ export async function createOrganizationAction(
         email,
         legalAcceptedAt,
         organizationName,
-        representativeName,
+        representativeLastName,
+        representativeFirstName,
         phoneNumber,
         address: {
           postalCode,
@@ -85,6 +92,9 @@ export async function createOrganizationAction(
         error:
           "適格請求書発行事業者登録番号の形式が不正です（例: T1234567890123）",
       };
+    }
+    if (err instanceof InvalidPhoneNumberError) {
+      return { error: "電話番号の形式が正しくありません" };
     }
     Sentry.captureException(err, {
       tags: { action: "createOrganizationAction" },

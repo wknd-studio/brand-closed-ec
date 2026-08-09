@@ -1,6 +1,7 @@
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
@@ -11,6 +12,7 @@ export type SelectPlanInput = {
   email: string;
   firstName: string;
   lastName: string;
+  phoneNumber: string;
   plan: MemberRankValue;
   // Clerkのlegal_accepted_at（サインアップ時の利用規約・プライバシーポリシー同意日時）。
   // 通常はuser.createdウェブフック（createUser）が既にusers.terms_agreed_atへ
@@ -51,6 +53,7 @@ export async function selectPlan(
     };
   }
 
+  const phoneNumber = PhoneNumber.of(input.phoneNumber);
   const existing = await userRepo.findByClerkUserId(input.clerkUserId);
 
   // termsAgreedAt/termsVersionはuser.createdウェブフック（createUser）が
@@ -59,6 +62,9 @@ export async function selectPlan(
   const user = existing
     ? existing.with({
         email: input.email,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phoneNumber: phoneNumber.value,
         rank: MemberRank.of(input.plan),
         onboardingCompleted: false,
       })
@@ -66,9 +72,9 @@ export async function selectPlan(
         id: crypto.randomUUID(),
         clerkUserId: input.clerkUserId,
         email: input.email,
-        firstName: "",
-        lastName: "",
-        phoneNumber: "",
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phoneNumber: phoneNumber.value,
         profileCompletedAt: null,
         rank: MemberRank.of(input.plan),
         subscribedAt: null,

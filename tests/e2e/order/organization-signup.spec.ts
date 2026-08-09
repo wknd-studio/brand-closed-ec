@@ -37,7 +37,8 @@ test.describe("法人セルフサインアップ", () => {
     await expect(page).toHaveURL(/\/onboarding\/organization/);
 
     await page.locator('input[name="organizationName"]').fill(organizationName);
-    await page.locator('input[name="representativeName"]').fill("山田太郎");
+    await page.locator('input[name="representativeLastName"]').fill("山田");
+    await page.locator('input[name="representativeFirstName"]').fill("太郎");
     await page.locator('input[name="phoneNumber"]').fill("0312345678");
     await page.locator('input[name="postalCode"]').fill("1000001");
     await page.locator('input[name="prefecture"]').fill("東京都");

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { selectPlan } from "@/use-cases/select-plan";
+import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import {
   makeUserRepo,
   makeAccountGateway,
@@ -13,6 +14,7 @@ const baseInput = {
   email: "test@example.com",
   firstName: "太郎",
   lastName: "山田",
+  phoneNumber: "09012345678",
   legalAcceptedAt: new Date(2026, 0, 1),
 };
 
@@ -33,13 +35,16 @@ describe("selectPlan", () => {
     expect(saved.onboardingCompleted).toBe(false);
     expect(saved.termsAgreedAt).toEqual(new Date(2026, 0, 1));
     expect(saved.termsVersion).toBe("2026-05-25");
+    expect(saved.firstName).toBe("太郎");
+    expect(saved.lastName).toBe("山田");
+    expect(saved.phoneNumber).toBe("09012345678");
     expect(accountGateway.updateOnboardingMetadata).toHaveBeenCalledWith(
       "clerk-1",
       false
     );
   });
 
-  it("既存userが存在する場合: rankを上書きして保存する", async () => {
+  it("既存userが存在する場合: rank・氏名・電話番号を上書きして保存する", async () => {
     const existingUser = makeUser({ rank: "starter" });
     const userRepo = makeUserRepo(existingUser);
     const accountGateway = makeAccountGateway();
@@ -52,6 +57,21 @@ describe("selectPlan", () => {
     const saved = vi.mocked(userRepo.save).mock.calls[0][0];
     expect(saved.id).toBe(existingUser.id);
     expect(saved.rank.value).toBe("standard");
+    expect(saved.firstName).toBe("太郎");
+    expect(saved.lastName).toBe("山田");
+    expect(saved.phoneNumber).toBe("09012345678");
+  });
+
+  it("電話番号の形式が不正な場合はInvalidPhoneNumberErrorをthrowする", async () => {
+    const userRepo = makeUserRepo();
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      selectPlan(
+        { ...baseInput, plan: "starter", phoneNumber: "12345" },
+        { userRepo, accountGateway }
+      )
+    ).rejects.toThrow(InvalidPhoneNumberError);
   });
 
   it("organizationIdが指定された場合: organizationのrankを仮保存し/onboarding/paymentにリダイレクト", async () => {

@@ -80,6 +80,9 @@ test.describe.serial("認証済みアクセス", () => {
 
   test("STARTER プランを選択すると Stripe Checkout へリダイレクトされる", async () => {
     await page.goto("/onboarding/plan");
+    await page.locator('input[name="lastName"]').fill("山田");
+    await page.locator('input[name="firstName"]').fill("太郎");
+    await page.locator('input[name="phoneNumber"]').fill("09012345678");
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
     await expect(page).toHaveURL(/checkout\.stripe\.com/);

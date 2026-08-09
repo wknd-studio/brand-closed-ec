@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { createOrganization } from "@/use-cases/create-organization";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
+import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import {
   makeUserRepo,
+  makeUser,
   makeOrganizationRepo,
   makeOrganizationMembershipRepo,
   makeOrganizationGateway,
@@ -15,7 +17,8 @@ function baseInput() {
     email: "test@example.com",
     legalAcceptedAt: new Date(2026, 0, 1),
     organizationName: "株式会社テスト",
-    representativeName: "山田太郎",
+    representativeLastName: "山田",
+    representativeFirstName: "太郎",
     phoneNumber: "0312345678",
     address: {
       postalCode: "1000001",
@@ -51,6 +54,71 @@ describe("createOrganization", () => {
     const savedMembership = (membershipRepo.save as ReturnType<typeof vi.fn>)
       .mock.calls[0][0];
     expect(savedMembership.clerkRole).toBe("org:admin");
+
+    const savedOrganization = (
+      organizationRepo.save as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0];
+    expect(savedOrganization.representativeName).toBe("山田太郎");
+  });
+
+  it("代表者名・電話番号を本人のusers.firstName/lastName/phoneNumberにも反映する（新規作成）", async () => {
+    const organizationRepo = makeOrganizationRepo();
+    const membershipRepo = makeOrganizationMembershipRepo();
+    const organizationGateway = makeOrganizationGateway();
+    const userRepo = makeUserRepo();
+    userRepo.findByClerkUserId = async () => null;
+
+    await createOrganization(baseInput(), {
+      organizationRepo,
+      membershipRepo,
+      organizationGateway,
+      userRepo,
+    });
+
+    const savedUser = (userRepo.save as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(savedUser.lastName).toBe("山田");
+    expect(savedUser.firstName).toBe("太郎");
+    expect(savedUser.phoneNumber).toBe("0312345678");
+  });
+
+  it("代表者名・電話番号を本人のusers.firstName/lastName/phoneNumberにも反映する（既存user更新）", async () => {
+    const existingUser = makeUser({
+      firstName: "",
+      lastName: "",
+      phoneNumber: "",
+    });
+    const organizationRepo = makeOrganizationRepo();
+    const membershipRepo = makeOrganizationMembershipRepo();
+    const organizationGateway = makeOrganizationGateway();
+    const userRepo = makeUserRepo(existingUser);
+
+    await createOrganization(baseInput(), {
+      organizationRepo,
+      membershipRepo,
+      organizationGateway,
+      userRepo,
+    });
+
+    const savedUser = (userRepo.save as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(savedUser.id).toBe(existingUser.id);
+    expect(savedUser.lastName).toBe("山田");
+    expect(savedUser.firstName).toBe("太郎");
+    expect(savedUser.phoneNumber).toBe("0312345678");
+  });
+
+  it("電話番号の形式が不正な場合はInvalidPhoneNumberErrorになる", async () => {
+    const input = { ...baseInput(), phoneNumber: "12345" };
+
+    await expect(
+      createOrganization(input, {
+        organizationRepo: makeOrganizationRepo(),
+        membershipRepo: makeOrganizationMembershipRepo(),
+        organizationGateway: makeOrganizationGateway(),
+        userRepo: makeUserRepo(),
+      })
+    ).rejects.toThrow(InvalidPhoneNumberError);
   });
 
   it("不正な形式のインボイス番号はInvalidInvoiceRegistrationNumberErrorになる", async () => {
