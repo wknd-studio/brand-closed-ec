@@ -33,6 +33,9 @@ test.describe("実際の登録画面を経由した新規会員登録", () => {
     await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await page.getByRole("button", { name: "Continue" }).click();
 
+    // Clerk Dashboard側の「サインアップ後の遷移先」設定が/onboarding/planを
+    // 指しているため、招待チケット経由のサインアップ直後は/onboarding/account-type
+    // を経由せず直接ここに着地する（clerk-test-invitation.tsのコメント参照）
     await expect(page).toHaveURL(/\/onboarding\/plan/);
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();

@@ -58,6 +58,13 @@ export async function createTestInvitation(emailAddress: string) {
  * 招待受諾→利用規約同意→パスワード設定までの、実際の画面操作を伴う
  * 新規会員登録フロー（`registration.spec.ts`等で重複していた処理を共通化）。
  * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/plan）の状態になる。
+ *
+ * 注: Clerk Dashboard側の「サインアップ後の遷移先」設定が/onboarding/planを
+ * 指しているため（本機能導入前からの設定）、サインアップ直後はmiddleware.tsの
+ * ゲートを経由せず直接このURLに着地する。法人登録など/onboarding/account-type
+ * から始まるフローを検証する場合は、このヘルパー呼び出し後に明示的に
+ * page.goto("/onboarding/account-type")すること。Dashboard側の設定を
+ * /onboarding/account-typeに変更すれば、直接そちらに着地するようになる。
  */
 export async function signUpViaInvitation(
   page: Page,

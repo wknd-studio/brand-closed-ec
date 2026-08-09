@@ -54,7 +54,7 @@ test.describe
     // コード入力欄への入力完了と同時に自動送信されるため、Continueボタンのクリックは不要
     await page.getByLabel("Enter verification code").fill("424242");
 
-    await expect(page).toHaveURL(/\/onboarding\/plan|\/shop/);
+    await expect(page).toHaveURL(/\/onboarding\/account-type|\/shop/);
   });
 
   test("誤った確認コードを入力した場合、エラーが表示されログインが完了しない", async ({
