@@ -23,7 +23,10 @@ type InputProps = {
   disabled?: boolean;
   error?: string; // 指定するとaria-invalid=trueかつエラー表示になる
   placeholder?: string;
-} & Pick<React.InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue" | "onChange" | "required">;
+} & Pick<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "value" | "defaultValue" | "onChange" | "required"
+>;
 ```
 
 ## Checkbox / Radio
@@ -57,7 +60,10 @@ type SelectProps = {
   options: SelectOption[];
   disabled?: boolean;
   error?: string;
-} & Pick<React.SelectHTMLAttributes<HTMLSelectElement>, "value" | "defaultValue" | "onChange" | "required">;
+} & Pick<
+  React.SelectHTMLAttributes<HTMLSelectElement>,
+  "value" | "defaultValue" | "onChange" | "required"
+>;
 ```
 
 ## 契約上の保証

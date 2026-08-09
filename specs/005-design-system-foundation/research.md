@@ -7,6 +7,7 @@
 **Rationale**: `globals.css` には既に `--color-brand-primary` 等、ブランドごとのテーマ上書き機構が実装済み（`brand-theme-wrapper.tsx`が`--brand-*`をラッパー要素で上書きする設計、`brand-theme-style.test.ts`で検証済み）。Constitution原則V「事実の単一情報源化」に従い、トークン定義を分散させず既存の仕組みに合流させる。スペーシング・タイポグラフィのスケール（`text-sm`/`p-4`等）はTailwind v4が標準で提供する値をそのままトークンとして採用し、独自の再定義は行わない（過剰な抽象化を避ける）。
 
 **Alternatives considered**:
+
 - 独立した `tokens.css` や `theme.ts` を新設 → 定義箇所が2箇所になり原則Vに反するため却下
 - スペーシング/タイポグラフィも独自トークンとして再定義 → Tailwindの標準スケールと二重管理になり保守コストが増すため却下
 
@@ -17,6 +18,7 @@
 **Rationale**: 現状`clsx`/`cva`は未導入。ボタンのvariant（primary/secondary/danger等）×state（disabled等）の組み合わせをTailwindクラスの文字列結合で素朴に書くと可読性・型安全性が落ちる。cvaはVariantの型をTypeScriptで検査でき、Tailwind前提のReactコンポーネントライブラリで広く使われる標準的な組み合わせ。
 
 **Alternatives considered**:
+
 - 素のTailwindクラス文字列結合のみ → コンポーネント数が増えると保守困難になるため却下
 - shadcn/ui一式を導入 → 生成されるコンポーネント数が今回のスコープ（5種類）に対して過剰で、依存関係も増えるため今回は見送り。将来的にプリミティブが増えた段階で再検討可能
 
@@ -27,6 +29,7 @@
 **Rationale**: FR-005「業務フローを経由せず単体確認」を満たすにはNext.js frameworkプリセットが必要（App Router固有の機能を使わないプリミティブコンポーネントのみが対象のため、実際には最小構成でも動作する）。story併置はコンポーネント追加時にstoryの追加漏れを防ぎやすい。
 
 **Alternatives considered**:
+
 - 独立した `stories/` ディレクトリに集約 → コンポーネント本体との対応が追いにくくなるため却下
 
 ## 4. 既存ビルド・テストへの影響分離（FR-006, US3のシステム保証）

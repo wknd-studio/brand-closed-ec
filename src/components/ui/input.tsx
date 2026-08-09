@@ -10,7 +10,12 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
   error?: string;
 };
 
-export function Input({ className, error, type = "text", ...props }: InputProps) {
+export function Input({
+  className,
+  error,
+  type = "text",
+  ...props
+}: InputProps) {
   return (
     <input
       type={type}
