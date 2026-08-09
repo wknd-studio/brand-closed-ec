@@ -24,6 +24,9 @@ const eslintConfig = defineConfig([
     // Playwright実行時の生成物:
     "playwright-report/**",
     "test-results/**",
+    // npx skills add で導入したベンダー製スキル（自プロジェクトのコード規約対象外）:
+    ".agents/**",
+    ".claude/skills/**",
   ]),
   ...storybook.configs["flat/recommended"],
 ]);

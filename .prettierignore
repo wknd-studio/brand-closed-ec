@@ -2,3 +2,5 @@ pnpm-lock.yaml
 .open-next/
 .sanity/
 dist/
+.agents/
+.claude/skills/
