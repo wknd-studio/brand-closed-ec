@@ -76,20 +76,22 @@
 
 ## Phase 4: User Story 2 - 個人会員・法人代表者共通のプロフィール情報必須化 (Priority: P2)
 
-**Goal**: 新規会員は氏名・電話番号の入力を必須とし、既存会員は次回ログイン時に入力を求められる
+**Goal**: 新規会員は各オンボーディング画面（個人は`/onboarding/plan`、法人代表者は`/onboarding/organization`）内で氏名・電話番号の入力を必須とする
 
-**Independent Test**: 新規個人会員がオンボーディング完了前に氏名・電話番号の入力を求められる。氏名/電話番号が空の既存会員がログイン時に入力完了画面へ誘導される（quickstart.mdシナリオ2）
+> **設計変更（PR #143）**: 当初案は`middleware.ts`による汎用ゲート+`/profile/complete`画面で新規・既存会員を一括して扱う方式だったが、本機能は本番未リリースでFR-020（既存会員への遡及入力）の対象ユーザーが実在しないため、その部分は実装しないことにした。代わりに、氏名・電話番号は各オンボーディング画面内で完結して収集する（個人は`/onboarding/plan`に入力欄を追加、法人代表者は`/onboarding/organization`の代表者名入力を姓・名に分割してそのまま本人のプロフィールにも反映）。将来的に本番リリース後、氏名・電話番号が未入力の既存会員が発生し得る状況になった場合は、`CompleteProfileUseCase`・`middleware.ts`ゲート・`/profile/complete`画面を別タスクとして追加する。
+
+**Independent Test**: 新規個人会員が`/onboarding/plan`で氏名・電話番号の入力を求められ、未入力または不正な形式では完了できないことを確認する。新規法人代表者が`/onboarding/organization`で代表者の姓・名・電話番号を入力すると、それが本人（`users`テーブル）のプロフィールにもそのまま反映され、別画面での再入力が発生しないことを確認する（quickstart.mdシナリオ2は要更新、別タスク）。
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] `CompleteProfileUseCase`を実装する in `src/use-cases/complete-profile.ts`（依存: T009, T010）
-- [ ] T029 [US2] `middleware.ts`を拡張し、`first_name`/`last_name`/`phone_number`のいずれかが空の場合に`/profile/complete`へリダイレクトする条件を追加する in `src/middleware.ts`（既存のオンボーディング未完了リダイレクトと同じパターン。依存: T028）
-- [ ] T030 [US2] プロフィール入力完了画面を実装する in `src/app/profile/complete/page.tsx`, `src/app/profile/complete/actions.ts`（個人・法人代表者・法人一般担当者共通。依存: T028）
-- [ ] T031 [US2] `onboarding/plan/actions.ts`（個人向けオンボーディング）を修正し、`selectPlan`が受け取る`firstName`/`lastName`を実際に`User`エンティティへ永続化するよう配線する in `src/app/onboarding/plan/actions.ts`（依存: T009, T010）
-- [ ] T032 [US2] Unit test: `CompleteProfileUseCase`のバリデーション in `tests/unit/use-cases/complete-profile.test.ts`
-- [ ] T033 [US2] Integration test: 氏名/電話番号未入力の既存会員がログイン時にブロックされること（実DB）in `tests/integration/use-cases/profile-completion-gate.test.ts`
+- [x] T028 [US2] `PhoneNumber`値オブジェクト・`InvalidPhoneNumberError`を新設する in `src/domain/value-objects/phone-number.ts`, `src/domain/errors/invalid-phone-number-error.ts`（0始まりの10〜11桁を検証。個人・法人フロー共通で使用）
+- [x] T029 [US2] `/onboarding/plan`（個人フロー）に姓・名・電話番号の入力欄を追加し、`select-plan.ts`が受け取る`firstName`/`lastName`/`phoneNumber`を実際に`User`エンティティへ永続化するよう修正する in `src/app/onboarding/plan/plan-selector.tsx`, `src/app/onboarding/plan/actions.ts`, `src/use-cases/select-plan.ts`（法人フロー選択時=`organizationId`指定時はこの入力欄を表示しない）
+- [x] T030 [US2] `organization-form.tsx`の代表者名入力を姓・名の2欄に分割し、郵便番号自動補完（zipcloud、`address-form.tsx`と同じ方式）を追加する in `src/app/onboarding/organization/organization-form.tsx`, `src/app/onboarding/organization/actions.ts`
+- [x] T031 [US2] `create-organization.ts`を修正し、代表者の姓・名・電話番号を本人の`users.firstName`/`lastName`/`phoneNumber`にも反映する（二重入力の回避。代表者はセルフサインアップした本人であるという前提に基づく設計） in `src/use-cases/create-organization.ts`
+- [x] T032 [US2] Unit test: `PhoneNumber`、`select-plan.ts`・`create-organization.ts`の追加分 in `tests/unit/phone-number.test.ts`, `tests/unit/use-cases/select-plan.test.ts`, `tests/unit/use-cases/create-organization.test.ts`
+- [x] T033 [US2] Integration test: 個人フロー・法人フローそれぞれで氏名・電話番号が正しく永続化されること（実DB）in `tests/integration/select-plan.test.ts`, `tests/integration/use-cases/organization-onboarding.test.ts`
 
-**Checkpoint**: 個人・法人を問わず、氏名・電話番号が必須項目として機能する
+**Checkpoint**: 個人・法人代表者を問わず、新規オンボーディング時に氏名・電話番号が必須項目として機能する（既存会員への遡及対応は本番リリース後の別課題）
 
 ---
 
