@@ -44,20 +44,25 @@ Sources:
 
 ## タスク一覧
 
-- [ ] T1 **[検証・最優先]** Waitlist mode有効化後も`clerk.invitations.createInvitation()`が機能するか確認する（開発環境で試験的にON→既存の招待APIを1回実行）。機能しない場合は後続タスクの設計を修正する
-- [ ] T2 `git fetch origin develop`して`feature/waitlist-signup`ブランチを作成する
-- [ ] T3 Clerk Dashboard（開発環境）でサインアップモードを`Restricted`→`Waitlist`に切り替える（手動設定、コード変更なし）
-- [ ] T4 公開ページ`src/app/waitlist/page.tsx`を新設し`<Waitlist />`コンポーネントを配置する
-- [ ] T5 トップページ・ヘッダー等、`/sign-up`への直接リンクを洗い出し`/waitlist`に差し替える（`grep -rn "/sign-up" src/app`で洗い出す）
-- [ ] T6 `src/app/api/admin/waitlist/route.ts`を新設する: `GET`で`waitlistEntries.list({status:"pending"})`、`POST`で`waitlistEntries.invite(id)`（承認）、`DELETE`で`waitlistEntries.reject(id)`（却下）。`requireAdmin()`パターンは既存の`admin/invitations/route.ts`を踏襲
-- [ ] T7 `src/app/admin/waitlist/page.tsx`を新設する: 承認待ち一覧表示＋承認/却下ボタン（既存の`admin/invitations/page.tsx`のテーブルUIパターンを踏襲、メールアドレス入力フォームは不要）
-- [ ] T8 旧`src/app/admin/invitations/`・`src/app/api/admin/invitations/`を削除する。管理画面ナビゲーション等の参照を`/admin/waitlist`に更新する
-- [ ] T9 `tests/e2e/helpers/clerk-test-invitation.ts`を更新する（T1の検証結果次第で対応が変わる。機能しなくなる場合は`waitlistEntries`経由に書き換え）
-- [ ] T10 Unit/Integration test: `/api/admin/waitlist`の権限チェック・承認・却下のテストを追加する
-- [ ] T11 E2Eテスト: `/waitlist`ページからの参加希望送信〜管理者承認〜サインアップ完了までのシナリオを追加する
-- [ ] T12 `docs/signup-flow.md`のフェーズ1（招待送信）・フェーズ2（サインアップ）をWaitlistベースの図に書き換える
-- [ ] T13 `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm test:integration`を通す
-- [ ] T14 コミット・プッシュ・PR作成（`develop`向け、ユーザーの明示承認後）
+- [x] T1 **[検証・最優先]** Waitlist mode有効化後も`clerk.invitations.createInvitation()`が機能するか確認する（開発環境で試験的にON→既存の招待APIを1回実行）。機能しない場合は後続タスクの設計を修正する
+  - 検証結果: 引き続き機能する（エラーなくpending状態の招待が作成された）。E2Eヘルパーは変更不要と判明
+- [x] T2 `git fetch origin develop`して`feature/waitlist-signup`ブランチを作成する
+- [x] T3 Clerk Dashboard（開発環境）でサインアップモードを`Restricted`→`Waitlist`に切り替える（手動設定、コード変更なし）
+- [x] T4 公開ページ`src/app/waitlist/page.tsx`を新設し`<Waitlist />`コンポーネントを配置する
+- [x] T5 トップページ・ヘッダー等、`/sign-up`への直接リンクを洗い出し`/waitlist`に差し替える（`grep -rn "/sign-up" src/app`で洗い出す）
+  - 差し替え対象の直接リンクは無かった（廃止予定の`admin/invitations/route.ts`のredirectUrlのみ）。代わりに`/waitlist`を`middleware.ts`の公開ルートに追加
+- [x] T6 `src/app/api/admin/waitlist/route.ts`を新設する: `GET`で`waitlistEntries.list({status:"pending"})`、`POST`で`waitlistEntries.invite(id)`（承認）、`DELETE`で`waitlistEntries.reject(id)`（却下）。`requireAdmin()`パターンは既存の`admin/invitations/route.ts`を踏襲
+- [x] T7 `src/app/admin/waitlist/page.tsx`を新設する: 承認待ち一覧表示＋承認/却下ボタン（既存の`admin/invitations/page.tsx`のテーブルUIパターンを踏襲、メールアドレス入力フォームは不要）
+- [x] T8 旧`src/app/admin/invitations/`・`src/app/api/admin/invitations/`を削除する。管理画面ナビゲーション等の参照を`/admin/waitlist`に更新する
+- [x] T9 `tests/e2e/helpers/clerk-test-invitation.ts`を更新する（T1の検証結果次第で対応が変わる。機能しなくなる場合は`waitlistEntries`経由に書き換え）
+  - T1の検証結果により変更不要と確認
+- [x] T10 Unit/Integration test: `/api/admin/waitlist`の権限チェック・承認・却下のテストを追加する
+- [x] T11 E2Eテスト: `/waitlist`ページからの参加希望送信〜管理者承認〜サインアップ完了までのシナリオを追加する
+  - 検証範囲を「参加希望送信〜管理者承認による招待URL発行」までに縮小。`waitlistEntries.invite()`は`createInvitation()`と異なりredirectUrlを指定できず招待リンクが必ずClerkホスト型ページを経由するため、`setupClerkTestingToken`との相性が悪く自動操作が安定しなかった。招待URL以降（ホスト型ページでのサインアップ完了〜自社アプリ復帰）は`createInvitation`経由の既存E2E（`registration.spec.ts`等）と同一コードパスのためカバー対象外とし、手動ブラウザ操作で`/onboarding/account-type`到達まで確認済み（詳細は`docs/signup-flow.md`の設計決定事項#13）
+- [x] T12 `docs/signup-flow.md`のフェーズ1（招待送信）・フェーズ2（サインアップ）をWaitlistベースの図に書き換える
+- [x] T13 `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm test:integration`を通す
+- [x] T14 コミット・プッシュ・PR作成（`develop`向け、ユーザーの明示承認後）
+  - PR #144: https://github.com/wknd-studio/brand-closed-ec/pull/144
 
 ## 実装順序の注意
 
