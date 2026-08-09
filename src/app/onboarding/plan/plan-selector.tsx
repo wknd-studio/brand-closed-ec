@@ -44,7 +44,11 @@ const PLANS = RANK_ORDER.filter((rank) => rank !== "enterprise").map(
   (rank) => ({ id: rank, ...PLAN_LABELS[rank] })
 );
 
-export default function PlanSelector() {
+export default function PlanSelector({
+  organizationId,
+}: {
+  organizationId?: string;
+}) {
   const { session } = useClerk();
   const router = useRouter();
   const [state, action, isPending] = useActionState<
@@ -63,6 +67,9 @@ export default function PlanSelector() {
 
   return (
     <form action={action} className="space-y-4">
+      {organizationId && (
+        <input type="hidden" name="organizationId" value={organizationId} />
+      )}
       <div className="grid gap-3">
         {PLANS.map((plan) => (
           <label
