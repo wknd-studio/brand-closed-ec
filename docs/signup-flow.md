@@ -1,6 +1,6 @@
 # 会員登録フロー
 
-> 本ドキュメントは spec 005（法人会員/B2B対応）のPhase 3実装時点（個人セルフサインアップ〜プラン選択〜Stripe決済、および法人セルフサインアップ〜組織作成〜プラン選択〜Stripe決済）の実装を反映している。7ランクモデル（STARTER〜ENTERPRISE）準拠。
+> 本ドキュメントは spec 005（法人会員/B2B対応）のPhase 4実装時点（個人セルフサインアップ〜プラン選択（氏名・電話番号入力含む）〜Stripe決済、および法人セルフサインアップ〜組織作成（代表者の氏名・電話番号入力含む）〜プラン選択〜Stripe決済）の実装を反映している。7ランクモデル（STARTER〜ENTERPRISE）準拠。
 
 ## 前提
 
@@ -10,6 +10,7 @@
 - **個人・法人は排他**: 1ユーザーが個人会員としての会員ランクと法人組織メンバーとしての所属を両方持つことはない（FR-022）
 - **決済は個人・法人で共通**: どちらもStripe Checkoutで初期費用・月額費用を決済する。決済完了はStripe Webhook（`checkout.session.completed`）で非同期に確定する
 - **Webhookによる非同期処理**: Clerkの`user.created`イベントでSupabaseに仮ユーザーレコードを作成する（ベストエフォート配信のため、各Server Action側でも整合性を保証する）。同イベントの`legal_accepted_at`を`users.terms_agreed_at`にそのまま転記する
+- **氏名・電話番号の必須化**: 個人は`/onboarding/plan`、法人代表者は`/onboarding/organization`で、それぞれのオンボーディング画面内で収集する。既存会員への遡及対応（本番未リリースのため対象ユーザーなし）は本リリースのスコープ外（詳細は`specs/005-b2b-organization/spec.md`のFR-020参照）
 
 ---
 
@@ -23,13 +24,13 @@ flowchart TD
     E --> F["Clerkがuser.createdを発火\n（Webhookでusersレコードを仮作成、legal_accepted_atを転記）"]
     F --> G["/onboarding/account-type\n個人/法人を選択"]
 
-    G -- 個人として登録 --> H["/onboarding/plan\nプラン選択"]
-    H --> I["selectPlan\nusers.rankを仮保存"]
+    G -- 個人として登録 --> H["/onboarding/plan\nプラン選択 + 姓・名・電話番号を入力"]
+    H --> I["selectPlan\nusers.rank・firstName・lastName・\nphoneNumberを保存"]
     I --> J["/onboarding/payment\nStripe Checkout"]
 
-    G -- 法人として登録 --> K["/onboarding/organization\n会社情報・インボイス番号を入力"]
-    K --> L["createOrganization\n組織作成 + Clerk Organizations API\n作成者をorg:adminで登録"]
-    L --> M["/onboarding/plan?organizationId=...\nプラン選択"]
+    G -- 法人として登録 --> K["/onboarding/organization\n会社名・代表者名（姓・名）・所在地\n（郵便番号自動補完）・電話番号・\nインボイス番号を入力"]
+    K --> L["createOrganization\n組織作成 + Clerk Organizations API\n作成者をorg:adminで登録\n代表者の姓・名・電話番号を\nusers側にも反映"]
+    L --> M["/onboarding/plan?organizationId=...\nプラン選択（氏名・電話番号欄は非表示）"]
     M --> N["selectPlan（組織版）\norganizations.rankを仮保存"]
     N --> O["/onboarding/payment?organizationId=...\nStripe Checkout"]
 
@@ -128,9 +129,10 @@ sequenceDiagram
     participant Webhook as /api/webhooks/stripe
     participant DB as Supabase
 
-    ユーザー->>Plan: プランを選択して送信
-    Plan->>Action: selectPlan
-    Action->>DB: users.rankを保存（onboarding_completed=false）
+    ユーザー->>Plan: 姓・名・電話番号を入力し、\nプランを選択して送信
+    Plan->>Action: selectPlan（firstName/lastName/phoneNumber含む）
+    Action->>Action: PhoneNumber値オブジェクトで\n電話番号の形式を検証
+    Action->>DB: users.rank・firstName・lastName・\nphoneNumberを保存（onboarding_completed=false）
     Action-->>ユーザー: /onboarding/payment?plan=xxx へ
 
     ユーザー->>Payment: ページを開く
@@ -162,11 +164,11 @@ sequenceDiagram
     participant Webhook as /api/webhooks/stripe
     participant DB as Supabase
 
-    代表者->>Org: 会社名・代表者名・所在地・電話番号・\nインボイス番号を入力して送信
+    代表者->>Org: 会社名・代表者名（姓・名）・所在地\n（郵便番号入力でzipcloud APIから自動補完）・\n電話番号・インボイス番号を入力して送信
     Org->>CreateOrg: createOrganization
-    CreateOrg->>CreateOrg: インボイス番号の形式検証（T+13桁）
+    CreateOrg->>CreateOrg: インボイス番号の形式検証（T+13桁）\nPhoneNumber値オブジェクトで電話番号を検証
     CreateOrg->>DB: 会社名の重複チェック
-    CreateOrg->>DB: usersレコードが無ければ作成\n（Webhook未到達対策）
+    CreateOrg->>DB: usersレコードが無ければ作成、\nあれば代表者の姓・名・電話番号で更新\n（本人のプロフィールとして反映、二重入力を回避）
     CreateOrg->>Clerk: 組織作成API
     CreateOrg->>DB: organizations作成\norganization_membershipsに\norg:adminとして登録
     CreateOrg-->>代表者: /onboarding/plan?organizationId=xxx へ
@@ -215,14 +217,16 @@ sequenceDiagram
 
 ## 設計決定事項
 
-| #   | 項目                                 | 決定内容                                                                                                                                                                                                                                                            |
-| --- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | アクセス制限                         | ClerkのRestricted signup modeで招待リンク以外のサインアップをブロック                                                                                                                                                                                               |
-| 2   | サインアップ直後の遷移先             | `next.config.ts`の`NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL`で`/onboarding/account-type`を指定（Clerk Dashboardの設定ではない）                                                                                                                                 |
-| 3   | 個人/法人の判定                      | `organization_memberships`に自分のレコードが1件でもあるかで判定。動的な切り替えは発生しない（FR-022）                                                                                                                                                               |
-| 4   | Webhookと Server Action の二重upsert | Webhookはベストエフォート配信のため、`selectPlan`・`createOrganization`でも`users`をupsert/作成して整合性を保証                                                                                                                                                     |
-| 5   | onboarding_completedフラグ           | 個人・法人ともにStripe決済完了（`checkout.session.completed`）まで`false`のまま。決済前にrankだけ仮保存し、確定はWebhook側で行う                                                                                                                                    |
-| 6   | 法人のStripe決済                     | 個人会員と同じくCheckout Sessionで初期費用・月額費用を決済する。`organizations`テーブルに`stripe_customer_id`/`stripe_subscription_id`を保持                                                                                                                        |
-| 7   | 法人登録時のusersレコード未作成対策  | 法人登録は個人の`selectPlan`を経由しないため、`user.created`Webhook到達前に`createOrganization`が呼ばれる可能性がある。その場でusersレコードを作成するフォールバックを持つ                                                                                          |
-| 8   | Webhook冪等性                        | `completeSubscriptionOnboarding`・`completeOrganizationSubscriptionOnboarding`はいずれも、既に`onboarding_completed=true`なら早期returnし再配信に対して冪等                                                                                                         |
-| 9   | 利用規約同意の実装                   | 独自の`/welcome`ページは廃止し、Clerk標準のLegal Consent機能（`compliance.legal_consent`、`clerk config patch`で設定）に一本化。同意日時はClerkの`legal_accepted_at`をuser.createdウェブフックで`users.terms_agreed_at`へ転記する（`selectPlan`側では上書きしない） |
+| #   | 項目                                 | 決定内容                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | アクセス制限                         | ClerkのRestricted signup modeで招待リンク以外のサインアップをブロック                                                                                                                                                                                                                                                                                                                              |
+| 2   | サインアップ直後の遷移先             | `next.config.ts`の`NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL`で`/onboarding/account-type`を指定（Clerk Dashboardの設定ではない）                                                                                                                                                                                                                                                                |
+| 3   | 個人/法人の判定                      | `organization_memberships`に自分のレコードが1件でもあるかで判定。動的な切り替えは発生しない（FR-022）                                                                                                                                                                                                                                                                                              |
+| 4   | Webhookと Server Action の二重upsert | Webhookはベストエフォート配信のため、`selectPlan`・`createOrganization`でも`users`をupsert/作成して整合性を保証                                                                                                                                                                                                                                                                                    |
+| 5   | onboarding_completedフラグ           | 個人・法人ともにStripe決済完了（`checkout.session.completed`）まで`false`のまま。決済前にrankだけ仮保存し、確定はWebhook側で行う                                                                                                                                                                                                                                                                   |
+| 6   | 法人のStripe決済                     | 個人会員と同じくCheckout Sessionで初期費用・月額費用を決済する。`organizations`テーブルに`stripe_customer_id`/`stripe_subscription_id`を保持                                                                                                                                                                                                                                                       |
+| 7   | 法人登録時のusersレコード未作成対策  | 法人登録は個人の`selectPlan`を経由しないため、`user.created`Webhook到達前に`createOrganization`が呼ばれる可能性がある。その場でusersレコードを作成するフォールバックを持つ                                                                                                                                                                                                                         |
+| 8   | Webhook冪等性                        | `completeSubscriptionOnboarding`・`completeOrganizationSubscriptionOnboarding`はいずれも、既に`onboarding_completed=true`なら早期returnし再配信に対して冪等                                                                                                                                                                                                                                        |
+| 9   | 利用規約同意の実装                   | 独自の`/welcome`ページは廃止し、Clerk標準のLegal Consent機能（`compliance.legal_consent`、`clerk config patch`で設定）に一本化。同意日時はClerkの`legal_accepted_at`をuser.createdウェブフックで`users.terms_agreed_at`へ転記する（`selectPlan`側では上書きしない）                                                                                                                                |
+| 10  | 氏名・電話番号の収集場所             | 汎用のプロフィール入力ゲート（`/profile/complete`+`middleware.ts`リダイレクト）は作らず、各オンボーディング画面内で完結させる。個人は`/onboarding/plan`に入力欄を追加。法人代表者は`/onboarding/organization`の代表者名を姓・名に分割し、その値と電話番号をそのまま本人の`users.first_name`/`last_name`/`phone_number`にも反映する（`create-organization.ts`）ため、別画面での二重入力が発生しない |
+| 11  | 電話番号のバリデーション             | `PhoneNumber`値オブジェクト（0始まりの10〜11桁、ハイフンは正規化）で個人・法人共通で検証する。不正な形式は`InvalidPhoneNumberError`                                                                                                                                                                                                                                                                |
