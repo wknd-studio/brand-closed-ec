@@ -35,22 +35,16 @@ export async function selectPlan(
     const organization = await organizationRepo.findById(input.organizationId);
     if (!organization) throw new Error("組織が見つかりません");
 
+    // rankは仮保存し、onboarding_completedはStripe決済完了のWebhook
+    // （completeOrganizationSubscriptionOnboarding）で確定させる。
+    // 個人会員のselectPlanと同じパターン。
     await organizationRepo.save(
-      organization.with({
-        rank: MemberRank.of(input.plan),
-        onboardingCompleted: true,
-      })
+      organization.with({ rank: MemberRank.of(input.plan) })
     );
 
-    // 組織作成者（代表者）自身のオンボーディングもここで完了扱いにする。
-    // 個人会員のonboarding_completedと異なりStripe決済を経由しないため。
-    const user = await userRepo.findByClerkUserId(input.clerkUserId);
-    if (user) {
-      await userRepo.save(user.with({ onboardingCompleted: true }));
-    }
-    await accountGateway.updateOnboardingMetadata(input.clerkUserId, true);
-
-    return { redirectTo: "/" };
+    return {
+      redirectTo: `/onboarding/payment?plan=${input.plan}&organizationId=${input.organizationId}`,
+    };
   }
 
   const now = new Date();

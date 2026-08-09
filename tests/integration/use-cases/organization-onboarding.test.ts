@@ -6,6 +6,7 @@ import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supaba
 import { SupabaseOrganizationMembershipRepository } from "@/infrastructure/supabase/supabase-organization-membership-repository";
 import { createOrganization } from "@/use-cases/create-organization";
 import { selectPlan } from "@/use-cases/select-plan";
+import { completeOrganizationSubscriptionOnboarding } from "@/use-cases/complete-organization-subscription-onboarding";
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import type { OrganizationGateway } from "@/repositories/organization-gateway";
@@ -144,13 +145,40 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
       }
     );
 
-    expect(planResult).toEqual({ redirectTo: "/" });
+    expect(planResult).toEqual({
+      redirectTo: `/onboarding/payment?plan=advanced&organizationId=${createResult.organizationId}`,
+    });
+
+    // rankは仮保存されるが、onboarding_completedはまだStripe決済完了前のため false のまま
+    const organizationBeforePayment = await organizationRepo.findById(
+      createResult.organizationId
+    );
+    expect(organizationBeforePayment!.rank.value).toBe("advanced");
+    expect(organizationBeforePayment!.onboardingCompleted).toBe(false);
+
+    // Stripe Webhook（checkout.session.completed）相当の処理
+    await completeOrganizationSubscriptionOnboarding(
+      {
+        organizationId: createResult.organizationId,
+        clerkUserId: TEST_CLERK_USER_ID,
+        plan: "advanced",
+        stripeCustomerId: "cus_test_org",
+        stripeSubscriptionId: "sub_test_org",
+      },
+      {
+        organizationRepo,
+        userRepo,
+        accountGateway: makeAccountGateway(),
+      }
+    );
 
     const updatedOrganization = await organizationRepo.findById(
       createResult.organizationId
     );
     expect(updatedOrganization!.rank.value).toBe("advanced");
     expect(updatedOrganization!.onboardingCompleted).toBe(true);
+    expect(updatedOrganization!.stripeCustomerId).toBe("cus_test_org");
+    expect(updatedOrganization!.stripeSubscriptionId).toBe("sub_test_org");
 
     const updatedUser = await userRepo.findByClerkUserId(TEST_CLERK_USER_ID);
     expect(updatedUser!.onboardingCompleted).toBe(true);

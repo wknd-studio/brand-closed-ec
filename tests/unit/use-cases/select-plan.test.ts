@@ -53,8 +53,10 @@ describe("selectPlan", () => {
     expect(saved.rank.value).toBe("standard");
   });
 
-  it("organizationIdが指定された場合: organizationのrank/onboarding_completedを更新し/へリダイレクト", async () => {
-    const organization = makeOrganization({ rank: "starter" });
+  it("organizationIdが指定された場合: organizationのrankを仮保存し/onboarding/paymentにリダイレクト", async () => {
+    const organization = makeOrganization({ rank: "starter" }).with({
+      onboardingCompleted: false,
+    });
     const organizationRepo = makeOrganizationRepo(organization);
     const userRepo = makeUserRepo();
     const accountGateway = makeAccountGateway();
@@ -64,13 +66,13 @@ describe("selectPlan", () => {
       { userRepo, accountGateway, organizationRepo }
     );
 
-    expect(result).toEqual({ redirectTo: "/" });
+    expect(result).toEqual({
+      redirectTo: `/onboarding/payment?plan=advanced&organizationId=${organization.id}`,
+    });
     const savedOrg = vi.mocked(organizationRepo.save).mock.calls[0][0];
     expect(savedOrg.rank.value).toBe("advanced");
-    expect(savedOrg.onboardingCompleted).toBe(true);
-    expect(userRepo.save).toHaveBeenCalled();
-    const savedUser = vi.mocked(userRepo.save).mock.calls[0][0];
-    expect(savedUser.onboardingCompleted).toBe(true);
+    expect(savedOrg.onboardingCompleted).toBe(false);
+    expect(userRepo.save).not.toHaveBeenCalled();
   });
 
   it("organizationIdが指定されているのにorganizationRepoが無い場合はエラー", async () => {

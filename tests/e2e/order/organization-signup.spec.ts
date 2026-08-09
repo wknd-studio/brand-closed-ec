@@ -76,8 +76,10 @@ test.describe("法人セルフサインアップ", () => {
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-    // "/"は認証済みユーザーを常に/shopへリダイレクトする既存仕様
-    await expect(page).toHaveURL("http://localhost:3000/shop");
+    // 法人も個人会員と同じくStripe Checkoutで初期費用・月額費用を決済する
+    // （実際の決済はStripe側のため、Checkout画面への到達までを確認する。
+    // registration.spec.tsの個人向けE2Eと同じ検証範囲）
+    await expect(page).toHaveURL(/checkout\.stripe\.com/);
 
     const { data: organization } = await supabaseAdmin()
       .from("organizations")
@@ -85,8 +87,10 @@ test.describe("法人セルフサインアップ", () => {
       .eq("name", organizationName)
       .single();
     expect(organization).not.toBeNull();
+    // rankは決済ページ遷移前に仮保存されるが、onboarding_completedは
+    // Stripe Webhook（決済完了）を経てから確定するため、この時点ではfalseのまま
     expect(organization!.rank).toBe("starter");
-    expect(organization!.onboarding_completed).toBe(true);
+    expect(organization!.onboarding_completed).toBe(false);
 
     const { data: memberships } = await supabaseAdmin()
       .from("organization_memberships")
