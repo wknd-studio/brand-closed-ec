@@ -1,5 +1,6 @@
 import { Organization } from "@/domain/entities/organization";
 import { OrganizationMembership } from "@/domain/entities/organization-membership";
+import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
@@ -11,6 +12,10 @@ const INVOICE_REGISTRATION_NUMBER_PATTERN = /^T\d{13}$/;
 
 export type CreateOrganizationInput = {
   clerkUserId: string;
+  // Clerkのuser.createdウェブフックがまだ届いていない場合に、usersレコードを
+  // 新規作成するために使う（法人登録は個人のselectPlanを経由しないため、
+  // 既存の個人フローと違ってusersレコードが存在しない状態で呼ばれ得る）
+  email: string;
   organizationName: string;
   representativeName: string;
   phoneNumber: string;
@@ -58,8 +63,27 @@ export async function createOrganization(
     return { type: "error", reason: "duplicate_name" };
   }
 
-  const user = await userRepo.findByClerkUserId(input.clerkUserId);
-  if (!user) throw new Error("ユーザーが見つかりません");
+  let user = await userRepo.findByClerkUserId(input.clerkUserId);
+  if (!user) {
+    user = User.of({
+      id: crypto.randomUUID(),
+      clerkUserId: input.clerkUserId,
+      email: input.email,
+      firstName: "",
+      lastName: "",
+      phoneNumber: "",
+      profileCompletedAt: null,
+      rank: MemberRank.of("starter"),
+      subscribedAt: null,
+      onboardingCompleted: false,
+      termsAgreedAt: null,
+      termsVersion: null,
+      deletedAt: null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+    });
+    await userRepo.save(user);
+  }
 
   const { clerkOrgId } = await organizationGateway.createOrganization({
     name: input.organizationName,

@@ -1,6 +1,8 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
+import { currentUser } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createOrganization as createOrganizationUseCase } from "@/use-cases/create-organization";
 import { createAdminClient } from "@/lib/supabase/server-admin";
@@ -21,6 +23,9 @@ export async function createOrganizationAction(
   const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
+  const user = await currentUser();
+  const email = user?.emailAddresses[0]?.emailAddress ?? "";
+
   const organizationName = String(formData.get("organizationName") ?? "");
   const representativeName = String(formData.get("representativeName") ?? "");
   const phoneNumber = String(formData.get("phoneNumber") ?? "");
@@ -39,6 +44,7 @@ export async function createOrganizationAction(
     const result = await createOrganizationUseCase(
       {
         clerkUserId: userId,
+        email,
         organizationName,
         representativeName,
         phoneNumber,
@@ -76,6 +82,10 @@ export async function createOrganizationAction(
           "適格請求書発行事業者登録番号の形式が不正です（例: T1234567890123）",
       };
     }
+    Sentry.captureException(err, {
+      tags: { action: "createOrganizationAction" },
+      extra: { clerkUserId: userId },
+    });
     return { error: "組織の作成に失敗しました" };
   }
 }

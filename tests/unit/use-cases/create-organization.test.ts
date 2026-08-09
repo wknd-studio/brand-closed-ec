@@ -12,6 +12,7 @@ import {
 function baseInput() {
   return {
     clerkUserId: "clerk-1",
+    email: "test@example.com",
     organizationName: "株式会社テスト",
     representativeName: "山田太郎",
     phoneNumber: "0312345678",
@@ -76,5 +77,27 @@ describe("createOrganization", () => {
     });
 
     expect(result).toEqual({ type: "error", reason: "duplicate_name" });
+  });
+
+  it("usersレコードが未作成の場合（webhook未到達）でも新規作成して組織を作成する", async () => {
+    const organizationRepo = makeOrganizationRepo();
+    const membershipRepo = makeOrganizationMembershipRepo();
+    const organizationGateway = makeOrganizationGateway();
+    const userRepo = makeUserRepo();
+    userRepo.findByClerkUserId = async () => null;
+
+    const result = await createOrganization(baseInput(), {
+      organizationRepo,
+      membershipRepo,
+      organizationGateway,
+      userRepo,
+    });
+
+    expect(result.type).toBe("created");
+    expect(userRepo.save).toHaveBeenCalled();
+    const savedUser = (userRepo.save as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(savedUser.clerkUserId).toBe("clerk-1");
+    expect(savedUser.email).toBe("test@example.com");
   });
 });

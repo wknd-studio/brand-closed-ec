@@ -89,6 +89,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
     const createResult = await createOrganization(
       {
         clerkUserId: TEST_CLERK_USER_ID,
+        email: "org-onboarding@example.com",
         organizationName: "統合テスト株式会社",
         representativeName: "山田太郎",
         phoneNumber: "0312345678",
