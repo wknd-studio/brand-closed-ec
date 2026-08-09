@@ -1,6 +1,7 @@
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 
 export const ORDER_STATUS_VALUES = [
+  "pending_approval",
   "pending_payment",
   "confirming",
   "limit_exceeded",

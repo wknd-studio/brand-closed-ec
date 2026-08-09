@@ -8,6 +8,10 @@ describe("OrderStatus", () => {
       expect(OrderStatus.of("paid").value).toBe("paid");
     });
 
+    it("pending_approval を受け付ける", () => {
+      expect(OrderStatus.of("pending_approval").value).toBe("pending_approval");
+    });
+
     it("無効な値はエラーになる", () => {
       expect(() => OrderStatus.of("unknown")).toThrow();
     });

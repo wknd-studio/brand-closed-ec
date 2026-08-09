@@ -31,6 +31,19 @@ export class MonthlyPeriod {
     );
   }
 
+  static fromBillingAnchorDay(
+    billingAnchorDay: number | null,
+    now: Date = new Date()
+  ): MonthlyPeriod {
+    if (billingAnchorDay === null) {
+      return MonthlyPeriod.fromSubscribedAt(null, now);
+    }
+    return MonthlyPeriod.fromSubscribedAt(
+      new Date(now.getFullYear(), now.getMonth(), billingAnchorDay),
+      now
+    );
+  }
+
   contains(date: Date): boolean {
     return date >= this.start && date < this.end;
   }
