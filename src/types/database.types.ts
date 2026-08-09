@@ -42,6 +42,7 @@ export type Database = {
           created_at: string;
           id: string;
           is_default: boolean;
+          organization_id: string | null;
           phone_number: string;
           postal_code: string;
           prefecture: string;
@@ -58,6 +59,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           is_default?: boolean;
+          organization_id?: string | null;
           phone_number: string;
           postal_code: string;
           prefecture: string;
@@ -74,6 +76,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           is_default?: boolean;
+          organization_id?: string | null;
           phone_number?: string;
           postal_code?: string;
           prefecture?: string;
@@ -84,6 +87,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "addresses_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "addresses_user_id_fkey";
             columns: ["user_id"];
@@ -203,12 +213,17 @@ export type Database = {
       };
       orders: {
         Row: {
+          approval_status: string | null;
+          approved_at: string | null;
+          approved_by_user_id: string | null;
           billing_address_snapshot: Json;
           created_at: string;
           id: string;
           monthly_limit_at_order: number;
+          organization_id: string | null;
           payment_flow: Database["public"]["Enums"]["order_payment_flow"];
           rank_at_order: Database["public"]["Enums"]["member_rank"];
+          requested_by_user_id: string | null;
           shipping_address_snapshot: Json;
           split_group_id: string | null;
           status: Database["public"]["Enums"]["order_status"];
@@ -218,12 +233,17 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          approval_status?: string | null;
+          approved_at?: string | null;
+          approved_by_user_id?: string | null;
           billing_address_snapshot: Json;
           created_at?: string;
           id?: string;
           monthly_limit_at_order: number;
+          organization_id?: string | null;
           payment_flow: Database["public"]["Enums"]["order_payment_flow"];
           rank_at_order: Database["public"]["Enums"]["member_rank"];
+          requested_by_user_id?: string | null;
           shipping_address_snapshot: Json;
           split_group_id?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
@@ -233,12 +253,17 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          approval_status?: string | null;
+          approved_at?: string | null;
+          approved_by_user_id?: string | null;
           billing_address_snapshot?: Json;
           created_at?: string;
           id?: string;
           monthly_limit_at_order?: number;
+          organization_id?: string | null;
           payment_flow?: Database["public"]["Enums"]["order_payment_flow"];
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
+          requested_by_user_id?: string | null;
           shipping_address_snapshot?: Json;
           split_group_id?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
@@ -249,6 +274,27 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "orders_approved_by_user_id_fkey";
+            columns: ["approved_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "orders_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "orders_requested_by_user_id_fkey";
+            columns: ["requested_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "orders_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
@@ -256,6 +302,123 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      organization_memberships: {
+        Row: {
+          clerk_role: string;
+          created_at: string;
+          id: string;
+          organization_id: string;
+          user_id: string;
+        };
+        Insert: {
+          clerk_role: string;
+          created_at?: string;
+          id?: string;
+          organization_id: string;
+          user_id: string;
+        };
+        Update: {
+          clerk_role?: string;
+          created_at?: string;
+          id?: string;
+          organization_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_memberships_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_memberships_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organizations: {
+        Row: {
+          address_line1: string;
+          address_line2: string | null;
+          billing_anchor_day: number | null;
+          city: string;
+          clerk_org_id: string;
+          created_at: string;
+          deleted_at: string | null;
+          id: string;
+          initial_fee_paid_rank:
+            | Database["public"]["Enums"]["member_rank"]
+            | null;
+          invoice_registration_number: string;
+          name: string;
+          onboarding_completed: boolean;
+          pending_rank: Database["public"]["Enums"]["member_rank"] | null;
+          phone_number: string;
+          postal_code: string;
+          prefecture: string;
+          rank: Database["public"]["Enums"]["member_rank"];
+          representative_name: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          stripe_subscription_schedule_id: string | null;
+        };
+        Insert: {
+          address_line1: string;
+          address_line2?: string | null;
+          billing_anchor_day?: number | null;
+          city: string;
+          clerk_org_id: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          id?: string;
+          initial_fee_paid_rank?:
+            | Database["public"]["Enums"]["member_rank"]
+            | null;
+          invoice_registration_number: string;
+          name: string;
+          onboarding_completed?: boolean;
+          pending_rank?: Database["public"]["Enums"]["member_rank"] | null;
+          phone_number: string;
+          postal_code: string;
+          prefecture: string;
+          rank?: Database["public"]["Enums"]["member_rank"];
+          representative_name: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_subscription_schedule_id?: string | null;
+        };
+        Update: {
+          address_line1?: string;
+          address_line2?: string | null;
+          billing_anchor_day?: number | null;
+          city?: string;
+          clerk_org_id?: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          id?: string;
+          initial_fee_paid_rank?:
+            | Database["public"]["Enums"]["member_rank"]
+            | null;
+          invoice_registration_number?: string;
+          name?: string;
+          onboarding_completed?: boolean;
+          pending_rank?: Database["public"]["Enums"]["member_rank"] | null;
+          phone_number?: string;
+          postal_code?: string;
+          prefecture?: string;
+          rank?: Database["public"]["Enums"]["member_rank"];
+          representative_name?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_subscription_schedule_id?: string | null;
+        };
+        Relationships: [];
       };
       users: {
         Row: {
@@ -267,6 +430,8 @@ export type Database = {
           id: string;
           last_name: string;
           onboarding_completed: boolean;
+          phone_number: string;
+          profile_completed_at: string | null;
           rank: Database["public"]["Enums"]["member_rank"];
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
@@ -284,6 +449,8 @@ export type Database = {
           id?: string;
           last_name?: string;
           onboarding_completed?: boolean;
+          phone_number?: string;
+          profile_completed_at?: string | null;
           rank?: Database["public"]["Enums"]["member_rank"];
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
@@ -301,6 +468,8 @@ export type Database = {
           id?: string;
           last_name?: string;
           onboarding_completed?: boolean;
+          phone_number?: string;
+          profile_completed_at?: string | null;
           rank?: Database["public"]["Enums"]["member_rank"];
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
@@ -316,6 +485,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_current_org_id: { Args: never; Returns: string };
       get_current_user_id: { Args: never; Returns: string };
     };
     Enums: {
@@ -332,6 +502,7 @@ export type Database = {
         | "premium";
       order_payment_flow: "checkout" | "invoice";
       order_status:
+        | "pending_approval"
         | "pending_payment"
         | "confirming"
         | "limit_exceeded"
@@ -490,6 +661,7 @@ export const Constants = {
       ],
       order_payment_flow: ["checkout", "invoice"],
       order_status: [
+        "pending_approval",
         "pending_payment",
         "confirming",
         "limit_exceeded",
