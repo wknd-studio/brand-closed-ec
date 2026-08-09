@@ -4,6 +4,7 @@ import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
+import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 
 export type SelectPlanInput = {
   clerkUserId: string;
@@ -11,7 +12,10 @@ export type SelectPlanInput = {
   firstName: string;
   lastName: string;
   plan: MemberRankValue;
-  termsVersion: string;
+  // Clerkのlegal_accepted_at（サインアップ時の利用規約・プライバシーポリシー同意日時）。
+  // 通常はuser.createdウェブフック（createUser）が既にusers.terms_agreed_atへ
+  // 記録済みのため、ここではウェブフック未到達時の新規作成フォールバックにのみ使う
+  legalAcceptedAt: Date | null;
   // 法人組織のオンボーディング中に呼ばれる場合のみ指定する（T021で作成済みの組織ID）
   organizationId?: string;
 };
@@ -47,16 +51,15 @@ export async function selectPlan(
     };
   }
 
-  const now = new Date();
-
   const existing = await userRepo.findByClerkUserId(input.clerkUserId);
 
+  // termsAgreedAt/termsVersionはuser.createdウェブフック（createUser）が
+  // Clerkのlegal_accepted_atから記録済みのため、既存ユーザーの場合はここで
+  // 上書きしない。ウェブフック未到達の新規作成時のみinput.legalAcceptedAtから設定する
   const user = existing
     ? existing.with({
         email: input.email,
         rank: MemberRank.of(input.plan),
-        termsAgreedAt: now,
-        termsVersion: input.termsVersion,
         onboardingCompleted: false,
       })
     : User.of({
@@ -70,8 +73,8 @@ export async function selectPlan(
         rank: MemberRank.of(input.plan),
         subscribedAt: null,
         onboardingCompleted: false,
-        termsAgreedAt: now,
-        termsVersion: input.termsVersion,
+        termsAgreedAt: input.legalAcceptedAt,
+        termsVersion: input.legalAcceptedAt ? CURRENT_TERMS_VERSION : null,
         deletedAt: null,
         stripeCustomerId: null,
         stripeSubscriptionId: null,

@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   try {
     invitation = await clerk.invitations.createInvitation({
       emailAddress,
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/welcome`,
+      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
       ignoreExisting: false,
     });
   } catch (err: unknown) {

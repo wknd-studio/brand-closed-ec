@@ -13,7 +13,7 @@ const baseInput = {
   email: "test@example.com",
   firstName: "太郎",
   lastName: "山田",
-  termsVersion: "2026-05-25",
+  legalAcceptedAt: new Date(2026, 0, 1),
 };
 
 describe("selectPlan", () => {
@@ -31,6 +31,7 @@ describe("selectPlan", () => {
     const saved = vi.mocked(userRepo.save).mock.calls[0][0];
     expect(saved.rank.value).toBe("starter");
     expect(saved.onboardingCompleted).toBe(false);
+    expect(saved.termsAgreedAt).toEqual(new Date(2026, 0, 1));
     expect(saved.termsVersion).toBe("2026-05-25");
     expect(accountGateway.updateOnboardingMetadata).toHaveBeenCalledWith(
       "clerk-1",

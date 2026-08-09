@@ -11,8 +11,6 @@ import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gatewa
 import { RANK_ORDER } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
-const TERMS_VERSION = "2026-05-25";
-
 // ENTERPRISEは個別契約のためセルフサービスの選択肢から除外する（FR-006）
 const VALID_PLANS: MemberRankValue[] = RANK_ORDER.filter(
   (rank) => rank !== "enterprise"
@@ -39,6 +37,9 @@ export async function selectPlan(
   const email = user?.emailAddresses[0]?.emailAddress ?? "";
   const firstName = user?.firstName ?? "";
   const lastName = user?.lastName ?? "";
+  const legalAcceptedAt = user?.legalAcceptedAt
+    ? new Date(user.legalAcceptedAt)
+    : null;
 
   const db = createAdminClient();
 
@@ -50,7 +51,7 @@ export async function selectPlan(
         firstName,
         lastName,
         plan,
-        termsVersion: TERMS_VERSION,
+        legalAcceptedAt,
         organizationId: organizationId ? String(organizationId) : undefined,
       },
       {

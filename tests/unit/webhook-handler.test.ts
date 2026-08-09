@@ -99,6 +99,7 @@ describe("POST /api/webhooks/clerk", () => {
           email_addresses: [{ email_address: "test@example.com" }],
           first_name: "太郎",
           last_name: "山田",
+          legal_accepted_at: 1767225600000,
         },
       };
       setupWebhook(() => payload);
@@ -112,7 +113,32 @@ describe("POST /api/webhooks/clerk", () => {
           email: "test@example.com",
           firstName: "太郎",
           lastName: "山田",
+          legalAcceptedAt: new Date(1767225600000),
         },
+        expect.any(Object)
+      );
+    });
+
+    it("legal_accepted_atがnullの場合はlegalAcceptedAt: nullでcreateUserを呼ぶ", async () => {
+      setupHeaders();
+
+      const payload = {
+        type: "user.created",
+        data: {
+          id: "user_def",
+          email_addresses: [{ email_address: "test2@example.com" }],
+          first_name: "花子",
+          last_name: "鈴木",
+          legal_accepted_at: null,
+        },
+      };
+      setupWebhook(() => payload);
+      vi.mocked(createUser).mockResolvedValue(undefined);
+
+      const res = await POST(makeRequest(JSON.stringify(payload)));
+      expect(res.status).toBe(200);
+      expect(createUser).toHaveBeenCalledWith(
+        expect.objectContaining({ legalAcceptedAt: null }),
         expect.any(Object)
       );
     });

@@ -91,6 +91,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
       {
         clerkUserId: TEST_CLERK_USER_ID,
         email: "org-onboarding@example.com",
+        legalAcceptedAt: new Date(),
         organizationName: "統合テスト株式会社",
         representativeName: "山田太郎",
         phoneNumber: "0312345678",
@@ -135,7 +136,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         firstName: "太郎",
         lastName: "山田",
         plan: "advanced",
-        termsVersion: "2026-05-25",
+        legalAcceptedAt: new Date(),
         organizationId: createResult.organizationId,
       },
       {
