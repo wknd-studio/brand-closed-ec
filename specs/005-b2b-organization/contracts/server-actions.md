@@ -31,8 +31,9 @@ function resolveMemberContext(
 interface CreateOrganizationParams {
   clerkUserId: string;
   organizationName: string;
-  representativeName: string;
-  phoneNumber: string;
+  representativeLastName: string;
+  representativeFirstName: string;
+  phoneNumber: string; // PhoneNumber値オブジェクトで検証（0始まり10〜11桁）
   address: {
     postalCode: string;
     prefecture: string;
@@ -53,6 +54,8 @@ type CreateOrganizationResult =
         | "clerk_api_error";
     };
 ```
+
+**PR #143での変更**: 代表者名は姓・名の2つの入力（`representativeLastName` / `representativeFirstName`）に分割した（`organizations.representative_name`には結合して保存）。代表者はセルフサインアップした本人であるという前提のもと、この2つの値と`phoneNumber`をそのまま呼び出し元ユーザーの`users.first_name` / `last_name` / `phone_number`にも反映する（後述のCompleteProfileUseCaseへの別途誘導を不要にするための設計）。あわせてフォーム側に郵便番号自動補完（zipcloud）を追加した。
 
 ## InviteMemberUseCase
 
@@ -126,24 +129,9 @@ interface RejectOrderParams {
 
 ## CompleteProfileUseCase
 
-個人会員・法人代表者・法人一般担当者いずれも共通で使う、氏名・電話番号入力完了の処理（User Story 2）。
+**スコープ外（PR #143）**: 個人会員・法人代表者・法人一般担当者共通のプロフィール入力完了UseCase、および`middleware.ts`によるゲート（`users.first_name` / `last_name` / `phone_number`のいずれかが空の場合に入力画面へリダイレクト）は実装しない。本機能は本番未リリースで、この仕組みが本来対象とする「既にオンボーディングを完了している既存会員」が実在しないため。代わりに、氏名・電話番号は新規サインアップ時の各オンボーディング画面内で収集する（個人は`SelectPlanUseCase`の拡張、法人代表者は`CreateOrganizationUseCase`の拡張。上述）。将来的に既存会員への遡及対応が必要になった場合は、本セクションの設計を復活させて実装する（FR-020参照）。
 
-```ts
-interface CompleteProfileParams {
-  clerkUserId: string;
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-}
-
-type CompleteProfileResult =
-  | { type: "completed" }
-  | { type: "error"; reason: "validation_error" };
-```
-
-`middleware.ts` 側は、`users.first_name` / `last_name` / `phone_number` のいずれかが空の場合にこのUseCaseの入力画面へリダイレクトする（R7参照）。新規サインアップはオンボーディング完了フローの一部として、既存会員は次回ログイン時のゲートとして同じUseCaseを呼ぶ。
-
-**既存不備の是正（R9）**: `src/use-cases/select-plan.ts` はすでに`firstName`/`lastName`を受け取っているが、`User`エンティティに永続化されず握りつぶされている。本UseCase実装時に、`User`エンティティへのフィールド追加と`UserRepository`実装のマッピング追加を合わせて行う。
+**既存不備の是正（R9、実装済み）**: `src/use-cases/select-plan.ts` は`firstName`/`lastName`を受け取っていたが`User`エンティティに永続化されず握りつぶされていた。PR #143でこのバグを修正し、あわせて`phoneNumber`も受け取って`PhoneNumber`値オブジェクトで検証・永続化するよう拡張した（`SelectPlanParams`に`phoneNumber: string`を追加）。
 
 ## LeaveOrganizationUseCase（既存 `withdraw.ts` の拡張）
 
