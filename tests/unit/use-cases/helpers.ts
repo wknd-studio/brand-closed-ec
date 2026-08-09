@@ -3,6 +3,8 @@ import { User } from "@/domain/entities/user";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
 import { Address } from "@/domain/entities/address";
+import { Organization } from "@/domain/entities/organization";
+import { OrganizationMembership } from "@/domain/entities/organization-membership";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { Money } from "@/domain/value-objects/money";
 import { OrderStatus } from "@/domain/value-objects/order-status";
@@ -18,6 +20,9 @@ import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
+import type { OrganizationRepository } from "@/repositories/organization-repository";
+import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
+import type { OrganizationGateway } from "@/repositories/organization-gateway";
 
 export function makeUser(
   overrides?: Partial<{
@@ -225,5 +230,82 @@ export function makeAccountGateway(): AccountGateway {
   return {
     deleteUser: vi.fn().mockResolvedValue(undefined),
     updateOnboardingMetadata: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeOrganization(
+  overrides?: Partial<{ rank: string; billingAnchorDay: number | null }>
+) {
+  return Organization.of({
+    id: "00000000-0000-0000-0000-000000000101",
+    clerkOrgId: "org_test_1",
+    name: "株式会社テスト",
+    representativeName: "山田太郎",
+    phoneNumber: "0312345678",
+    postalCode: "1000001",
+    prefecture: "東京都",
+    city: "千代田区",
+    addressLine1: "1-1-1",
+    addressLine2: null,
+    invoiceRegistrationNumber: "T1234567890123",
+    onboardingCompleted: true,
+    rank: MemberRank.of(overrides?.rank ?? "standard"),
+    billingAnchorDay: overrides?.billingAnchorDay ?? 1,
+    pendingRank: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    stripeSubscriptionScheduleId: null,
+    initialFeePaidRank: null,
+    deletedAt: null,
+  });
+}
+
+export function makeOrganizationMembership(
+  overrides?: Partial<{ clerkRole: "org:admin" | "org:member" }>
+) {
+  return OrganizationMembership.of({
+    id: "00000000-0000-0000-0000-000000000102",
+    organizationId: "00000000-0000-0000-0000-000000000101",
+    userId: "00000000-0000-0000-0000-000000000001",
+    clerkRole: overrides?.clerkRole ?? "org:admin",
+    createdAt: new Date(2026, 0, 1),
+  });
+}
+
+export function makeOrganizationRepo(
+  organization: Organization | null = null
+): OrganizationRepository {
+  return {
+    findById: vi.fn().mockResolvedValue(organization),
+    findByClerkOrgId: vi.fn().mockResolvedValue(organization),
+    findByName: vi.fn().mockResolvedValue(null),
+    save: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeOrganizationMembershipRepo(
+  memberships: OrganizationMembership[] = []
+): OrganizationMembershipRepository {
+  return {
+    findByUserId: vi.fn().mockResolvedValue(memberships),
+    findByOrganizationId: vi.fn().mockResolvedValue(memberships),
+    findByOrganizationAndUser: vi
+      .fn()
+      .mockResolvedValue(memberships[0] ?? null),
+    countAdmins: vi
+      .fn()
+      .mockResolvedValue(
+        memberships.filter((m) => m.clerkRole === "org:admin").length
+      ),
+    save: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeOrganizationGateway(): OrganizationGateway {
+  return {
+    createOrganization: vi.fn().mockResolvedValue({ clerkOrgId: "org_new_1" }),
+    inviteMember: vi.fn().mockResolvedValue(undefined),
+    deleteOrganization: vi.fn().mockResolvedValue(undefined),
   };
 }
