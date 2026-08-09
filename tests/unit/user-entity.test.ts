@@ -7,6 +7,10 @@ function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
     id: "user-001",
     clerkUserId: "clerk_abc123",
     email: "test@example.com",
+    firstName: "太郎",
+    lastName: "山田",
+    phoneNumber: "09012345678",
+    profileCompletedAt: new Date(2026, 0, 10),
     rank: MemberRank.of("basic"),
     subscribedAt: new Date(2026, 0, 10),
     onboardingCompleted: true,
@@ -54,6 +58,38 @@ describe("User", () => {
       expect(makeUser({ deletedAt: new Date(2026, 0, 1) }).isWithdrawn()).toBe(
         true
       );
+    });
+  });
+
+  describe("hasCompletedProfile()", () => {
+    it("氏名・電話番号がすべて入力済みのとき true", () => {
+      expect(
+        makeUser({
+          firstName: "太郎",
+          lastName: "山田",
+          phoneNumber: "09012345678",
+        }).hasCompletedProfile()
+      ).toBe(true);
+    });
+
+    it("電話番号が空のとき false", () => {
+      expect(
+        makeUser({
+          firstName: "太郎",
+          lastName: "山田",
+          phoneNumber: "",
+        }).hasCompletedProfile()
+      ).toBe(false);
+    });
+
+    it("氏名が空のとき false", () => {
+      expect(
+        makeUser({
+          firstName: "",
+          lastName: "",
+          phoneNumber: "09012345678",
+        }).hasCompletedProfile()
+      ).toBe(false);
     });
   });
 

@@ -8,6 +8,10 @@ type UserRow = {
   id: string;
   clerk_user_id: string;
   email: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  profile_completed_at: string | null;
   rank: string;
   subscribed_at: string | null;
   onboarding_completed: boolean;
@@ -23,6 +27,12 @@ function toUser(row: UserRow): User {
     id: row.id,
     clerkUserId: row.clerk_user_id,
     email: row.email,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    phoneNumber: row.phone_number,
+    profileCompletedAt: row.profile_completed_at
+      ? new Date(row.profile_completed_at)
+      : null,
     rank: MemberRank.of(row.rank),
     subscribedAt: row.subscribed_at ? new Date(row.subscribed_at) : null,
     onboardingCompleted: row.onboarding_completed,
@@ -35,7 +45,7 @@ function toUser(row: UserRow): User {
 }
 
 const SELECT_FIELDS =
-  "id, clerk_user_id, email, rank, subscribed_at, onboarding_completed, terms_agreed_at, terms_version, deleted_at, stripe_customer_id, stripe_subscription_id";
+  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank, subscribed_at, onboarding_completed, terms_agreed_at, terms_version, deleted_at, stripe_customer_id, stripe_subscription_id";
 
 export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -63,6 +73,10 @@ export class SupabaseUserRepository implements UserRepository {
       id: user.id,
       clerk_user_id: user.clerkUserId,
       email: user.email,
+      first_name: user.firstName,
+      last_name: user.lastName,
+      phone_number: user.phoneNumber,
+      profile_completed_at: user.profileCompletedAt?.toISOString() ?? null,
       rank: user.rank.value,
       subscribed_at: user.subscribedAt?.toISOString() ?? null,
       onboarding_completed: user.onboardingCompleted,

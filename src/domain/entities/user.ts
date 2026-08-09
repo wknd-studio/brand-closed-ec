@@ -6,6 +6,10 @@ interface UserProps {
   id: string;
   clerkUserId: string;
   email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  profileCompletedAt: Date | null;
   rank: MemberRank;
   subscribedAt: Date | null;
   onboardingCompleted: boolean;
@@ -20,6 +24,10 @@ export class User {
   readonly id: string;
   readonly clerkUserId: string;
   readonly email: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phoneNumber: string;
+  readonly profileCompletedAt: Date | null;
   readonly rank: MemberRank;
   readonly subscribedAt: Date | null;
   readonly onboardingCompleted: boolean;
@@ -33,6 +41,10 @@ export class User {
     this.id = props.id;
     this.clerkUserId = props.clerkUserId;
     this.email = props.email;
+    this.firstName = props.firstName;
+    this.lastName = props.lastName;
+    this.phoneNumber = props.phoneNumber;
+    this.profileCompletedAt = props.profileCompletedAt;
     this.rank = props.rank;
     this.subscribedAt = props.subscribedAt;
     this.onboardingCompleted = props.onboardingCompleted;
@@ -56,6 +68,10 @@ export class User {
       id: this.id,
       clerkUserId: this.clerkUserId,
       email: this.email,
+      firstName: this.firstName,
+      lastName: this.lastName,
+      phoneNumber: this.phoneNumber,
+      profileCompletedAt: this.profileCompletedAt,
       rank: this.rank,
       subscribedAt: this.subscribedAt,
       onboardingCompleted: this.onboardingCompleted,
@@ -81,5 +97,11 @@ export class User {
 
   hasCompletedOnboarding(): boolean {
     return this.onboardingCompleted;
+  }
+
+  hasCompletedProfile(): boolean {
+    return (
+      this.firstName !== "" && this.lastName !== "" && this.phoneNumber !== ""
+    );
   }
 }
