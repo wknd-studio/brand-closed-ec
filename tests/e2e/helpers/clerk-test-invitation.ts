@@ -57,14 +57,8 @@ export async function createTestInvitation(emailAddress: string) {
 /**
  * 招待受諾→利用規約同意→パスワード設定までの、実際の画面操作を伴う
  * 新規会員登録フロー（`registration.spec.ts`等で重複していた処理を共通化）。
- * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/plan）の状態になる。
- *
- * 注: Clerk Dashboard側の「サインアップ後の遷移先」設定が/onboarding/planを
- * 指しているため（本機能導入前からの設定）、サインアップ直後はmiddleware.tsの
- * ゲートを経由せず直接このURLに着地する。法人登録など/onboarding/account-type
- * から始まるフローを検証する場合は、このヘルパー呼び出し後に明示的に
- * page.goto("/onboarding/account-type")すること。Dashboard側の設定を
- * /onboarding/account-typeに変更すれば、直接そちらに着地するようになる。
+ * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/account-type）の状態になる
+ * （next.config.tsのNEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URLで指定）。
  */
 export async function signUpViaInvitation(
   page: Page,
@@ -84,11 +78,28 @@ export async function signUpViaInvitation(
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Continue" }).click();
 
+  await expect(page).toHaveURL(/\/onboarding\/account-type/);
+}
+
+/**
+ * `signUpViaInvitation`に加え、個人/法人選択画面で「個人として登録」を選び
+ * /onboarding/planまで進める（個人向けの各E2Eテストの共通前段）。
+ */
+export async function signUpAsIndividual(
+  page: Page,
+  emailAddress: string,
+  password: string
+): Promise<void> {
+  await signUpViaInvitation(page, emailAddress, password);
+
+  await page.getByRole("radio", { name: /個人として登録/ }).check();
+  await page.getByRole("button", { name: /次へ/ }).click();
+
   await expect(page).toHaveURL(/\/onboarding\/plan/);
 }
 
 /**
- * `signUpViaInvitation`に加え、プラン選択画面で実際にSTARTERプランを
+ * `signUpAsIndividual`に加え、プラン選択画面で実際にSTARTERプランを
  * 選択して`selectPlan`サーバーアクションを実行させ（実際のauth()が返す
  * 正しいclerk_user_idでusersテーブルの行が作成される）、Stripeでの
  * 実決済は行わず本テストの前提として必要な「決済完了・オンボーディング
@@ -100,7 +111,7 @@ export async function signUpAndCompleteOnboarding(
   emailAddress: string,
   password: string
 ): Promise<void> {
-  await signUpViaInvitation(page, emailAddress, password);
+  await signUpAsIndividual(page, emailAddress, password);
 
   await page.getByRole("radio", { name: /STARTER/ }).check();
   await page.getByRole("button", { name: /このプランで始める/ }).click();

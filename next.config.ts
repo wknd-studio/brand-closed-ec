@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in",
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up",
     NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL: "/shop",
-    NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: "/onboarding/plan",
+    NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: "/onboarding/account-type",
   },
   images: {
     remotePatterns: [

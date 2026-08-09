@@ -46,10 +46,6 @@ test.describe("法人セルフサインアップ", () => {
   }) => {
     await signUpViaInvitation(page, TEST_EMAIL, TEST_PASSWORD);
 
-    // Clerk Dashboard側の「サインアップ後の遷移先」が/onboarding/planを指しているため
-    // （clerk-test-invitation.tsのコメント参照）、法人登録を選ぶにはここから
-    // 明示的に/onboarding/account-typeへ遷移する
-    await page.goto("/onboarding/account-type");
     await page.getByRole("radio", { name: /法人として登録/ }).check();
     await page.getByRole("button", { name: /次へ/ }).click();
 
@@ -80,7 +76,8 @@ test.describe("法人セルフサインアップ", () => {
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-    await expect(page).toHaveURL("/");
+    // "/"は認証済みユーザーを常に/shopへリダイレクトする既存仕様
+    await expect(page).toHaveURL("http://localhost:3000/shop");
 
     const { data: organization } = await supabaseAdmin()
       .from("organizations")
