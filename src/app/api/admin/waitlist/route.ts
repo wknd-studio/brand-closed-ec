@@ -14,9 +14,11 @@ export async function GET() {
   }
 
   const clerk = await clerkClient();
-  const { data: invitations } = await clerk.invitations.getInvitationList();
+  const { data: waitlistEntries } = await clerk.waitlistEntries.list({
+    status: "pending",
+  });
 
-  return NextResponse.json(invitations);
+  return NextResponse.json(waitlistEntries);
 }
 
 export async function POST(req: Request) {
@@ -24,28 +26,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { emailAddress } = await req.json();
-  if (!emailAddress) {
+  const { waitlistEntryId } = await req.json();
+  if (!waitlistEntryId) {
     return NextResponse.json(
-      { error: "emailAddress is required" },
+      { error: "waitlistEntryId is required" },
       { status: 400 }
     );
   }
 
   const clerk = await clerkClient();
-  let invitation;
+  let waitlistEntry;
   try {
-    invitation = await clerk.invitations.createInvitation({
-      emailAddress,
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
-      ignoreExisting: false,
-    });
+    waitlistEntry = await clerk.waitlistEntries.invite(waitlistEntryId);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "招待の作成に失敗しました";
+    const msg = err instanceof Error ? err.message : "承認に失敗しました";
     return NextResponse.json({ error: msg }, { status: 422 });
   }
 
-  return NextResponse.json(invitation, { status: 201 });
+  return NextResponse.json(waitlistEntry);
 }
 
 export async function DELETE(req: Request) {
@@ -53,16 +51,22 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { invitationId } = await req.json();
-  if (!invitationId) {
+  const { waitlistEntryId } = await req.json();
+  if (!waitlistEntryId) {
     return NextResponse.json(
-      { error: "invitationId is required" },
+      { error: "waitlistEntryId is required" },
       { status: 400 }
     );
   }
 
   const clerk = await clerkClient();
-  await clerk.invitations.revokeInvitation(invitationId);
+  let waitlistEntry;
+  try {
+    waitlistEntry = await clerk.waitlistEntries.reject(waitlistEntryId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "却下に失敗しました";
+    return NextResponse.json({ error: msg }, { status: 422 });
+  }
 
-  return NextResponse.json({ revoked: true });
+  return NextResponse.json(waitlistEntry);
 }
