@@ -70,6 +70,38 @@ export default function PlanSelector({
       {organizationId && (
         <input type="hidden" name="organizationId" value={organizationId} />
       )}
+      {!organizationId && (
+        <div className="space-y-4 rounded border p-4">
+          <p className="text-sm font-medium">ご本人情報</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium">姓</label>
+              <input
+                name="lastName"
+                required
+                className="mt-1 w-full rounded border p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">名</label>
+              <input
+                name="firstName"
+                required
+                className="mt-1 w-full rounded border p-2"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium">電話番号</label>
+            <input
+              name="phoneNumber"
+              required
+              placeholder="09012345678"
+              className="mt-1 w-full rounded border p-2"
+            />
+          </div>
+        </div>
+      )}
       <div className="grid gap-3">
         {PLANS.map((plan) => (
           <label

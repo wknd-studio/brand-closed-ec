@@ -29,15 +29,18 @@ export function makeUser(
     rank: string;
     onboardingCompleted: boolean;
     subscribedAt: Date | null;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
   }>
 ) {
   return User.of({
     id: "00000000-0000-0000-0000-000000000001",
     clerkUserId: "clerk-1",
     email: "test@example.com",
-    firstName: "太郎",
-    lastName: "山田",
-    phoneNumber: "09012345678",
+    firstName: overrides?.firstName ?? "太郎",
+    lastName: overrides?.lastName ?? "山田",
+    phoneNumber: overrides?.phoneNumber ?? "09012345678",
     profileCompletedAt: new Date(2026, 0, 1),
     rank: MemberRank.of(overrides?.rank ?? "standard"),
     subscribedAt: overrides?.subscribedAt ?? new Date(2026, 0, 1),

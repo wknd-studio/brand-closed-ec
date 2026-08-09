@@ -72,10 +72,10 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         id: crypto.randomUUID(),
         clerkUserId: TEST_CLERK_USER_ID,
         email: "org-onboarding@example.com",
-        firstName: "太郎",
-        lastName: "山田",
-        phoneNumber: "09012345678",
-        profileCompletedAt: new Date(),
+        firstName: "",
+        lastName: "",
+        phoneNumber: "",
+        profileCompletedAt: null,
         rank: MemberRank.of("starter"),
         subscribedAt: null,
         onboardingCompleted: false,
@@ -93,7 +93,8 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         email: "org-onboarding@example.com",
         legalAcceptedAt: new Date(),
         organizationName: "統合テスト株式会社",
-        representativeName: "山田太郎",
+        representativeLastName: "山田",
+        representativeFirstName: "太郎",
         phoneNumber: "0312345678",
         address: {
           postalCode: "1000001",
@@ -122,6 +123,12 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
     expect(organization!.rank.value).toBe("starter");
 
     const user = await userRepo.findByClerkUserId(TEST_CLERK_USER_ID);
+    // 代表者の氏名・電話番号が、組織作成時の入力からそのまま本人のプロフィールへ
+    // 反映されていること（/profile/complete等の別画面での二重入力を避ける設計）
+    expect(user!.lastName).toBe("山田");
+    expect(user!.firstName).toBe("太郎");
+    expect(user!.phoneNumber).toBe("0312345678");
+
     const membership = await membershipRepo.findByOrganizationAndUser(
       createResult.organizationId,
       user!.id
@@ -135,6 +142,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         email: "org-onboarding@example.com",
         firstName: "太郎",
         lastName: "山田",
+        phoneNumber: "0312345678",
         plan: "advanced",
         legalAcceptedAt: new Date(),
         organizationId: createResult.organizationId,

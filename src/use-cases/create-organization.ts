@@ -3,6 +3,7 @@ import { OrganizationMembership } from "@/domain/entities/organization-membershi
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
 import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
@@ -21,7 +22,8 @@ export type CreateOrganizationInput = {
   // 上記と同じ理由でusersレコードを新規作成する場合にのみ使う
   legalAcceptedAt: Date | null;
   organizationName: string;
-  representativeName: string;
+  representativeLastName: string;
+  representativeFirstName: string;
   phoneNumber: string;
   address: {
     postalCode: string;
@@ -62,32 +64,41 @@ export async function createOrganization(
     );
   }
 
+  const phoneNumber = PhoneNumber.of(input.phoneNumber);
+
   const existing = await organizationRepo.findByName(input.organizationName);
   if (existing) {
     return { type: "error", reason: "duplicate_name" };
   }
 
+  // 代表者はセルフサインアップした本人であるため、ここで入力された代表者名・
+  // 電話番号を、本人のusers.firstName/lastName/phoneNumberにもそのまま反映する
+  // （/profile/complete等の別画面での二重入力を避けるための設計）
   let user = await userRepo.findByClerkUserId(input.clerkUserId);
-  if (!user) {
-    user = User.of({
-      id: crypto.randomUUID(),
-      clerkUserId: input.clerkUserId,
-      email: input.email,
-      firstName: "",
-      lastName: "",
-      phoneNumber: "",
-      profileCompletedAt: null,
-      rank: MemberRank.of("starter"),
-      subscribedAt: null,
-      onboardingCompleted: false,
-      termsAgreedAt: input.legalAcceptedAt,
-      termsVersion: input.legalAcceptedAt ? CURRENT_TERMS_VERSION : null,
-      deletedAt: null,
-      stripeCustomerId: null,
-      stripeSubscriptionId: null,
-    });
-    await userRepo.save(user);
-  }
+  user = user
+    ? user.with({
+        firstName: input.representativeFirstName,
+        lastName: input.representativeLastName,
+        phoneNumber: phoneNumber.value,
+      })
+    : User.of({
+        id: crypto.randomUUID(),
+        clerkUserId: input.clerkUserId,
+        email: input.email,
+        firstName: input.representativeFirstName,
+        lastName: input.representativeLastName,
+        phoneNumber: phoneNumber.value,
+        profileCompletedAt: null,
+        rank: MemberRank.of("starter"),
+        subscribedAt: null,
+        onboardingCompleted: false,
+        termsAgreedAt: input.legalAcceptedAt,
+        termsVersion: input.legalAcceptedAt ? CURRENT_TERMS_VERSION : null,
+        deletedAt: null,
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+      });
+  await userRepo.save(user);
 
   const { clerkOrgId } = await organizationGateway.createOrganization({
     name: input.organizationName,
@@ -98,8 +109,8 @@ export async function createOrganization(
     id: crypto.randomUUID(),
     clerkOrgId,
     name: input.organizationName,
-    representativeName: input.representativeName,
-    phoneNumber: input.phoneNumber,
+    representativeName: `${input.representativeLastName}${input.representativeFirstName}`,
+    phoneNumber: phoneNumber.value,
     postalCode: input.address.postalCode,
     prefecture: input.address.prefecture,
     city: input.address.city,
