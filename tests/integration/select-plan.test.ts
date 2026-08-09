@@ -46,7 +46,7 @@ describe("selectPlan（実DB）", () => {
           firstName: "テスト",
           lastName: plan,
           plan,
-          termsVersion: "2026-05-25",
+          legalAcceptedAt: new Date(),
         },
         { userRepo, accountGateway: makeAccountGateway() }
       );
@@ -68,7 +68,7 @@ describe("selectPlan（実DB）", () => {
         firstName: "テスト",
         lastName: "初回",
         plan: "starter",
-        termsVersion: "2026-05-25",
+        legalAcceptedAt: new Date(),
       },
       { userRepo, accountGateway: makeAccountGateway() }
     );
@@ -80,7 +80,7 @@ describe("selectPlan（実DB）", () => {
         firstName: "テスト",
         lastName: "初回",
         plan: "premium",
-        termsVersion: "2026-05-25",
+        legalAcceptedAt: new Date(),
       },
       { userRepo, accountGateway: makeAccountGateway() }
     );

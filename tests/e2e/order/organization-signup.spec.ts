@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   signUpViaInvitation,
   cleanupTestUser,
+  cleanupTestOrganization,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_EMAIL = "info+clerk_test_org_signup@wknd-studio.com";
@@ -13,22 +14,6 @@ function supabaseAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-async function cleanupTestOrganization(name: string) {
-  const supabase = supabaseAdmin();
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("id")
-    .eq("name", name)
-    .maybeSingle();
-  if (org) {
-    await supabase
-      .from("organization_memberships")
-      .delete()
-      .eq("organization_id", org.id);
-    await supabase.from("organizations").delete().eq("id", org.id);
-  }
 }
 
 // quickstart.md シナリオ1: 代表者のセルフサインアップによる法人組織作成

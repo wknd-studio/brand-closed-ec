@@ -13,6 +13,7 @@ function baseInput() {
   return {
     clerkUserId: "clerk-1",
     email: "test@example.com",
+    legalAcceptedAt: new Date(2026, 0, 1),
     organizationName: "株式会社テスト",
     representativeName: "山田太郎",
     phoneNumber: "0312345678",

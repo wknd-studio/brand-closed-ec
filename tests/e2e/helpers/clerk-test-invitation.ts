@@ -42,7 +42,7 @@ export async function createTestInvitation(emailAddress: string) {
 
   const invitation = await clerk.invitations.createInvitation({
     emailAddress,
-    redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/welcome`,
+    redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
     ignoreExisting: true,
     notify: false, // テスト用招待のためメール送信を止める。invitation.url を直接使うので通知不要
   });
@@ -55,8 +55,10 @@ export async function createTestInvitation(emailAddress: string) {
 }
 
 /**
- * 招待受諾→利用規約同意→パスワード設定までの、実際の画面操作を伴う
- * 新規会員登録フロー（`registration.spec.ts`等で重複していた処理を共通化）。
+ * 招待受諾→パスワード設定までの、実際の画面操作を伴う新規会員登録フロー
+ * （`registration.spec.ts`等で重複していた処理を共通化）。
+ * 利用規約・プライバシーポリシーへの同意はClerk標準のLegal Consent機能
+ * （サインアップフォーム内のチェックボックス）で行う。
  * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/account-type）の状態になる
  * （next.config.tsのNEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URLで指定）。
  */
@@ -70,12 +72,11 @@ export async function signUpViaInvitation(
   const invitationUrl = await createTestInvitation(emailAddress);
   await page.goto(invitationUrl);
 
-  await expect(page.getByRole("heading", { name: "利用規約" })).toBeVisible();
-  await page.getByLabel("利用規約に同意する").check();
-  await page.getByRole("button", { name: "同意してアカウントを作成" }).click();
-
   await expect(page).toHaveURL(/\/sign-up/);
   await page.getByLabel("Password", { exact: true }).fill(password);
+  await page
+    .getByLabel(/I agree to the Terms of Service and Privacy Policy/)
+    .check();
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page).toHaveURL(/\/onboarding\/account-type/);
@@ -173,4 +174,32 @@ export async function cleanupTestUser(emailAddress: string) {
   }
 
   await supabase.from("users").delete().eq("email", emailAddress);
+}
+
+/**
+ * organization-signup.spec.ts等の法人E2Eテストで作成した組織を後片付けする。
+ * Supabase側だけでなく、createOrganizationUseCaseが作成したClerk Organization
+ * リソースも削除しないと、Clerk Dashboard上にテスト用組織が残り続ける。
+ */
+export async function cleanupTestOrganization(name: string) {
+  const supabase = supabaseAdmin();
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("id, clerk_org_id")
+    .eq("name", name)
+    .maybeSingle();
+  if (!org) return;
+
+  await supabase
+    .from("organization_memberships")
+    .delete()
+    .eq("organization_id", org.id);
+  await supabase.from("organizations").delete().eq("id", org.id);
+
+  try {
+    const clerk = await clerkClient();
+    await clerk.organizations.deleteOrganization(org.clerk_org_id);
+  } catch {
+    // ベストエフォート。Clerk側の後片付けに失敗してもSupabase側の削除は完了している
+  }
 }
