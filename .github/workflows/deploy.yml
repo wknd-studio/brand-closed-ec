@@ -96,7 +96,9 @@ jobs:
       - name: Install Stripe CLI
         run: npm install -g @stripe/cli
       - name: Start local Supabase
-        run: supabase start
+        # このアプリはStorage/Realtime/Edge Functions/Studio/inbucketを使わないため、
+        # 未使用コンテナのDocker pull・起動をスキップしてCI時間を短縮する
+        run: supabase start -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta
       - name: Apply local migrations
         run: supabase db reset
       - name: Run E2E tests
@@ -119,15 +121,17 @@ jobs:
             pnpm test:e2e
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Upload Playwright report (動画・トレース含む)
-        if: always()
+      - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
+        # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
+        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-pr
           path: |
             playwright-report/
             test-results/
-          retention-days: 7
+          retention-days: 3
 
   deploy-stg:
     name: Deploy (staging)
@@ -279,12 +283,14 @@ jobs:
         run: doppler run -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Upload Playwright report (動画・トレース含む)
-        if: always()
+      - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
+        # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
+        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-stg
           path: |
             playwright-report/
             test-results/
-          retention-days: 7
+          retention-days: 3

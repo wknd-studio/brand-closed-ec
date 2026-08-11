@@ -39,16 +39,18 @@ test.describe
   }) => {
     await setupClerkTestingToken({ page });
 
+    // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
+    // 安定した要素属性(id・data-localization-key)でフォーム要素を指定する
     await page.goto("/sign-in");
-    await page.getByLabel("Email address").fill(TEST_EMAIL);
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.locator("#identifier-field").fill(TEST_EMAIL);
+    await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
-    await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.locator("#password-field").fill(TEST_PASSWORD);
+    await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
     await expect(page).toHaveURL(/\/sign-in\/factor-two/);
     await expect(
-      page.getByRole("heading", { name: "Check your email" })
+      page.locator('[data-localization-key="signIn.emailCodeMfa.title"]')
     ).toBeVisible();
 
     // コード入力欄への入力完了と同時に自動送信されるため、Continueボタンのクリックは不要
@@ -63,11 +65,11 @@ test.describe
     await setupClerkTestingToken({ page });
 
     await page.goto("/sign-in");
-    await page.getByLabel("Email address").fill(TEST_EMAIL);
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.locator("#identifier-field").fill(TEST_EMAIL);
+    await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
-    await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.locator("#password-field").fill(TEST_PASSWORD);
+    await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
     await expect(page).toHaveURL(/\/sign-in\/factor-two/);
     await page.getByLabel("Enter verification code").fill("000000");
