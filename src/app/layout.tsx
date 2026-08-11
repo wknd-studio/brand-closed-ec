@@ -15,6 +15,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// jaJPのデフォルト文言はClerk汎用のもののため、waitlistまわりのみブランドのトーンに合わせて上書きする
+const localization = {
+  ...jaJP,
+  waitlist: {
+    ...jaJP.waitlist,
+    start: {
+      ...jaJP.waitlist!.start,
+      title: "登録希望を送る",
+      subtitle:
+        "メールアドレスをご登録いただくと、審査のうえご招待のご案内をお送りします。",
+      formButton: "登録する",
+      // ホーム画面のサインインリンクと表記を揃え、ブランドのトーン(会員限定・招待制)に合わせる
+      actionText: "すでに会員の方は",
+      actionLink: "ログイン",
+    },
+    success: {
+      ...jaJP.waitlist!.success,
+      title: "ご登録ありがとうございます",
+      subtitle: "審査のうえ、ご登録のメールアドレス宛にご案内をお送りします。",
+    },
+  },
+};
+
 export const metadata: Metadata = {
   title: "Members",
   robots: { index: false, follow: false },
@@ -26,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider afterSignOutUrl="/" localization={jaJP}>
+    <ClerkProvider afterSignOutUrl="/" localization={localization}>
       <html
         lang="ja"
         className={`${geistSans.variable} ${geistMono.variable} ${BRAND_FONT_VARIABLES} h-full antialiased`}

@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { Heading } from "@/components/ui/heading";
+import { headingVariants } from "@/components/ui/heading";
 import { cn } from "@/lib/cn";
 
 export function WaitlistPresenter() {
@@ -14,27 +14,22 @@ export function WaitlistPresenter() {
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 py-16">
       <Container className="flex justify-center">
         <Card className="w-full max-w-[420px] p-[clamp(28px,5vw,40px)] text-center">
-          <Eyebrow withLine className="justify-center">
+          <Eyebrow withLine className="mb-3 justify-center">
             Waitlist
           </Eyebrow>
-          <Heading
-            as="h1"
-            level="compact"
-            className="mt-3 mb-2 text-neutral-900"
-          >
-            登録希望を送る
-          </Heading>
-          <p className="mb-6 text-sm text-secondary">
-            メールアドレスをご登録いただくと、審査のうえご招待のご案内をお送りします。
-          </p>
           <Waitlist
             appearance={{
               elements: {
                 rootBox: "!w-full !max-w-full",
                 cardBox: "!w-full !max-w-full shadow-none",
                 card: "!w-full !max-w-full border-none bg-transparent p-0 shadow-none",
-                // 見出しは上のHeadingで独自表現しているため、Clerk側のデフォルト見出しは非表示にする
-                header: "!hidden",
+                // 登録前(start)・登録後(success)どちらの文言もここで描画されるため、
+                // 隠さずにブランドの見出しスタイルへ合わせる
+                headerTitle: cn(
+                  headingVariants({ level: "compact" }),
+                  "!text-neutral-900"
+                ),
+                headerSubtitle: "!text-sm !text-secondary",
                 formButtonPrimary: cn(
                   buttonVariants({ variant: "primary" }),
                   "w-full !text-primary-foreground"
