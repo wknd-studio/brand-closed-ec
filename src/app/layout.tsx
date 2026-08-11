@@ -18,6 +18,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Members",
   robots: { index: false, follow: false },
+  // 専用のfavicon素材が用意されるまでの暫定対応。正方形アイコンが届き次第差し替える
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
