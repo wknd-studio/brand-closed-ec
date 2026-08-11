@@ -180,6 +180,8 @@ erDiagram
         uuid id PK
         uuid order_id FK
         text sanity_product_id
+        text brand_id_snapshot
+        text brand_name_snapshot
     }
 
     cart_items {
@@ -450,18 +452,20 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: 1注文は複数商品を含みうるため、`orders`と商品情報の間に多対1の中間エンティティが必要。
 
-| カラム                  | 型          | 制約                        | なぜ必要か                                                                                                                                            |
-| ----------------------- | ----------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                    | UUID        | PK                          | サロゲートキー                                                                                                                                        |
-| `order_id`              | UUID        | NOT NULL, FK → `orders(id)` | どの注文の明細かを特定する本体データ                                                                                                                  |
-| `sanity_product_id`     | TEXT        | NOT NULL                    | 商品マスタはSanity CMS側にあり、SupabaseにFK参照できないため、外部システムのIDをそのまま保持する（指摘9のとおりDB側でのFK整合性チェックはスコープ外） |
-| `product_name_snapshot` | TEXT        | NOT NULL                    | Sanity側で商品名が変更・削除された後も、過去注文の明細表示が壊れないようにするため                                                                    |
-| `unit_price_snapshot`   | BIGINT      | NULL可                      | 価格改定後も過去注文の金額を正しく保持するため。NULL＝要相談商品で注文時点では価格未確定                                                              |
-| `quantity`              | INTEGER     | NOT NULL, CHECK `> 0`       | 注文数量。CHECKにより「数量0の注文明細」という無意味な状態をDBレベルで防ぐ                                                                            |
-| `is_negotiable`         | BOOLEAN     | NOT NULL DEFAULT false      | 価格未確定の要相談商品かどうかを判定し、Invoiceフローに回すかどうかの分岐に使うため                                                                   |
-| `negotiated_unit_price` | BIGINT      | NULL可                      | 運営者が請求書発行時に確定させた単価。要相談商品の最終金額を別カラムに残すことで、当初の見込み額（あれば）と実額を両方追跡できる                      |
-| `created_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()      | 明細行の作成日時                                                                                                                                      |
-| `updated_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()      | 旧設計に無く、運営による`negotiated_unit_price`確定日時を追跡できなかったため新設（指摘8）                                                            |
+| カラム                  | 型          | 制約                        | なぜ必要か                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | ----------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                    | UUID        | PK                          | サロゲートキー                                                                                                                                                                                                                                                                                                                                      |
+| `order_id`              | UUID        | NOT NULL, FK → `orders(id)` | どの注文の明細かを特定する本体データ                                                                                                                                                                                                                                                                                                                |
+| `sanity_product_id`     | TEXT        | NOT NULL                    | 商品マスタはSanity CMS側にあり、SupabaseにFK参照できないため、外部システムのIDをそのまま保持する（指摘9のとおりDB側でのFK整合性チェックはスコープ外）                                                                                                                                                                                               |
+| `product_name_snapshot` | TEXT        | NOT NULL                    | Sanity側で商品名が変更・削除された後も、過去注文の明細表示が壊れないようにするため                                                                                                                                                                                                                                                                  |
+| `brand_id_snapshot`     | TEXT        | NULL可                      | 商品はSanity上で必ずいずれかのブランドに属する。運営者は複数の一次卸業者へ発注するため、将来ブランド（≒仕入れ先）別に受注を集計・分析する際、Sanity側でブランド再割当・商品削除が起きていても過去注文の実績を正しく遡れるようにする。NULL可なのは、この列を追加する時点で既存の過去注文にはバックフィルできないブランド不明のレコードが残りうるため |
+| `brand_name_snapshot`   | TEXT        | NULL可                      | `brand_id_snapshot`と同じ理由。IDだけでなく表示名もスナップショットすることで、Sanity側のブランドが削除された後でも運営画面の集計表示が壊れない                                                                                                                                                                                                     |
+| `unit_price_snapshot`   | BIGINT      | NULL可                      | 価格改定後も過去注文の金額を正しく保持するため。NULL＝要相談商品で注文時点では価格未確定                                                                                                                                                                                                                                                            |
+| `quantity`              | INTEGER     | NOT NULL, CHECK `> 0`       | 注文数量。CHECKにより「数量0の注文明細」という無意味な状態をDBレベルで防ぐ                                                                                                                                                                                                                                                                          |
+| `is_negotiable`         | BOOLEAN     | NOT NULL DEFAULT false      | 価格未確定の要相談商品かどうかを判定し、Invoiceフローに回すかどうかの分岐に使うため                                                                                                                                                                                                                                                                 |
+| `negotiated_unit_price` | BIGINT      | NULL可                      | 運営者が請求書発行時に確定させた単価。要相談商品の最終金額を別カラムに残すことで、当初の見込み額（あれば）と実額を両方追跡できる                                                                                                                                                                                                                    |
+| `created_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()      | 明細行の作成日時                                                                                                                                                                                                                                                                                                                                    |
+| `updated_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()      | 旧設計に無く、運営による`negotiated_unit_price`確定日時を追跡できなかったため新設（指摘8）                                                                                                                                                                                                                                                          |
 
 ---
 
@@ -533,6 +537,30 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 - `member_ranks`：全会員が参照できる必要があるため、`FOR SELECT USING (true)`（マスタデータ）。書き込みは運営者のみ。
 - `addresses`：既存の「本人 or 同一組織」ポリシーはそのまま流用できる（`type='headquarters'`の行も`organization_id`が入っているため既存の組織スコープポリシーの対象になる）。
 - `admin_users` / `admin_memberships`：`get_current_user_id()`と対になる`get_current_admin_user_id()`をSECURITY DEFINERで新設し、運営スタッフ本人が自分自身のロールを参照できるSELECTポリシーのみ設ける（運営組織が1つの前提なので`get_current_org_ids()`相当の関数は不要）。書き込みはClerk Webhook（service role）経由のみで、アプリケーションからのINSERT/UPDATE/DELETEポリシーは設けない。顧客向けテーブル（`orders`等）に対する運営者の書き込みは、これらのテーブルをJOINして許可するRLSポリシーを増やすのではなく、既存の管理画面API（service role経由・アプリケーション層で`has({ permission })`相当のチェックを行う）に一本化する。RLSに運営者用の書き込み許可を増やしていくと、顧客向けポリシーとの組み合わせで検証すべきパターンが指数的に増えるため。
+
+---
+
+## スコープ外とした論点（意図的な先送り）
+
+以下は今回のヒアリングで話題に上ったが、要件が固まっていないため本設計には含めていない。**見落としではなく、意図的に先送りした判断**として記録する。
+
+### 仕入れ発注（suppliers / purchase_orders）
+
+運営者は卸売業者であり、複数の一次卸業者へ発注を行う。業務フローは「顧客からの受注 → 業者への発注 → 事務所への入荷 → 顧客への発送」という一般的なEC/卸のフローだが、この**「発注」（御社から一次卸業者への仕入れ注文）を管理する機能はソフトウェアの対象範囲がまだ決まっていない**。
+
+現状の`orders.status`は`sourcing`（仕入れ中）→`ordered`（発注済み）→`preparing`（準備中）という値を持ち、**顧客の1注文ごとに状態を1段階ずつ進める**という素朴な形で、この業務フローの進捗だけは表現できている。一方で以下は表現できていない。
+
+- どの一次卸業者に発注したか（発注先そのものの記録）
+- 複数の顧客注文をまとめて1件の発注（PO）にした場合の対応関係
+- 卸業者からの入荷予定日・入荷実績
+
+これらを表現するには`suppliers`（仕入れ先マスタ）・`purchase_orders`/`purchase_order_items`（御社→卸業者への発注、顧客からの`orders`とは別の集約）を新設する必要があるが、実際にどこまでソフトウェアで管理したいか（例: 発注そのものをこのシステムから行うのか、進捗管理だけなのか）が未確定なため、**今回は着手しない**。
+
+これに備えて、`order_items`に`brand_id_snapshot`/`brand_name_snapshot`のみ追加した（本設計に含めた変更）。ブランドは一次卸業者との対応関係の手がかりになりうるため、将来仕入れ発注機能を作る際に、過去の受注をブランド別に遡って集計できるようにするための最小限の保険であり、`suppliers`/`purchase_orders`自体の設計を先取りするものではない。
+
+**次のアクション**: 仕入れ発注業務をどこまでソフトウェアで管理するかが具体化した時点で、別途この論点を再検討する。「ブランド」と「一次卸業者」が1対1かどうか（1ブランドが複数卸業者から仕入れられる、または1卸業者が複数ブランドを扱う、といったケースの有無）も、その際に確認する。
+
+---
 
 ## 移行方針（概要・詳細はマイグレーション作成時に確定）
 
