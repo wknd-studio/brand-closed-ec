@@ -35,26 +35,130 @@
 
 ## ER概要
 
-```
-member_ranks (参照テーブル)
-    ▲                 ▲
-    │ rank_code        │ rank_code
-    │                   │
-  users            organizations
-    │  ▲               │  ▲
-    │  │ user_id        │  │ organization_id
-    │  │(排他)           │  │(排他)
-    │  └── subscriptions ──┘
-    │  └── rank_changes ────┘
-    │
-    ├── addresses (user_id NOT NULL, organization_id NULL可)
-    ├── orders ── order_items
-    ├── cart_items
-    ├── favorites
-    └── organization_memberships ── organizations
+```mermaid
+erDiagram
+    member_ranks ||--o{ users : "rank_code"
+    member_ranks ||--o{ organizations : "rank_code"
+    member_ranks ||--o{ subscriptions : "rank_code / pending_rank_code"
+    member_ranks ||--o{ rank_changes : "from_rank_code / to_rank_code"
+    member_ranks ||--o{ orders : "rank_code_at_order"
 
-stripe_webhook_events（他テーブルと関連を持たない独立ログ）
+    users ||--o{ subscriptions : "user_id（排他）"
+    organizations ||--o{ subscriptions : "organization_id（排他）"
+    users ||--o{ rank_changes : "user_id（排他）"
+    organizations ||--o{ rank_changes : "organization_id（排他）"
+
+    users ||--o{ addresses : "user_id（登録者）"
+    organizations |o--o{ addresses : "organization_id（NULL可）"
+
+    users ||--o{ orders : "user_id"
+    organizations |o--o{ orders : "organization_id（NULL可）"
+    users |o--o{ orders : "requested_by_user_id / approved_by_user_id"
+    orders ||--o{ order_items : "order_id"
+
+    users ||--o{ cart_items : "user_id"
+    users ||--o{ favorites : "user_id"
+
+    users ||--o{ organization_memberships : "user_id"
+    organizations ||--o{ organization_memberships : "organization_id"
+
+    member_ranks {
+        text code PK
+        smallint sort_order UK
+        text display_name_ja
+        bigint monthly_limit_amount
+        boolean is_active
+    }
+
+    users {
+        uuid id PK
+        text clerk_user_id UK "partial: deleted_at IS NULL"
+        text stripe_customer_id UK "partial: deleted_at IS NULL"
+        text rank_code FK
+        text initial_fee_paid_rank_code FK
+        smallint billing_anchor_day
+        timestamptz deleted_at
+    }
+
+    organizations {
+        uuid id PK
+        text clerk_org_id UK "partial: deleted_at IS NULL"
+        text stripe_customer_id UK "partial: deleted_at IS NULL"
+        text rank_code FK
+        text initial_fee_paid_rank_code FK
+        smallint billing_anchor_day
+        timestamptz deleted_at
+    }
+
+    subscriptions {
+        uuid id PK
+        uuid user_id FK "排他: どちらか一方のみ"
+        uuid organization_id FK "排他: どちらか一方のみ"
+        text stripe_subscription_id UK
+        text status
+        text rank_code FK
+        text pending_rank_code FK
+    }
+
+    rank_changes {
+        uuid id PK
+        uuid user_id FK "排他: どちらか一方のみ"
+        uuid organization_id FK "排他: どちらか一方のみ"
+        text from_rank_code FK
+        text to_rank_code FK
+        text changed_by
+        boolean initial_fee_charged
+    }
+
+    addresses {
+        uuid id PK
+        uuid user_id FK
+        uuid organization_id FK "NULL可"
+        text type "billing/shipping/headquarters"
+    }
+
+    organization_memberships {
+        uuid id PK
+        uuid organization_id FK
+        uuid user_id FK
+        text clerk_role
+    }
+
+    orders {
+        uuid id PK
+        uuid user_id FK
+        uuid organization_id FK "NULL可"
+        uuid requested_by_user_id FK
+        uuid approved_by_user_id FK
+        text status
+        text payment_flow
+        text rank_code_at_order FK
+    }
+
+    order_items {
+        uuid id PK
+        uuid order_id FK
+        text sanity_product_id
+    }
+
+    cart_items {
+        uuid id PK
+        uuid user_id FK
+    }
+
+    favorites {
+        uuid id PK
+        uuid user_id FK
+    }
+
+    stripe_webhook_events {
+        text event_id PK
+        text type
+        text status
+    }
 ```
+
+`stripe_webhook_events` は他テーブルと関連を持たない独立ログのため、上図では単独エンティティとして扱う（Stripeの `event.id` をそのまま主キーにする）。
 
 `subscriptions` と `rank_changes` は「所有者が `users` か `organizations` のどちらか一方」という排他的関連（exclusive arrow）を、`owner_type`+`owner_id` のポリモーフィック関連ではなく **2本のnullable FKカラム + CHECK制約** で表現する。理由は、Postgresのポリモーフィック関連（`owner_type TEXT` + `owner_id UUID`）はFK制約による参照整合性チェックができず、存在しないIDを指しても検知できないため。2本のFKカラムなら通常のFK制約がそのまま効く。
 
