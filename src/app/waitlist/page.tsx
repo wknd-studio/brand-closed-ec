@@ -1,9 +1,5 @@
-import { Waitlist } from "@clerk/nextjs";
+import { WaitlistPresenter } from "./waitlist-presenter";
 
 export default function WaitlistPage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <Waitlist />
-    </main>
-  );
+  return <WaitlistPresenter />;
 }

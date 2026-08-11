@@ -1,4 +1,5 @@
 import { ClerkProvider } from "@clerk/nextjs";
+import { jaJP } from "@clerk/localizations";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BRAND_FONT_VARIABLES } from "@/lib/fonts";
@@ -25,9 +26,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider afterSignOutUrl="/">
+    <ClerkProvider afterSignOutUrl="/" localization={jaJP}>
       <html
-        lang="en"
+        lang="ja"
         className={`${geistSans.variable} ${geistMono.variable} ${BRAND_FONT_VARIABLES} h-full antialiased`}
       >
         <body className="min-h-full flex flex-col">{children}</body>
