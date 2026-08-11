@@ -18,6 +18,9 @@ const geistMono = Geist_Mono({
 // jaJPのデフォルト文言はClerk汎用のもののため、waitlistまわりのみブランドのトーンに合わせて上書きする
 const localization = {
   ...jaJP,
+  // サインアップ(新規パスワード作成)時のプレースホルダー。
+  // jaJPには未翻訳(undefined)のため英語"Create a password"のままになる
+  formFieldInputPlaceholder__signUpPassword: "パスワードを入力",
   signIn: {
     ...jaJP.signIn,
     start: {
@@ -27,6 +30,14 @@ const localization = {
       // waitlist画面側の表記(登録する)に揃える
       actionText__join_waitlist: "未登録の方は",
       actionLink__join_waitlist: "登録希望を送る",
+    },
+  },
+  signUp: {
+    ...jaJP.signUp,
+    continue: {
+      ...jaJP.signUp!.continue,
+      title: "会員登録",
+      subtitle: "パスワードを設定して登録を完了してください",
     },
   },
   waitlist: {
