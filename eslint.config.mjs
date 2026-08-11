@@ -29,6 +29,14 @@ const eslintConfig = defineConfig([
     ".claude/skills/**",
   ]),
   ...storybook.configs["flat/recommended"],
+  {
+    // Playwrightのfixture APIは慣例的に引数名`use`を使うが、react-hooksルールが
+    // これをReact Hookと誤認識するため、E2Eテストではこのルールを無効化する
+    files: ["tests/e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

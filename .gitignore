@@ -55,6 +55,7 @@ next-env.d.ts
 # Playwright
 playwright-report/
 test-results/
+tests/e2e/.auth/
 
 # Generated export files
 *.docx

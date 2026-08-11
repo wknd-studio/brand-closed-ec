@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import {
   cleanupTestUser,
@@ -7,6 +7,32 @@ import {
 
 const TEST_EMAIL = "info+clerk_test_checkout@wknd-studio.com";
 const TEST_PASSWORD = "TestPassw0rd!12345";
+
+/**
+ * このファイルの3テストはいずれも「オンボーディング完了済み会員」であることが
+ * 前提条件で、認証フロー自体は検証対象ではない。招待受諾〜プラン選択という
+ * 重いUI操作をテストのたびに繰り返すと実行時間が伸びるだけでなく、
+ * Clerk側APIの断続的な失敗（helper内のコメント参照）に3倍さらされることになるため、
+ * worker単位で一度だけ実施しstorageStateを使い回す。
+ * TEST_EMAILはこのファイル専有のため、複数workerで同時実行されても他specと衝突しない。
+ */
+const test = base.extend<object, { checkoutStorageState: string }>({
+  storageState: async ({ checkoutStorageState }, use) => {
+    await use(checkoutStorageState);
+  },
+  checkoutStorageState: [
+    async ({ browser }, use) => {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
+      const storageStatePath = "tests/e2e/.auth/checkout-user.json";
+      await context.storageState({ path: storageStatePath });
+      await context.close();
+      await use(storageStatePath);
+    },
+    { scope: "worker" },
+  ],
+});
 
 function supabaseAdmin() {
   return createClient(
@@ -42,7 +68,9 @@ async function fillNewAddress(
   await page.locator('input[name="address_line1"]').fill("丸の内1-1-1");
   await page.locator('input[name="phone_number"]').fill("09012345678");
   await page.getByRole("button", { name: "保存" }).click();
-  await page.waitForTimeout(1000);
+  // 固定sleepではなく、保存済み住所が実際に一覧へ反映されたこと（陽性のランドマーク）を
+  // 待ってから次の操作に進む。呼び出し元は必ずこの直後に同じラジオを操作する
+  await expect(page.getByRole("radio", { name: /テスト 太郎/ })).toBeVisible();
 }
 
 async function getTestUserId(): Promise<string> {
@@ -54,18 +82,36 @@ async function getTestUserId(): Promise<string> {
   return data!.id;
 }
 
-// 3つのテストが同じメールアドレス（TEST_EMAIL）を使い回すため、並列実行での競合を避けるために直列実行する
+// 3つのテストが同じアカウント（storageStateを使い回す同一会員）を共有するため、
+// 並列実行での競合を避けるために直列実行する
 test.describe.serial("実際のカタログ〜チェックアウト画面遷移フロー", () => {
   test.afterEach(async ({ page }) => {
     // Stripeの外部ドメインに遷移したままだと後続処理が失敗するため、自アプリのドメインに戻す
     await page.goto("/");
+    // アカウント自体は3テストで使い回すため削除しないが、各テストが作成した
+    // 住所・注文（派生データ）は次のテストに影響しないようここで必ず片付ける
+    const userId = await getTestUserId();
+    const { data: orders } = await supabaseAdmin()
+      .from("orders")
+      .select("id")
+      .eq("user_id", userId);
+    for (const order of orders ?? []) {
+      await supabaseAdmin()
+        .from("order_items")
+        .delete()
+        .eq("order_id", order.id);
+    }
+    await supabaseAdmin().from("orders").delete().eq("user_id", userId);
+    await supabaseAdmin().from("addresses").delete().eq("user_id", userId);
+  });
+
+  test.afterAll(async () => {
     await cleanupTestUser(TEST_EMAIL);
   });
 
   test("登録済み住所がない会員が新規入力した住所で注文を確定すると、Stripe Checkout画面へ遷移する", async ({
     page,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
     await addFirstProductToCart(page);
 
     await page.goto("/order/checkout");
@@ -82,8 +128,6 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
   test("登録済み住所がある会員が既存住所を選択して注文を確定すると、Stripe Checkout画面へ遷移する", async ({
     page,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
-
     const userId = await getTestUserId();
     await supabaseAdmin()
       .from("addresses")
@@ -130,7 +174,6 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
   test("月次仕入れ上限を超える注文は確定できず、Stripe Checkout画面へ遷移しない", async ({
     page,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
     const userId = await getTestUserId();
 
     // カート追加時点ではまだ確定済み金額がないため、
@@ -178,14 +221,6 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
       .eq("user_id", userId)
       .neq("id", "00000000-0000-0000-0000-000000000060");
     expect(orders).toHaveLength(0);
-
-    await supabaseAdmin()
-      .from("order_items")
-      .delete()
-      .eq("order_id", "00000000-0000-0000-0000-000000000060");
-    await supabaseAdmin()
-      .from("orders")
-      .delete()
-      .eq("id", "00000000-0000-0000-0000-000000000060");
+    // このテストが作成した注文（上限テスト用の290,000円分）自体はafterEachで片付く
   });
 });

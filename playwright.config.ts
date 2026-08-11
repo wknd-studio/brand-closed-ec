@@ -7,7 +7,13 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // 各specファイルはメールアドレス・固定ID・組織名をファイルごとに専有しており
+  // （ファイル内で共有アカウントを使う箇所はdescribe.serialで直列化済み）、
+  // ファイル間のデータ競合は起きない構造になっている。以前はworkers:1で
+  // 直列実行していたが、まずは2に引き上げて計測する。GitHub Actions
+  // 共有ランナーでのCPU競合・Supabase接続数の様子を見ながら、
+  // 問題なければ段階的にさらに引き上げを検討する
+  workers: process.env.CI ? 2 : undefined,
   // CIのランナーはローカルより低速で、Sanity等の外部APIへのアクセスも
   // 余分にレイテンシがかかるため、テストごとのタイムアウトを長めにする
   timeout: process.env.CI ? 60000 : 30000,
