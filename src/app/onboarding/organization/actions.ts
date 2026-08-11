@@ -26,9 +26,6 @@ export async function createOrganizationAction(
 
   const user = await currentUser();
   const email = user?.emailAddresses[0]?.emailAddress ?? "";
-  const legalAcceptedAt = user?.legalAcceptedAt
-    ? new Date(user.legalAcceptedAt)
-    : null;
 
   const organizationName = String(formData.get("organizationName") ?? "");
   const representativeLastName = String(
@@ -54,7 +51,6 @@ export async function createOrganizationAction(
       {
         clerkUserId: userId,
         email,
-        legalAcceptedAt,
         organizationName,
         representativeLastName,
         representativeFirstName,

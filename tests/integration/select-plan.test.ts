@@ -47,7 +47,6 @@ describe("selectPlan（実DB）", () => {
           lastName: plan,
           phoneNumber: "09012345678",
           plan,
-          legalAcceptedAt: new Date(),
         },
         { userRepo, accountGateway: makeAccountGateway() }
       );
@@ -70,7 +69,6 @@ describe("selectPlan（実DB）", () => {
         lastName: "初回",
         phoneNumber: "09012345678",
         plan: "starter",
-        legalAcceptedAt: new Date(),
       },
       { userRepo, accountGateway: makeAccountGateway() }
     );
@@ -83,7 +81,6 @@ describe("selectPlan（実DB）", () => {
         lastName: "初回",
         phoneNumber: "09012345678",
         plan: "premium",
-        legalAcceptedAt: new Date(),
       },
       { userRepo, accountGateway: makeAccountGateway() }
     );

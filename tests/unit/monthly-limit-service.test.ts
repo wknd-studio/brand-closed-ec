@@ -19,8 +19,6 @@ function makeUser(rankValue: string): User {
     subscribedAt: new Date(2026, 0, 1),
     onboardingCompleted: true,
     deletedAt: null,
-    termsAgreedAt: null,
-    termsVersion: null,
     stripeCustomerId: null,
     stripeSubscriptionId: null,
   });

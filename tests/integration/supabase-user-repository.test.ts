@@ -24,8 +24,6 @@ beforeAll(async () => {
     rank: "basic",
     onboarding_completed: true,
     subscribed_at: "2026-01-10T00:00:00.000Z",
-    terms_agreed_at: "2026-01-10T00:00:00.000Z",
-    terms_version: "v1",
   });
 });
 

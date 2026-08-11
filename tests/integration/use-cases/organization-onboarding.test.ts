@@ -79,8 +79,6 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         rank: MemberRank.of("starter"),
         subscribedAt: null,
         onboardingCompleted: false,
-        termsAgreedAt: null,
-        termsVersion: null,
         deletedAt: null,
         stripeCustomerId: null,
         stripeSubscriptionId: null,
@@ -91,7 +89,6 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
       {
         clerkUserId: TEST_CLERK_USER_ID,
         email: "org-onboarding@example.com",
-        legalAcceptedAt: new Date(),
         organizationName: "統合テスト株式会社",
         representativeLastName: "山田",
         representativeFirstName: "太郎",
@@ -144,7 +141,6 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         lastName: "山田",
         phoneNumber: "0312345678",
         plan: "advanced",
-        legalAcceptedAt: new Date(),
         organizationId: createResult.organizationId,
       },
       {

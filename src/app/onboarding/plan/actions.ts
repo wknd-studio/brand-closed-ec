@@ -42,9 +42,6 @@ export async function selectPlan(
 
   const user = await currentUser();
   const email = user?.emailAddresses[0]?.emailAddress ?? "";
-  const legalAcceptedAt = user?.legalAcceptedAt
-    ? new Date(user.legalAcceptedAt)
-    : null;
 
   const db = createAdminClient();
 
@@ -57,7 +54,6 @@ export async function selectPlan(
         lastName,
         phoneNumber,
         plan,
-        legalAcceptedAt,
         organizationId: organizationId ? String(organizationId) : undefined,
       },
       {
