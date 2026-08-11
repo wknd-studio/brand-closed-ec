@@ -37,6 +37,7 @@ import {
 describe("admin/waitlist actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_APP_URL = "https://example.com";
   });
 
   describe("権限チェック", () => {
@@ -70,17 +71,30 @@ describe("admin/waitlist actions", () => {
       });
     });
 
-    it("承認時にredirectUrlとtemplateSlugを指定して招待を作成する", async () => {
+    it("承認時に絶対URLのredirectUrlとtemplateSlugを指定して招待を作成する", async () => {
       createInvitationMock.mockResolvedValue({ id: "inv_1" });
 
       const result = await approveWaitlistEntry("a@example.com");
 
       expect(createInvitationMock).toHaveBeenCalledWith({
         emailAddress: "a@example.com",
-        redirectUrl: "/sign-up",
+        redirectUrl: "https://example.com/sign-up",
         templateSlug: "waitlist_invitation",
       });
       expect(result).toBeUndefined();
+    });
+
+    it("NEXT_PUBLIC_APP_URLの末尾スラッシュを除去し二重スラッシュにしない", async () => {
+      const original = process.env.NEXT_PUBLIC_APP_URL;
+      process.env.NEXT_PUBLIC_APP_URL = "https://example.com/";
+      createInvitationMock.mockResolvedValue({ id: "inv_1" });
+
+      await approveWaitlistEntry("a@example.com");
+
+      expect(createInvitationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ redirectUrl: "https://example.com/sign-up" })
+      );
+      process.env.NEXT_PUBLIC_APP_URL = original;
     });
 
     it("招待作成が失敗したらエラーを返す", async () => {
