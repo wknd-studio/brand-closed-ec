@@ -13,8 +13,6 @@ interface UserProps {
   rank: MemberRank;
   subscribedAt: Date | null;
   onboardingCompleted: boolean;
-  termsAgreedAt: Date | null;
-  termsVersion: string | null;
   deletedAt: Date | null;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
@@ -31,8 +29,6 @@ export class User {
   readonly rank: MemberRank;
   readonly subscribedAt: Date | null;
   readonly onboardingCompleted: boolean;
-  readonly termsAgreedAt: Date | null;
-  readonly termsVersion: string | null;
   readonly deletedAt: Date | null;
   readonly stripeCustomerId: string | null;
   readonly stripeSubscriptionId: string | null;
@@ -48,8 +44,6 @@ export class User {
     this.rank = props.rank;
     this.subscribedAt = props.subscribedAt;
     this.onboardingCompleted = props.onboardingCompleted;
-    this.termsAgreedAt = props.termsAgreedAt;
-    this.termsVersion = props.termsVersion;
     this.deletedAt = props.deletedAt;
     this.stripeCustomerId = props.stripeCustomerId;
     this.stripeSubscriptionId = props.stripeSubscriptionId;
@@ -75,8 +69,6 @@ export class User {
       rank: this.rank,
       subscribedAt: this.subscribedAt,
       onboardingCompleted: this.onboardingCompleted,
-      termsAgreedAt: this.termsAgreedAt,
-      termsVersion: this.termsVersion,
       deletedAt: this.deletedAt,
       stripeCustomerId: this.stripeCustomerId,
       stripeSubscriptionId: this.stripeSubscriptionId,

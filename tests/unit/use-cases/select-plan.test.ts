@@ -15,7 +15,6 @@ const baseInput = {
   firstName: "太郎",
   lastName: "山田",
   phoneNumber: "09012345678",
-  legalAcceptedAt: new Date(2026, 0, 1),
 };
 
 describe("selectPlan", () => {
@@ -33,8 +32,6 @@ describe("selectPlan", () => {
     const saved = vi.mocked(userRepo.save).mock.calls[0][0];
     expect(saved.rank.value).toBe("starter");
     expect(saved.onboardingCompleted).toBe(false);
-    expect(saved.termsAgreedAt).toEqual(new Date(2026, 0, 1));
-    expect(saved.termsVersion).toBe("2026-05-25");
     expect(saved.firstName).toBe("太郎");
     expect(saved.lastName).toBe("山田");
     expect(saved.phoneNumber).toBe("09012345678");

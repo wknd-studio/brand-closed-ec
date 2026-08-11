@@ -4,7 +4,6 @@ import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
-import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
 import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
 import type { OrganizationGateway } from "@/repositories/organization-gateway";
@@ -18,9 +17,6 @@ export type CreateOrganizationInput = {
   // 新規作成するために使う（法人登録は個人のselectPlanを経由しないため、
   // 既存の個人フローと違ってusersレコードが存在しない状態で呼ばれ得る）
   email: string;
-  // Clerkのlegal_accepted_at（サインアップ時の利用規約・プライバシーポリシー同意日時）。
-  // 上記と同じ理由でusersレコードを新規作成する場合にのみ使う
-  legalAcceptedAt: Date | null;
   organizationName: string;
   representativeLastName: string;
   representativeFirstName: string;
@@ -92,8 +88,6 @@ export async function createOrganization(
         rank: MemberRank.of("starter"),
         subscribedAt: null,
         onboardingCompleted: false,
-        termsAgreedAt: input.legalAcceptedAt,
-        termsVersion: input.legalAcceptedAt ? CURRENT_TERMS_VERSION : null,
         deletedAt: null,
         stripeCustomerId: null,
         stripeSubscriptionId: null,

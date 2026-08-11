@@ -46,8 +46,6 @@ export function makeUser(
     subscribedAt: overrides?.subscribedAt ?? new Date(2026, 0, 1),
     onboardingCompleted: overrides?.onboardingCompleted ?? true,
     deletedAt: null,
-    termsAgreedAt: null,
-    termsVersion: null,
     stripeCustomerId: null,
     stripeSubscriptionId: null,
   });

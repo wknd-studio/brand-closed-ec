@@ -436,8 +436,6 @@ export type Database = {
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
           subscribed_at: string | null;
-          terms_agreed_at: string | null;
-          terms_version: string | null;
           updated_at: string;
         };
         Insert: {
@@ -455,8 +453,6 @@ export type Database = {
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           subscribed_at?: string | null;
-          terms_agreed_at?: string | null;
-          terms_version?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -474,8 +470,6 @@ export type Database = {
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           subscribed_at?: string | null;
-          terms_agreed_at?: string | null;
-          terms_version?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -486,6 +480,7 @@ export type Database = {
     };
     Functions: {
       get_current_org_id: { Args: never; Returns: string };
+      get_current_org_ids: { Args: never; Returns: string[] };
       get_current_user_id: { Args: never; Returns: string };
     };
     Enums: {

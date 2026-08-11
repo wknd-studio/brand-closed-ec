@@ -462,9 +462,8 @@ ClerkのユーザーメタデータにランクをカスタムClaimとして付�
    → 利用規約ページを表示（同意しないと次へ進めない）
    → 同意 → Clerk 会員登録フォームへ
    → 登録完了 → Clerk PublicMetadata に rank: "free" を付与
+     （規約同意の記録はClerkのlegal_accepted_atのみで管理し、Supabase側には保持しない）
    → Supabase users テーブルにレコード挿入（Server Action）
-     ・terms_agreed_at: 同意日時
-     ・terms_version: 規約バージョン文字列（例: "2026-05-16"）
 
 3. ログイン済みアクセス
    → middleware.ts が Clerk JWT を検証 → 通過

@@ -43,7 +43,6 @@ export async function POST(req: Request) {
       email_addresses: { email_address: string }[];
       first_name: string | null;
       last_name: string | null;
-      legal_accepted_at: number | null;
     };
 
     await createUser(
@@ -52,9 +51,6 @@ export async function POST(req: Request) {
         email: data.email_addresses[0]?.email_address ?? "",
         firstName: data.first_name ?? "",
         lastName: data.last_name ?? "",
-        legalAcceptedAt: data.legal_accepted_at
-          ? new Date(data.legal_accepted_at)
-          : null,
       },
       { userRepo: new SupabaseUserRepository(createAdminClient()) }
     );

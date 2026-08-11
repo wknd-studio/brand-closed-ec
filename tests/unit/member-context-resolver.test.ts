@@ -16,8 +16,6 @@ function makeUser(rankValue: string): User {
     rank: MemberRank.of(rankValue),
     subscribedAt: new Date(2026, 0, 1),
     onboardingCompleted: true,
-    termsAgreedAt: null,
-    termsVersion: null,
     deletedAt: null,
     stripeCustomerId: null,
     stripeSubscriptionId: null,
