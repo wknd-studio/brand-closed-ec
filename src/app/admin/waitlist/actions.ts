@@ -23,10 +23,14 @@ export async function approveWaitlistEntry(
   try {
     // waitlistEntries.invite()はAccount Portal(*.accounts.dev、英語固定)にしか
     // リンクできない仕様のため使わない。redirectUrlを指定できる汎用の招待APIを使い、
-    // 自前の/sign-upページ(ブランドデザイン・日本語)に招待リンクを向ける
+    // 自前の/sign-upページ(ブランドデザイン・日本語)に招待リンクを向ける。
+    // 相対パスだとClerk側が自ドメインへ解決できずAccount Portalにフォールバック
+    // することを実機検証で確認したため、必ず絶対URLで渡す
+    // (NEXT_PUBLIC_APP_URLの末尾スラッシュ有無どちらでも二重スラッシュにならないようにする)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL!.replace(/\/$/, "");
     await clerk.invitations.createInvitation({
       emailAddress,
-      redirectUrl: "/sign-up",
+      redirectUrl: `${appUrl}/sign-up`,
       templateSlug: "waitlist_invitation",
     });
   } catch (err: unknown) {
