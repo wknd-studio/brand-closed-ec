@@ -45,8 +45,12 @@ test.describe("Waitlist経由の参加希望と管理者承認", () => {
   }) => {
     await setupClerkTestingToken({ page });
     await page.goto("/waitlist");
-    await page.getByLabel("Email address").fill(TEST_EMAIL);
-    await page.getByRole("button", { name: "Join the waitlist" }).click();
+    // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
+    // 安定した要素属性(id・data-localization-key)でフォーム要素を指定する
+    await page.locator("#emailAddress-field").fill(TEST_EMAIL);
+    await page
+      .locator('[data-localization-key="waitlist.start.formButton"]')
+      .click();
 
     let entry: Awaited<ReturnType<typeof findPendingWaitlistEntry>>;
     await expect(async () => {
