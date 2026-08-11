@@ -18,6 +18,17 @@ const geistMono = Geist_Mono({
 // jaJPのデフォルト文言はClerk汎用のもののため、waitlistまわりのみブランドのトーンに合わせて上書きする
 const localization = {
   ...jaJP,
+  signIn: {
+    ...jaJP.signIn,
+    start: {
+      ...jaJP.signIn!.start,
+      title: "ログイン",
+      // Clerkデフォルトの「先行体験にご興味ありますか？/ウェイトリストに登録」を
+      // waitlist画面側の表記(登録する)に揃える
+      actionText__join_waitlist: "未登録の方は",
+      actionLink__join_waitlist: "登録希望を送る",
+    },
+  },
   waitlist: {
     ...jaJP.waitlist,
     start: {
