@@ -10,17 +10,17 @@
 
 ## 指摘事項との対応表（トレーサビリティ）
 
-| #         | レビューでの指摘                                                                                        | 本設計での対応                                                                                                                                                                                      |
-| --------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1         | `users`/`organizations` で Stripe 関連カラムの制約が非対称（`UNIQUE`の有無）                            | Stripeサブスクリプション状態を `subscriptions` テーブルに正規化して分離。残る `stripe_customer_id` は両テーブルとも部分UNIQUEに統一（→指摘3とセットで解消）                                         |
-| 2         | Webhookのべき等性を担保するテーブルが無い                                                               | `stripe_webhook_events` を新設。`event.id` を主キーで先着1件のみ受理する                                                                                                                            |
-| 3         | `deleted_at` と `UNIQUE` の組み合わせで論理削除後の再登録が破綻する                                     | 該当カラムをすべて `WHERE deleted_at IS NULL` の部分UNIQUEインデックスに変更                                                                                                                        |
-| 4         | 個人/法人で月次期間の起点（`billing_anchor_day`）の持ち方が非対称                                       | `users` にも `billing_anchor_day` を追加し、両テーブルで同じ方法により期間を算出する                                                                                                                |
-| 5         | 住所スキーマが `addresses` と `organizations` 直書きカラムの2箇所に重複                                 | 組織の本店所在地も `addresses`（`type='headquarters'`）に統合し、`organizations` から住所カラムを削除                                                                                               |
-| 6         | ENUM と TEXT+CHECK が場当たり的に混在。`member_rank` はENUM値追加のトランザクション制約で運用負債化済み | `member_rank` は参照テーブル `member_ranks` に変更（行データ化）。`order_status`/`order_payment_flow`/`address_type` はTEXT+CHECKに統一し、`approval_status`/`clerk_role`（既にTEXT+CHECK）と揃える |
-| 7         | サブスクリプション状態が「今の値」のみで変更履歴を追えない                                              | `rank_changes`（追記専用の履歴テーブル）を新設。`subscriptions` は現在値のミラー、`rank_changes` が来歴を持つ、という役割分担にする                                                                 |
-| 8（軽微） | `updated_at` トリガーの有無がテーブルによってバラバラ                                                   | 全テーブルに統一（`favorites`のみ性質上不要と判断し明記）                                                                                                                                           |
-| 9（軽微） | `sanity_product_id` の外部整合性チェックが無い                                                          | 本設計のスコープ外として維持（Sanityは別システムであり、DB側でのFK参照は不可能。将来的に整合性チェックバッチを設けることを課題として明記するに留める）                                              |
+| #         | レビューでの指摘                                                                                        | 本設計での対応                                                                                                                                                                                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1         | `users`/`organizations` で Stripe 関連カラムの制約が非対称（`UNIQUE`の有無）                            | Stripeサブスクリプション状態を `subscriptions` テーブルに正規化して分離。残る `stripe_customer_id` は両テーブルとも部分UNIQUEに統一（→指摘3とセットで解消）                                                                                                                                                       |
+| 2         | Webhookのべき等性を担保するテーブルが無い                                                               | `stripe_webhook_events` を新設。`event.id` を主キーで先着1件のみ受理する                                                                                                                                                                                                                                          |
+| 3         | `deleted_at` と `UNIQUE` の組み合わせで論理削除後の再登録が破綻する                                     | 該当カラムをすべて `WHERE deleted_at IS NULL` の部分UNIQUEインデックスに変更                                                                                                                                                                                                                                      |
+| 4         | 個人/法人で月次期間の起点（`billing_anchor_day`）の持ち方が非対称                                       | `users` にも `billing_anchor_day` を追加し、両テーブルで同じ方法により期間を算出する                                                                                                                                                                                                                              |
+| 5         | 住所スキーマが `addresses` と `organizations` 直書きカラムの2箇所に重複                                 | 組織の本店所在地も `addresses`（`type='headquarters'`）に統合し、`organizations` から住所カラムを削除                                                                                                                                                                                                             |
+| 6         | ENUM と TEXT+CHECK が場当たり的に混在。`member_rank` はENUM値追加のトランザクション制約で運用負債化済み | `member_rank` は参照テーブル `member_ranks` に変更（行データ化）。`order_status`/`order_payment_flow`/`address_type`/`approval_status` はTEXT+CHECKで統一する。`clerk_role`（会員側・運営側とも）は逆にCHECKを付けない方針にする（値が今後も増減するため。原則7・後述の「ロールのバリデーションについて」を参照） |
+| 7         | サブスクリプション状態が「今の値」のみで変更履歴を追えない                                              | `rank_changes`（追記専用の履歴テーブル）を新設。`subscriptions` は現在値のミラー、`rank_changes` が来歴を持つ、という役割分担にする                                                                                                                                                                               |
+| 8（軽微） | `updated_at` トリガーの有無がテーブルによってバラバラ                                                   | 全テーブルに統一（`favorites`のみ性質上不要と判断し明記）                                                                                                                                                                                                                                                         |
+| 9（軽微） | `sanity_product_id` の外部整合性チェックが無い                                                          | 本設計のスコープ外として維持（Sanityは別システムであり、DB側でのFK参照は不可能。将来的に整合性チェックバッチを設けることを課題として明記するに留める）                                                                                                                                                            |
 
 ---
 
@@ -40,16 +40,35 @@
 
 今後予定されている以下の2つの要件について、本設計での対応方針を明記する。
 
-- **会員側の法人RBAC**（法人会員 or 個人会員として登録する、従来通りの運用）: `organizations`/`organization_memberships`/`clerk_role`（`org:admin`/`org:member`の2値）で**既に対応済み**。変更は不要。
-- **管理者側RBAC**（運営組織を作り、発注作業等の限定的な権限だけを持つカスタムロールをメンバーに付与・削除できる）: **現行の`organizations`/`organization_memberships`では対応できない**。理由は以下の2点。
+- **会員側の法人RBAC**（法人会員 or 個人会員として登録する、従来通りの運用）: `organizations`/`organization_memberships`で対応する。ただし`clerk_role`は当初`CHECK IN ('org:admin', 'org:member')`で2値に固定する案だったが、**将来ロールを追加する可能性があるためCHECKを外す**（詳細は後述）。
+- **管理者側RBAC**（運営組織のメンバーに、発注作業等の限定的な権限だけを持つカスタムロールを付与・削除できる）: **現行の`organizations`/`organization_memberships`では対応できない**。理由は以下の2点。
   1. `organizations`は顧客の請求主体（`invoice_registration_number` NOT NULL・`rank_code`・`stripe_customer_id`等）として設計されており、運営組織を同じテーブルで表現すると無関係な制約に縛られる。
-  2. `organization_memberships.clerk_role`は`CHECK IN ('org:admin', 'org:member')`に固定されており、「発注作業のみ」のようなカスタムロールを保存できない。
+  2. `organization_memberships.clerk_role`は元々`org:admin`/`org:member`の2値を想定しており、「発注作業のみ」のようなカスタムロールとは前提が異なる。
 
-これを解消するため、顧客組織とは完全に独立した**運営組織専用のテーブル群**（`admin_organizations` / `admin_users` / `admin_memberships`）を新設する。Clerk側は運営組織を専用のRole Set（顧客組織とは別のRole Set）で運用し、`org:order_manager`のようなカスタムロールに`org:orders:manage`のようなカスタム権限を割り当てる（Clerk Organizations の Custom Roles / Custom Permissions 機能）。DB側はそのロールキーをそのままミラーするだけで、権限の中身（どのロールが何をできるか）はDBに持たない。
+これを解消するため、顧客組織とは完全に独立した`admin_users` / `admin_memberships`を新設する。Clerk側は運営組織を専用のRole Set（顧客組織とは別のRole Set）で運用し、`org:order_manager`のようなカスタムロールに`org:orders:manage`のようなカスタム権限を割り当てる（Clerk Organizations の Custom Roles / Custom Permissions 機能）。DB側はそのロールキーをそのままミラーするだけで、権限の中身（どのロールが何をできるか）はDBに持たない。
+
+**運営組織は1つだけを前提にする（`admin_organizations`テーブルは持たない）**: 当初は複数の運営組織を想定したテーブル設計にしていたが、御社の事業（単一ブランドのtoC/toB向けショッピングサイト、運営業務は仕入れ・発注・配送）を前提にすると、複数の運営組織が必要になる具体的なケースが無い。仕入れ・発注・配送は「1つの運営組織内のロールの違い」であり、別々の組織ではない。将来、外部委託先（3PL等）のように別法人へアクセスを限定的に開放するといった具体的な要件が出た時点で、組織の概念を再導入する。それまでは`admin_users`（誰が運営スタッフか）と`admin_memberships`（そのスタッフがどのロールか）の2テーブルで表現する。
 
 **顧客と運営者を同じ`users`テーブルに混ぜない理由**: `users`は個人会員（顧客）の集約ルートであり、`rank_code`（NOT NULL, DEFAULT `'starter'`）・`billing_anchor_day`・`initial_fee_paid_rank_code`など、運営スタッフには一切無関係な列を必ず持つ。運営組織のメンバーをここに登録すると、顧客ドメインの列に無意味な既定値が入り続けることになるため、`admin_users`として分離する（同じClerkアカウントが顧客としても運営スタッフとしても存在しうるが、それぞれ別の集約として扱う）。
 
-**運用上の注意点（実装時に確定させる事項）**: 現行のRLSは`auth.jwt() ->> 'org_id'`のようにセッショントークンのクレームを直接見ている。Clerkの権限（`org_permissions`）はデフォルトのセッショントークンには含まれないため、Supabase側のRLSで権限まで判定したい場合はClerkのセッショントークンカスタマイズでクレームを追加する必要がある。本設計では「RLSは所属・ロールキーの参照に留め、権限判定はアプリケーション層の`has()`で行う」ことを前提にしているため、この追加クレームは必須ではないが、将来DB層での権限判定が必要になった場合の検討事項として明記しておく。
+### ロールのバリデーションについて（CHECK制約を外すことのトレードオフ）
+
+`organization_memberships.clerk_role`と`admin_memberships.clerk_role`は、どちらも**CHECK制約を付けずTEXT + NOT NULLのみ**にする。これは「バリデーションをしなくてよい」という意味ではなく、**バリデーションの責務をDBからアプリケーション層に移す**という判断であり、以下のトレードオフを理解した上での選択である。
+
+- **CHECKを付けた場合**: ロールを1つ追加するたびに`ALTER TABLE ... DROP CONSTRAINT` → `ADD CONSTRAINT`のマイグレーションが必要になる。指摘6で`member_rank` ENUMが運用負債化した（7ランク移行で2回に分けてマイグレーションする羽目になった）のと全く同じ問題を、`clerk_role`にも持ち込むことになる。
+- **CHECKを外した場合**: DBは「NOT NULLである」以上の検証をしない。Clerk側のWebhookバグや、Clerk側でのロールキーのtypo（Clerkのロールキーは大文字小文字を区別するため、`org:Admin`のような入力ミスが起きても検知できない）が起きた場合、DBは黙って受け入れてしまう。
+
+このリスクを許容できる理由は次の3点：
+
+1. **書き込み経路がアプリケーション経由の任意入力ではなく、Clerk Webhookからのミラーリングのみ**（`organization_memberships`/`admin_memberships`セクション参照）。人間が直接この列に自由入力するパスが無いため、悪意ある値の混入は起きにくい。
+2. **認可判定（実際に何ができるか）はDBのCHECKではなくアプリケーション層の`has({ permission })`が担う**（設計原則7）。仮に想定外の文字列が`clerk_role`に入っても、アプリケーション側は既知のロール・権限だけをホワイトリストで許可し、未知のロールはデフォルトで「権限なし」として扱う実装にする。CHECK制約はこの防御の代わりにはならない（CHECKで弾かれた行はそもそもINSERTが失敗するだけで、認可ロジックの安全性を保証するものではない）。
+3. **不整合を検知する手段は別に持つ**：Webhook受信のログ（`stripe_webhook_events`と同様の考え方をClerk Webhookにも適用するかは実装時の検討事項）や、定期的に「DB上のロールキーがClerk側のロール定義に存在するか」を突き合わせる監視バッチで拾う運用とし、DBの制約に頼らない。
+
+まとめると、**「バリデーションをしないと壊れる」というより「DBでの構造的な検証を諦める代わりに、ロールが増減してもマイグレーション不要という運用上の柔軟性を得ている」**というトレードオフである。アプリケーション層の認可コードが「未知のロールは拒否する」というデフォルト拒否（fail closed）を必ず実装することが、この設計が安全に機能するための前提条件になる。
+
+### 運用上の注意点（実装時に確定させる事項）
+
+現行のRLSは`auth.jwt() ->> 'org_id'`のようにセッショントークンのクレームを直接見ている。Clerkの権限（`org_permissions`）はデフォルトのセッショントークンには含まれないため、Supabase側のRLSで権限まで判定したい場合はClerkのセッショントークンカスタマイズでクレームを追加する必要がある。本設計では「RLSは所属・ロールキーの参照に留め、権限判定はアプリケーション層の`has()`で行う」ことを前提にしているため、この追加クレームは必須ではないが、将来DB層での権限判定が必要になった場合の検討事項として明記しておく。
 
 ---
 
@@ -82,7 +101,6 @@ erDiagram
     users ||--o{ organization_memberships : "user_id"
     organizations ||--o{ organization_memberships : "organization_id"
 
-    admin_organizations ||--o{ admin_memberships : "admin_organization_id"
     admin_users ||--o{ admin_memberships : "admin_user_id"
 
     member_ranks {
@@ -180,12 +198,6 @@ erDiagram
         text status
     }
 
-    admin_organizations {
-        uuid id PK
-        text clerk_org_id UK
-        text name
-    }
-
     admin_users {
         uuid id PK
         text clerk_user_id UK
@@ -195,35 +207,35 @@ erDiagram
 
     admin_memberships {
         uuid id PK
-        uuid admin_organization_id FK
-        uuid admin_user_id FK
+        uuid admin_user_id FK UK
         text clerk_role
     }
 ```
 
 `stripe_webhook_events` は他テーブルと関連を持たない独立ログのため、上図では単独エンティティとして扱う（Stripeの `event.id` をそのまま主キーにする）。
 
-`admin_organizations`/`admin_users`/`admin_memberships`は、顧客側の`organizations`/`users`/`organization_memberships`とは**意図的に無関係**（FKで繋がない）。運営者と顧客は別の集約であり、混ぜるとテーブルの制約が矛盾するため（詳細は「管理者RBAC・会員側法人RBACへの対応方針」を参照）。
+`admin_users`/`admin_memberships`は、顧客側の`organizations`/`users`/`organization_memberships`とは**意図的に無関係**（FKで繋がない）。運営者と顧客は別の集約であり、混ぜるとテーブルの制約が矛盾するため（詳細は「管理者RBAC・会員側法人RBACへの対応方針」を参照）。運営組織は1つだけを前提にしているため`admin_organizations`は持たず、`admin_memberships`は`admin_users`に対して実質1:1（1スタッフにつき1ロール）になる。
 
 `subscriptions` と `rank_changes` は「所有者が `users` か `organizations` のどちらか一方」という排他的関連（exclusive arrow）を、`owner_type`+`owner_id` のポリモーフィック関連ではなく **2本のnullable FKカラム + CHECK制約** で表現する。理由は、Postgresのポリモーフィック関連（`owner_type TEXT` + `owner_id UUID`）はFK制約による参照整合性チェックができず、存在しないIDを指しても検知できないため。2本のFKカラムなら通常のFK制約がそのまま効く。
 
 ### 各リレーションシップがなぜ必要か
 
-| リレーションシップ                                                 | なぜ必要か                                                                                                                                           |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `member_ranks` → `users`/`organizations`（`rank_code`）            | 商品カタログの閲覧可否・月次仕入れ上限を、リクエストの都度「今のランクは何か」で判定するため。FKにすることで存在しないランクコードが紛れ込むのを防ぐ |
-| `member_ranks` → `subscriptions`/`rank_changes`                    | Stripe側の契約ランクとDB側のランク定義がズレないよう、同じマスタを参照させるため                                                                     |
-| `member_ranks` → `orders`（`rank_code_at_order`）                  | 注文時点のランクを固定するため（後述の`orders`セクション参照）。存在しないランクコードを注文に残さないようFKにする                                   |
-| `users`/`organizations` → `subscriptions`（排他）                  | 1つのStripeサブスクリプションは必ず個人か法人のどちらか一方に属するため。排他制約により「両方に属する」「どちらにも属さない」不正な行を防ぐ          |
-| `users`/`organizations` → `rank_changes`（排他）                   | ランク変更は必ず個人か法人どちらかの出来事であるため。理由は`subscriptions`と同じ                                                                    |
-| `users` → `addresses`（`user_id`、必須）                           | どんな住所も「誰が登録したか」が必ず存在するため（本人の配送先でも、組織の共有住所帳でも、実際に入力した担当者がいる）                               |
-| `organizations` → `addresses`（`organization_id`、任意）           | 組織の共有住所帳（本店所在地・配送先・請求先）かどうかを判定するため。個人住所では`NULL`のまま                                                       |
-| `users` → `orders`（`user_id`）                                    | 注文は必ず特定のClerkアカウントに紐づく必要があるため（組織注文でも「システム上、誰の操作として記録されるか」の起点）                                |
-| `organizations` → `orders`（`organization_id`、任意）              | 法人注文かどうかを判定し、月次上限の集計・住所選択のスコープ・承認フローの要否を分岐させるため                                                       |
-| `users` → `orders`（`requested_by_user_id`/`approved_by_user_id`） | 組織注文で「誰が発注し、誰が承認したか」を別々に記録しないと、承認フローの監査（FR-018相当）が成立しないため                                         |
-| `orders` → `order_items`                                           | 1注文に複数商品が含まれるため（商品ごとに数量・価格・要相談フラグが異なる）                                                                          |
-| `users` → `cart_items`/`favorites`                                 | どちらも「特定のユーザーが選んだ商品」を表すため、ユーザーへの従属が必須                                                                             |
-| `users`/`organizations` ↔ `organization_memberships`               | ユーザーと組織は多対多（1ユーザーが複数組織に所属しうる）であり、中間テーブル無しでは表現できないため                                                |
+| リレーションシップ                                                 | なぜ必要か                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `member_ranks` → `users`/`organizations`（`rank_code`）            | 商品カタログの閲覧可否・月次仕入れ上限を、リクエストの都度「今のランクは何か」で判定するため。FKにすることで存在しないランクコードが紛れ込むのを防ぐ                                                                                                                                  |
+| `member_ranks` → `subscriptions`/`rank_changes`                    | Stripe側の契約ランクとDB側のランク定義がズレないよう、同じマスタを参照させるため                                                                                                                                                                                                      |
+| `member_ranks` → `orders`（`rank_code_at_order`）                  | 注文時点のランクを固定するため（後述の`orders`セクション参照）。存在しないランクコードを注文に残さないようFKにする                                                                                                                                                                    |
+| `users`/`organizations` → `subscriptions`（排他）                  | 1つのStripeサブスクリプションは必ず個人か法人のどちらか一方に属するため。排他制約により「両方に属する」「どちらにも属さない」不正な行を防ぐ                                                                                                                                           |
+| `users`/`organizations` → `rank_changes`（排他）                   | ランク変更は必ず個人か法人どちらかの出来事であるため。理由は`subscriptions`と同じ                                                                                                                                                                                                     |
+| `users` → `addresses`（`user_id`、必須）                           | どんな住所も「誰が登録したか」が必ず存在するため（本人の配送先でも、組織の共有住所帳でも、実際に入力した担当者がいる）                                                                                                                                                                |
+| `organizations` → `addresses`（`organization_id`、任意）           | 組織の共有住所帳（本店所在地・配送先・請求先）かどうかを判定するため。個人住所では`NULL`のまま                                                                                                                                                                                        |
+| `users` → `orders`（`user_id`）                                    | 注文は必ず特定のClerkアカウントに紐づく必要があるため（組織注文でも「システム上、誰の操作として記録されるか」の起点）                                                                                                                                                                 |
+| `organizations` → `orders`（`organization_id`、任意）              | 法人注文かどうかを判定し、月次上限の集計・住所選択のスコープ・承認フローの要否を分岐させるため                                                                                                                                                                                        |
+| `users` → `orders`（`requested_by_user_id`/`approved_by_user_id`） | 組織注文で「誰が発注し、誰が承認したか」を別々に記録しないと、承認フローの監査（FR-018相当）が成立しないため                                                                                                                                                                          |
+| `orders` → `order_items`                                           | 1注文に複数商品が含まれるため（商品ごとに数量・価格・要相談フラグが異なる）                                                                                                                                                                                                           |
+| `users` → `cart_items`/`favorites`                                 | どちらも「特定のユーザーが選んだ商品」を表すため、ユーザーへの従属が必須                                                                                                                                                                                                              |
+| `users`/`organizations` ↔ `organization_memberships`               | ユーザーと組織は多対多（1ユーザーが複数組織に所属しうる）であり、中間テーブル無しでは表現できないため                                                                                                                                                                                 |
+| `admin_users` → `admin_memberships`                                | 「運営スタッフの身元」と「そのスタッフのロール」を別テーブルに分けているのは、識別情報（`admin_users`）と認可情報（`admin_memberships`）の変更理由・変更頻度が異なるため（ロールは頻繁に変わりうるが身元は変わらない）。将来運営組織を複数に分ける場合も`admin_users`側は無改修で済む |
 
 ---
 
@@ -398,14 +410,14 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: `users`と`organizations`は多対多（1ユーザーが複数組織に所属しうる）の関係であり、中間テーブル無しでは表現できない。ClerkのOrganizationMembershipをWebhookでミラーリングし、DB側のRLS判定（`get_current_org_ids()`）の根拠にする。
 
-| カラム            | 型          | 制約                                              | なぜ必要か                                                                              |
-| ----------------- | ----------- | ------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `id`              | UUID        | PK                                                | サロゲートキー                                                                          |
-| `organization_id` | UUID        | NOT NULL, FK → `organizations(id)`                | どの組織への所属かを特定する本体データ                                                  |
-| `user_id`         | UUID        | NOT NULL, FK → `users(id)`                        | どのユーザーの所属かを特定する本体データ                                                |
-| `clerk_role`      | TEXT        | NOT NULL, CHECK IN (`'org:admin'`,`'org:member'`) | 注文承認フローで「承認権限があるか」を判定するために必須（`org:admin`のみ承認可能）     |
-| `created_at`      | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                            | いつ組織に加入したかの記録                                                              |
-| `updated_at`      | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                            | 旧設計に無く、`clerk_role`の昇格・降格がいつ起きたかを追跡できなかったため新設（指摘8） |
+| カラム            | 型          | 制約                               | なぜ必要か                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------- | ----------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | UUID        | PK                                 | サロゲートキー                                                                                                                                                                                                                                                                                                                                                          |
+| `organization_id` | UUID        | NOT NULL, FK → `organizations(id)` | どの組織への所属かを特定する本体データ                                                                                                                                                                                                                                                                                                                                  |
+| `user_id`         | UUID        | NOT NULL, FK → `users(id)`         | どのユーザーの所属かを特定する本体データ                                                                                                                                                                                                                                                                                                                                |
+| `clerk_role`      | TEXT        | NOT NULL（CHECK無し）              | 注文承認フローで「承認権限があるか」を判定するために必須（現状は`org:admin`のみ承認可能）。当初は`CHECK IN ('org:admin','org:member')`で2値に固定する案だったが、将来ロールを追加する可能性があるためCHECKを外した（「ロールのバリデーションについて」参照）。認可の実体はアプリケーション層の`has({ permission })`が担い、未知のロールはデフォルトで権限なし扱いにする |
+| `created_at`      | TIMESTAMPTZ | NOT NULL DEFAULT NOW()             | いつ組織に加入したかの記録                                                                                                                                                                                                                                                                                                                                              |
+| `updated_at`      | TIMESTAMPTZ | NOT NULL DEFAULT NOW()             | 旧設計に無く、`clerk_role`の昇格・降格がいつ起きたかを追跡できなかったため新設（指摘8）                                                                                                                                                                                                                                                                                 |
 
 制約 `UNIQUE(organization_id, user_id)` は維持。同じユーザーが同じ組織に二重所属する状態を防ぐために必要。
 
@@ -469,21 +481,6 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ---
 
-### `admin_organizations`（新設）
-
-**このテーブルが必要な理由**: 運営組織（発注作業等の社内業務を行うスタッフを束ねる組織）を、顧客の`organizations`とは独立に表現する。顧客組織のテーブルは請求主体としての制約（法人番号必須等）を持つため、性質の異なる運営組織を同じテーブルに混ぜられない。
-
-| カラム         | 型          | 制約                   | なぜ必要か                                                                                                        |
-| -------------- | ----------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `id`           | UUID        | PK                     | サロゲートキー                                                                                                    |
-| `clerk_org_id` | TEXT        | NOT NULL, UNIQUE       | Clerk側で作成した運営組織（Organization）との紐付けキー。RLSで「このJWTのorg_idは運営組織か」を判定する際の照合先 |
-| `name`         | TEXT        | NOT NULL               | 管理画面で複数の運営組織（例: 部署別のオペレーションチーム）を扱う場合の表示名                                    |
-| `created_at`   | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 監査証跡                                                                                                          |
-
-物理削除しない設計にはしていない（運営組織は顧客のような「退会」概念を持たず、廃止時は`admin_memberships`を先に全削除してから運営判断でこの行自体を削除する運用を想定）。将来、退会と同様に監査要件が生じた場合は`deleted_at`を追加する。
-
----
-
 ### `admin_users`（新設）
 
 **このテーブルが必要な理由**: 運営スタッフのClerkアカウントを、顧客を表す`users`とは独立に表現する。`users`は`rank_code`・`billing_anchor_day`など顧客専用の列を必ず持つため、スタッフをそこに登録すると無関係な既定値を持たせることになってしまう。同じ人物が顧客としても運営スタッフとしても存在しうるため、`clerk_user_id`の値が`users.clerk_user_id`と重複すること自体は許容する（別集約として扱う）。
@@ -500,20 +497,17 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ### `admin_memberships`（新設）
 
-**このテーブルが必要な理由**: 運営組織とスタッフの多対多、および「どのロールキーか」を保持する。ロールの中身（何ができるか）はClerk側のカスタムロール/権限機能が正であり、ここではロールキー文字列をミラーするだけに留める。
+**このテーブルが必要な理由**: 運営スタッフが「運営者としてのロールを持つメンバーである」ことと、「どのロールキーか」を保持する。運営組織は1つだけを前提にしているため所属先（組織ID）は持たず、`admin_users`とは別テーブルにして識別情報とロール情報の変更理由を分離する（`admin_users`セクション参照）。ロールの中身（何ができるか）はClerk側のカスタムロール/権限機能が正であり、ここではロールキー文字列をミラーするだけに留める。
 
-| カラム                  | 型          | 制約                                     | なぜ必要か                                                                                                                                                                                                                                                                                                    |
-| ----------------------- | ----------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                    | UUID        | PK                                       | サロゲートキー                                                                                                                                                                                                                                                                                                |
-| `admin_organization_id` | UUID        | NOT NULL, FK → `admin_organizations(id)` | どの運営組織のメンバーかを特定する本体データ                                                                                                                                                                                                                                                                  |
-| `admin_user_id`         | UUID        | NOT NULL, FK → `admin_users(id)`         | どの運営スタッフかを特定する本体データ                                                                                                                                                                                                                                                                        |
-| `clerk_role`            | TEXT        | NOT NULL                                 | Clerk側のカスタムロールキー（例: `org:order_manager`）をそのまま複写する。会員側の`organization_memberships.clerk_role`と異なりCHECK制約を付けない理由＝運営側はロールが今後も増減する前提であり、CHECK制約で固定すると値を1つ追加するたびにマイグレーションが必要になる（指摘6と同じ問題を持ち込まないため） |
-| `created_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                   | いつ運営組織に加入したかの記録                                                                                                                                                                                                                                                                                |
-| `updated_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                   | ロールの付与・変更・削除がいつ起きたかを追跡するため（誰が発注承認権限をいつ持っていたかの監査に必須）                                                                                                                                                                                                        |
+| カラム          | 型          | 制約                                     | なぜ必要か                                                                                                                                                                                           |
+| --------------- | ----------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | UUID        | PK                                       | サロゲートキー                                                                                                                                                                                       |
+| `admin_user_id` | UUID        | NOT NULL, UNIQUE, FK → `admin_users(id)` | どの運営スタッフのロールかを特定する本体データ。UNIQUEにする理由＝運営組織が1つだけの前提では、1スタッフは常に1ロールしか持たない（Clerk Organizationsも1メンバー1ロール）ため、行の重複自体を防げる |
+| `clerk_role`    | TEXT        | NOT NULL（CHECK無し）                    | Clerk側のカスタムロールキー（例: `org:order_manager`）をそのまま複写する。CHECK制約を付けない理由は「ロールのバリデーションについて」参照                                                            |
+| `created_at`    | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                   | いつロールが付与されたかの記録                                                                                                                                                                       |
+| `updated_at`    | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                   | ロールの変更がいつ起きたかを追跡するため（誰が発注承認権限をいつ持っていたかの監査に必須）                                                                                                           |
 
-制約 `UNIQUE(admin_organization_id, admin_user_id)` — 同じスタッフが同じ運営組織に二重加入しないようにするため。1スタッフが同時に複数ロールを持つ場合は、Clerk側でロールを1つに集約するか（Clerk Organizationsは1メンバー1ロール）、将来的に中間テーブルをロール単位に分割するかを実装時に検討する。
-
-**このテーブルへの書き込みは、顧客側の`organization_memberships`と同様にClerk Webhook（`organizationMembership.*`イベント、運営組織のIDでフィルタ）経由のミラーリングのみとし、アプリケーションから直接INSERT/UPDATE/DELETEしない。** メンバーの追加・削除・ロール変更は必ずClerk側（Dashboard/Backend API）で行い、その結果をWebhookが反映する。
+**このテーブルへの書き込みは、顧客側の`organization_memberships`と同様にClerk Webhook（`organizationMembership.*`イベント）経由のミラーリングのみとし、アプリケーションから直接INSERT/UPDATE/DELETEしない。** メンバーの追加・削除・ロール変更は必ずClerk側（Dashboard/Backend API）で行い、その結果をWebhookが反映する。将来、運営組織を複数に分ける必要が出た場合は、`admin_organization_id`カラムを追加し、`UNIQUE(admin_organization_id, admin_user_id)`に制約を変更する形で拡張できる。
 
 ---
 
@@ -538,7 +532,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 - `subscriptions` / `rank_changes` / `stripe_webhook_events`：いずれもRLS有効化した上で、参照ポリシーはSELECTのみ（`subscriptions`は本人/同一組織メンバーが自分の契約状況を見られるよう`orders`と同様のポリシーを追加する）。書き込みは全てservice role（Webhookハンドラー）経由に限定し、ユーザー向けINSERT/UPDATE/DELETEポリシーは設けない。`stripe_webhook_events`はユーザーへのSELECT公開もしない（運営者のみ、アプリケーションからは触らない）。
 - `member_ranks`：全会員が参照できる必要があるため、`FOR SELECT USING (true)`（マスタデータ）。書き込みは運営者のみ。
 - `addresses`：既存の「本人 or 同一組織」ポリシーはそのまま流用できる（`type='headquarters'`の行も`organization_id`が入っているため既存の組織スコープポリシーの対象になる）。
-- `admin_organizations` / `admin_users` / `admin_memberships`：`get_current_user_id()`/`get_current_org_id()`と対になる`get_current_admin_user_id()`/`get_current_admin_org_ids()`をSECURITY DEFINERで新設し、運営スタッフ本人が自分の所属・ロールを参照できるSELECTポリシーのみ設ける。書き込みはClerk Webhook（service role）経由のみで、アプリケーションからのINSERT/UPDATE/DELETEポリシーは設けない。顧客向けテーブル（`orders`等）に対する運営者の書き込みは、これらのテーブルをJOINして許可するRLSポリシーを増やすのではなく、既存の管理画面API（service role経由・アプリケーション層で`has({ permission })`相当のチェックを行う）に一本化する。RLSに運営者用の書き込み許可を増やしていくと、顧客向けポリシーとの組み合わせで検証すべきパターンが指数的に増えるため。
+- `admin_users` / `admin_memberships`：`get_current_user_id()`と対になる`get_current_admin_user_id()`をSECURITY DEFINERで新設し、運営スタッフ本人が自分自身のロールを参照できるSELECTポリシーのみ設ける（運営組織が1つの前提なので`get_current_org_ids()`相当の関数は不要）。書き込みはClerk Webhook（service role）経由のみで、アプリケーションからのINSERT/UPDATE/DELETEポリシーは設けない。顧客向けテーブル（`orders`等）に対する運営者の書き込みは、これらのテーブルをJOINして許可するRLSポリシーを増やすのではなく、既存の管理画面API（service role経由・アプリケーション層で`has({ permission })`相当のチェックを行う）に一本化する。RLSに運営者用の書き込み許可を増やしていくと、顧客向けポリシーとの組み合わせで検証すべきパターンが指数的に増えるため。
 
 ## 移行方針（概要・詳細はマイグレーション作成時に確定）
 
