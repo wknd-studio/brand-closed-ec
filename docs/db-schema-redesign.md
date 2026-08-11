@@ -209,7 +209,7 @@ erDiagram
 
     admin_memberships {
         uuid id PK
-        uuid admin_user_id FK UK
+        uuid admin_user_id FK "UNIQUE"
         text clerk_role
     }
 ```
