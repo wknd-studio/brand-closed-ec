@@ -32,6 +32,24 @@
 4. **頻繁に値が増減する分類値はENUMにしない。** Postgres ENUMへの値追加は同一トランザクション内で使えない等の制約があり、実際に7ランク移行時（`20260720084006`/`20260720084116`）で運用負債になった。順序を持つ分類（ランク）は行データの参照テーブル、それ以外の状態値はTEXT+CHECKに統一する。
 5. **論理削除するテーブルの一意制約は必ず部分インデックスにする。** 物理削除しない設計を選ぶ以上、`deleted_at IS NULL` を条件に含めない一意制約は原則禁止とする。
 6. **決済のべき等性はDBで担保する。** アプリケーションコードの実装依存にせず、Webhookイベントの受理可否をDBの一意制約で判定する。
+7. **認可（RBAC）はClerkが正、Supabaseは所属とロールキーの最小限ミラーに留める。** Stripeを決済の正としてSupabaseがミラーするのと同じ考え方を、権限にも適用する。ロール・権限の定義そのもの（何のロールがあり、どんな権限を持つか）はClerk（カスタムロール/カスタム権限機能）で管理し、DB側には権限テーブルを重複して持たない。DBが持つのは「誰がどの組織でどのロールキーか」という参照情報だけで、実際の認可判定はアプリケーション層の`has({ permission })`で行う。
+
+---
+
+## 管理者RBAC・会員側法人RBACへの対応方針
+
+今後予定されている以下の2つの要件について、本設計での対応方針を明記する。
+
+- **会員側の法人RBAC**（法人会員 or 個人会員として登録する、従来通りの運用）: `organizations`/`organization_memberships`/`clerk_role`（`org:admin`/`org:member`の2値）で**既に対応済み**。変更は不要。
+- **管理者側RBAC**（運営組織を作り、発注作業等の限定的な権限だけを持つカスタムロールをメンバーに付与・削除できる）: **現行の`organizations`/`organization_memberships`では対応できない**。理由は以下の2点。
+  1. `organizations`は顧客の請求主体（`invoice_registration_number` NOT NULL・`rank_code`・`stripe_customer_id`等）として設計されており、運営組織を同じテーブルで表現すると無関係な制約に縛られる。
+  2. `organization_memberships.clerk_role`は`CHECK IN ('org:admin', 'org:member')`に固定されており、「発注作業のみ」のようなカスタムロールを保存できない。
+
+これを解消するため、顧客組織とは完全に独立した**運営組織専用のテーブル群**（`admin_organizations` / `admin_users` / `admin_memberships`）を新設する。Clerk側は運営組織を専用のRole Set（顧客組織とは別のRole Set）で運用し、`org:order_manager`のようなカスタムロールに`org:orders:manage`のようなカスタム権限を割り当てる（Clerk Organizations の Custom Roles / Custom Permissions 機能）。DB側はそのロールキーをそのままミラーするだけで、権限の中身（どのロールが何をできるか）はDBに持たない。
+
+**顧客と運営者を同じ`users`テーブルに混ぜない理由**: `users`は個人会員（顧客）の集約ルートであり、`rank_code`（NOT NULL, DEFAULT `'starter'`）・`billing_anchor_day`・`initial_fee_paid_rank_code`など、運営スタッフには一切無関係な列を必ず持つ。運営組織のメンバーをここに登録すると、顧客ドメインの列に無意味な既定値が入り続けることになるため、`admin_users`として分離する（同じClerkアカウントが顧客としても運営スタッフとしても存在しうるが、それぞれ別の集約として扱う）。
+
+**運用上の注意点（実装時に確定させる事項）**: 現行のRLSは`auth.jwt() ->> 'org_id'`のようにセッショントークンのクレームを直接見ている。Clerkの権限（`org_permissions`）はデフォルトのセッショントークンには含まれないため、Supabase側のRLSで権限まで判定したい場合はClerkのセッショントークンカスタマイズでクレームを追加する必要がある。本設計では「RLSは所属・ロールキーの参照に留め、権限判定はアプリケーション層の`has()`で行う」ことを前提にしているため、この追加クレームは必須ではないが、将来DB層での権限判定が必要になった場合の検討事項として明記しておく。
 
 ---
 
@@ -63,6 +81,9 @@ erDiagram
 
     users ||--o{ organization_memberships : "user_id"
     organizations ||--o{ organization_memberships : "organization_id"
+
+    admin_organizations ||--o{ admin_memberships : "admin_organization_id"
+    admin_users ||--o{ admin_memberships : "admin_user_id"
 
     member_ranks {
         text code PK
@@ -158,9 +179,31 @@ erDiagram
         text type
         text status
     }
+
+    admin_organizations {
+        uuid id PK
+        text clerk_org_id UK
+        text name
+    }
+
+    admin_users {
+        uuid id PK
+        text clerk_user_id UK
+        text name
+        text email
+    }
+
+    admin_memberships {
+        uuid id PK
+        uuid admin_organization_id FK
+        uuid admin_user_id FK
+        text clerk_role
+    }
 ```
 
 `stripe_webhook_events` は他テーブルと関連を持たない独立ログのため、上図では単独エンティティとして扱う（Stripeの `event.id` をそのまま主キーにする）。
+
+`admin_organizations`/`admin_users`/`admin_memberships`は、顧客側の`organizations`/`users`/`organization_memberships`とは**意図的に無関係**（FKで繋がない）。運営者と顧客は別の集約であり、混ぜるとテーブルの制約が矛盾するため（詳細は「管理者RBAC・会員側法人RBACへの対応方針」を参照）。
 
 `subscriptions` と `rank_changes` は「所有者が `users` か `organizations` のどちらか一方」という排他的関連（exclusive arrow）を、`owner_type`+`owner_id` のポリモーフィック関連ではなく **2本のnullable FKカラム + CHECK制約** で表現する。理由は、Postgresのポリモーフィック関連（`owner_type TEXT` + `owner_id UUID`）はFK制約による参照整合性チェックができず、存在しないIDを指しても検知できないため。2本のFKカラムなら通常のFK制約がそのまま効く。
 
@@ -426,6 +469,54 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ---
 
+### `admin_organizations`（新設）
+
+**このテーブルが必要な理由**: 運営組織（発注作業等の社内業務を行うスタッフを束ねる組織）を、顧客の`organizations`とは独立に表現する。顧客組織のテーブルは請求主体としての制約（法人番号必須等）を持つため、性質の異なる運営組織を同じテーブルに混ぜられない。
+
+| カラム         | 型          | 制約                   | なぜ必要か                                                                                                        |
+| -------------- | ----------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`           | UUID        | PK                     | サロゲートキー                                                                                                    |
+| `clerk_org_id` | TEXT        | NOT NULL, UNIQUE       | Clerk側で作成した運営組織（Organization）との紐付けキー。RLSで「このJWTのorg_idは運営組織か」を判定する際の照合先 |
+| `name`         | TEXT        | NOT NULL               | 管理画面で複数の運営組織（例: 部署別のオペレーションチーム）を扱う場合の表示名                                    |
+| `created_at`   | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 監査証跡                                                                                                          |
+
+物理削除しない設計にはしていない（運営組織は顧客のような「退会」概念を持たず、廃止時は`admin_memberships`を先に全削除してから運営判断でこの行自体を削除する運用を想定）。将来、退会と同様に監査要件が生じた場合は`deleted_at`を追加する。
+
+---
+
+### `admin_users`（新設）
+
+**このテーブルが必要な理由**: 運営スタッフのClerkアカウントを、顧客を表す`users`とは独立に表現する。`users`は`rank_code`・`billing_anchor_day`など顧客専用の列を必ず持つため、スタッフをそこに登録すると無関係な既定値を持たせることになってしまう。同じ人物が顧客としても運営スタッフとしても存在しうるため、`clerk_user_id`の値が`users.clerk_user_id`と重複すること自体は許容する（別集約として扱う）。
+
+| カラム          | 型          | 制約                   | なぜ必要か                                                                                                    |
+| --------------- | ----------- | ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `id`            | UUID        | PK                     | サロゲートキー                                                                                                |
+| `clerk_user_id` | TEXT        | NOT NULL, UNIQUE       | Clerkとの紐付けキー。運営組織のJWTから本人確認するために必要（`get_current_admin_user_id()`相当の関数で使用） |
+| `name`          | TEXT        | NOT NULL               | 管理画面・承認ログ等で「誰が操作したか」を表示するために必要                                                  |
+| `email`         | TEXT        | NOT NULL               | 運営者向け通知（承認依頼・エラー通知等）の送信先として必要                                                    |
+| `created_at`    | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 監査証跡                                                                                                      |
+
+---
+
+### `admin_memberships`（新設）
+
+**このテーブルが必要な理由**: 運営組織とスタッフの多対多、および「どのロールキーか」を保持する。ロールの中身（何ができるか）はClerk側のカスタムロール/権限機能が正であり、ここではロールキー文字列をミラーするだけに留める。
+
+| カラム                  | 型          | 制約                                     | なぜ必要か                                                                                                                                                                                                                                                                                                    |
+| ----------------------- | ----------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                    | UUID        | PK                                       | サロゲートキー                                                                                                                                                                                                                                                                                                |
+| `admin_organization_id` | UUID        | NOT NULL, FK → `admin_organizations(id)` | どの運営組織のメンバーかを特定する本体データ                                                                                                                                                                                                                                                                  |
+| `admin_user_id`         | UUID        | NOT NULL, FK → `admin_users(id)`         | どの運営スタッフかを特定する本体データ                                                                                                                                                                                                                                                                        |
+| `clerk_role`            | TEXT        | NOT NULL                                 | Clerk側のカスタムロールキー（例: `org:order_manager`）をそのまま複写する。会員側の`organization_memberships.clerk_role`と異なりCHECK制約を付けない理由＝運営側はロールが今後も増減する前提であり、CHECK制約で固定すると値を1つ追加するたびにマイグレーションが必要になる（指摘6と同じ問題を持ち込まないため） |
+| `created_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                   | いつ運営組織に加入したかの記録                                                                                                                                                                                                                                                                                |
+| `updated_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                   | ロールの付与・変更・削除がいつ起きたかを追跡するため（誰が発注承認権限をいつ持っていたかの監査に必須）                                                                                                                                                                                                        |
+
+制約 `UNIQUE(admin_organization_id, admin_user_id)` — 同じスタッフが同じ運営組織に二重加入しないようにするため。1スタッフが同時に複数ロールを持つ場合は、Clerk側でロールを1つに集約するか（Clerk Organizationsは1メンバー1ロール）、将来的に中間テーブルをロール単位に分割するかを実装時に検討する。
+
+**このテーブルへの書き込みは、顧客側の`organization_memberships`と同様にClerk Webhook（`organizationMembership.*`イベント、運営組織のIDでフィルタ）経由のミラーリングのみとし、アプリケーションから直接INSERT/UPDATE/DELETEしない。** メンバーの追加・削除・ロール変更は必ずClerk側（Dashboard/Backend API）で行い、その結果をWebhookが反映する。
+
+---
+
 ## 廃止されるオブジェクト
 
 | オブジェクト                                                               | 種別   | 理由                                       |
@@ -447,6 +538,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 - `subscriptions` / `rank_changes` / `stripe_webhook_events`：いずれもRLS有効化した上で、参照ポリシーはSELECTのみ（`subscriptions`は本人/同一組織メンバーが自分の契約状況を見られるよう`orders`と同様のポリシーを追加する）。書き込みは全てservice role（Webhookハンドラー）経由に限定し、ユーザー向けINSERT/UPDATE/DELETEポリシーは設けない。`stripe_webhook_events`はユーザーへのSELECT公開もしない（運営者のみ、アプリケーションからは触らない）。
 - `member_ranks`：全会員が参照できる必要があるため、`FOR SELECT USING (true)`（マスタデータ）。書き込みは運営者のみ。
 - `addresses`：既存の「本人 or 同一組織」ポリシーはそのまま流用できる（`type='headquarters'`の行も`organization_id`が入っているため既存の組織スコープポリシーの対象になる）。
+- `admin_organizations` / `admin_users` / `admin_memberships`：`get_current_user_id()`/`get_current_org_id()`と対になる`get_current_admin_user_id()`/`get_current_admin_org_ids()`をSECURITY DEFINERで新設し、運営スタッフ本人が自分の所属・ロールを参照できるSELECTポリシーのみ設ける。書き込みはClerk Webhook（service role）経由のみで、アプリケーションからのINSERT/UPDATE/DELETEポリシーは設けない。顧客向けテーブル（`orders`等）に対する運営者の書き込みは、これらのテーブルをJOINして許可するRLSポリシーを増やすのではなく、既存の管理画面API（service role経由・アプリケーション層で`has({ permission })`相当のチェックを行う）に一本化する。RLSに運営者用の書き込み許可を増やしていくと、顧客向けポリシーとの組み合わせで検証すべきパターンが指数的に増えるため。
 
 ## 移行方針（概要・詳細はマイグレーション作成時に確定）
 
