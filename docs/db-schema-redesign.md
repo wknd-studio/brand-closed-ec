@@ -117,6 +117,9 @@ erDiagram
     returns ||--o{ return_items : "return_id"
     order_items |o--o{ return_items : "order_item_id"
 
+    locations ||--o{ order_items : "fulfillment_location_code"
+    locations ||--o{ shipments : "origin_location_code"
+
     member_ranks {
         text code PK
         smallint sort_order UK
@@ -199,6 +202,7 @@ erDiagram
         text brand_name_snapshot
         uuid procurement_task_id FK
         uuid shipment_id FK "NULL可"
+        text fulfillment_location_code FK
     }
 
     shipments {
@@ -208,6 +212,14 @@ erDiagram
         text tracking_number
         timestamptz shipped_at
         timestamptz delivered_at
+        text origin_location_code FK
+    }
+
+    locations {
+        text code PK
+        text name
+        boolean requires_receiving
+        text postal_code "NULL可"
     }
 
     order_status_changes {
@@ -310,6 +322,8 @@ erDiagram
 | `admin_users` → `returns`（`reviewed_by_admin_user_id`、任意）             | 誰が承認/却下したかを特定するため。未処理のうちはNULL                                                                                                                                                                                                                                 |
 | `returns` → `return_items`（`return_id`）                                  | 1回の返品申請が複数明細にまたがりうるため（`orders`/`order_items`と同じ多対1の構造）                                                                                                                                                                                                  |
 | `order_items` → `return_items`（`order_item_id`、任意）                    | 元の注文のどの明細に対する返品かを特定するため。同じ明細に対して複数回の部分返品が起きうるため多対多ではなく「多」側を`return_items`が持つ                                                                                                                                            |
+| `locations` → `order_items`（`fulfillment_location_code`）                 | 商品ごとに「事務所経由か仕入れ先直送か」という配送ルートが異なるため。FKにすることで存在しないロケーションコードが紛れ込むのを防ぐ                                                                                                                                                    |
+| `locations` → `shipments`（`origin_location_code`）                        | 実際にこの出荷がどのロケーションから発送されたかを記録するため。`order_items.fulfillment_location_code`から辿れば分かる情報だが、出荷一覧・配送トラブル対応時に`shipments`単体で判断できるようにするため                                                                              |
 
 ---
 
@@ -544,22 +558,23 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: 1注文は複数商品を含みうるため、`orders`と商品情報の間に多対1の中間エンティティが必要。
 
-| カラム                  | 型          | 制約                                 | なぜ必要か                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------- | ----------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                    | UUID        | PK                                   | サロゲートキー                                                                                                                                                                                                                                                                                                                                      |
-| `order_id`              | UUID        | NOT NULL, FK → `orders(id)`          | どの注文の明細かを特定する本体データ                                                                                                                                                                                                                                                                                                                |
-| `sanity_product_id`     | TEXT        | NOT NULL                             | 商品マスタはSanity CMS側にあり、SupabaseにFK参照できないため、外部システムのIDをそのまま保持する（指摘9のとおりDB側でのFK整合性チェックはスコープ外）                                                                                                                                                                                               |
-| `product_name_snapshot` | TEXT        | NOT NULL                             | Sanity側で商品名が変更・削除された後も、過去注文の明細表示が壊れないようにするため                                                                                                                                                                                                                                                                  |
-| `brand_id_snapshot`     | TEXT        | NULL可                               | 商品はSanity上で必ずいずれかのブランドに属する。運営者は複数の一次卸業者へ発注するため、将来ブランド（≒仕入れ先）別に受注を集計・分析する際、Sanity側でブランド再割当・商品削除が起きていても過去注文の実績を正しく遡れるようにする。NULL可なのは、この列を追加する時点で既存の過去注文にはバックフィルできないブランド不明のレコードが残りうるため |
-| `brand_name_snapshot`   | TEXT        | NULL可                               | `brand_id_snapshot`と同じ理由。IDだけでなく表示名もスナップショットすることで、Sanity側のブランドが削除された後でも運営画面の集計表示が壊れない                                                                                                                                                                                                     |
-| `procurement_task_id`   | UUID        | NULL可, FK → `procurement_tasks(id)` | この明細が、運営スタッフの「発注タスク」にまとめられたかどうか。NULL＝まだどのタスクにも入っていない（未着手）。1明細は同時に1つのタスクにしか属さない前提（同じ明細の数量を2回に分けて発注する運用は当面想定しない）                                                                                                                               |
-| `shipment_id`           | UUID        | NULL可, FK → `shipments(id)`         | この明細が、どの出荷（箱）に載せられたかどうか。NULL＝まだ発送されていない。1明細は同時に1つの出荷にしか属さない前提（`procurement_task_id`と同じ考え方）。同じ注文内でも商品ごとに異なる`shipment_id`を持てるため、揃った商品から先に発送する分割出荷を表現できる                                                                                  |
-| `unit_price_snapshot`   | BIGINT      | NULL可                               | 価格改定後も過去注文の金額を正しく保持するため。NULL＝要相談商品で注文時点では価格未確定                                                                                                                                                                                                                                                            |
-| `quantity`              | INTEGER     | NOT NULL, CHECK `> 0`                | 注文数量。CHECKにより「数量0の注文明細」という無意味な状態をDBレベルで防ぐ                                                                                                                                                                                                                                                                          |
-| `is_negotiable`         | BOOLEAN     | NOT NULL DEFAULT false               | 価格未確定の要相談商品かどうかを判定し、Invoiceフローに回すかどうかの分岐に使うため                                                                                                                                                                                                                                                                 |
-| `negotiated_unit_price` | BIGINT      | NULL可                               | 運営者が請求書発行時に確定させた単価。要相談商品の最終金額を別カラムに残すことで、当初の見込み額（あれば）と実額を両方追跡できる                                                                                                                                                                                                                    |
-| `created_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()               | 明細行の作成日時                                                                                                                                                                                                                                                                                                                                    |
-| `updated_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()               | 旧設計に無く、運営による`negotiated_unit_price`確定日時を追跡できなかったため新設（指摘8）                                                                                                                                                                                                                                                          |
+| カラム                      | 型          | 制約                                 | なぜ必要か                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | ----------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | UUID        | PK                                   | サロゲートキー                                                                                                                                                                                                                                                                                                                                              |
+| `order_id`                  | UUID        | NOT NULL, FK → `orders(id)`          | どの注文の明細かを特定する本体データ                                                                                                                                                                                                                                                                                                                        |
+| `sanity_product_id`         | TEXT        | NOT NULL                             | 商品マスタはSanity CMS側にあり、SupabaseにFK参照できないため、外部システムのIDをそのまま保持する（指摘9のとおりDB側でのFK整合性チェックはスコープ外）                                                                                                                                                                                                       |
+| `product_name_snapshot`     | TEXT        | NOT NULL                             | Sanity側で商品名が変更・削除された後も、過去注文の明細表示が壊れないようにするため                                                                                                                                                                                                                                                                          |
+| `brand_id_snapshot`         | TEXT        | NULL可                               | 商品はSanity上で必ずいずれかのブランドに属する。運営者は複数の一次卸業者へ発注するため、将来ブランド（≒仕入れ先）別に受注を集計・分析する際、Sanity側でブランド再割当・商品削除が起きていても過去注文の実績を正しく遡れるようにする。NULL可なのは、この列を追加する時点で既存の過去注文にはバックフィルできないブランド不明のレコードが残りうるため         |
+| `brand_name_snapshot`       | TEXT        | NULL可                               | `brand_id_snapshot`と同じ理由。IDだけでなく表示名もスナップショットすることで、Sanity側のブランドが削除された後でも運営画面の集計表示が壊れない                                                                                                                                                                                                             |
+| `procurement_task_id`       | UUID        | NULL可, FK → `procurement_tasks(id)` | この明細が、運営スタッフの「発注タスク」にまとめられたかどうか。NULL＝まだどのタスクにも入っていない（未着手）。1明細は同時に1つのタスクにしか属さない前提（同じ明細の数量を2回に分けて発注する運用は当面想定しない）                                                                                                                                       |
+| `shipment_id`               | UUID        | NULL可, FK → `shipments(id)`         | この明細が、どの出荷（箱）に載せられたかどうか。NULL＝まだ発送されていない。1明細は同時に1つの出荷にしか属さない前提（`procurement_task_id`と同じ考え方）。同じ注文内でも商品ごとに異なる`shipment_id`を持てるため、揃った商品から先に発送する分割出荷を表現できる                                                                                          |
+| `fulfillment_location_code` | TEXT        | NOT NULL, FK → `locations(code)`     | この商品が事務所経由（`'office'`）か仕入れ先直送（`'supplier_direct'`）かを、注文時点の値としてスナップショットする。Sanity側の商品設定が後で変わっても過去注文のルートが変わらないようにするため。事務所経由かどうかで、`shipments`作成前に`procurement_tasks.received_at`を必須にするかどうかの業務ルールが分岐する（`locations.requires_receiving`参照） |
+| `unit_price_snapshot`       | BIGINT      | NULL可                               | 価格改定後も過去注文の金額を正しく保持するため。NULL＝要相談商品で注文時点では価格未確定                                                                                                                                                                                                                                                                    |
+| `quantity`                  | INTEGER     | NOT NULL, CHECK `> 0`                | 注文数量。CHECKにより「数量0の注文明細」という無意味な状態をDBレベルで防ぐ                                                                                                                                                                                                                                                                                  |
+| `is_negotiable`             | BOOLEAN     | NOT NULL DEFAULT false               | 価格未確定の要相談商品かどうかを判定し、Invoiceフローに回すかどうかの分岐に使うため                                                                                                                                                                                                                                                                         |
+| `negotiated_unit_price`     | BIGINT      | NULL可                               | 運営者が請求書発行時に確定させた単価。要相談商品の最終金額を別カラムに残すことで、当初の見込み額（あれば）と実額を両方追跡できる                                                                                                                                                                                                                            |
+| `created_at`                | TIMESTAMPTZ | NOT NULL DEFAULT NOW()               | 明細行の作成日時                                                                                                                                                                                                                                                                                                                                            |
+| `updated_at`                | TIMESTAMPTZ | NOT NULL DEFAULT NOW()               | 旧設計に無く、運営による`negotiated_unit_price`確定日時を追跡できなかったため新設（指摘8）                                                                                                                                                                                                                                                                  |
 
 ---
 
@@ -567,20 +582,44 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: 運営者は複数の一次卸業者へ商品ごとに異なる方法で発注するため、同じ注文内でも商品ごとに入荷タイミングがバラバラになる。これを「注文＝1回の発送」という前提のまま`orders.status`だけで表現すると、一番入荷が遅い商品に発送全体が引きずられてしまう。そこで「注文（顧客が申し込んだ内容）」と「出荷（実際に発送する箱）」を別エンティティに分離し、揃った商品から先に発送できるようにする（分割出荷）。1つの`orders`に対して`shipments`は複数存在しうる。
 
-| カラム            | 型          | 制約                                                                                | なぜ必要か                                                                                                                         |
-| ----------------- | ----------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | UUID        | PK                                                                                  | サロゲートキー                                                                                                                     |
-| `order_id`        | UUID        | NOT NULL, FK → `orders(id)`                                                         | どの注文に属する出荷かを特定する本体データ                                                                                         |
-| `status`          | TEXT        | NOT NULL, CHECK IN (`'preparing'`,`'shipped'`,`'delivered'`), DEFAULT `'preparing'` | 「梱包準備中/発送済み/配達完了」を出荷単位で区別する。注文単位ではなく箱単位で状態が進むことが、このテーブルを新設する理由そのもの |
-| `carrier`         | TEXT        | NULL可                                                                              | 配送業者名（例: ヤマト運輸）。問い合わせ対応で顧客に案内するために必要                                                             |
-| `tracking_number` | TEXT        | NULL可                                                                              | 顧客への追跡番号の案内、配送トラブル時の配送業者への問い合わせに必須                                                               |
-| `shipped_at`      | TIMESTAMPTZ | NULL可                                                                              | 発送日時。配送SLA（何日で届くか）の起点として必要                                                                                  |
-| `delivered_at`    | TIMESTAMPTZ | NULL可                                                                              | 配達完了日時。配送業者からの通知やスタッフの手動更新で反映する想定                                                                 |
-| `created_at`      | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                              | 監査証跡                                                                                                                           |
+| カラム                 | 型          | 制約                                                                                | なぜ必要か                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ----------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | UUID        | PK                                                                                  | サロゲートキー                                                                                                                                                                                                                                                                                                                                                                |
+| `order_id`             | UUID        | NOT NULL, FK → `orders(id)`                                                         | どの注文に属する出荷かを特定する本体データ                                                                                                                                                                                                                                                                                                                                    |
+| `status`               | TEXT        | NOT NULL, CHECK IN (`'preparing'`,`'shipped'`,`'delivered'`), DEFAULT `'preparing'` | 「梱包準備中/発送済み/配達完了」を出荷単位で区別する。注文単位ではなく箱単位で状態が進むことが、このテーブルを新設する理由そのもの                                                                                                                                                                                                                                            |
+| `carrier`              | TEXT        | NULL可                                                                              | 配送業者名（例: ヤマト運輸）。問い合わせ対応で顧客に案内するために必要                                                                                                                                                                                                                                                                                                        |
+| `tracking_number`      | TEXT        | NULL可                                                                              | 顧客への追跡番号の案内、配送トラブル時の配送業者への問い合わせに必須                                                                                                                                                                                                                                                                                                          |
+| `shipped_at`           | TIMESTAMPTZ | NULL可                                                                              | 発送日時。配送SLA（何日で届くか）の起点として必要                                                                                                                                                                                                                                                                                                                             |
+| `delivered_at`         | TIMESTAMPTZ | NULL可                                                                              | 配達完了日時。配送業者からの通知やスタッフの手動更新で反映する想定                                                                                                                                                                                                                                                                                                            |
+| `origin_location_code` | TEXT        | NOT NULL, FK → `locations(code)`                                                    | この出荷が事務所発送か仕入れ先直送かを記録する。`order_items.fulfillment_location_code`から辿れば分かる情報だが、出荷一覧・配送トラブル対応時に`shipments`単体で判断できるようにするため。1つの`shipments`に含まれる`order_items`は全て同じ`fulfillment_location_code`でなければならない（物理的に1箱が事務所発送と直送に同時になることはありえないため。アプリ層で検証する） |
+| `created_at`           | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                              | 監査証跡                                                                                                                                                                                                                                                                                                                                                                      |
 
-**運用の流れ**: `procurement_tasks.received_at`が入り商品が事務所に届いたら、スタッフが揃った`order_items`を選んで`shipments`を1件作成し、選んだ明細の`shipment_id`をまとめて更新する。同じ注文の別の商品がまだ届いていなければ、その明細は`shipment_id IS NULL`のまま残り、後日別の`shipments`が作られる。
+**運用の流れ**: `fulfillment_location_code`（＝`locations.requires_receiving`）によって2パターンに分岐する。
+
+- `requires_receiving = true`（事務所経由）：`procurement_tasks.received_at`が入り商品が事務所に届いたら、スタッフが揃った`order_items`を選んで`shipments`を1件作成し、選んだ明細の`shipment_id`をまとめて更新する
+- `requires_receiving = false`（仕入れ先直送）：`procurement_tasks.received_at`を経由せず、`procurement_tasks.ordered_at`（仕入れ先へ発注した時点）が入った段階で`shipments`を作成できる。発注時に`orders.shipping_address_snapshot`（顧客の配送先住所）を仕入れ先へ伝える必要があるが、これはスタッフの業務フローであり、既存の`orders`の列で足りるためスキーマの追加は不要
+
+同じ注文の別の商品がまだ届いていない／発注できていなければ、その明細は`shipment_id IS NULL`のまま残り、後日別の`shipments`が作られる。
 
 **あえて持たない設計（簡略化している点）**: 1つの明細（同じ商品・同じ数量のまとまり）を数量単位でさらに複数の出荷に分割する（例: 10個のうち3個だけ先に送る）ケースは対象外にする。必要になった場合は`shipment_items`（`shipment_id`, `order_item_id`, `quantity`）という中間テーブルに発展させて拡張できる。また、`orders.status`との同期は都度計算（`orders`に紐づく`shipments`/`order_items`をJOINして算出）とし、`orders`側に発送状況をキャッシュする列は今回は持たない（`procurement_tasks`の期限計算と同じ考え方）。画面表示が重くなるようであれば、後から同期用のトリガー・キャッシュ列を追加できる。
+
+---
+
+### `locations`（新設・参照テーブル）
+
+**このテーブルが必要な理由**: 商品は「事務所を経由して届く」ものと「仕入れ先から顧客へ直送される」ものが混在する。この配送ルートの違いを`order_items`/`shipments`から参照する固定値（CHECK制約）ではなく行データとして持つことで、将来ロケーションが増えても（倉庫の追加、仕入れ先ごとの直送区分の細分化等）マイグレーション無しでINSERTだけで対応できるようにする（`member_ranks`と同じ考え方、設計原則4）。Shopifyの「Location」概念を、`suppliers`マスタを持たない前提の範囲で簡略化したもの。
+
+| カラム                                                  | 型          | 制約                   | なぜ必要か                                                                                                                                                                                    |
+| ------------------------------------------------------- | ----------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code`                                                  | TEXT        | PK                     | `'office'`/`'supplier_direct'`。他テーブルから安定して参照できる識別子として、意味のある文字列をそのままキーにする（`member_ranks.code`と同じ方針）                                           |
+| `name`                                                  | TEXT        | NOT NULL               | 管理画面での表示名                                                                                                                                                                            |
+| `requires_receiving`                                    | BOOLEAN     | NOT NULL               | この拠点経由の商品が`shipments`作成前に事務所での受領（`procurement_tasks.received_at`）を必須とするかどうかの業務ルールを、CHECK制約やアプリコードのハードコードではなくデータとして持つため |
+| `postal_code` / `prefecture` / `city` / `address_line1` | TEXT        | NULL可                 | 実際の住所を持つのは`'office'`行のみを想定（送り状・発送元表示に使う）。`'supplier_direct'`行は仕入れ先ごとに住所が異なり`suppliers`マスタを持たない方針のため、常に`NULL`のままでよい        |
+| `address_line2`                                         | TEXT        | NULL可                 | `addresses`と同じ理由（任意項目）                                                                                                                                                             |
+| `phone_number`                                          | TEXT        | NULL可                 | `'office'`行のみ想定。配送業者からの連絡先として必要な場合に使う                                                                                                                              |
+| `created_at` / `updated_at`                             | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 監査証跡                                                                                                                                                                                      |
+
+初期投入データは`('office', '事務所', true, <実際の住所>)`と`('supplier_direct', '仕入れ先直送', false, NULL, NULL, NULL, NULL, NULL)`の2行を想定する。`addresses`テーブルとは別物であり、参照もしない（`addresses`は顧客が指定する配送「先」、`locations`は商品が出発する配送「元」という逆の役割のため。`addresses.user_id`がNOT NULLである以上、人でも組織でもない`locations`を同じテーブルに混ぜるとポリモーフィックな関連になってしまう）。
 
 ---
 
@@ -717,6 +756,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 - `shipments`：`orders`と同じ「本人 or 同一組織」ポリシーを流用し、顧客は自分（または所属組織）の注文に紐づく出荷をSELECTのみ可能にする（追跡番号・配送状況の確認用途）。書き込みは`procurement_tasks`と同様に管理画面API（service role経由）に一本化し、ユーザー向けINSERT/UPDATE/DELETEポリシーは設けない。`order_items.shipment_id`の更新も同じAPI経由に統一する。
 - `order_status_changes`：`orders`と同じ「本人 or 同一組織」ポリシーでSELECTのみ許可（注文の進捗履歴を顧客にも見せる用途）。書き込みは`orders.status`の更新と同一トランザクションで行うアプリケーションコード経由のみ。
 - `returns` / `return_items`：顧客は自分（または所属組織）の注文に対する返品・返金申請をSELECT、および`requested`状態でのINSERTのみ許可する（「返品したい」という申請自体は顧客の操作であるため、他の運営専用テーブルとは異なり顧客からの書き込みを認める）。承認・却下・返金実行（`status`の`requested`以降への遷移、`stripe_refund_id`/`refund_amount`のセット）は管理画面API（service role経由）に一本化し、顧客からの直接UPDATEは許可しない。
+- `locations`：運営内部の発送拠点情報であり、顧客がこのテーブルを直接参照する必要はない（`member_ranks`と異なりカタログ表示等に使われないため）。顧客向けSELECTポリシーは設けず、参照・書き込みともに管理画面API（service role経由）に一本化する。
 
 ---
 
@@ -762,5 +802,6 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 9. `shipments`を新設し、`order_items.shipment_id`を追加する。同時に`orders.status`のCHECK制約から`'shipping'`/`'delivered'`/`'sourcing'`/`'ordered'`/`'preparing'`を除去する（既存データに該当値があれば、`shipments`/`procurement_tasks`側へバックフィルした上で`orders.status`を`'paid'`に寄せる移行が必要）。
 10. `order_status_changes`を新設する。既存の`orders`各行について、現在の`status`を`to_status`とした初期1行（`from_status = NULL`, `changed_by = 'system'`）をバックフィルする。
 11. `returns`/`return_items`を新設する（既存データのバックフィルは不要。新規発生分から記録を開始する）。
+12. `locations`を新設し、`('office', ...)`/`('supplier_direct', ...)`の初期2行を投入する。`order_items.fulfillment_location_code`（既存データは全て`'office'`とみなしてバックフィル）・`shipments.origin_location_code`（既存データは全て`'office'`とみなしてバックフィル）を追加する。
 
 この設計に問題なければ、上記の移行方針をベースに実際のマイグレーションファイル作成に進みます。
