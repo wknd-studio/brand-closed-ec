@@ -102,6 +102,23 @@ erDiagram
     organizations ||--o{ organization_memberships : "organization_id"
 
     admin_users ||--o{ admin_memberships : "admin_user_id"
+    admin_users |o--o{ procurement_tasks : "assigned_admin_user_id"
+    procurement_tasks |o--o{ order_items : "procurement_task_id"
+
+    orders ||--o{ shipments : "order_id"
+    shipments |o--o{ order_items : "shipment_id"
+
+    orders ||--o{ order_status_changes : "order_id"
+    admin_users |o--o{ order_status_changes : "changed_by_admin_user_id"
+
+    orders ||--o{ returns : "order_id"
+    users ||--o{ returns : "requested_by_user_id"
+    admin_users |o--o{ returns : "reviewed_by_admin_user_id"
+    returns ||--o{ return_items : "return_id"
+    order_items |o--o{ return_items : "order_item_id"
+
+    locations ||--o{ order_items : "fulfillment_location_code"
+    locations ||--o{ shipments : "origin_location_code"
 
     member_ranks {
         text code PK
@@ -174,6 +191,7 @@ erDiagram
         text status
         text payment_flow
         text rank_code_at_order FK
+        timestamptz procurement_due_at
     }
 
     order_items {
@@ -182,6 +200,53 @@ erDiagram
         text sanity_product_id
         text brand_id_snapshot
         text brand_name_snapshot
+        uuid procurement_task_id FK
+        uuid shipment_id FK "NULL可"
+        text fulfillment_location_code FK
+    }
+
+    shipments {
+        uuid id PK
+        uuid order_id FK
+        text status
+        text tracking_number
+        timestamptz shipped_at
+        timestamptz delivered_at
+        text origin_location_code FK
+    }
+
+    locations {
+        text code PK
+        text name
+        boolean requires_receiving
+        text postal_code "NULL可"
+    }
+
+    order_status_changes {
+        uuid id PK
+        uuid order_id FK
+        text from_status "NULL可"
+        text to_status
+        text changed_by
+        uuid changed_by_admin_user_id FK "NULL可"
+    }
+
+    returns {
+        uuid id PK
+        uuid order_id FK
+        text status
+        uuid requested_by_user_id FK
+        uuid reviewed_by_admin_user_id FK "NULL可"
+        text stripe_refund_id UK "NULL可"
+        bigint refund_amount
+    }
+
+    return_items {
+        uuid id PK
+        uuid return_id FK
+        uuid order_item_id FK
+        integer quantity
+        bigint refund_amount
     }
 
     cart_items {
@@ -209,8 +274,16 @@ erDiagram
 
     admin_memberships {
         uuid id PK
-        uuid admin_user_id FK UK
+        uuid admin_user_id FK "UNIQUE"
         text clerk_role
+    }
+
+    procurement_tasks {
+        uuid id PK
+        text status
+        uuid assigned_admin_user_id FK "NULL可"
+        timestamptz ordered_at
+        timestamptz received_at
     }
 ```
 
@@ -222,22 +295,35 @@ erDiagram
 
 ### 各リレーションシップがなぜ必要か
 
-| リレーションシップ                                                 | なぜ必要か                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `member_ranks` → `users`/`organizations`（`rank_code`）            | 商品カタログの閲覧可否・月次仕入れ上限を、リクエストの都度「今のランクは何か」で判定するため。FKにすることで存在しないランクコードが紛れ込むのを防ぐ                                                                                                                                  |
-| `member_ranks` → `subscriptions`/`rank_changes`                    | Stripe側の契約ランクとDB側のランク定義がズレないよう、同じマスタを参照させるため                                                                                                                                                                                                      |
-| `member_ranks` → `orders`（`rank_code_at_order`）                  | 注文時点のランクを固定するため（後述の`orders`セクション参照）。存在しないランクコードを注文に残さないようFKにする                                                                                                                                                                    |
-| `users`/`organizations` → `subscriptions`（排他）                  | 1つのStripeサブスクリプションは必ず個人か法人のどちらか一方に属するため。排他制約により「両方に属する」「どちらにも属さない」不正な行を防ぐ                                                                                                                                           |
-| `users`/`organizations` → `rank_changes`（排他）                   | ランク変更は必ず個人か法人どちらかの出来事であるため。理由は`subscriptions`と同じ                                                                                                                                                                                                     |
-| `users` → `addresses`（`user_id`、必須）                           | どんな住所も「誰が登録したか」が必ず存在するため（本人の配送先でも、組織の共有住所帳でも、実際に入力した担当者がいる）                                                                                                                                                                |
-| `organizations` → `addresses`（`organization_id`、任意）           | 組織の共有住所帳（本店所在地・配送先・請求先）かどうかを判定するため。個人住所では`NULL`のまま                                                                                                                                                                                        |
-| `users` → `orders`（`user_id`）                                    | 注文は必ず特定のClerkアカウントに紐づく必要があるため（組織注文でも「システム上、誰の操作として記録されるか」の起点）                                                                                                                                                                 |
-| `organizations` → `orders`（`organization_id`、任意）              | 法人注文かどうかを判定し、月次上限の集計・住所選択のスコープ・承認フローの要否を分岐させるため                                                                                                                                                                                        |
-| `users` → `orders`（`requested_by_user_id`/`approved_by_user_id`） | 組織注文で「誰が発注し、誰が承認したか」を別々に記録しないと、承認フローの監査（FR-018相当）が成立しないため                                                                                                                                                                          |
-| `orders` → `order_items`                                           | 1注文に複数商品が含まれるため（商品ごとに数量・価格・要相談フラグが異なる）                                                                                                                                                                                                           |
-| `users` → `cart_items`/`favorites`                                 | どちらも「特定のユーザーが選んだ商品」を表すため、ユーザーへの従属が必須                                                                                                                                                                                                              |
-| `users`/`organizations` ↔ `organization_memberships`               | ユーザーと組織は多対多（1ユーザーが複数組織に所属しうる）であり、中間テーブル無しでは表現できないため                                                                                                                                                                                 |
-| `admin_users` → `admin_memberships`                                | 「運営スタッフの身元」と「そのスタッフのロール」を別テーブルに分けているのは、識別情報（`admin_users`）と認可情報（`admin_memberships`）の変更理由・変更頻度が異なるため（ロールは頻繁に変わりうるが身元は変わらない）。将来運営組織を複数に分ける場合も`admin_users`側は無改修で済む |
+| リレーションシップ                                                         | なぜ必要か                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `member_ranks` → `users`/`organizations`（`rank_code`）                    | 商品カタログの閲覧可否・月次仕入れ上限を、リクエストの都度「今のランクは何か」で判定するため。FKにすることで存在しないランクコードが紛れ込むのを防ぐ                                                                                                                                  |
+| `member_ranks` → `subscriptions`/`rank_changes`                            | Stripe側の契約ランクとDB側のランク定義がズレないよう、同じマスタを参照させるため                                                                                                                                                                                                      |
+| `member_ranks` → `orders`（`rank_code_at_order`）                          | 注文時点のランクを固定するため（後述の`orders`セクション参照）。存在しないランクコードを注文に残さないようFKにする                                                                                                                                                                    |
+| `users`/`organizations` → `subscriptions`（排他）                          | 1つのStripeサブスクリプションは必ず個人か法人のどちらか一方に属するため。排他制約により「両方に属する」「どちらにも属さない」不正な行を防ぐ                                                                                                                                           |
+| `users`/`organizations` → `rank_changes`（排他）                           | ランク変更は必ず個人か法人どちらかの出来事であるため。理由は`subscriptions`と同じ                                                                                                                                                                                                     |
+| `users` → `addresses`（`user_id`、必須）                                   | どんな住所も「誰が登録したか」が必ず存在するため（本人の配送先でも、組織の共有住所帳でも、実際に入力した担当者がいる）                                                                                                                                                                |
+| `organizations` → `addresses`（`organization_id`、任意）                   | 組織の共有住所帳（本店所在地・配送先・請求先）かどうかを判定するため。個人住所では`NULL`のまま                                                                                                                                                                                        |
+| `users` → `orders`（`user_id`）                                            | 注文は必ず特定のClerkアカウントに紐づく必要があるため（組織注文でも「システム上、誰の操作として記録されるか」の起点）                                                                                                                                                                 |
+| `organizations` → `orders`（`organization_id`、任意）                      | 法人注文かどうかを判定し、月次上限の集計・住所選択のスコープ・承認フローの要否を分岐させるため                                                                                                                                                                                        |
+| `users` → `orders`（`requested_by_user_id`/`approved_by_user_id`）         | 組織注文で「誰が発注し、誰が承認したか」を別々に記録しないと、承認フローの監査（FR-018相当）が成立しないため                                                                                                                                                                          |
+| `orders` → `order_items`                                                   | 1注文に複数商品が含まれるため（商品ごとに数量・価格・要相談フラグが異なる）                                                                                                                                                                                                           |
+| `users` → `cart_items`/`favorites`                                         | どちらも「特定のユーザーが選んだ商品」を表すため、ユーザーへの従属が必須                                                                                                                                                                                                              |
+| `users`/`organizations` ↔ `organization_memberships`                       | ユーザーと組織は多対多（1ユーザーが複数組織に所属しうる）であり、中間テーブル無しでは表現できないため                                                                                                                                                                                 |
+| `admin_users` → `admin_memberships`                                        | 「運営スタッフの身元」と「そのスタッフのロール」を別テーブルに分けているのは、識別情報（`admin_users`）と認可情報（`admin_memberships`）の変更理由・変更頻度が異なるため（ロールは頻繁に変わりうるが身元は変わらない）。将来運営組織を複数に分ける場合も`admin_users`側は無改修で済む |
+| `admin_users` → `procurement_tasks`（`assigned_admin_user_id`、任意）      | 「今誰が対応中か」を記録し、複数スタッフの間で発注作業が重複しないようにするため。未着手のタスクはまだ誰にも紐づかないのでNULL可                                                                                                                                                      |
+| `procurement_tasks` → `order_items`（`procurement_task_id`、任意）         | 複数の顧客注文にまたがる同一商品の明細を1つの発注タスクにまとめるため。まとめ発注により発注回数を減らし、価格・業務効率の両面でメリットを得る（前回のヒアリング参照）。まだタスク化されていない明細はNULLのまま「対応待ちキュー」として一覧できる                                     |
+| `orders` → `shipments`（`order_id`）                                       | 1注文の商品が同じタイミングで揃うとは限らない（商品ごとに発注先・入荷時期が異なるため）。「注文」と「実際に発送する箱」を別エンティティにすることで、揃った商品から先に発送する分割出荷を表現できるようにするため                                                                     |
+| `shipments` → `order_items`（`shipment_id`、任意）                         | どの明細がどの出荷（箱）に載ったかを記録するため。1明細は同時に1つの出荷にしか属さない前提（数量単位でさらに分割して送ることは当面想定しない）。まだ発送されていない明細はNULLのまま「未発送」として一覧できる（`procurement_task_id`と同じパターン）                                 |
+| `orders` → `order_status_changes`（`order_id`）                            | `orders.status`は現在値のみのため、いつ・誰が・何から何に変えたかを追跡できない。`rank_changes`と同じ「現在値/来歴の分離」（設計原則2）を`orders.status`にも適用するため                                                                                                              |
+| `admin_users` → `order_status_changes`（`changed_by_admin_user_id`、任意） | 運営スタッフが手動でステータスを変更した場合に、誰が変更したかを特定するため。Webhook等システムによる自動遷移や顧客操作の場合はNULL                                                                                                                                                   |
+| `orders` → `returns`（`order_id`）                                         | 注文確定後に発生する「返品・返金」という別の出来事（不良品対応、支払い後・未発送でのキャンセル）を、注文本体の状態遷移とは別のライフサイクルとして扱うため                                                                                                                            |
+| `users` → `returns`（`requested_by_user_id`）                              | 誰が返品を申請したかを特定するため。カスタマーサポート対応・不正申請の調査に必要                                                                                                                                                                                                      |
+| `admin_users` → `returns`（`reviewed_by_admin_user_id`、任意）             | 誰が承認/却下したかを特定するため。未処理のうちはNULL                                                                                                                                                                                                                                 |
+| `returns` → `return_items`（`return_id`）                                  | 1回の返品申請が複数明細にまたがりうるため（`orders`/`order_items`と同じ多対1の構造）                                                                                                                                                                                                  |
+| `order_items` → `return_items`（`order_item_id`、任意）                    | 元の注文のどの明細に対する返品かを特定するため。同じ明細に対して複数回の部分返品が起きうるため多対多ではなく「多」側を`return_items`が持つ                                                                                                                                            |
+| `locations` → `order_items`（`fulfillment_location_code`）                 | 商品ごとに「事務所経由か仕入れ先直送か」という配送ルートが異なるため。FKにすることで存在しないロケーションコードが紛れ込むのを防ぐ                                                                                                                                                    |
+| `locations` → `shipments`（`origin_location_code`）                        | 実際にこの出荷がどのロケーションから発送されたかを記録するため。`order_items.fulfillment_location_code`から辿れば分かる情報だが、出荷一覧・配送トラブル対応時に`shipments`単体で判断できるようにするため                                                                              |
 
 ---
 
@@ -429,22 +515,42 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: 注文の集約ルート。個人・法人、Checkout・Invoiceという異なる支払いフローを、同じ状態遷移（`status`）とテーブルで扱うことで、注文一覧・検索・通知などの横断機能を1つの実装で済ませられる。
 
-| カラム                                                   | 型          | 制約                                                                                                                                                                                                                                   | なぜ必要か                                                                                                                                                                                                                                    |
-| -------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                                     | UUID        | PK                                                                                                                                                                                                                                     | サロゲートキー                                                                                                                                                                                                                                |
-| `user_id`                                                | UUID        | NOT NULL, FK → `users(id)`                                                                                                                                                                                                             | 組織注文であっても「システム上、誰の操作として記録されるか」の起点が必要（個人注文では発注者そのもの）                                                                                                                                        |
-| `organization_id`                                        | UUID        | NULL可, FK → `organizations(id)`                                                                                                                                                                                                       | 法人注文かどうかを判定し、月次上限の集計スコープ・住所選択のスコープ・承認フローの要否を分岐させるために必要                                                                                                                                  |
-| `requested_by_user_id` / `approved_by_user_id`           | UUID        | NULL可, FK → `users(id)`                                                                                                                                                                                                               | 組織注文で「誰が発注し、誰が承認したか」を別々に記録しないと、承認フローの監査（不正発注時の説明責任）が成立しないため                                                                                                                        |
-| `payment_flow`                                           | TEXT        | NOT NULL, CHECK IN (`'checkout'`,`'invoice'`)                                                                                                                                                                                          | 即時決済（Checkout）か請求書後払い（Invoice）かによって、その後の状態遷移・Webhookイベントの種類・入金確認の方法が完全に異なるため区別が必須。旧`order_payment_flow` ENUMをTEXT+CHECKに変更（指摘6）                                          |
-| `status`                                                 | TEXT        | NOT NULL, CHECK IN (`'pending_approval'`,`'pending_payment'`,`'confirming'`,`'limit_exceeded'`,`'invoice_sent'`,`'paid'`,`'sourcing'`,`'ordered'`,`'preparing'`,`'shipping'`,`'delivered'`,`'cancelled'`), DEFAULT `'pending_payment'` | 注文のライフサイクル全体を1カラムで管理することで、画面表示の出し分け・通知トリガーの判定を単一の値で行えるようにするため。旧`order_status` ENUMをTEXT+CHECKに変更（指摘6）                                                                   |
-| `approval_status`                                        | TEXT        | NULL可, CHECK IN (`'auto_approved'`,`'pending_approval'`,`'approved'`,`'rejected'`)                                                                                                                                                    | 法人の承認要否と結果を`status`とは独立して持つ理由＝個人注文と法人注文の状態遷移を1つの`status`に混ぜ込むと分岐が複雑化するため。個人注文はNULLのまま                                                                                         |
-| `approved_at`                                            | TIMESTAMPTZ | NULL可                                                                                                                                                                                                                                 | 承認が行われた日時。「承認された」という事実だけでなく、いつ承認されたかがSLA管理・監査に必要                                                                                                                                                 |
-| `shipping_address_snapshot` / `billing_address_snapshot` | JSONB       | NOT NULL                                                                                                                                                                                                                               | 発送後に会員が`addresses`側の住所を変更・削除しても、過去注文の記録は注文当時の内容のまま保持する必要があるため（会計・配送トラブル対応上の要件）                                                                                             |
-| `rank_code_at_order`                                     | TEXT        | NOT NULL, FK → `member_ranks(code)`                                                                                                                                                                                                    | 月間仕入れ上限はランクごとに異なる。注文後にランクが変わっても過去注文の集計が狂わないよう、注文時点のランクを固定して残す必要がある。`member_ranks`の行は`is_active`で無効化するのみで削除しないため、FKを張っても過去注文の整合性が壊れない |
-| `monthly_limit_at_order`                                 | BIGINT      | NOT NULL                                                                                                                                                                                                                               | `rank_code_at_order`と同じ理由。上限額自体もランク改定の影響を受けないようスナップショットする                                                                                                                                                |
-| `stripe_checkout_session_id` / `stripe_invoice_id`       | TEXT        | NULL可                                                                                                                                                                                                                                 | Webhook受信時に「どの注文に対するイベントか」を突合するキーとして必要。`payment_flow`により片方のみ埋まる                                                                                                                                     |
-| `split_group_id`                                         | UUID        | NULL可                                                                                                                                                                                                                                 | 1回のカートに即時決済商品と要相談商品が混在する場合、Checkout用とInvoice用の2件の`orders`行に分割される。元は同じ会計だったことを結びつけないと、会員への注文内容表示が分裂して見えるため                                                     |
-| `created_at` / `updated_at`                              | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                                                                                                                                                                                 | 監査証跡                                                                                                                                                                                                                                      |
+| カラム                                                   | 型          | 制約                                                                                                                                                                 | なぜ必要か                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                     | UUID        | PK                                                                                                                                                                   | サロゲートキー                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `user_id`                                                | UUID        | NOT NULL, FK → `users(id)`                                                                                                                                           | 組織注文であっても「システム上、誰の操作として記録されるか」の起点が必要（個人注文では発注者そのもの）                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `organization_id`                                        | UUID        | NULL可, FK → `organizations(id)`                                                                                                                                     | 法人注文かどうかを判定し、月次上限の集計スコープ・住所選択のスコープ・承認フローの要否を分岐させるために必要                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `requested_by_user_id` / `approved_by_user_id`           | UUID        | NULL可, FK → `users(id)`                                                                                                                                             | 組織注文で「誰が発注し、誰が承認したか」を別々に記録しないと、承認フローの監査（不正発注時の説明責任）が成立しないため                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `payment_flow`                                           | TEXT        | NOT NULL, CHECK IN (`'checkout'`,`'invoice'`)                                                                                                                        | 即時決済（Checkout）か請求書後払い（Invoice）かによって、その後の状態遷移・Webhookイベントの種類・入金確認の方法が完全に異なるため区別が必須。旧`order_payment_flow` ENUMをTEXT+CHECKに変更（指摘6）                                                                                                                                                                                                                                                                                                                                                    |
+| `status`                                                 | TEXT        | NOT NULL, CHECK IN (`'pending_approval'`,`'pending_payment'`,`'confirming'`,`'limit_exceeded'`,`'invoice_sent'`,`'paid'`,`'cancelled'`), DEFAULT `'pending_payment'` | 注文の「注文そのもの」としての状態遷移（承認・支払い・キャンセル）だけをこの1カラムで管理する。旧`order_status` ENUMをTEXT+CHECKに変更（指摘6）。**`'shipping'`/`'delivered'`に加え`'sourcing'`/`'ordered'`/`'preparing'`も持たない**：1注文の商品は別々のタイミングで発注・入荷・発送されうる（`procurement_tasks`/`shipments`参照）ため、これらは注文1行の単一の値では正しく表現できない。`paid`より後の商品ごとの進捗（発注状況・配送状況）は`order_items`から`procurement_tasks`/`shipments`を辿って都度算出し、`orders.status`にはキャッシュしない |
+| `approval_status`                                        | TEXT        | NULL可, CHECK IN (`'auto_approved'`,`'pending_approval'`,`'approved'`,`'rejected'`)                                                                                  | 法人の承認要否と結果を`status`とは独立して持つ理由＝個人注文と法人注文の状態遷移を1つの`status`に混ぜ込むと分岐が複雑化するため。個人注文はNULLのまま                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `approved_at`                                            | TIMESTAMPTZ | NULL可                                                                                                                                                               | 承認が行われた日時。「承認された」という事実だけでなく、いつ承認されたかがSLA管理・監査に必要                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `shipping_address_snapshot` / `billing_address_snapshot` | JSONB       | NOT NULL                                                                                                                                                             | 発送後に会員が`addresses`側の住所を変更・削除しても、過去注文の記録は注文当時の内容のまま保持する必要があるため（会計・配送トラブル対応上の要件）                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `rank_code_at_order`                                     | TEXT        | NOT NULL, FK → `member_ranks(code)`                                                                                                                                  | 月間仕入れ上限はランクごとに異なる。注文後にランクが変わっても過去注文の集計が狂わないよう、注文時点のランクを固定して残す必要がある。`member_ranks`の行は`is_active`で無効化するのみで削除しないため、FKを張っても過去注文の整合性が壊れない                                                                                                                                                                                                                                                                                                           |
+| `monthly_limit_at_order`                                 | BIGINT      | NOT NULL                                                                                                                                                             | `rank_code_at_order`と同じ理由。上限額自体もランク改定の影響を受けないようスナップショットする                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `stripe_checkout_session_id` / `stripe_invoice_id`       | TEXT        | NULL可                                                                                                                                                               | Webhook受信時に「どの注文に対するイベントか」を突合するキーとして必要。`payment_flow`により片方のみ埋まる                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `split_group_id`                                         | UUID        | NULL可                                                                                                                                                               | 1回のカートに即時決済商品と要相談商品が混在する場合、Checkout用とInvoice用の2件の`orders`行に分割される。元は同じ会計だったことを結びつけないと、会員への注文内容表示が分裂して見えるため                                                                                                                                                                                                                                                                                                                                                               |
+| `procurement_due_at`                                     | TIMESTAMPTZ | NULL可                                                                                                                                                               | この注文に含まれる商品を、いつまでに一次卸業者へ発注しないと配送SLAに間に合わないかの期限。`procurement_tasks`のキュー表示を期限順に並び替えるための起点になる。注文確定時に配送SLA（何営業日以内に届けるか）から自動計算する想定だが、その日数ルールが未確定な間はNULLのままでよい。個別に手動で上書きすることも想定する                                                                                                                                                                                                                               |
+| `created_at` / `updated_at`                              | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                                                                                                               | 監査証跡                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+---
+
+### `order_status_changes`（新設・追記専用）
+
+**このテーブルが必要な理由**: `orders.status`は現在値しか持たず、`rank_changes`を新設した理由（指摘7）と全く同じ問題を抱えている。「いつ承認されたか」「いつ発送準備に入ったか」を後から追えないと、法人顧客からの問い合わせ対応や社内の遅延分析ができない。`rank_changes`と同様、**UPDATE/DELETEを行わない**追記専用ログとする。
+
+| カラム                     | 型          | 制約                                                   | なぜ必要か                                                                                                                                                                   |
+| -------------------------- | ----------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | UUID        | PK                                                     | サロゲートキー                                                                                                                                                               |
+| `order_id`                 | UUID        | NOT NULL, FK → `orders(id)`                            | どの注文の変更かを特定する本体データ                                                                                                                                         |
+| `from_status`              | TEXT        | NULL可                                                 | 変更前の状態。注文作成時点の最初の1行はNULL                                                                                                                                  |
+| `to_status`                | TEXT        | NOT NULL                                               | 変更後の状態                                                                                                                                                                 |
+| `changed_by`               | TEXT        | NOT NULL, CHECK IN (`'customer'`,`'admin'`,`'system'`) | 顧客操作（キャンセル等）か、運営の手動操作か、Webhook等システムによる自動遷移かを区別しないと、不正操作や誤対応の切り分け調査ができない。`rank_changes.changed_by`と同じ発想 |
+| `changed_by_admin_user_id` | UUID        | NULL可, FK → `admin_users(id)`                         | `changed_by='admin'`の場合に、具体的に誰が変更したかを特定するため                                                                                                           |
+| `reason`                   | TEXT        | NULL可                                                 | 運営が手動で通常フロー外の変更（差し戻し等）を行った場合、その理由を残さないと説明責任を果たせない                                                                           |
+| `created_at`               | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                 | いつ変わったかの記録                                                                                                                                                         |
+
+`orders.status`の更新は、必ずこのテーブルへのINSERTと同一トランザクションで行う（`rank_changes`と同じ運用ルール）。
 
 ---
 
@@ -452,20 +558,111 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: 1注文は複数商品を含みうるため、`orders`と商品情報の間に多対1の中間エンティティが必要。
 
-| カラム                  | 型          | 制約                        | なぜ必要か                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------- | ----------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                    | UUID        | PK                          | サロゲートキー                                                                                                                                                                                                                                                                                                                                      |
-| `order_id`              | UUID        | NOT NULL, FK → `orders(id)` | どの注文の明細かを特定する本体データ                                                                                                                                                                                                                                                                                                                |
-| `sanity_product_id`     | TEXT        | NOT NULL                    | 商品マスタはSanity CMS側にあり、SupabaseにFK参照できないため、外部システムのIDをそのまま保持する（指摘9のとおりDB側でのFK整合性チェックはスコープ外）                                                                                                                                                                                               |
-| `product_name_snapshot` | TEXT        | NOT NULL                    | Sanity側で商品名が変更・削除された後も、過去注文の明細表示が壊れないようにするため                                                                                                                                                                                                                                                                  |
-| `brand_id_snapshot`     | TEXT        | NULL可                      | 商品はSanity上で必ずいずれかのブランドに属する。運営者は複数の一次卸業者へ発注するため、将来ブランド（≒仕入れ先）別に受注を集計・分析する際、Sanity側でブランド再割当・商品削除が起きていても過去注文の実績を正しく遡れるようにする。NULL可なのは、この列を追加する時点で既存の過去注文にはバックフィルできないブランド不明のレコードが残りうるため |
-| `brand_name_snapshot`   | TEXT        | NULL可                      | `brand_id_snapshot`と同じ理由。IDだけでなく表示名もスナップショットすることで、Sanity側のブランドが削除された後でも運営画面の集計表示が壊れない                                                                                                                                                                                                     |
-| `unit_price_snapshot`   | BIGINT      | NULL可                      | 価格改定後も過去注文の金額を正しく保持するため。NULL＝要相談商品で注文時点では価格未確定                                                                                                                                                                                                                                                            |
-| `quantity`              | INTEGER     | NOT NULL, CHECK `> 0`       | 注文数量。CHECKにより「数量0の注文明細」という無意味な状態をDBレベルで防ぐ                                                                                                                                                                                                                                                                          |
-| `is_negotiable`         | BOOLEAN     | NOT NULL DEFAULT false      | 価格未確定の要相談商品かどうかを判定し、Invoiceフローに回すかどうかの分岐に使うため                                                                                                                                                                                                                                                                 |
-| `negotiated_unit_price` | BIGINT      | NULL可                      | 運営者が請求書発行時に確定させた単価。要相談商品の最終金額を別カラムに残すことで、当初の見込み額（あれば）と実額を両方追跡できる                                                                                                                                                                                                                    |
-| `created_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()      | 明細行の作成日時                                                                                                                                                                                                                                                                                                                                    |
-| `updated_at`            | TIMESTAMPTZ | NOT NULL DEFAULT NOW()      | 旧設計に無く、運営による`negotiated_unit_price`確定日時を追跡できなかったため新設（指摘8）                                                                                                                                                                                                                                                          |
+| カラム                      | 型          | 制約                                 | なぜ必要か                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | ----------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | UUID        | PK                                   | サロゲートキー                                                                                                                                                                                                                                                                                                                                              |
+| `order_id`                  | UUID        | NOT NULL, FK → `orders(id)`          | どの注文の明細かを特定する本体データ                                                                                                                                                                                                                                                                                                                        |
+| `sanity_product_id`         | TEXT        | NOT NULL                             | 商品マスタはSanity CMS側にあり、SupabaseにFK参照できないため、外部システムのIDをそのまま保持する（指摘9のとおりDB側でのFK整合性チェックはスコープ外）                                                                                                                                                                                                       |
+| `product_name_snapshot`     | TEXT        | NOT NULL                             | Sanity側で商品名が変更・削除された後も、過去注文の明細表示が壊れないようにするため                                                                                                                                                                                                                                                                          |
+| `brand_id_snapshot`         | TEXT        | NULL可                               | 商品はSanity上で必ずいずれかのブランドに属する。運営者は複数の一次卸業者へ発注するため、将来ブランド（≒仕入れ先）別に受注を集計・分析する際、Sanity側でブランド再割当・商品削除が起きていても過去注文の実績を正しく遡れるようにする。NULL可なのは、この列を追加する時点で既存の過去注文にはバックフィルできないブランド不明のレコードが残りうるため         |
+| `brand_name_snapshot`       | TEXT        | NULL可                               | `brand_id_snapshot`と同じ理由。IDだけでなく表示名もスナップショットすることで、Sanity側のブランドが削除された後でも運営画面の集計表示が壊れない                                                                                                                                                                                                             |
+| `procurement_task_id`       | UUID        | NULL可, FK → `procurement_tasks(id)` | この明細が、運営スタッフの「発注タスク」にまとめられたかどうか。NULL＝まだどのタスクにも入っていない（未着手）。1明細は同時に1つのタスクにしか属さない前提（同じ明細の数量を2回に分けて発注する運用は当面想定しない）                                                                                                                                       |
+| `shipment_id`               | UUID        | NULL可, FK → `shipments(id)`         | この明細が、どの出荷（箱）に載せられたかどうか。NULL＝まだ発送されていない。1明細は同時に1つの出荷にしか属さない前提（`procurement_task_id`と同じ考え方）。同じ注文内でも商品ごとに異なる`shipment_id`を持てるため、揃った商品から先に発送する分割出荷を表現できる                                                                                          |
+| `fulfillment_location_code` | TEXT        | NOT NULL, FK → `locations(code)`     | この商品が事務所経由（`'office'`）か仕入れ先直送（`'supplier_direct'`）かを、注文時点の値としてスナップショットする。Sanity側の商品設定が後で変わっても過去注文のルートが変わらないようにするため。事務所経由かどうかで、`shipments`作成前に`procurement_tasks.received_at`を必須にするかどうかの業務ルールが分岐する（`locations.requires_receiving`参照） |
+| `unit_price_snapshot`       | BIGINT      | NULL可                               | 価格改定後も過去注文の金額を正しく保持するため。NULL＝要相談商品で注文時点では価格未確定                                                                                                                                                                                                                                                                    |
+| `quantity`                  | INTEGER     | NOT NULL, CHECK `> 0`                | 注文数量。CHECKにより「数量0の注文明細」という無意味な状態をDBレベルで防ぐ                                                                                                                                                                                                                                                                                  |
+| `is_negotiable`             | BOOLEAN     | NOT NULL DEFAULT false               | 価格未確定の要相談商品かどうかを判定し、Invoiceフローに回すかどうかの分岐に使うため                                                                                                                                                                                                                                                                         |
+| `negotiated_unit_price`     | BIGINT      | NULL可                               | 運営者が請求書発行時に確定させた単価。要相談商品の最終金額を別カラムに残すことで、当初の見込み額（あれば）と実額を両方追跡できる                                                                                                                                                                                                                            |
+| `created_at`                | TIMESTAMPTZ | NOT NULL DEFAULT NOW()               | 明細行の作成日時                                                                                                                                                                                                                                                                                                                                            |
+| `updated_at`                | TIMESTAMPTZ | NOT NULL DEFAULT NOW()               | 旧設計に無く、運営による`negotiated_unit_price`確定日時を追跡できなかったため新設（指摘8）                                                                                                                                                                                                                                                                  |
+
+---
+
+### `shipments`（新設）
+
+**このテーブルが必要な理由**: 運営者は複数の一次卸業者へ商品ごとに異なる方法で発注するため、同じ注文内でも商品ごとに入荷タイミングがバラバラになる。これを「注文＝1回の発送」という前提のまま`orders.status`だけで表現すると、一番入荷が遅い商品に発送全体が引きずられてしまう。そこで「注文（顧客が申し込んだ内容）」と「出荷（実際に発送する箱）」を別エンティティに分離し、揃った商品から先に発送できるようにする（分割出荷）。1つの`orders`に対して`shipments`は複数存在しうる。
+
+| カラム                 | 型          | 制約                                                                                | なぜ必要か                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ----------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | UUID        | PK                                                                                  | サロゲートキー                                                                                                                                                                                                                                                                                                                                                                |
+| `order_id`             | UUID        | NOT NULL, FK → `orders(id)`                                                         | どの注文に属する出荷かを特定する本体データ                                                                                                                                                                                                                                                                                                                                    |
+| `status`               | TEXT        | NOT NULL, CHECK IN (`'preparing'`,`'shipped'`,`'delivered'`), DEFAULT `'preparing'` | 「梱包準備中/発送済み/配達完了」を出荷単位で区別する。注文単位ではなく箱単位で状態が進むことが、このテーブルを新設する理由そのもの                                                                                                                                                                                                                                            |
+| `carrier`              | TEXT        | NULL可                                                                              | 配送業者名（例: ヤマト運輸）。問い合わせ対応で顧客に案内するために必要                                                                                                                                                                                                                                                                                                        |
+| `tracking_number`      | TEXT        | NULL可                                                                              | 顧客への追跡番号の案内、配送トラブル時の配送業者への問い合わせに必須                                                                                                                                                                                                                                                                                                          |
+| `shipped_at`           | TIMESTAMPTZ | NULL可                                                                              | 発送日時。配送SLA（何日で届くか）の起点として必要                                                                                                                                                                                                                                                                                                                             |
+| `delivered_at`         | TIMESTAMPTZ | NULL可                                                                              | 配達完了日時。配送業者からの通知やスタッフの手動更新で反映する想定                                                                                                                                                                                                                                                                                                            |
+| `origin_location_code` | TEXT        | NOT NULL, FK → `locations(code)`                                                    | この出荷が事務所発送か仕入れ先直送かを記録する。`order_items.fulfillment_location_code`から辿れば分かる情報だが、出荷一覧・配送トラブル対応時に`shipments`単体で判断できるようにするため。1つの`shipments`に含まれる`order_items`は全て同じ`fulfillment_location_code`でなければならない（物理的に1箱が事務所発送と直送に同時になることはありえないため。アプリ層で検証する） |
+| `created_at`           | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                              | 監査証跡                                                                                                                                                                                                                                                                                                                                                                      |
+
+**運用の流れ**: `fulfillment_location_code`（＝`locations.requires_receiving`）によって2パターンに分岐する。
+
+- `requires_receiving = true`（事務所経由）：`procurement_tasks.received_at`が入り商品が事務所に届いたら、スタッフが揃った`order_items`を選んで`shipments`を1件作成し、選んだ明細の`shipment_id`をまとめて更新する
+- `requires_receiving = false`（仕入れ先直送）：`procurement_tasks.received_at`を経由せず、`procurement_tasks.ordered_at`（仕入れ先へ発注した時点）が入った段階で`shipments`を作成できる。発注時に`orders.shipping_address_snapshot`（顧客の配送先住所）を仕入れ先へ伝える必要があるが、これはスタッフの業務フローであり、既存の`orders`の列で足りるためスキーマの追加は不要
+
+同じ注文の別の商品がまだ届いていない／発注できていなければ、その明細は`shipment_id IS NULL`のまま残り、後日別の`shipments`が作られる。
+
+**あえて持たない設計（簡略化している点）**: 1つの明細（同じ商品・同じ数量のまとまり）を数量単位でさらに複数の出荷に分割する（例: 10個のうち3個だけ先に送る）ケースは対象外にする。必要になった場合は`shipment_items`（`shipment_id`, `order_item_id`, `quantity`）という中間テーブルに発展させて拡張できる。また、`orders.status`との同期は都度計算（`orders`に紐づく`shipments`/`order_items`をJOINして算出）とし、`orders`側に発送状況をキャッシュする列は今回は持たない（`procurement_tasks`の期限計算と同じ考え方）。画面表示が重くなるようであれば、後から同期用のトリガー・キャッシュ列を追加できる。
+
+---
+
+### `locations`（新設・参照テーブル）
+
+**このテーブルが必要な理由**: 商品は「事務所を経由して届く」ものと「仕入れ先から顧客へ直送される」ものが混在する。この配送ルートの違いを`order_items`/`shipments`から参照する固定値（CHECK制約）ではなく行データとして持つことで、将来ロケーションが増えても（倉庫の追加、仕入れ先ごとの直送区分の細分化等）マイグレーション無しでINSERTだけで対応できるようにする（`member_ranks`と同じ考え方、設計原則4）。Shopifyの「Location」概念を、`suppliers`マスタを持たない前提の範囲で簡略化したもの。
+
+| カラム                                                  | 型          | 制約                   | なぜ必要か                                                                                                                                                                                    |
+| ------------------------------------------------------- | ----------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code`                                                  | TEXT        | PK                     | `'office'`/`'supplier_direct'`。他テーブルから安定して参照できる識別子として、意味のある文字列をそのままキーにする（`member_ranks.code`と同じ方針）                                           |
+| `name`                                                  | TEXT        | NOT NULL               | 管理画面での表示名                                                                                                                                                                            |
+| `requires_receiving`                                    | BOOLEAN     | NOT NULL               | この拠点経由の商品が`shipments`作成前に事務所での受領（`procurement_tasks.received_at`）を必須とするかどうかの業務ルールを、CHECK制約やアプリコードのハードコードではなくデータとして持つため |
+| `postal_code` / `prefecture` / `city` / `address_line1` | TEXT        | NULL可                 | 実際の住所を持つのは`'office'`行のみを想定（送り状・発送元表示に使う）。`'supplier_direct'`行は仕入れ先ごとに住所が異なり`suppliers`マスタを持たない方針のため、常に`NULL`のままでよい        |
+| `address_line2`                                         | TEXT        | NULL可                 | `addresses`と同じ理由（任意項目）                                                                                                                                                             |
+| `phone_number`                                          | TEXT        | NULL可                 | `'office'`行のみ想定。配送業者からの連絡先として必要な場合に使う                                                                                                                              |
+| `created_at` / `updated_at`                             | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 監査証跡                                                                                                                                                                                      |
+
+初期投入データは`('office', '事務所', true, <実際の住所>)`と`('supplier_direct', '仕入れ先直送', false, NULL, NULL, NULL, NULL, NULL)`の2行を想定する。`addresses`テーブルとは別物であり、参照もしない（`addresses`は顧客が指定する配送「先」、`locations`は商品が出発する配送「元」という逆の役割のため。`addresses.user_id`がNOT NULLである以上、人でも組織でもない`locations`を同じテーブルに混ぜるとポリモーフィックな関連になってしまう）。
+
+---
+
+### `returns`（新設）
+
+**このテーブルが必要な理由**: 注文確定後に発生する「お客さんにお金を返す」出来事を記録する。以下の3パターンのうち、②③をこのテーブルで扱う（①は支払いも発送も発生していないため、単に`orders.status='cancelled'`にするだけで完結し、このテーブルは使わない）。
+
+| パターン                          | 支払い         | 商品の返送     | 扱い                                                 |
+| --------------------------------- | -------------- | -------------- | ---------------------------------------------------- |
+| ①支払い前のキャンセル             | 発生していない | 発生していない | `orders.status='cancelled'`のみ。`returns`は使わない |
+| ②支払い後・未発送でのキャンセル   | 発生している   | 発生しない     | `returns`（`received`ステップを飛ばす）              |
+| ③発送後の返品（不良品・誤配送等） | 発生している   | 発生する       | `returns`（`received`まで進める）                    |
+
+②③はどちらも最終的にStripeへのRefund実行という同じ処理に帰着するため、テーブルを分けない。Checkout（即時決済）・Invoice（後払い）のどちらの注文でも、返品・返金が発生する時点では両者とも「支払い済み（`paid`）」であるという前提は共通なので、`payment_flow`による分岐は持たない（返金額の算出時に参照する単価が`order_items.unit_price_snapshot`か`negotiated_unit_price`かが変わるだけ）。
+
+| カラム                      | 型          | 制約                                                                                                                        | なぜ必要か                                                                                                                                                                                                 |
+| --------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | UUID        | PK                                                                                                                          | サロゲートキー                                                                                                                                                                                             |
+| `order_id`                  | UUID        | NOT NULL, FK → `orders(id)`                                                                                                 | どの注文に対する返品・返金かを特定する本体データ                                                                                                                                                           |
+| `status`                    | TEXT        | NOT NULL, CHECK IN (`'requested'`,`'approved'`,`'rejected'`,`'received'`,`'refunded'`,`'cancelled'`), DEFAULT `'requested'` | 申請→承認/却下→（商品がある場合のみ）返送受領→返金完了、という返品固有のライフサイクルを追う。`'received'`は物理的な返送があるパターン③でのみ通過し、パターン②では`'approved'`から直接`'refunded'`へ進める |
+| `requested_by_user_id`      | UUID        | NOT NULL, FK → `users(id)`                                                                                                  | 誰が返品・返金を申請したかを特定するため                                                                                                                                                                   |
+| `reviewed_by_admin_user_id` | UUID        | NULL可, FK → `admin_users(id)`                                                                                              | 誰が承認/却下したかを特定するため。未処理のうちはNULL                                                                                                                                                      |
+| `reason`                    | TEXT        | NOT NULL                                                                                                                    | 返品・返金の理由（不良品・誤配送・支払い後キャンセル等）。顧客対応・仕入れ先へのクレームの根拠として必須                                                                                                   |
+| `stripe_refund_id`          | TEXT        | NULL可, UNIQUE                                                                                                              | Stripe側のRefundオブジェクトとの突合、および同じ返金を二重実行しないためのべき等性キー。返金確定前はNULL                                                                                                   |
+| `refund_amount`             | BIGINT      | NULL可                                                                                                                      | 実際に返金した合計金額。返金確定前はNULL                                                                                                                                                                   |
+| `approved_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 承認された日時                                                                                                                                                                                             |
+| `received_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 商品の返送を受領した日時。パターン②（返送なし）では常にNULLのまま                                                                                                                                          |
+| `refunded_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 実際に返金した日時                                                                                                                                                                                         |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                                                                      | 監査証跡                                                                                                                                                                                                   |
+
+---
+
+### `return_items`（新設）
+
+**このテーブルが必要な理由**: 1回の返品・返金申請は複数の注文明細にまたがりうる（`orders`/`order_items`と同じ多対1の構造）ため、`returns`本体とは別に明細を持つ必要がある。
+
+| カラム          | 型      | 制約                             | なぜ必要か                                                                                                                   |
+| --------------- | ------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | UUID    | PK                               | サロゲートキー                                                                                                               |
+| `return_id`     | UUID    | NOT NULL, FK → `returns(id)`     | どの返品・返金申請の明細かを特定する本体データ                                                                               |
+| `order_item_id` | UUID    | NOT NULL, FK → `order_items(id)` | 元の注文のどの商品明細に対する返品かを特定するため                                                                           |
+| `quantity`      | INTEGER | NOT NULL, CHECK `> 0`            | 一部数量のみの返品に対応するため（例: 3枚のうち1枚のみ）。`order_items.quantity`以下であることはアプリ層で検証               |
+| `refund_amount` | BIGINT  | NULL可                           | この明細分の返金額。`order_items.unit_price_snapshot`または`negotiated_unit_price`（Invoiceフローの場合）×`quantity`から算出 |
 
 ---
 
@@ -515,6 +712,24 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ---
 
+### `procurement_tasks`（新設）
+
+**このテーブルが必要な理由**: 運営者（卸売業者）は、商品ごとに異なる方法（メーカー担当者への直接連絡、またはメーカーが用意する仕入れサイト）で一次卸業者へ発注する。この発注はAPI連携ではなく人手で行うため、ソフトウェアが支援すべきは「発注そのものの自動化」ではなく、**複数の顧客注文にまたがる同一商品をまとめて1回の発注作業にできること**、および**誰が・どこまで対応したかを複数人のスタッフ間で共有し、二重発注や対応漏れを防ぐこと**である。`orders`（顧客の受注）とは別の集約として持つ。仕入れ先そのもののマスタ管理（`suppliers`）や、卸業者への発注をAPIで自動送信する仕組みは対象外（「スコープ外とした論点」参照）。
+
+| カラム                      | 型          | 制約                                                                                                     | なぜ必要か                                                                                                                                                                     |
+| --------------------------- | ----------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                        | UUID        | PK                                                                                                       | サロゲートキー                                                                                                                                                                 |
+| `status`                    | TEXT        | NOT NULL, CHECK IN (`'pending'`,`'claimed'`,`'ordered'`,`'received'`,`'cancelled'`), DEFAULT `'pending'` | 「未着手/担当者が着手中/発注済み/入荷済み/取消」を区別しないと、複数スタッフが同じタスクに気づかず重複して連絡してしまう（`claimed`が二重着手防止の要）                        |
+| `assigned_admin_user_id`    | UUID        | NULL可, FK → `admin_users(id)`                                                                           | 「今誰が対応中か」を全スタッフに見えるようにすることで、担当が被らないようにするため。未着手（`pending`）のうちはNULL                                                          |
+| `ordered_at`                | TIMESTAMPTZ | NULL可                                                                                                   | 実際にメーカー担当者・仕入れサイトへ発注した日時。入荷予定の目安や、発注から入荷までのリードタイム把握に使う                                                                   |
+| `received_at`               | TIMESTAMPTZ | NULL可                                                                                                   | 事務所に商品が届いた日時。`orders.status`は持たないため、この明細が「入荷済みかどうか」は`order_items`→`procurement_tasks`を辿って都度判定する（注文一覧の発注進捗表示に使う） |
+| `notes`                     | TEXT        | NULL可                                                                                                   | 「電話で担当の◯◯様に確認済み」等、定型化できない発注の経緯をスタッフ間で共有するため。定型データにできない情報を無理にカラム化しないための逃げ道                               |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                                                   | いつタスクが作られ、いつ状態が変わったかの監査証跡。複数人での作業分担において「いつ誰が動いたか」の記録は必須                                                                 |
+
+**運用の流れ**: スタッフが`order_items.procurement_task_id IS NULL`の明細（＝まだどの発注タスクにも入っていない、対応待ちの明細）を一覧し、同じブランド・同じ商品のものを選んで新しい`procurement_tasks`を1件作成し、選んだ`order_items`の`procurement_task_id`をまとめて更新する。商品ごとの合計必要数は、`procurement_task_id`で`order_items`を絞り込んで`sanity_product_id`ごとに`quantity`を`SUM`するだけで求められるため、これ自体のための集計用カラムは持たない。タスクの緊急度（並び替え用の期限）も同様に、紐づく`orders.procurement_due_at`の最小値をその都度計算する想定で、`procurement_tasks`側に期限をキャッシュする列は今回は持たない（表示が重くなるようなら、後から追加できる）。
+
+---
+
 ## 廃止されるオブジェクト
 
 | オブジェクト                                                               | 種別   | 理由                                       |
@@ -537,6 +752,11 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 - `member_ranks`：全会員が参照できる必要があるため、`FOR SELECT USING (true)`（マスタデータ）。書き込みは運営者のみ。
 - `addresses`：既存の「本人 or 同一組織」ポリシーはそのまま流用できる（`type='headquarters'`の行も`organization_id`が入っているため既存の組織スコープポリシーの対象になる）。
 - `admin_users` / `admin_memberships`：`get_current_user_id()`と対になる`get_current_admin_user_id()`をSECURITY DEFINERで新設し、運営スタッフ本人が自分自身のロールを参照できるSELECTポリシーのみ設ける（運営組織が1つの前提なので`get_current_org_ids()`相当の関数は不要）。書き込みはClerk Webhook（service role）経由のみで、アプリケーションからのINSERT/UPDATE/DELETEポリシーは設けない。顧客向けテーブル（`orders`等）に対する運営者の書き込みは、これらのテーブルをJOINして許可するRLSポリシーを増やすのではなく、既存の管理画面API（service role経由・アプリケーション層で`has({ permission })`相当のチェックを行う）に一本化する。RLSに運営者用の書き込み許可を増やしていくと、顧客向けポリシーとの組み合わせで検証すべきパターンが指数的に増えるため。
+- `procurement_tasks`：顧客はこのテーブルを一切参照できない（発注業務は運営内部の情報であり、顧客向けRLSポリシーは設けない）。運営スタッフ向けのSELECT/INSERT/UPDATEは、`admin_memberships`と同様にRLSポリシーを積み増すのではなく、管理画面API（service role経由）に一本化し、そのAPI内で`has({ permission: 'org:orders:manage' })`相当のチェックを行う。`order_items.procurement_task_id`の更新（タスクへの明細の割り当て）も同じAPI経由に統一する。
+- `shipments`：`orders`と同じ「本人 or 同一組織」ポリシーを流用し、顧客は自分（または所属組織）の注文に紐づく出荷をSELECTのみ可能にする（追跡番号・配送状況の確認用途）。書き込みは`procurement_tasks`と同様に管理画面API（service role経由）に一本化し、ユーザー向けINSERT/UPDATE/DELETEポリシーは設けない。`order_items.shipment_id`の更新も同じAPI経由に統一する。
+- `order_status_changes`：`orders`と同じ「本人 or 同一組織」ポリシーでSELECTのみ許可（注文の進捗履歴を顧客にも見せる用途）。書き込みは`orders.status`の更新と同一トランザクションで行うアプリケーションコード経由のみ。
+- `returns` / `return_items`：顧客は自分（または所属組織）の注文に対する返品・返金申請をSELECT、および`requested`状態でのINSERTのみ許可する（「返品したい」という申請自体は顧客の操作であるため、他の運営専用テーブルとは異なり顧客からの書き込みを認める）。承認・却下・返金実行（`status`の`requested`以降への遷移、`stripe_refund_id`/`refund_amount`のセット）は管理画面API（service role経由）に一本化し、顧客からの直接UPDATEは許可しない。
+- `locations`：運営内部の発送拠点情報であり、顧客がこのテーブルを直接参照する必要はない（`member_ranks`と異なりカタログ表示等に使われないため）。顧客向けSELECTポリシーは設けず、参照・書き込みともに管理画面API（service role経由）に一本化する。
 
 ---
 
@@ -544,21 +764,28 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 以下は今回のヒアリングで話題に上ったが、要件が固まっていないため本設計には含めていない。**見落としではなく、意図的に先送りした判断**として記録する。
 
-### 仕入れ発注（suppliers / purchase_orders）
+### 仕入れ先マスタ・卸業者へのAPI発注連携（suppliers / 自動発注）
 
-運営者は卸売業者であり、複数の一次卸業者へ発注を行う。業務フローは「顧客からの受注 → 業者への発注 → 事務所への入荷 → 顧客への発送」という一般的なEC/卸のフローだが、この**「発注」（御社から一次卸業者への仕入れ注文）を管理する機能はソフトウェアの対象範囲がまだ決まっていない**。
+運営者は卸売業者であり、複数の一次卸業者へ発注を行う。ただし発注方法は商品ごとに異なり（メーカー担当者への直接連絡、またはメーカーが用意する仕入れサイト経由）、**卸業者側とのAPI連携は存在せず、今後も予定しない**。これを踏まえ、以下は今回のスコープに含めない。
 
-現状の`orders.status`は`sourcing`（仕入れ中）→`ordered`（発注済み）→`preparing`（準備中）という値を持ち、**顧客の1注文ごとに状態を1段階ずつ進める**という素朴な形で、この業務フローの進捗だけは表現できている。一方で以下は表現できていない。
+- `suppliers`（一次卸業者のマスタデータ、担当者連絡先、APIキー等）を管理する仕組み
+- 卸業者への発注をシステムから自動送信する仕組み
 
-- どの一次卸業者に発注したか（発注先そのものの記録）
-- 複数の顧客注文をまとめて1件の発注（PO）にした場合の対応関係
-- 卸業者からの入荷予定日・入荷実績
+これらが必要にならない前提を置いているため、`procurement_tasks`は「発注を実行する」ためのテーブルではなく、あくまで**運営スタッフの作業状況（誰が・どのタスクを・どこまで進めたか）を共有するための社内向けテーブル**という位置づけにしている。実際の発注行為（電話・仕入れサイトでの操作）は引き続き人手で行い、その結果（発注した/入荷した）を`procurement_tasks`に記録するだけである。
 
-これらを表現するには`suppliers`（仕入れ先マスタ）・`purchase_orders`/`purchase_order_items`（御社→卸業者への発注、顧客からの`orders`とは別の集約）を新設する必要があるが、実際にどこまでソフトウェアで管理したいか（例: 発注そのものをこのシステムから行うのか、進捗管理だけなのか）が未確定なため、**今回は着手しない**。
+**次のアクション**: 「ブランド」と「一次卸業者」が1対1かどうか（1ブランドが複数卸業者から仕入れられる、または1卸業者が複数ブランドを扱う、といったケースの有無）は今回のスコープでは前提を置かず、`procurement_tasks`の作成時にスタッフが手動で明細を選ぶ運用にすることで対応不要にしている（`brand_id_snapshot`はタスク作成時にスタッフが商品をまとめる際の目印として使うだけで、タスク自体を特定のブランドに縛るFK制約は設けない）。もし将来、卸業者マスタや自動発注が必要になった場合は、`suppliers`テーブルを新設し`procurement_tasks`に`supplier_id`を追加する形で拡張できる。
 
-これに備えて、`order_items`に`brand_id_snapshot`/`brand_name_snapshot`のみ追加した（本設計に含めた変更）。ブランドは一次卸業者との対応関係の手がかりになりうるため、将来仕入れ発注機能を作る際に、過去の受注をブランド別に遡って集計できるようにするための最小限の保険であり、`suppliers`/`purchase_orders`自体の設計を先取りするものではない。
+### B2B機能として話題に上ったが今回は見送るもの
 
-**次のアクション**: 仕入れ発注業務をどこまでソフトウェアで管理するかが具体化した時点で、別途この論点を再検討する。「ブランド」と「一次卸業者」が1対1かどうか（1ブランドが複数卸業者から仕入れられる、または1卸業者が複数ブランドを扱う、といったケースの有無）も、その際に確認する。
+以下はB2B ECサイトとして一般的に検討されうる機能だが、ヒアリングの結果、現時点では不要と判断した。**見落としではなく、意図的に先送りした判断**として記録する。
+
+- **見積（RFQ / Quote）**：注文前に見積もりを提示し、承諾後に正式発注する2段階のフローは不要。会員は通常の通販と同じく、カタログの価格でそのまま注文する
+- **与信・支払条件（Net 30/60等の個社ごとの支払いサイト）**：`payment_flow`（checkout/invoice）の2値のみで十分。法人ごとに異なる支払いサイトを管理する仕組みは不要
+- **多段階承認（金額閾値に応じた複数承認者）**：現行の`orders.approved_by_user_id`（単一承認者）のまま維持する
+- **法人個社ごとの個別価格**：`member_ranks`によるランク単位の価格差のみで対応し、顧客ごとの個別掛け率契約は持たない
+- **部門・コストセンター管理**：`organizations`を1つの購買主体として扱い、組織内の部署別の予算管理・実績分離は行わない
+
+これらが将来必要になった場合は、それぞれ独立した追加（`quotes`テーブル、`organizations`への支払条件カラム追加等）として拡張でき、本設計の変更を要しない。
 
 ---
 
@@ -570,5 +797,11 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 4. `orders.status`等のENUM→TEXTは、新カラムを追加→データコピー→旧カラム削除→リネームの手順で無停止移行する（Postgresの`ALTER TYPE`制約を踏まえ、旧ENUM値を都度追加していた現行運用と同じ理由でワンステップ変換は避ける）。
 5. `organizations`の住所カラムを`addresses`へバックフィル後に削除する。
 6. 最後に部分UNIQUEインデックス群を追加する。
+7. `admin_users`/`admin_memberships`を新設し、Clerk側に運営組織を作成した上でWebhook経由の同期を実装する。
+8. `procurement_tasks`を新設し、`order_items.procurement_task_id`・`orders.procurement_due_at`を追加する（`admin_users`が存在した後でないと`procurement_tasks.assigned_admin_user_id`のFKが張れないため、7の後に実施する）。
+9. `shipments`を新設し、`order_items.shipment_id`を追加する。同時に`orders.status`のCHECK制約から`'shipping'`/`'delivered'`/`'sourcing'`/`'ordered'`/`'preparing'`を除去する（既存データに該当値があれば、`shipments`/`procurement_tasks`側へバックフィルした上で`orders.status`を`'paid'`に寄せる移行が必要）。
+10. `order_status_changes`を新設する。既存の`orders`各行について、現在の`status`を`to_status`とした初期1行（`from_status = NULL`, `changed_by = 'system'`）をバックフィルする。
+11. `returns`/`return_items`を新設する（既存データのバックフィルは不要。新規発生分から記録を開始する）。
+12. `locations`を新設し、`('office', ...)`/`('supplier_direct', ...)`の初期2行を投入する。`order_items.fulfillment_location_code`（既存データは全て`'office'`とみなしてバックフィル）・`shipments.origin_location_code`（既存データは全て`'office'`とみなしてバックフィル）を追加する。
 
 この設計に問題なければ、上記の移行方針をベースに実際のマイグレーションファイル作成に進みます。
