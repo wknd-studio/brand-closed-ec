@@ -23,11 +23,14 @@
 
 ## ソース資料（既存資料。ゼロから書かず、これらを材料に現状と突き合わせて再構成する）
 
-- `docs/archive/service-spec.md` … サービス概要・利用者・招待・ランク変更・退会・運営者ロール（凍結済み）
-- `docs/archive/user-stories.md` … 機能ごとのユーザーストーリー・受け入れ条件（凍結済み）
-- `docs/archive/data-model.md` … 旧データモデル（凍結済み。**`db-schema-redesign.md`の方が新しく正確**なので、矛盾する場合は`db-schema-redesign.md`を優先する）
-- `docs/archive/order-flow.md` … 旧注文フロー（凍結済み。発注/出荷/返品は含まれていないので今回追記が必要）
-- `docs/archive/operations-order.md` … 旧注文対応オペレーション（凍結済み）
+> **全ファイル完了に伴い`docs/archive/*.md`は削除済み**。以下は執筆当時に参照した資料の記録（内容は各`docs/domain/*.md`に移行済み）。
+>
+> - `docs/archive/service-spec.md` … サービス概要・利用者・招待・ランク変更・退会・運営者ロール
+> - `docs/archive/user-stories.md` … 機能ごとのユーザーストーリー・受け入れ条件
+> - `docs/archive/data-model.md` … 旧データモデル（`db-schema-redesign.md`の方が新しく正確なので、矛盾する場合はそちらを優先していた）
+> - `docs/archive/order-flow.md` … 旧注文フロー
+> - `docs/archive/operations-order.md` … 旧注文対応オペレーション
+
 - `docs/signup-flow.md` / `docs/plan-change-flow.md` / `docs/waitlist-migration-plan.md` … 現行の会員登録・プラン変更まわり
 - `docs/glossary.md` … 用語集（現行）
 - `docs/db-schema-redesign.md` … 今回のスキーマ再設計（最新の正）
@@ -48,7 +51,7 @@
 | `returns.md`              | 返品・返金（新設）                               | `db-schema-redesign.md`（returns/return_items節）                                                                               | ✅ 完了 |
 | `admin-rbac.md`           | 運営者権限管理（新設）                           | `db-schema-redesign.md`（admin_users/admin_memberships節）, `archive/service-spec.md`「運営者ロール」                           | ✅ 完了 |
 
-全ファイル完了後、`docs/overview.md`のリンクを`docs/domain/*.md`へ張り替え、`docs/archive/*.md`は役目を終える（削除するかは完了時に判断）。
+**✅ 全ファイル完了。`docs/overview.md`のリンクは`docs/domain/*.md`へ張り替え済み、`docs/archive/*.md`は削除済み。**
 
 ## 並行作業の進め方（複数セッションで同時に進める場合）
 

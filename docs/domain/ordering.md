@@ -117,7 +117,7 @@
 ## 参考資料
 
 - `docs/db-schema-redesign.md`: `orders`（変更）節・`order_status_changes`（新設・追記専用）節・`order_items`（変更）節・`addresses`（変更）節・`cart_items`（変更なし）節・`favorites`（変更なし）節
-- `docs/archive/order-flow.md`（凍結済み）: 旧・注文ステータス遷移（`paid`〜`delivered`を単一`status`で表現）を前提にした決済フロー図。`paid`到達までの分岐（Checkout/Invoice・月次上限チェック・Invoice支払い期限等）は引き続き参考にできるが、`paid`より先の遷移は[[procurement]]/`fulfillment.md`側の新設計に置き換わっている
+- （旧`docs/archive/order-flow.md`: 注文ステータス遷移（`paid`〜`delivered`を単一`status`で表現）を前提にした決済フロー図を材料に執筆。`paid`より先の遷移は[[procurement]]/`fulfillment.md`側の新設計に置き換わっている。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - `specs/003-checkout-invoice-e2e`: カタログ〜チェックアウト・決済確定までのE2E/統合テスト網羅の仕様（住所選択2経路・月次上限超過時のブロック・Webhookによる`paid`化）
 - `specs/004-split-order-payment-timing`: 商品別支払いタイミング設定・チェックアウト分割の仕様（`payment_timing`・`split_group_id`・カート画面のグループ表示）
 - `specs/005-b2b-organization`: 法人会員対応の仕様（`organization_id`/`requested_by_user_id`/`approval_status`/`approved_by_user_id`・承認フローの状態遷移・法人組織の月次上限集計ルール）
