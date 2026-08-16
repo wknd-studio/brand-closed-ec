@@ -791,7 +791,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ## 移行方針（概要・詳細はマイグレーション作成時に確定）
 
-1. `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。
+1. ✅ `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。（`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み）
 2. `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。
 3. `users`/`organizations`の既存Stripeカラムから`subscriptions`へバックフィル。既存の`rank`/`initial_fee_paid_rank`を起点に`rank_changes`の初期1行（`from_rank_code = NULL`, `changed_by = 'system'`）を生成する。
 4. `orders.status`等のENUM→TEXTは、新カラムを追加→データコピー→旧カラム削除→リネームの手順で無停止移行する（Postgresの`ALTER TYPE`制約を踏まえ、旧ENUM値を都度追加していた現行運用と同じ理由でワンステップ変換は避ける）。
