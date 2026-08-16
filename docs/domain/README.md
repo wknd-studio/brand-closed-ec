@@ -37,16 +37,16 @@
 
 作業を始める前に自分の担当行を `⏳ 作業中（担当: <目印>）` に変更し、終わったら `✅ 完了` にする。**同じファイルを複数セッションで同時に書き始めない**（下記「並行作業の進め方」参照）。
 
-| ファイル                  | 内容                                             | 主なソース                                                                                                                      | 状態                                  |
-| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `membership.md`           | 会員登録（招待制）・個人/法人・退会              | `archive/service-spec.md`, `signup-flow.md`, `waitlist-migration-plan.md`                                                       | ✅ 完了                               |
-| `subscription-billing.md` | ランク・サブスクリプション・初期費用・プラン変更 | `archive/service-spec.md`, `plan-change-flow.md`, `specs/001-seven-rank-pricing`                                                | ✅ 完了                               |
-| `catalog.md`              | 商品カタログ・ブランド・在庫・手配リクエスト     | `glossary.md`, `archive/service-spec.md`（Sanity側）                                                                            | ✅ 完了                               |
-| `ordering.md`             | カート・注文・Checkout/Invoice・法人承認         | `archive/order-flow.md`, `specs/003-checkout-invoice-e2e`, `specs/004-split-order-payment-timing`, `specs/005-b2b-organization` | ✅ 完了                               |
-| `procurement.md`          | 発注管理（新設）                                 | `db-schema-redesign.md`（procurement_tasks節）, `archive/operations-order.md`                                                   | ✅ 完了                               |
-| `fulfillment.md`          | 配送・分割出荷・配送ルート（新設）               | `db-schema-redesign.md`（shipments/locations節）                                                                                | ⏳ 作業中（担当: claude-fulfillment） |
-| `returns.md`              | 返品・返金（新設）                               | `db-schema-redesign.md`（returns/return_items節）                                                                               | ⬜ 未着手                             |
-| `admin-rbac.md`           | 運営者権限管理（新設）                           | `db-schema-redesign.md`（admin_users/admin_memberships節）, `archive/service-spec.md`「運営者ロール」                           | ✅ 完了                               |
+| ファイル                  | 内容                                             | 主なソース                                                                                                                      | 状態      |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `membership.md`           | 会員登録（招待制）・個人/法人・退会              | `archive/service-spec.md`, `signup-flow.md`, `waitlist-migration-plan.md`                                                       | ✅ 完了   |
+| `subscription-billing.md` | ランク・サブスクリプション・初期費用・プラン変更 | `archive/service-spec.md`, `plan-change-flow.md`, `specs/001-seven-rank-pricing`                                                | ✅ 完了   |
+| `catalog.md`              | 商品カタログ・ブランド・在庫・手配リクエスト     | `glossary.md`, `archive/service-spec.md`（Sanity側）                                                                            | ✅ 完了   |
+| `ordering.md`             | カート・注文・Checkout/Invoice・法人承認         | `archive/order-flow.md`, `specs/003-checkout-invoice-e2e`, `specs/004-split-order-payment-timing`, `specs/005-b2b-organization` | ✅ 完了   |
+| `procurement.md`          | 発注管理（新設）                                 | `db-schema-redesign.md`（procurement_tasks節）, `archive/operations-order.md`                                                   | ✅ 完了   |
+| `fulfillment.md`          | 配送・分割出荷・配送ルート（新設）               | `db-schema-redesign.md`（shipments/locations節）                                                                                | ✅ 完了   |
+| `returns.md`              | 返品・返金（新設）                               | `db-schema-redesign.md`（returns/return_items節）                                                                               | ⬜ 未着手 |
+| `admin-rbac.md`           | 運営者権限管理（新設）                           | `db-schema-redesign.md`（admin_users/admin_memberships節）, `archive/service-spec.md`「運営者ロール」                           | ✅ 完了   |
 
 全ファイル完了後、`docs/overview.md`のリンクを`docs/domain/*.md`へ張り替え、`docs/archive/*.md`は役目を終える（削除するかは完了時に判断）。
 
