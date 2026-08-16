@@ -257,12 +257,12 @@ export type Database = {
           id: string;
           monthly_limit_at_order: number;
           organization_id: string | null;
-          payment_flow: Database["public"]["Enums"]["order_payment_flow"];
+          payment_flow: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           requested_by_user_id: string | null;
           shipping_address_snapshot: Json;
           split_group_id: string | null;
-          status: Database["public"]["Enums"]["order_status"];
+          status: string;
           stripe_checkout_session_id: string | null;
           stripe_invoice_id: string | null;
           updated_at: string;
@@ -277,12 +277,12 @@ export type Database = {
           id?: string;
           monthly_limit_at_order: number;
           organization_id?: string | null;
-          payment_flow: Database["public"]["Enums"]["order_payment_flow"];
+          payment_flow: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           requested_by_user_id?: string | null;
           shipping_address_snapshot: Json;
           split_group_id?: string | null;
-          status?: Database["public"]["Enums"]["order_status"];
+          status?: string;
           stripe_checkout_session_id?: string | null;
           stripe_invoice_id?: string | null;
           updated_at?: string;
@@ -297,12 +297,12 @@ export type Database = {
           id?: string;
           monthly_limit_at_order?: number;
           organization_id?: string | null;
-          payment_flow?: Database["public"]["Enums"]["order_payment_flow"];
+          payment_flow?: string;
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
           requested_by_user_id?: string | null;
           shipping_address_snapshot?: Json;
           split_group_id?: string | null;
-          status?: Database["public"]["Enums"]["order_status"];
+          status?: string;
           stripe_checkout_session_id?: string | null;
           stripe_invoice_id?: string | null;
           updated_at?: string;
@@ -730,20 +730,6 @@ export type Database = {
         | "basic"
         | "advanced"
         | "premium";
-      order_payment_flow: "checkout" | "invoice";
-      order_status:
-        | "pending_approval"
-        | "pending_payment"
-        | "confirming"
-        | "limit_exceeded"
-        | "invoice_sent"
-        | "paid"
-        | "sourcing"
-        | "ordered"
-        | "preparing"
-        | "shipping"
-        | "delivered"
-        | "cancelled";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -888,21 +874,6 @@ export const Constants = {
         "basic",
         "advanced",
         "premium",
-      ],
-      order_payment_flow: ["checkout", "invoice"],
-      order_status: [
-        "pending_approval",
-        "pending_payment",
-        "confirming",
-        "limit_exceeded",
-        "invoice_sent",
-        "paid",
-        "sourcing",
-        "ordered",
-        "preparing",
-        "shipping",
-        "delivered",
-        "cancelled",
       ],
     },
   },
