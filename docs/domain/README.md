@@ -46,7 +46,7 @@
 | `procurement.md`          | 発注管理（新設）                                 | `db-schema-redesign.md`（procurement_tasks節）, `archive/operations-order.md`                                                   | ⬜ 未着手 |
 | `fulfillment.md`          | 配送・分割出荷・配送ルート（新設）               | `db-schema-redesign.md`（shipments/locations節）                                                                                | ⬜ 未着手 |
 | `returns.md`              | 返品・返金（新設）                               | `db-schema-redesign.md`（returns/return_items節）                                                                               | ⬜ 未着手 |
-| `admin-rbac.md`           | 運営者権限管理（新設）                           | `db-schema-redesign.md`（admin_users/admin_memberships節）, `archive/service-spec.md`「運営者ロール」                           | ⬜ 未着手 |
+| `admin-rbac.md`           | 運営者権限管理（新設）                           | `db-schema-redesign.md`（admin_users/admin_memberships節）, `archive/service-spec.md`「運営者ロール」                           | ✅ 完了   |
 
 全ファイル完了後、`docs/overview.md`のリンクを`docs/domain/*.md`へ張り替え、`docs/archive/*.md`は役目を終える（削除するかは完了時に判断）。
 
