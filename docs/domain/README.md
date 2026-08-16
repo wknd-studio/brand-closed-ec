@@ -41,7 +41,7 @@
 | ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `membership.md`           | 会員登録（招待制）・個人/法人・退会              | `archive/service-spec.md`, `signup-flow.md`, `waitlist-migration-plan.md`                                                       | ✅ 完了   |
 | `subscription-billing.md` | ランク・サブスクリプション・初期費用・プラン変更 | `archive/service-spec.md`, `plan-change-flow.md`, `specs/001-seven-rank-pricing`                                                | ✅ 完了   |
-| `catalog.md`              | 商品カタログ・ブランド・在庫・手配リクエスト     | `glossary.md`, `archive/service-spec.md`（Sanity側）                                                                            | ⬜ 未着手 |
+| `catalog.md`              | 商品カタログ・ブランド・在庫・手配リクエスト     | `glossary.md`, `archive/service-spec.md`（Sanity側）                                                                            | ✅ 完了   |
 | `ordering.md`             | カート・注文・Checkout/Invoice・法人承認         | `archive/order-flow.md`, `specs/003-checkout-invoice-e2e`, `specs/004-split-order-payment-timing`, `specs/005-b2b-organization` | ⬜ 未着手 |
 | `procurement.md`          | 発注管理（新設）                                 | `db-schema-redesign.md`（procurement_tasks節）, `archive/operations-order.md`                                                   | ✅ 完了   |
 | `fulfillment.md`          | 配送・分割出荷・配送ルート（新設）               | `db-schema-redesign.md`（shipments/locations節）                                                                                | ⬜ 未着手 |
