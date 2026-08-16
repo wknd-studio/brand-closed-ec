@@ -109,7 +109,7 @@
 
 - `docs/db-schema-redesign.md` の`member_ranks`（新設・参照テーブル）節、`users`/`organizations`の`rank_code`・`billing_anchor_day`・`initial_fee_paid_rank_code`列、`subscriptions`（新設）節、`rank_changes`（新設・追記専用）節
   - 旧`member_rank` ENUM型は`member_ranks`参照テーブルへ置き換えられる（7ランク移行で2回に分けてマイグレーションする運用負債が発生した反省による）。**`member_ranks`は`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み**（移行方針1番）
-  - 旧`organizations.pending_rank`は`subscriptions.pending_rank_code`へ、`stripe_subscription_id`/`stripe_subscription_schedule_id`は`users`/`organizations`から`subscriptions`へ、それぞれ移動する設計になっている（移行方針2〜6番。本ドキュメント執筆時点で未マイグレーション）
+  - 旧`organizations.pending_rank`は`subscriptions.pending_rank_code`へ、`stripe_subscription_id`/`stripe_subscription_schedule_id`は`users`/`organizations`から`subscriptions`へ、それぞれ移動する設計になっている。**`subscriptions`/`rank_changes`/`stripe_webhook_events`は`supabase/migrations/20260816175631_create_subscriptions_rank_changes_stripe_webhook_events.sql`で実装済み**（移行方針2番）。ただし`users`/`organizations`の既存Stripeカラムからのバックフィル（移行方針3番）は未実施のため、`users.rank_code`等のキャッシュ更新と`rank_changes`へのINSERTを同一トランザクションで行うアプリケーションコード側の追従はまだ無い
 - （旧`docs/archive/service-spec.md`「会員プラン」節・「ランク変更ルール」節を材料に執筆。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - `docs/plan-change-flow.md` — プラン変更のStripe操作・Webhookハンドラー・`changePlan`統合ユースケースの詳細設計（本ドキュメントの「業務ルール」節は主にこれを要約）
 - `specs/001-seven-rank-pricing/` — 旧5ランクから新7ランクへの移行spec。`data-model.md`に`MemberRank`のコード定義・DB移行手順あり
