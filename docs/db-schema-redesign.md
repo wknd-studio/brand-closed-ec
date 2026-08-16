@@ -797,7 +797,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 1. ✅ `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。（`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み。[PR #164](https://github.com/wknd-studio/brand-closed-ec/pull/164)）
 2. ✅ [#166](https://github.com/wknd-studio/brand-closed-ec/issues/166) `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。（`supabase/migrations/20260816175631_create_subscriptions_rank_changes_stripe_webhook_events.sql`で実装済み）
-3. ⬜ [#167](https://github.com/wknd-studio/brand-closed-ec/issues/167) `users`/`organizations`の既存Stripeカラムから`subscriptions`へバックフィル。既存の`rank`/`initial_fee_paid_rank`を起点に`rank_changes`の初期1行（`from_rank_code = NULL`, `changed_by = 'system'`）を生成する。
+3. ✅ [#167](https://github.com/wknd-studio/brand-closed-ec/issues/167) `users`/`organizations`の既存Stripeカラムから`subscriptions`へバックフィル。既存の`rank`/`initial_fee_paid_rank`を起点に`rank_changes`の初期1行（`from_rank_code = NULL`, `changed_by = 'system'`）を生成する。（`supabase/migrations/20260816181934_backfill_subscriptions_from_users_organizations.sql`で実装済み。`users.rank`/`organizations.rank`・`initial_fee_paid_rank`を`rank_code`/`initial_fee_paid_rank_code`へリネーム・FK化し、旧Stripeカラムを削除済み。リポジトリ層等アプリケーションコードの追従は12ステップ完走後にまとめて行う方針のため、現時点で`pnpm typecheck`は意図的に赤い）
 4. ⬜ [#168](https://github.com/wknd-studio/brand-closed-ec/issues/168) `orders.status`等のENUM→TEXTへ変更する。実データが無いため、旧カラムを直接`DROP`して新しいTEXT+CHECKカラムを作り直す形でよい（無停止移行の段階的手順は不要）。
 5. ⬜ [#169](https://github.com/wknd-studio/brand-closed-ec/issues/169) `organizations`の住所カラムを`addresses`へ統合する（バックフィル不要。旧カラムを削除して`addresses`側に集約するだけでよい）。
 6. ⬜ [#170](https://github.com/wknd-studio/brand-closed-ec/issues/170) 最後に部分UNIQUEインデックス群を追加する。

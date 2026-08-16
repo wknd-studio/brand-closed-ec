@@ -388,21 +388,16 @@ export type Database = {
           created_at: string;
           deleted_at: string | null;
           id: string;
-          initial_fee_paid_rank:
-            | Database["public"]["Enums"]["member_rank"]
-            | null;
+          initial_fee_paid_rank_code: string | null;
           invoice_registration_number: string;
           name: string;
           onboarding_completed: boolean;
-          pending_rank: Database["public"]["Enums"]["member_rank"] | null;
           phone_number: string;
           postal_code: string;
           prefecture: string;
-          rank: Database["public"]["Enums"]["member_rank"];
+          rank_code: string;
           representative_name: string;
           stripe_customer_id: string | null;
-          stripe_subscription_id: string | null;
-          stripe_subscription_schedule_id: string | null;
         };
         Insert: {
           address_line1: string;
@@ -413,21 +408,16 @@ export type Database = {
           created_at?: string;
           deleted_at?: string | null;
           id?: string;
-          initial_fee_paid_rank?:
-            | Database["public"]["Enums"]["member_rank"]
-            | null;
+          initial_fee_paid_rank_code?: string | null;
           invoice_registration_number: string;
           name: string;
           onboarding_completed?: boolean;
-          pending_rank?: Database["public"]["Enums"]["member_rank"] | null;
           phone_number: string;
           postal_code: string;
           prefecture: string;
-          rank?: Database["public"]["Enums"]["member_rank"];
+          rank_code?: string;
           representative_name: string;
           stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          stripe_subscription_schedule_id?: string | null;
         };
         Update: {
           address_line1?: string;
@@ -438,23 +428,33 @@ export type Database = {
           created_at?: string;
           deleted_at?: string | null;
           id?: string;
-          initial_fee_paid_rank?:
-            | Database["public"]["Enums"]["member_rank"]
-            | null;
+          initial_fee_paid_rank_code?: string | null;
           invoice_registration_number?: string;
           name?: string;
           onboarding_completed?: boolean;
-          pending_rank?: Database["public"]["Enums"]["member_rank"] | null;
           phone_number?: string;
           postal_code?: string;
           prefecture?: string;
-          rank?: Database["public"]["Enums"]["member_rank"];
+          rank_code?: string;
           representative_name?: string;
           stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          stripe_subscription_schedule_id?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "organizations_initial_fee_paid_rank_code_fkey";
+            columns: ["initial_fee_paid_rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "organizations_rank_code_fkey";
+            columns: ["rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+        ];
       };
       rank_changes: {
         Row: {
@@ -642,57 +642,72 @@ export type Database = {
       };
       users: {
         Row: {
+          billing_anchor_day: number | null;
           clerk_user_id: string;
           created_at: string;
           deleted_at: string | null;
           email: string;
           first_name: string;
           id: string;
+          initial_fee_paid_rank_code: string | null;
           last_name: string;
           onboarding_completed: boolean;
           phone_number: string;
           profile_completed_at: string | null;
-          rank: Database["public"]["Enums"]["member_rank"];
+          rank_code: string;
           stripe_customer_id: string | null;
-          stripe_subscription_id: string | null;
-          subscribed_at: string | null;
           updated_at: string;
         };
         Insert: {
+          billing_anchor_day?: number | null;
           clerk_user_id: string;
           created_at?: string;
           deleted_at?: string | null;
           email: string;
           first_name?: string;
           id?: string;
+          initial_fee_paid_rank_code?: string | null;
           last_name?: string;
           onboarding_completed?: boolean;
           phone_number?: string;
           profile_completed_at?: string | null;
-          rank?: Database["public"]["Enums"]["member_rank"];
+          rank_code?: string;
           stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          subscribed_at?: string | null;
           updated_at?: string;
         };
         Update: {
+          billing_anchor_day?: number | null;
           clerk_user_id?: string;
           created_at?: string;
           deleted_at?: string | null;
           email?: string;
           first_name?: string;
           id?: string;
+          initial_fee_paid_rank_code?: string | null;
           last_name?: string;
           onboarding_completed?: boolean;
           phone_number?: string;
           profile_completed_at?: string | null;
-          rank?: Database["public"]["Enums"]["member_rank"];
+          rank_code?: string;
           stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          subscribed_at?: string | null;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "users_initial_fee_paid_rank_code_fkey";
+            columns: ["initial_fee_paid_rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "users_rank_code_fkey";
+            columns: ["rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+        ];
       };
     };
     Views: {
