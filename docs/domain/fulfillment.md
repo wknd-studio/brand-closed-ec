@@ -67,5 +67,5 @@
 ## 参考資料
 
 - `docs/db-schema-redesign.md`: `shipments`テーブル定義節（「このテーブルが必要な理由」「運用の流れ」「あえて持たない設計」含む）、`locations`テーブル定義節、`order_items.shipment_id`/`fulfillment_location_code`列、ER図の`orders ||--o{ shipments`／`shipments |o--o{ order_items`／`locations ||--o{ order_items`／`locations ||--o{ shipments`関係、「RLSポリシー方針への影響」節（`shipments`・`locations`の項）、「移行方針」9番・12番
-- `docs/archive/operations-order.md`（凍結済み）: 旧・単一`orders.status`遷移（`preparing`〜`delivered`）を前提にした運営者の作業手順（配送伝票作成・追跡番号取得・配送業者への引き渡し）。新設計との対応は本ドキュメント「旧オペレーションフローとの対応」参照
+- （旧`docs/archive/operations-order.md`: 単一`orders.status`遷移（`preparing`〜`delivered`）を前提にした運営者の作業手順を材料に執筆。新設計との対応は本ドキュメント「旧オペレーションフローとの対応」参照。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - 実装: 本ドキュメント執筆時点で`shipments`/`locations`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは別途作成予定）

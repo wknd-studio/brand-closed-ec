@@ -102,5 +102,5 @@ RLSは`get_current_admin_user_id()`（`get_current_user_id()`と対になる関�
 ## 参考資料
 
 - `docs/db-schema-redesign.md` の「管理者RBAC・会員側法人RBACへの対応方針」節、「ロールのバリデーションについて」節、`admin_users`/`admin_memberships`テーブル定義節、「RLSポリシー方針への影響」節
-- `docs/archive/service-spec.md` の「利用者」節・「運営者ロール」節（凍結済み）
+- （旧`docs/archive/service-spec.md`「利用者」節・「運営者ロール」節を材料に執筆。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - 実装: 本ドキュメント執筆時点では`admin_users`/`admin_memberships`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは別途作成予定）

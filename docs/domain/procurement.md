@@ -64,5 +64,5 @@
 ## 参考資料
 
 - `docs/db-schema-redesign.md`: `procurement_tasks`テーブル定義節、`order_items.procurement_task_id`列、`orders.procurement_due_at`列、「RLSポリシー方針への影響」節（`procurement_tasks`の項）、「スコープ外とした論点」節（`suppliers`／自動発注）、「移行方針」8番
-- `docs/archive/operations-order.md`（凍結済み）: 旧・単一`orders.status`遷移（`paid`〜`shipping`）を前提にした運営者の作業手順。新設計との対応は本ドキュメント「旧オペレーションフローからの変更点」参照。調達担当の作業内容自体（仕入れ先への発注・納期確認・検品）は引き続き参考にできる
+- （旧`docs/archive/operations-order.md`: 単一`orders.status`遷移（`paid`〜`shipping`）を前提にした運営者の作業手順を材料に執筆。新設計との対応は本ドキュメント「旧オペレーションフローからの変更点」参照。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - 実装: 本ドキュメント執筆時点で`procurement_tasks`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは`admin_users`/`admin_memberships`新設後に別途作成予定）

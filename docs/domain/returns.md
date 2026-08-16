@@ -64,5 +64,5 @@
 ## 参考資料
 
 - `docs/db-schema-redesign.md`: `returns`／`return_items`テーブル定義節、「RLSポリシー方針への影響」節（`returns`/`return_items`の項）
-- `docs/archive/operations-order.md`（凍結済み）: 「9-4. `paid`以降のキャンセル」節（旧・Stripeダッシュボード手動返金フロー）。運用担当（管理者のみ）・返金理由の記録という考え方自体は新設計にも引き継がれる
+- （旧`docs/archive/operations-order.md`「9-4. `paid`以降のキャンセル」節: Stripeダッシュボード手動返金フローを材料に執筆。運用担当（管理者のみ）・返金理由の記録という考え方自体は新設計にも引き継がれる。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - 実装: 本ドキュメント執筆時点で`returns`/`return_items`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは別途作成予定）

@@ -102,5 +102,4 @@
 - 実装（アプリケーション層）: `src/lib/sanity/products.ts`（`isProductAccessible()`・`getAllowedRanks()`・`fetchProducts()`等）、`src/domain/value-objects/cart-item.ts`
 - `docs/db-schema-redesign.md` の`cart_items`（変更なし）節・`favorites`（変更なし）節・`order_items`の`sanity_product_id`/`product_name_snapshot`/`brand_id_snapshot`/`brand_name_snapshot`/`fulfillment_location_code`列の節
 - `specs/004-product-data-import/` — 業者商品データの統一インポート基盤の仕様（CSV提供業者・スクレイピング業者・定期実行・JANコード重複判定）。`contracts/unified-product-schema.md`に統一中間スキーマの定義あり
-- `docs/archive/service-spec.md` の「会員プラン」節（商品単価・掛け率の例示）
-- `docs/archive/user-stories.md` の「2. 商品閲覧」（PROD-01〜06）・「2.5 お気に入り」（FAV-01〜02）節（凍結済み・旧5ランクモデル時代の記述である点に注意）
+- （旧`docs/archive/service-spec.md`「会員プラン」節・`docs/archive/user-stories.md`「2. 商品閲覧」「2.5 お気に入り」節を材料に執筆。ドメインドキュメント全体完了に伴いarchiveは削除済み）
