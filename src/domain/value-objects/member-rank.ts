@@ -12,10 +12,13 @@ export const RANK_ORDER = [
 
 export type MemberRankValue = (typeof RANK_ORDER)[number];
 
-// TODO: 月間仕入れ上限はdocs/archive/service-spec.mdで未確定（TBD）。
-// 確定次第この暫定値を更新する（specs/001-seven-rank-pricing/research.md参照）。
+// TODO: 月間仕入れ上限は未確定（TBD）の暫定値。確定次第更新する
+// （specs/001-seven-rank-pricing/research.md参照）。
 // standard/pro/enterpriseは名称が旧モデルから引き継がれるため、旧モデルの数値を
 // そのまま流用した（starter/basic/advanced/premiumは新規ランクのため新規に暫定設定）。
+// 同じ値をsupabase/migrations/20260816151000_create_member_ranks.sqlの
+// member_ranks.monthly_limit_amountにも投入している。DB参照化するまでは
+// 二重管理になるため、値を変える場合は両方揃えること。
 const MONTHLY_LIMITS: Record<MemberRankValue, number> = {
   starter: 300_000,
   basic: 1_000_000,
