@@ -796,7 +796,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 > **2026-08-17更新**: サービスは未リリースで実データが無いため（`develop`/stg含む）、以下は無停止移行・バックフィルの慎重な手順を前提にした記述だが、**実際にはデータ保全を気にせず直接`ALTER TABLE`で書き換えてよい**。スキーマを最短で12ステップ完走させることを優先し、アプリケーションコード側の追従（`MemberRank`のDB参照化・各種UI実装等）は12ステップ完了後にまとめて行う。以下の番号付きリストはテーブル新設の目的・関係性の記録として残すが、手順の慎重さの記述は参考程度に読むこと。
 
 1. ✅ `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。（`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み。[PR #164](https://github.com/wknd-studio/brand-closed-ec/pull/164)）
-2. ⬜ [#166](https://github.com/wknd-studio/brand-closed-ec/issues/166) `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。
+2. ✅ [#166](https://github.com/wknd-studio/brand-closed-ec/issues/166) `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。（`supabase/migrations/20260816175631_create_subscriptions_rank_changes_stripe_webhook_events.sql`で実装済み）
 3. ⬜ [#167](https://github.com/wknd-studio/brand-closed-ec/issues/167) `users`/`organizations`の既存Stripeカラムから`subscriptions`へバックフィル。既存の`rank`/`initial_fee_paid_rank`を起点に`rank_changes`の初期1行（`from_rank_code = NULL`, `changed_by = 'system'`）を生成する。
 4. ⬜ [#168](https://github.com/wknd-studio/brand-closed-ec/issues/168) `orders.status`等のENUM→TEXTへ変更する。実データが無いため、旧カラムを直接`DROP`して新しいTEXT+CHECKカラムを作り直す形でよい（無停止移行の段階的手順は不要）。
 5. ⬜ [#169](https://github.com/wknd-studio/brand-closed-ec/issues/169) `organizations`の住所カラムを`addresses`へ統合する（バックフィル不要。旧カラムを削除して`addresses`側に集約するだけでよい）。

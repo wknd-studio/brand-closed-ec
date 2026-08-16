@@ -456,6 +456,190 @@ export type Database = {
         };
         Relationships: [];
       };
+      rank_changes: {
+        Row: {
+          changed_by: string;
+          created_at: string;
+          effective_at: string;
+          from_rank_code: string | null;
+          id: string;
+          initial_fee_charged: boolean;
+          organization_id: string | null;
+          reason: string | null;
+          stripe_subscription_id: string | null;
+          to_rank_code: string;
+          user_id: string | null;
+        };
+        Insert: {
+          changed_by: string;
+          created_at?: string;
+          effective_at?: string;
+          from_rank_code?: string | null;
+          id?: string;
+          initial_fee_charged?: boolean;
+          organization_id?: string | null;
+          reason?: string | null;
+          stripe_subscription_id?: string | null;
+          to_rank_code: string;
+          user_id?: string | null;
+        };
+        Update: {
+          changed_by?: string;
+          created_at?: string;
+          effective_at?: string;
+          from_rank_code?: string | null;
+          id?: string;
+          initial_fee_charged?: boolean;
+          organization_id?: string | null;
+          reason?: string | null;
+          stripe_subscription_id?: string | null;
+          to_rank_code?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rank_changes_from_rank_code_fkey";
+            columns: ["from_rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "rank_changes_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rank_changes_to_rank_code_fkey";
+            columns: ["to_rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "rank_changes_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      stripe_webhook_events: {
+        Row: {
+          error: string | null;
+          event_id: string;
+          payload: Json;
+          processed_at: string | null;
+          received_at: string;
+          status: string;
+          type: string;
+        };
+        Insert: {
+          error?: string | null;
+          event_id: string;
+          payload: Json;
+          processed_at?: string | null;
+          received_at?: string;
+          status?: string;
+          type: string;
+        };
+        Update: {
+          error?: string | null;
+          event_id?: string;
+          payload?: Json;
+          processed_at?: string | null;
+          received_at?: string;
+          status?: string;
+          type?: string;
+        };
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean;
+          canceled_at: string | null;
+          created_at: string;
+          current_period_end: string;
+          current_period_start: string;
+          id: string;
+          organization_id: string | null;
+          pending_rank_code: string | null;
+          rank_code: string;
+          status: string;
+          stripe_customer_id: string;
+          stripe_subscription_id: string;
+          stripe_subscription_schedule_id: string | null;
+          updated_at: string;
+          user_id: string | null;
+        };
+        Insert: {
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          created_at?: string;
+          current_period_end: string;
+          current_period_start: string;
+          id?: string;
+          organization_id?: string | null;
+          pending_rank_code?: string | null;
+          rank_code: string;
+          status: string;
+          stripe_customer_id: string;
+          stripe_subscription_id: string;
+          stripe_subscription_schedule_id?: string | null;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Update: {
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          created_at?: string;
+          current_period_end?: string;
+          current_period_start?: string;
+          id?: string;
+          organization_id?: string | null;
+          pending_rank_code?: string | null;
+          rank_code?: string;
+          status?: string;
+          stripe_customer_id?: string;
+          stripe_subscription_id?: string;
+          stripe_subscription_schedule_id?: string | null;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "subscriptions_pending_rank_code_fkey";
+            columns: ["pending_rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "subscriptions_rank_code_fkey";
+            columns: ["rank_code"];
+            isOneToOne: false;
+            referencedRelation: "member_ranks";
+            referencedColumns: ["code"];
+          },
+          {
+            foreignKeyName: "subscriptions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       users: {
         Row: {
           clerk_user_id: string;
