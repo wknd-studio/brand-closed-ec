@@ -791,17 +791,21 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ## 移行方針（概要・詳細はマイグレーション作成時に確定）
 
-1. `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。
-2. `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。
-3. `users`/`organizations`の既存Stripeカラムから`subscriptions`へバックフィル。既存の`rank`/`initial_fee_paid_rank`を起点に`rank_changes`の初期1行（`from_rank_code = NULL`, `changed_by = 'system'`）を生成する。
-4. `orders.status`等のENUM→TEXTは、新カラムを追加→データコピー→旧カラム削除→リネームの手順で無停止移行する（Postgresの`ALTER TYPE`制約を踏まえ、旧ENUM値を都度追加していた現行運用と同じ理由でワンステップ変換は避ける）。
-5. `organizations`の住所カラムを`addresses`へバックフィル後に削除する。
-6. 最後に部分UNIQUEインデックス群を追加する。
-7. `admin_users`/`admin_memberships`を新設し、Clerk側に運営組織を作成した上でWebhook経由の同期を実装する。
-8. `procurement_tasks`を新設し、`order_items.procurement_task_id`・`orders.procurement_due_at`を追加する（`admin_users`が存在した後でないと`procurement_tasks.assigned_admin_user_id`のFKが張れないため、7の後に実施する）。
-9. `shipments`を新設し、`order_items.shipment_id`を追加する。同時に`orders.status`のCHECK制約から`'shipping'`/`'delivered'`/`'sourcing'`/`'ordered'`/`'preparing'`を除去する（既存データに該当値があれば、`shipments`/`procurement_tasks`側へバックフィルした上で`orders.status`を`'paid'`に寄せる移行が必要）。
-10. `order_status_changes`を新設する。既存の`orders`各行について、現在の`status`を`to_status`とした初期1行（`from_status = NULL`, `changed_by = 'system'`）をバックフィルする。
-11. `returns`/`return_items`を新設する（既存データのバックフィルは不要。新規発生分から記録を開始する）。
-12. `locations`を新設し、`('office', ...)`/`('supplier_direct', ...)`の初期2行を投入する。`order_items.fulfillment_location_code`（既存データは全て`'office'`とみなしてバックフィル）・`shipments.origin_location_code`（既存データは全て`'office'`とみなしてバックフィル）を追加する。
+進捗はGitHub issue [#165](https://github.com/wknd-studio/brand-closed-ec/issues/165)（親issue）・各ステップの子issueで管理する（Linear issue作成上限のため、当面はGitHub issueで代替。[[project_db_schema_migration_plan]]参照）。
+
+> **2026-08-17更新**: サービスは未リリースで実データが無いため（`develop`/stg含む）、以下は無停止移行・バックフィルの慎重な手順を前提にした記述だが、**実際にはデータ保全を気にせず直接`ALTER TABLE`で書き換えてよい**。スキーマを最短で12ステップ完走させることを優先し、アプリケーションコード側の追従（`MemberRank`のDB参照化・各種UI実装等）は12ステップ完了後にまとめて行う。以下の番号付きリストはテーブル新設の目的・関係性の記録として残すが、手順の慎重さの記述は参考程度に読むこと。
+
+1. ✅ `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。（`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み。[PR #164](https://github.com/wknd-studio/brand-closed-ec/pull/164)）
+2. ⬜ [#166](https://github.com/wknd-studio/brand-closed-ec/issues/166) `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。
+3. ⬜ [#167](https://github.com/wknd-studio/brand-closed-ec/issues/167) `users`/`organizations`の既存Stripeカラムから`subscriptions`へバックフィル。既存の`rank`/`initial_fee_paid_rank`を起点に`rank_changes`の初期1行（`from_rank_code = NULL`, `changed_by = 'system'`）を生成する。
+4. ⬜ [#168](https://github.com/wknd-studio/brand-closed-ec/issues/168) `orders.status`等のENUM→TEXTへ変更する。実データが無いため、旧カラムを直接`DROP`して新しいTEXT+CHECKカラムを作り直す形でよい（無停止移行の段階的手順は不要）。
+5. ⬜ [#169](https://github.com/wknd-studio/brand-closed-ec/issues/169) `organizations`の住所カラムを`addresses`へ統合する（バックフィル不要。旧カラムを削除して`addresses`側に集約するだけでよい）。
+6. ⬜ [#170](https://github.com/wknd-studio/brand-closed-ec/issues/170) 最後に部分UNIQUEインデックス群を追加する。
+7. ⬜ [#171](https://github.com/wknd-studio/brand-closed-ec/issues/171) `admin_users`/`admin_memberships`を新設する（Clerk側の運営組織作成・Webhook同期は12ステップ完了後のアプリコード実装フェーズでまとめて行う）。
+8. ⬜ [#172](https://github.com/wknd-studio/brand-closed-ec/issues/172) `procurement_tasks`を新設し、`order_items.procurement_task_id`・`orders.procurement_due_at`を追加する（`admin_users`が存在した後でないと`procurement_tasks.assigned_admin_user_id`のFKが張れないため、7の後に実施する）。
+9. ⬜ [#173](https://github.com/wknd-studio/brand-closed-ec/issues/173) `shipments`を新設し、`order_items.shipment_id`を追加する。`orders.status`のCHECK制約から`'shipping'`/`'delivered'`/`'sourcing'`/`'ordered'`/`'preparing'`を除去する（実データが無いためバックフィル不要）。
+10. ⬜ [#174](https://github.com/wknd-studio/brand-closed-ec/issues/174) `order_status_changes`を新設する（実データが無いためバックフィル不要）。
+11. ⬜ [#175](https://github.com/wknd-studio/brand-closed-ec/issues/175) `returns`/`return_items`を新設する。
+12. ⬜ [#176](https://github.com/wknd-studio/brand-closed-ec/issues/176) `locations`を新設し、`('office', ...)`/`('supplier_direct', ...)`の初期2行を投入する。`order_items.fulfillment_location_code`・`shipments.origin_location_code`を追加する（実データが無いためバックフィル不要）。
 
 この設計に問題なければ、上記の移行方針をベースに実際のマイグレーションファイル作成に進みます。

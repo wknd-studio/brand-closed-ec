@@ -167,6 +167,42 @@ export type Database = {
           },
         ];
       };
+      member_ranks: {
+        Row: {
+          code: string;
+          created_at: string;
+          display_name_ja: string;
+          is_active: boolean;
+          monthly_limit_amount: number | null;
+          sort_order: number;
+          stripe_initial_fee_price_id: string | null;
+          stripe_monthly_price_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          code: string;
+          created_at?: string;
+          display_name_ja: string;
+          is_active?: boolean;
+          monthly_limit_amount?: number | null;
+          sort_order: number;
+          stripe_initial_fee_price_id?: string | null;
+          stripe_monthly_price_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          code?: string;
+          created_at?: string;
+          display_name_ja?: string;
+          is_active?: boolean;
+          monthly_limit_amount?: number | null;
+          sort_order?: number;
+          stripe_initial_fee_price_id?: string | null;
+          stripe_monthly_price_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       order_items: {
         Row: {
           created_at: string;
