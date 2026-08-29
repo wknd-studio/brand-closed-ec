@@ -51,6 +51,40 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
 
+  schema-types-drift:
+    name: Schema Types Drift
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: supabase/setup-cli@v1
+        with: { version: 2.102.0 }
+      - run: pnpm install --frozen-lockfile
+      - name: Start local Supabase
+        # このジョブはDBのスキーマとsrc/types/database.types.tsの整合性しか
+        # 見ないため、E2E同様に未使用コンテナの起動をスキップして時間を短縮する
+        run: supabase start -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta
+      - name: Apply local migrations
+        run: supabase db reset
+      - name: Generate types from local DB and diff against committed file
+        # マイグレーションでカラムを追加・削除・リネームした後、
+        # `supabase gen types typescript --local`の再実行とコミットを
+        # 忘れると、tscがDBの実際の形と食い違ったまま検査してしまい
+        # （例: 削除済みカラムへの参照が素通りする)、実行時まで気づけない。
+        # ここでその「型定義の更新忘れ」自体を検出する
+        run: |
+          supabase gen types typescript --local > /tmp/database.types.ts
+          pnpm exec prettier --write /tmp/database.types.ts
+          if ! diff -q /tmp/database.types.ts src/types/database.types.ts > /dev/null; then
+            echo "::error::src/types/database.types.ts がDBの実際のスキーマと一致していません。"
+            echo "::error::以下を実行してコミットしてください: supabase gen types typescript --local > src/types/database.types.ts && pnpm exec prettier --write src/types/database.types.ts"
+            diff /tmp/database.types.ts src/types/database.types.ts || true
+            exit 1
+          fi
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
