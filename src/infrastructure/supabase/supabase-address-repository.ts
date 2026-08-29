@@ -70,10 +70,15 @@ export class SupabaseAddressRepository implements AddressRepository {
     return count ?? 0;
   }
 
-  async save(address: Address, userId: string): Promise<void> {
+  async save(
+    address: Address,
+    userId: string,
+    organizationId?: string
+  ): Promise<void> {
     await this.db.from("addresses").insert({
       id: address.id,
       user_id: userId,
+      organization_id: organizationId ?? null,
       type: address.type,
       is_default: address.isDefault,
       recipient_last_name: address.recipientLastName,

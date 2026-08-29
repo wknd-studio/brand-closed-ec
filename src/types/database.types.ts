@@ -48,7 +48,7 @@ export type Database = {
           prefecture: string;
           recipient_first_name: string;
           recipient_last_name: string;
-          type: Database["public"]["Enums"]["address_type"];
+          type: string;
           updated_at: string;
           user_id: string;
         };
@@ -65,7 +65,7 @@ export type Database = {
           prefecture: string;
           recipient_first_name: string;
           recipient_last_name: string;
-          type: Database["public"]["Enums"]["address_type"];
+          type: string;
           updated_at?: string;
           user_id: string;
         };
@@ -82,7 +82,7 @@ export type Database = {
           prefecture?: string;
           recipient_first_name?: string;
           recipient_last_name?: string;
-          type?: Database["public"]["Enums"]["address_type"];
+          type?: string;
           updated_at?: string;
           user_id?: string;
         };
@@ -380,10 +380,7 @@ export type Database = {
       };
       organizations: {
         Row: {
-          address_line1: string;
-          address_line2: string | null;
           billing_anchor_day: number | null;
-          city: string;
           clerk_org_id: string;
           created_at: string;
           deleted_at: string | null;
@@ -393,17 +390,12 @@ export type Database = {
           name: string;
           onboarding_completed: boolean;
           phone_number: string;
-          postal_code: string;
-          prefecture: string;
           rank_code: string;
           representative_name: string;
           stripe_customer_id: string | null;
         };
         Insert: {
-          address_line1: string;
-          address_line2?: string | null;
           billing_anchor_day?: number | null;
-          city: string;
           clerk_org_id: string;
           created_at?: string;
           deleted_at?: string | null;
@@ -413,17 +405,12 @@ export type Database = {
           name: string;
           onboarding_completed?: boolean;
           phone_number: string;
-          postal_code: string;
-          prefecture: string;
           rank_code?: string;
           representative_name: string;
           stripe_customer_id?: string | null;
         };
         Update: {
-          address_line1?: string;
-          address_line2?: string | null;
           billing_anchor_day?: number | null;
-          city?: string;
           clerk_org_id?: string;
           created_at?: string;
           deleted_at?: string | null;
@@ -433,8 +420,6 @@ export type Database = {
           name?: string;
           onboarding_completed?: boolean;
           phone_number?: string;
-          postal_code?: string;
-          prefecture?: string;
           rank_code?: string;
           representative_name?: string;
           stripe_customer_id?: string | null;
@@ -719,7 +704,6 @@ export type Database = {
       get_current_user_id: { Args: never; Returns: string };
     };
     Enums: {
-      address_type: "billing" | "shipping";
       member_rank:
         | "free"
         | "entry"
@@ -863,7 +847,6 @@ export const Constants = {
   },
   public: {
     Enums: {
-      address_type: ["billing", "shipping"],
       member_rank: [
         "free",
         "entry",

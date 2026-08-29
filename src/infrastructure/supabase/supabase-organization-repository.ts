@@ -10,11 +10,6 @@ type OrganizationRow = {
   name: string;
   representative_name: string;
   phone_number: string;
-  postal_code: string;
-  prefecture: string;
-  city: string;
-  address_line1: string;
-  address_line2: string | null;
   invoice_registration_number: string;
   onboarding_completed: boolean;
   rank_code: string;
@@ -31,11 +26,6 @@ function toOrganization(row: OrganizationRow): Organization {
     name: row.name,
     representativeName: row.representative_name,
     phoneNumber: row.phone_number,
-    postalCode: row.postal_code,
-    prefecture: row.prefecture,
-    city: row.city,
-    addressLine1: row.address_line1,
-    addressLine2: row.address_line2,
     invoiceRegistrationNumber: row.invoice_registration_number,
     onboardingCompleted: row.onboarding_completed,
     rank: MemberRank.of(row.rank_code),
@@ -49,7 +39,7 @@ function toOrganization(row: OrganizationRow): Organization {
 }
 
 const SELECT_FIELDS =
-  "id, clerk_org_id, name, representative_name, phone_number, postal_code, prefecture, city, address_line1, address_line2, invoice_registration_number, onboarding_completed, rank_code, billing_anchor_day, stripe_customer_id, initial_fee_paid_rank_code, deleted_at";
+  "id, clerk_org_id, name, representative_name, phone_number, invoice_registration_number, onboarding_completed, rank_code, billing_anchor_day, stripe_customer_id, initial_fee_paid_rank_code, deleted_at";
 
 export class SupabaseOrganizationRepository implements OrganizationRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -89,11 +79,6 @@ export class SupabaseOrganizationRepository implements OrganizationRepository {
       name: organization.name,
       representative_name: organization.representativeName,
       phone_number: organization.phoneNumber,
-      postal_code: organization.postalCode,
-      prefecture: organization.prefecture,
-      city: organization.city,
-      address_line1: organization.addressLine1,
-      address_line2: organization.addressLine2,
       invoice_registration_number: organization.invoiceRegistrationNumber,
       onboarding_completed: organization.onboardingCompleted,
       rank_code: organization.rank.value,

@@ -9,6 +9,7 @@ import {
   makeOrganizationMembershipRepo,
   makeOrganizationGateway,
   makeOrganization,
+  makeAddressRepo,
 } from "./helpers";
 
 function baseInput() {
@@ -35,12 +36,14 @@ describe("createOrganization", () => {
     const membershipRepo = makeOrganizationMembershipRepo();
     const organizationGateway = makeOrganizationGateway();
     const userRepo = makeUserRepo();
+    const addressRepo = makeAddressRepo();
 
     const result = await createOrganization(baseInput(), {
       organizationRepo,
       membershipRepo,
       organizationGateway,
       userRepo,
+      addressRepo,
     });
 
     expect(result.type).toBe("created");
@@ -58,6 +61,17 @@ describe("createOrganization", () => {
       organizationRepo.save as ReturnType<typeof vi.fn>
     ).mock.calls[0][0];
     expect(savedOrganization.representativeName).toBe("山田太郎");
+
+    // 本店所在地はaddresses（type='headquarters'）に統合済み
+    // （docs/db-schema-redesign.md移行方針5番）
+    expect(addressRepo.save).toHaveBeenCalled();
+    const [savedAddress, savedUserId, savedOrgId] = (
+      addressRepo.save as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(savedAddress.type).toBe("headquarters");
+    expect(savedAddress.postalCode).toBe("1000001");
+    expect(savedOrgId).toBe(savedOrganization.id);
+    expect(typeof savedUserId).toBe("string");
   });
 
   it("代表者名・電話番号を本人のusers.firstName/lastName/phoneNumberにも反映する（新規作成）", async () => {
@@ -72,6 +86,7 @@ describe("createOrganization", () => {
       membershipRepo,
       organizationGateway,
       userRepo,
+      addressRepo: makeAddressRepo(),
     });
 
     const savedUser = (userRepo.save as ReturnType<typeof vi.fn>).mock
@@ -97,6 +112,7 @@ describe("createOrganization", () => {
       membershipRepo,
       organizationGateway,
       userRepo,
+      addressRepo: makeAddressRepo(),
     });
 
     const savedUser = (userRepo.save as ReturnType<typeof vi.fn>).mock
@@ -116,6 +132,7 @@ describe("createOrganization", () => {
         membershipRepo: makeOrganizationMembershipRepo(),
         organizationGateway: makeOrganizationGateway(),
         userRepo: makeUserRepo(),
+        addressRepo: makeAddressRepo(),
       })
     ).rejects.toThrow(InvalidPhoneNumberError);
   });
@@ -129,6 +146,7 @@ describe("createOrganization", () => {
         membershipRepo: makeOrganizationMembershipRepo(),
         organizationGateway: makeOrganizationGateway(),
         userRepo: makeUserRepo(),
+        addressRepo: makeAddressRepo(),
       })
     ).rejects.toThrow(InvalidInvoiceRegistrationNumberError);
   });
@@ -142,6 +160,7 @@ describe("createOrganization", () => {
       membershipRepo: makeOrganizationMembershipRepo(),
       organizationGateway: makeOrganizationGateway(),
       userRepo: makeUserRepo(),
+      addressRepo: makeAddressRepo(),
     });
 
     expect(result).toEqual({ type: "error", reason: "duplicate_name" });
@@ -159,6 +178,7 @@ describe("createOrganization", () => {
       membershipRepo,
       organizationGateway,
       userRepo,
+      addressRepo: makeAddressRepo(),
     });
 
     expect(result.type).toBe("created");
