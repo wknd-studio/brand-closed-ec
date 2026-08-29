@@ -6,6 +6,7 @@ import {
   makeUser,
   makeOrganizationRepo,
   makeOrganization,
+  makeSubscriptionRepo,
 } from "./helpers";
 
 function baseInput() {
@@ -15,6 +16,9 @@ function baseInput() {
     plan: "basic" as const,
     stripeCustomerId: "cus_1",
     stripeSubscriptionId: "sub_1",
+    status: "active" as const,
+    currentPeriodStart: new Date(2026, 0, 1),
+    currentPeriodEnd: new Date(2026, 1, 1),
   };
 }
 
@@ -26,6 +30,7 @@ describe("completeOrganizationSubscriptionOnboarding", () => {
       completeOrganizationSubscriptionOnboarding(baseInput(), {
         organizationRepo,
         userRepo: makeUserRepo(),
+        subscriptionRepo: makeSubscriptionRepo(),
         accountGateway: makeAccountGateway(),
       })
     ).rejects.toThrow("組織が見つかりません");
@@ -38,19 +43,31 @@ describe("completeOrganizationSubscriptionOnboarding", () => {
     const organizationRepo = makeOrganizationRepo(organization);
     const user = makeUser({ onboardingCompleted: false });
     const userRepo = makeUserRepo(user);
+    const subscriptionRepo = makeSubscriptionRepo();
     const accountGateway = makeAccountGateway();
 
     await completeOrganizationSubscriptionOnboarding(baseInput(), {
       organizationRepo,
       userRepo,
+      subscriptionRepo,
       accountGateway,
     });
 
     const savedOrg = vi.mocked(organizationRepo.save).mock.calls[0][0];
     expect(savedOrg.rank.value).toBe("basic");
     expect(savedOrg.stripeCustomerId).toBe("cus_1");
-    expect(savedOrg.stripeSubscriptionId).toBe("sub_1");
     expect(savedOrg.onboardingCompleted).toBe(true);
+    expect(savedOrg.billingAnchorDay).not.toBeNull();
+
+    expect(subscriptionRepo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: organization.id,
+        stripeCustomerId: "cus_1",
+        stripeSubscriptionId: "sub_1",
+        status: "active",
+        rank: "basic",
+      })
+    );
 
     const savedUser = vi.mocked(userRepo.save).mock.calls[0][0];
     expect(savedUser.onboardingCompleted).toBe(true);
@@ -65,15 +82,18 @@ describe("completeOrganizationSubscriptionOnboarding", () => {
     const alreadyCompleted = organization.with({ onboardingCompleted: true });
     const organizationRepo = makeOrganizationRepo(alreadyCompleted);
     const userRepo = makeUserRepo();
+    const subscriptionRepo = makeSubscriptionRepo();
     const accountGateway = makeAccountGateway();
 
     await completeOrganizationSubscriptionOnboarding(baseInput(), {
       organizationRepo,
       userRepo,
+      subscriptionRepo,
       accountGateway,
     });
 
     expect(organizationRepo.save).not.toHaveBeenCalled();
+    expect(subscriptionRepo.upsert).not.toHaveBeenCalled();
     expect(userRepo.save).not.toHaveBeenCalled();
     expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });

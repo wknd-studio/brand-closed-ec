@@ -70,9 +70,9 @@ beforeAll(async () => {
     email: "order-infra-test@example.com",
     first_name: "テスト",
     last_name: "太郎",
-    rank: "basic",
+    rank_code: "basic",
     onboarding_completed: true,
-    subscribed_at: "2026-01-10T00:00:00.000Z",
+    billing_anchor_day: 10,
   });
 });
 

@@ -23,12 +23,16 @@ import type { AccountGateway } from "@/repositories/account-gateway";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
 import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
 import type { OrganizationGateway } from "@/repositories/organization-gateway";
+import type {
+  SubscriptionRepository,
+  SubscriptionSnapshot,
+} from "@/repositories/subscription-repository";
 
 export function makeUser(
   overrides?: Partial<{
     rank: string;
     onboardingCompleted: boolean;
-    subscribedAt: Date | null;
+    billingAnchorDay: number | null;
     firstName: string;
     lastName: string;
     phoneNumber: string;
@@ -43,11 +47,10 @@ export function makeUser(
     phoneNumber: overrides?.phoneNumber ?? "09012345678",
     profileCompletedAt: new Date(2026, 0, 1),
     rank: MemberRank.of(overrides?.rank ?? "standard"),
-    subscribedAt: overrides?.subscribedAt ?? new Date(2026, 0, 1),
+    billingAnchorDay: overrides?.billingAnchorDay ?? 1,
     onboardingCompleted: overrides?.onboardingCompleted ?? true,
     deletedAt: null,
     stripeCustomerId: null,
-    stripeSubscriptionId: null,
   });
 }
 
@@ -227,6 +230,35 @@ export function makeSubscriptionGateway(): SubscriptionGateway {
   };
 }
 
+export function makeSubscriptionSnapshot(
+  overrides?: Partial<SubscriptionSnapshot>
+): SubscriptionSnapshot {
+  return {
+    id: "00000000-0000-0000-0000-000000000201",
+    stripeCustomerId: "cus_1",
+    stripeSubscriptionId: "sub_1",
+    stripeSubscriptionScheduleId: null,
+    status: "active",
+    rank: "standard",
+    pendingRank: null,
+    currentPeriodStart: new Date(2026, 0, 1),
+    currentPeriodEnd: new Date(2026, 1, 1),
+    cancelAtPeriodEnd: false,
+    canceledAt: null,
+    ...overrides,
+  };
+}
+
+export function makeSubscriptionRepo(
+  snapshot: SubscriptionSnapshot | null = null
+): SubscriptionRepository {
+  return {
+    findActiveByUserId: vi.fn().mockResolvedValue(snapshot),
+    findActiveByOrganizationId: vi.fn().mockResolvedValue(snapshot),
+    upsert: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 export function makeAccountGateway(): AccountGateway {
   return {
     deleteUser: vi.fn().mockResolvedValue(undefined),
@@ -252,10 +284,7 @@ export function makeOrganization(
     onboardingCompleted: true,
     rank: MemberRank.of(overrides?.rank ?? "standard"),
     billingAnchorDay: overrides?.billingAnchorDay ?? 1,
-    pendingRank: null,
     stripeCustomerId: null,
-    stripeSubscriptionId: null,
-    stripeSubscriptionScheduleId: null,
     initialFeePaidRank: null,
     deletedAt: null,
   });

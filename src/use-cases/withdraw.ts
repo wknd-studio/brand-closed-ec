@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
+import type { SubscriptionRepository } from "@/repositories/subscription-repository";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
@@ -12,6 +13,7 @@ export type WithdrawInput = {
 export type WithdrawDeps = {
   userRepo: UserRepository;
   orderRepo: OrderRepository;
+  subscriptionRepo: SubscriptionRepository;
   subscriptionGateway: SubscriptionGateway;
   accountGateway: AccountGateway;
 };
@@ -20,7 +22,13 @@ export async function withdraw(
   input: WithdrawInput,
   deps: WithdrawDeps
 ): Promise<void> {
-  const { userRepo, orderRepo, subscriptionGateway, accountGateway } = deps;
+  const {
+    userRepo,
+    orderRepo,
+    subscriptionRepo,
+    subscriptionGateway,
+    accountGateway,
+  } = deps;
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
   if (!user) throw new Error("ユーザーが見つかりません");
@@ -31,9 +39,12 @@ export async function withdraw(
   const withdrawnUser = user.with({ deletedAt: new Date() });
   await userRepo.save(withdrawnUser);
 
-  if (user.stripeSubscriptionId) {
+  const subscription = await subscriptionRepo.findActiveByUserId(user.id);
+  if (subscription) {
     try {
-      await subscriptionGateway.cancelSubscription(user.stripeSubscriptionId);
+      await subscriptionGateway.cancelSubscription(
+        subscription.stripeSubscriptionId
+      );
     } catch (err) {
       await userRepo.save(user.with({ deletedAt: null }));
       throw err;

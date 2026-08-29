@@ -81,13 +81,9 @@ beforeAll(async () => {
     email: "place-order-infra-test@example.com",
     first_name: "テスト",
     last_name: "太郎",
-    rank: "advanced",
+    rank_code: "advanced",
     onboarding_completed: true,
-    subscribed_at: new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1
-    ).toISOString(),
+    billing_anchor_day: 1,
   });
 
   await supabase.from("addresses").insert({
@@ -153,7 +149,7 @@ describe("placeOrder（実DB・7ランクのスナップショット）", () => 
   it("注文後にユーザーのランクを変更しても、保存済み注文の rankAtOrder は変わらない", async () => {
     await supabase
       .from("users")
-      .update({ rank: "premium" })
+      .update({ rank_code: "premium" })
       .eq("id", TEST_USER_ID);
 
     const { data: order } = await supabase
@@ -192,13 +188,9 @@ async function seedSplitUser() {
     email: "place-order-split-infra-test@example.com",
     first_name: "テスト",
     last_name: "花子",
-    rank: "advanced",
+    rank_code: "advanced",
     onboarding_completed: true,
-    subscribed_at: new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1
-    ).toISOString(),
+    billing_anchor_day: 1,
   });
 
   await supabase.from("addresses").insert({

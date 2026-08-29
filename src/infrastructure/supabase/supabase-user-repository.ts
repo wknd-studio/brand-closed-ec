@@ -12,12 +12,11 @@ type UserRow = {
   last_name: string;
   phone_number: string;
   profile_completed_at: string | null;
-  rank: string;
-  subscribed_at: string | null;
+  rank_code: string;
+  billing_anchor_day: number | null;
   onboarding_completed: boolean;
   deleted_at: string | null;
   stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
 };
 
 function toUser(row: UserRow): User {
@@ -31,17 +30,16 @@ function toUser(row: UserRow): User {
     profileCompletedAt: row.profile_completed_at
       ? new Date(row.profile_completed_at)
       : null,
-    rank: MemberRank.of(row.rank),
-    subscribedAt: row.subscribed_at ? new Date(row.subscribed_at) : null,
+    rank: MemberRank.of(row.rank_code),
+    billingAnchorDay: row.billing_anchor_day,
     onboardingCompleted: row.onboarding_completed,
     deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
     stripeCustomerId: row.stripe_customer_id,
-    stripeSubscriptionId: row.stripe_subscription_id,
   });
 }
 
 const SELECT_FIELDS =
-  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank, subscribed_at, onboarding_completed, deleted_at, stripe_customer_id, stripe_subscription_id";
+  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id";
 
 export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -73,12 +71,11 @@ export class SupabaseUserRepository implements UserRepository {
       last_name: user.lastName,
       phone_number: user.phoneNumber,
       profile_completed_at: user.profileCompletedAt?.toISOString() ?? null,
-      rank: user.rank.value,
-      subscribed_at: user.subscribedAt?.toISOString() ?? null,
+      rank_code: user.rank.value,
+      billing_anchor_day: user.billingAnchorDay,
       onboarding_completed: user.onboardingCompleted,
       deleted_at: user.deletedAt?.toISOString() ?? null,
       stripe_customer_id: user.stripeCustomerId,
-      stripe_subscription_id: user.stripeSubscriptionId,
     });
   }
 }
