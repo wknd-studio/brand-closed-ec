@@ -107,10 +107,6 @@ describe("organizations: rank_code/initial_fee_paid_rank_code", () => {
       name: "ランクカラムテスト株式会社",
       representative_name: "代表 太郎",
       phone_number: "0300000002",
-      postal_code: "1000001",
-      prefecture: "東京都",
-      city: "千代田区",
-      address_line1: "1-1-1",
       invoice_registration_number: "T1000000000011",
     });
     expect(error).toBeNull();

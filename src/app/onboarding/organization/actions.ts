@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
 import { SupabaseOrganizationMembershipRepository } from "@/infrastructure/supabase/supabase-organization-membership-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { ClerkOrganizationGateway } from "@/infrastructure/clerk/clerk-organization-gateway";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
@@ -69,6 +70,7 @@ export async function createOrganizationAction(
         membershipRepo: new SupabaseOrganizationMembershipRepository(db),
         organizationGateway: new ClerkOrganizationGateway(),
         userRepo: new SupabaseUserRepository(db),
+        addressRepo: new SupabaseAddressRepository(db),
       }
     );
 

@@ -8,11 +8,6 @@ interface OrganizationProps {
   name: string;
   representativeName: string;
   phoneNumber: string;
-  postalCode: string;
-  prefecture: string;
-  city: string;
-  addressLine1: string;
-  addressLine2: string | null;
   invoiceRegistrationNumber: string;
   onboardingCompleted: boolean;
   rank: MemberRank;
@@ -28,11 +23,6 @@ export class Organization {
   readonly name: string;
   readonly representativeName: string;
   readonly phoneNumber: string;
-  readonly postalCode: string;
-  readonly prefecture: string;
-  readonly city: string;
-  readonly addressLine1: string;
-  readonly addressLine2: string | null;
   readonly invoiceRegistrationNumber: string;
   readonly onboardingCompleted: boolean;
   readonly rank: MemberRank;
@@ -47,11 +37,6 @@ export class Organization {
     this.name = props.name;
     this.representativeName = props.representativeName;
     this.phoneNumber = props.phoneNumber;
-    this.postalCode = props.postalCode;
-    this.prefecture = props.prefecture;
-    this.city = props.city;
-    this.addressLine1 = props.addressLine1;
-    this.addressLine2 = props.addressLine2;
     this.invoiceRegistrationNumber = props.invoiceRegistrationNumber;
     this.onboardingCompleted = props.onboardingCompleted;
     this.rank = props.rank;
@@ -76,11 +61,6 @@ export class Organization {
       name: this.name,
       representativeName: this.representativeName,
       phoneNumber: this.phoneNumber,
-      postalCode: this.postalCode,
-      prefecture: this.prefecture,
-      city: this.city,
-      addressLine1: this.addressLine1,
-      addressLine2: this.addressLine2,
       invoiceRegistrationNumber: this.invoiceRegistrationNumber,
       onboardingCompleted: this.onboardingCompleted,
       rank: this.rank,

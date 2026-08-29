@@ -5,6 +5,7 @@ import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-
 import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
 import { SupabaseOrganizationMembershipRepository } from "@/infrastructure/supabase/supabase-organization-membership-repository";
 import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
+import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { createOrganization } from "@/use-cases/create-organization";
 import { selectPlan } from "@/use-cases/select-plan";
 import { completeOrganizationSubscriptionOnboarding } from "@/use-cases/complete-organization-subscription-onboarding";
@@ -52,6 +53,7 @@ async function cleanup() {
       .delete()
       .eq("organization_id", org.id);
     await supabase.from("subscriptions").delete().eq("organization_id", org.id);
+    await supabase.from("addresses").delete().eq("organization_id", org.id);
     await supabase.from("organizations").delete().eq("id", org.id);
   }
   await supabase.from("users").delete().eq("clerk_user_id", TEST_CLERK_USER_ID);
@@ -68,6 +70,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
     const membershipRepo = new SupabaseOrganizationMembershipRepository(
       supabase
     );
+    const addressRepo = new SupabaseAddressRepository(supabase);
 
     await userRepo.save(
       User.of({
@@ -107,6 +110,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         membershipRepo,
         organizationGateway: makeOrganizationGateway(),
         userRepo,
+        addressRepo,
       }
     );
 
@@ -133,6 +137,17 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
     );
     expect(membership).not.toBeNull();
     expect(membership!.clerkRole).toBe("org:admin");
+
+    // 本店所在地はaddresses（type='headquarters'）に統合済み
+    // （docs/db-schema-redesign.md移行方針5番）
+    const { data: headquartersAddress } = await supabase
+      .from("addresses")
+      .select("postal_code, prefecture, city, address_line1, type")
+      .eq("organization_id", createResult.organizationId)
+      .eq("type", "headquarters")
+      .single();
+    expect(headquartersAddress?.postal_code).toBe("1000001");
+    expect(headquartersAddress?.address_line1).toBe("1-1-1");
 
     const planResult = await selectPlan(
       {

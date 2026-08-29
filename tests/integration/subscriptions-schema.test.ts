@@ -89,10 +89,6 @@ beforeAll(async () => {
     name: "組織A",
     representative_name: "代表A",
     phone_number: "0300000001",
-    postal_code: "1000001",
-    prefecture: "東京都",
-    city: "千代田区",
-    address_line1: "1-1-1",
     invoice_registration_number: "T1000000000010",
   });
   if (orgError) throw orgError;

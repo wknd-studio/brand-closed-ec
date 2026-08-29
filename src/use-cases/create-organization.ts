@@ -1,6 +1,7 @@
 import { Organization } from "@/domain/entities/organization";
 import { OrganizationMembership } from "@/domain/entities/organization-membership";
 import { User } from "@/domain/entities/user";
+import { Address } from "@/domain/entities/address";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
@@ -8,6 +9,7 @@ import type { OrganizationRepository } from "@/repositories/organization-reposit
 import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
 import type { OrganizationGateway } from "@/repositories/organization-gateway";
 import type { UserRepository } from "@/repositories/user-repository";
+import type { AddressRepository } from "@/repositories/address-repository";
 
 const INVOICE_REGISTRATION_NUMBER_PATTERN = /^T\d{13}$/;
 
@@ -36,6 +38,7 @@ export type CreateOrganizationDeps = {
   membershipRepo: OrganizationMembershipRepository;
   organizationGateway: OrganizationGateway;
   userRepo: UserRepository;
+  addressRepo: AddressRepository;
 };
 
 export type CreateOrganizationResult =
@@ -49,8 +52,13 @@ export async function createOrganization(
   input: CreateOrganizationInput,
   deps: CreateOrganizationDeps
 ): Promise<CreateOrganizationResult> {
-  const { organizationRepo, membershipRepo, organizationGateway, userRepo } =
-    deps;
+  const {
+    organizationRepo,
+    membershipRepo,
+    organizationGateway,
+    userRepo,
+    addressRepo,
+  } = deps;
 
   if (
     !INVOICE_REGISTRATION_NUMBER_PATTERN.test(input.invoiceRegistrationNumber)
@@ -104,11 +112,6 @@ export async function createOrganization(
     name: input.organizationName,
     representativeName: `${input.representativeLastName}${input.representativeFirstName}`,
     phoneNumber: phoneNumber.value,
-    postalCode: input.address.postalCode,
-    prefecture: input.address.prefecture,
-    city: input.address.city,
-    addressLine1: input.address.addressLine1,
-    addressLine2: input.address.addressLine2 ?? null,
     invoiceRegistrationNumber: input.invoiceRegistrationNumber,
     onboardingCompleted: false,
     rank: MemberRank.of("starter"),
@@ -118,6 +121,23 @@ export async function createOrganization(
     deletedAt: null,
   });
   await organizationRepo.save(organization);
+
+  // 本店所在地はaddresses（type='headquarters'）に統合済み（docs/db-schema-redesign.md
+  // 移行方針5番）。1組織1件の部分UNIQUE制約があるため、代表者本人をuser_idとして登録する
+  const headquartersAddress = Address.of({
+    id: crypto.randomUUID(),
+    type: "headquarters",
+    isDefault: true,
+    recipientLastName: input.representativeLastName,
+    recipientFirstName: input.representativeFirstName,
+    postalCode: input.address.postalCode,
+    prefecture: input.address.prefecture,
+    city: input.address.city,
+    addressLine1: input.address.addressLine1,
+    addressLine2: input.address.addressLine2 ?? "",
+    phoneNumber: phoneNumber.value,
+  });
+  await addressRepo.save(headquartersAddress, user.id, organization.id);
 
   const membership = OrganizationMembership.of({
     id: crypto.randomUUID(),

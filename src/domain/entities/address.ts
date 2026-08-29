@@ -1,6 +1,6 @@
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 
-export type AddressType = "shipping" | "billing";
+export type AddressType = "shipping" | "billing" | "headquarters";
 
 interface AddressProps {
   id: string;
