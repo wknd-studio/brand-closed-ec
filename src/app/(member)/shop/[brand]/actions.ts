@@ -18,11 +18,11 @@ export async function fetchMoreProducts(
   const supabase = createAdminClient();
   const { data: user } = await supabase
     .from("users")
-    .select("rank")
+    .select("rank_code")
     .eq("clerk_user_id", userId)
     .single();
 
-  const allowedRanks = getAllowedRanks(user?.rank ?? "starter");
+  const allowedRanks = getAllowedRanks(user?.rank_code ?? "starter");
   const { products } = await fetchProducts({ allowedRanks, brand, offset });
   return products;
 }

@@ -46,13 +46,9 @@ beforeAll(async () => {
     email: "monthly-confirmed-infra-test@example.com",
     first_name: "テスト",
     last_name: "太郎",
-    rank: "advanced",
+    rank_code: "advanced",
     onboarding_completed: true,
-    subscribed_at: new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1
-    ).toISOString(),
+    billing_anchor_day: 1,
   });
 
   await supabase.from("orders").insert({

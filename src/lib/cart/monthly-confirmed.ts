@@ -1,35 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 
 export type MonthlyUsageInfo = {
   confirmedAmount: number;
   monthlyLimit: number;
 };
-
-function getCurrentMonthPeriod(subscribedAt: string | null): {
-  start: Date;
-  end: Date;
-} {
-  const now = new Date();
-  if (!subscribedAt) {
-    return {
-      start: new Date(now.getFullYear(), now.getMonth(), 1),
-      end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
-    };
-  }
-  const day = new Date(subscribedAt).getDate();
-  const startThisMonth = new Date(now.getFullYear(), now.getMonth(), day);
-  if (now >= startThisMonth) {
-    return {
-      start: startThisMonth,
-      end: new Date(now.getFullYear(), now.getMonth() + 1, day),
-    };
-  }
-  return {
-    start: new Date(now.getFullYear(), now.getMonth() - 1, day),
-    end: startThisMonth,
-  };
-}
 
 export async function getMonthlyUsageInfo(
   clerkUserId: string
@@ -38,14 +14,16 @@ export async function getMonthlyUsageInfo(
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, rank, subscribed_at")
+    .select("id, rank_code, billing_anchor_day")
     .eq("clerk_user_id", clerkUserId)
     .single();
 
   if (!user) return { confirmedAmount: 0, monthlyLimit: 0 };
 
-  const monthlyLimit = MemberRank.of(user.rank).getMonthlyLimit().amount;
-  const { start, end } = getCurrentMonthPeriod(user.subscribed_at);
+  const monthlyLimit = MemberRank.of(user.rank_code).getMonthlyLimit().amount;
+  const { start, end } = MonthlyPeriod.fromBillingAnchorDay(
+    user.billing_anchor_day
+  );
 
   const { data: orders } = await supabase
     .from("orders")
