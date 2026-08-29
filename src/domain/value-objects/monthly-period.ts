@@ -47,4 +47,10 @@ export class MonthlyPeriod {
   contains(date: Date): boolean {
     return date >= this.start && date < this.end;
   }
+
+  // docs/domain/subscription-billing.md: billing_anchor_dayはCHECK制約で
+  // 1〜28に制限されるため、29〜31日は28に丸める
+  static toBillingAnchorDay(date: Date): number {
+    return Math.min(date.getDate(), 28);
+  }
 }

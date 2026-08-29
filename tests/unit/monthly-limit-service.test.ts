@@ -16,11 +16,10 @@ function makeUser(rankValue: string): User {
     phoneNumber: "09012345678",
     profileCompletedAt: new Date(2026, 0, 1),
     rank: MemberRank.of(rankValue),
-    subscribedAt: new Date(2026, 0, 1),
+    billingAnchorDay: 1,
     onboardingCompleted: true,
     deletedAt: null,
     stripeCustomerId: null,
-    stripeSubscriptionId: null,
   });
 }
 

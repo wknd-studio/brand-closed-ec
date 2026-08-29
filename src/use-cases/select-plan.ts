@@ -69,11 +69,10 @@ export async function selectPlan(
         phoneNumber: phoneNumber.value,
         profileCompletedAt: null,
         rank: MemberRank.of(input.plan),
-        subscribedAt: null,
+        billingAnchorDay: null,
         onboardingCompleted: false,
         deletedAt: null,
         stripeCustomerId: null,
-        stripeSubscriptionId: null,
       });
 
   await userRepo.save(user);

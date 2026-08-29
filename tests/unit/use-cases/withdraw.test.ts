@@ -10,6 +10,8 @@ import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-erro
 import {
   makeUserRepo,
   makeOrderRepo,
+  makeSubscriptionRepo,
+  makeSubscriptionSnapshot,
   makeSubscriptionGateway,
   makeAccountGateway,
   makeUser,
@@ -27,6 +29,7 @@ describe("withdraw", () => {
         {
           userRepo,
           orderRepo: makeOrderRepo(),
+          subscriptionRepo: makeSubscriptionRepo(),
           subscriptionGateway: makeSubscriptionGateway(),
           accountGateway: makeAccountGateway(),
         }
@@ -45,6 +48,7 @@ describe("withdraw", () => {
         {
           userRepo,
           orderRepo,
+          subscriptionRepo: makeSubscriptionRepo(),
           subscriptionGateway: makeSubscriptionGateway(),
           accountGateway: makeAccountGateway(),
         }
@@ -53,17 +57,24 @@ describe("withdraw", () => {
   });
 
   it("有料会員: Supabase論理削除 → Stripe解約 → Clerk削除を順に実行する", async () => {
-    const user = makeUser({ rank: "basic" }).with({
-      stripeSubscriptionId: "sub_123",
-    });
+    const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
+    const subscriptionRepo = makeSubscriptionRepo(
+      makeSubscriptionSnapshot({ stripeSubscriptionId: "sub_123" })
+    );
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
 
     await withdraw(
       { clerkUserId: "clerk-1" },
-      { userRepo, orderRepo, subscriptionGateway, accountGateway }
+      {
+        userRepo,
+        orderRepo,
+        subscriptionRepo,
+        subscriptionGateway,
+        accountGateway,
+      }
     );
 
     const savedUser = vi.mocked(userRepo.save).mock.calls[0][0];
@@ -74,18 +85,23 @@ describe("withdraw", () => {
     expect(accountGateway.deleteUser).toHaveBeenCalledWith("clerk-1");
   });
 
-  it("stripeSubscriptionIdがない会員: Stripe解約をスキップする", async () => {
-    const user = makeUser({ rank: "starter" }).with({
-      stripeSubscriptionId: null,
-    });
+  it("アクティブなsubscriptionがない会員: Stripe解約をスキップする", async () => {
+    const user = makeUser({ rank: "starter" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
+    const subscriptionRepo = makeSubscriptionRepo(null);
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
 
     await withdraw(
       { clerkUserId: "clerk-1" },
-      { userRepo, orderRepo, subscriptionGateway, accountGateway }
+      {
+        userRepo,
+        orderRepo,
+        subscriptionRepo,
+        subscriptionGateway,
+        accountGateway,
+      }
     );
 
     expect(subscriptionGateway.cancelSubscription).not.toHaveBeenCalled();
@@ -93,11 +109,12 @@ describe("withdraw", () => {
   });
 
   it("Stripe解約失敗時はdeleted_atをロールバックしてエラーをthrowする", async () => {
-    const user = makeUser({ rank: "basic" }).with({
-      stripeSubscriptionId: "sub_123",
-    });
+    const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
+    const subscriptionRepo = makeSubscriptionRepo(
+      makeSubscriptionSnapshot({ stripeSubscriptionId: "sub_123" })
+    );
     const subscriptionGateway = makeSubscriptionGateway();
     vi.mocked(subscriptionGateway.cancelSubscription).mockRejectedValue(
       new Error("Stripe error")
@@ -107,7 +124,13 @@ describe("withdraw", () => {
     await expect(
       withdraw(
         { clerkUserId: "clerk-1" },
-        { userRepo, orderRepo, subscriptionGateway, accountGateway }
+        {
+          userRepo,
+          orderRepo,
+          subscriptionRepo,
+          subscriptionGateway,
+          accountGateway,
+        }
       )
     ).rejects.toThrow();
 
@@ -117,11 +140,12 @@ describe("withdraw", () => {
   });
 
   it("Clerk削除失敗時もvoidで正常終了し、console.errorでログを残す", async () => {
-    const user = makeUser({ rank: "basic" }).with({
-      stripeSubscriptionId: "sub_123",
-    });
+    const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
+    const subscriptionRepo = makeSubscriptionRepo(
+      makeSubscriptionSnapshot({ stripeSubscriptionId: "sub_123" })
+    );
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
     vi.mocked(accountGateway.deleteUser).mockRejectedValue(
@@ -132,7 +156,13 @@ describe("withdraw", () => {
     await expect(
       withdraw(
         { clerkUserId: "clerk-1" },
-        { userRepo, orderRepo, subscriptionGateway, accountGateway }
+        {
+          userRepo,
+          orderRepo,
+          subscriptionRepo,
+          subscriptionGateway,
+          accountGateway,
+        }
       )
     ).resolves.toBeUndefined();
 
@@ -141,11 +171,12 @@ describe("withdraw", () => {
   });
 
   it("Clerk削除失敗時にSentry.captureExceptionを呼ぶ", async () => {
-    const user = makeUser({ rank: "basic" }).with({
-      stripeSubscriptionId: "sub_123",
-    });
+    const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
+    const subscriptionRepo = makeSubscriptionRepo(
+      makeSubscriptionSnapshot({ stripeSubscriptionId: "sub_123" })
+    );
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
     const error = new Error("Clerk error");
@@ -155,7 +186,13 @@ describe("withdraw", () => {
 
     await withdraw(
       { clerkUserId: "clerk-1" },
-      { userRepo, orderRepo, subscriptionGateway, accountGateway }
+      {
+        userRepo,
+        orderRepo,
+        subscriptionRepo,
+        subscriptionGateway,
+        accountGateway,
+      }
     );
 
     expect(Sentry.captureException).toHaveBeenCalledWith(

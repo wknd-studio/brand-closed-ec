@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const constructEventMock = vi.fn();
+const retrieveSubscriptionMock = vi.fn().mockResolvedValue({
+  status: "active",
+  items: {
+    data: [
+      {
+        current_period_start: Math.floor(new Date(2026, 0, 1).getTime() / 1000),
+        current_period_end: Math.floor(new Date(2026, 1, 1).getTime() / 1000),
+      },
+    ],
+  },
+});
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
@@ -10,6 +21,7 @@ vi.mock("@sentry/nextjs", () => ({
 vi.mock("@/lib/stripe", () => ({
   getStripe: () => ({
     webhooks: { constructEvent: constructEventMock },
+    subscriptions: { retrieve: retrieveSubscriptionMock },
   }),
 }));
 
@@ -21,6 +33,9 @@ vi.mock("@/infrastructure/supabase/supabase-order-repository", () => ({
 }));
 vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
   SupabaseUserRepository: vi.fn(),
+}));
+vi.mock("@/infrastructure/supabase/supabase-subscription-repository", () => ({
+  SupabaseSubscriptionRepository: vi.fn(),
 }));
 vi.mock("@/infrastructure/resend/resend-notification-service", () => ({
   ResendNotificationService: vi.fn(),

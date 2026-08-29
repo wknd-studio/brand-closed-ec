@@ -11,11 +11,10 @@ interface UserProps {
   phoneNumber: string;
   profileCompletedAt: Date | null;
   rank: MemberRank;
-  subscribedAt: Date | null;
+  billingAnchorDay: number | null;
   onboardingCompleted: boolean;
   deletedAt: Date | null;
   stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
 }
 
 export class User {
@@ -27,11 +26,10 @@ export class User {
   readonly phoneNumber: string;
   readonly profileCompletedAt: Date | null;
   readonly rank: MemberRank;
-  readonly subscribedAt: Date | null;
+  readonly billingAnchorDay: number | null;
   readonly onboardingCompleted: boolean;
   readonly deletedAt: Date | null;
   readonly stripeCustomerId: string | null;
-  readonly stripeSubscriptionId: string | null;
 
   private constructor(props: UserProps) {
     this.id = props.id;
@@ -42,11 +40,10 @@ export class User {
     this.phoneNumber = props.phoneNumber;
     this.profileCompletedAt = props.profileCompletedAt;
     this.rank = props.rank;
-    this.subscribedAt = props.subscribedAt;
+    this.billingAnchorDay = props.billingAnchorDay;
     this.onboardingCompleted = props.onboardingCompleted;
     this.deletedAt = props.deletedAt;
     this.stripeCustomerId = props.stripeCustomerId;
-    this.stripeSubscriptionId = props.stripeSubscriptionId;
   }
 
   static of(props: UserProps): User {
@@ -67,16 +64,15 @@ export class User {
       phoneNumber: this.phoneNumber,
       profileCompletedAt: this.profileCompletedAt,
       rank: this.rank,
-      subscribedAt: this.subscribedAt,
+      billingAnchorDay: this.billingAnchorDay,
       onboardingCompleted: this.onboardingCompleted,
       deletedAt: this.deletedAt,
       stripeCustomerId: this.stripeCustomerId,
-      stripeSubscriptionId: this.stripeSubscriptionId,
     };
   }
 
   getMonthlyPeriod(now: Date = new Date()): MonthlyPeriod {
-    return MonthlyPeriod.fromSubscribedAt(this.subscribedAt, now);
+    return MonthlyPeriod.fromBillingAnchorDay(this.billingAnchorDay, now);
   }
 
   getMonthlyLimit(): Money {

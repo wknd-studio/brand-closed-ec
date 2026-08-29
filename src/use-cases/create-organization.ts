@@ -86,11 +86,10 @@ export async function createOrganization(
         phoneNumber: phoneNumber.value,
         profileCompletedAt: null,
         rank: MemberRank.of("starter"),
-        subscribedAt: null,
+        billingAnchorDay: null,
         onboardingCompleted: false,
         deletedAt: null,
         stripeCustomerId: null,
-        stripeSubscriptionId: null,
       });
   await userRepo.save(user);
 
@@ -114,10 +113,7 @@ export async function createOrganization(
     onboardingCompleted: false,
     rank: MemberRank.of("starter"),
     billingAnchorDay: null,
-    pendingRank: null,
     stripeCustomerId: null,
-    stripeSubscriptionId: null,
-    stripeSubscriptionScheduleId: null,
     initialFeePaidRank: null,
     deletedAt: null,
   });

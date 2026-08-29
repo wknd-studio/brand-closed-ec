@@ -4,6 +4,7 @@ import type { Database } from "@/types/database.types";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
 import { SupabaseOrganizationMembershipRepository } from "@/infrastructure/supabase/supabase-organization-membership-repository";
+import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { createOrganization } from "@/use-cases/create-organization";
 import { selectPlan } from "@/use-cases/select-plan";
 import { completeOrganizationSubscriptionOnboarding } from "@/use-cases/complete-organization-subscription-onboarding";
@@ -50,6 +51,7 @@ async function cleanup() {
       .from("organization_memberships")
       .delete()
       .eq("organization_id", org.id);
+    await supabase.from("subscriptions").delete().eq("organization_id", org.id);
     await supabase.from("organizations").delete().eq("id", org.id);
   }
   await supabase.from("users").delete().eq("clerk_user_id", TEST_CLERK_USER_ID);
@@ -77,11 +79,10 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         phoneNumber: "",
         profileCompletedAt: null,
         rank: MemberRank.of("starter"),
-        subscribedAt: null,
+        billingAnchorDay: null,
         onboardingCompleted: false,
         deletedAt: null,
         stripeCustomerId: null,
-        stripeSubscriptionId: null,
       })
     );
 
@@ -162,6 +163,7 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
     expect(organizationBeforePayment!.onboardingCompleted).toBe(false);
 
     // Stripe Webhook（checkout.session.completed）相当の処理
+    const subscriptionRepo = new SupabaseSubscriptionRepository(supabase);
     await completeOrganizationSubscriptionOnboarding(
       {
         organizationId: createResult.organizationId,
@@ -169,10 +171,14 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
         plan: "advanced",
         stripeCustomerId: "cus_test_org",
         stripeSubscriptionId: "sub_test_org",
+        status: "active",
+        currentPeriodStart: new Date(2026, 0, 1),
+        currentPeriodEnd: new Date(2026, 1, 1),
       },
       {
         organizationRepo,
         userRepo,
+        subscriptionRepo,
         accountGateway: makeAccountGateway(),
       }
     );
@@ -183,7 +189,11 @@ describe("法人組織作成〜プラン選択のオンボーディング（実D
     expect(updatedOrganization!.rank.value).toBe("advanced");
     expect(updatedOrganization!.onboardingCompleted).toBe(true);
     expect(updatedOrganization!.stripeCustomerId).toBe("cus_test_org");
-    expect(updatedOrganization!.stripeSubscriptionId).toBe("sub_test_org");
+
+    const subscription = await subscriptionRepo.findActiveByOrganizationId(
+      createResult.organizationId
+    );
+    expect(subscription!.stripeSubscriptionId).toBe("sub_test_org");
 
     const updatedUser = await userRepo.findByClerkUserId(TEST_CLERK_USER_ID);
     expect(updatedUser!.onboardingCompleted).toBe(true);

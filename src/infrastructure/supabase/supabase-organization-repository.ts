@@ -17,13 +17,10 @@ type OrganizationRow = {
   address_line2: string | null;
   invoice_registration_number: string;
   onboarding_completed: boolean;
-  rank: string;
+  rank_code: string;
   billing_anchor_day: number | null;
-  pending_rank: string | null;
   stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
-  stripe_subscription_schedule_id: string | null;
-  initial_fee_paid_rank: string | null;
+  initial_fee_paid_rank_code: string | null;
   deleted_at: string | null;
 };
 
@@ -41,21 +38,18 @@ function toOrganization(row: OrganizationRow): Organization {
     addressLine2: row.address_line2,
     invoiceRegistrationNumber: row.invoice_registration_number,
     onboardingCompleted: row.onboarding_completed,
-    rank: MemberRank.of(row.rank),
+    rank: MemberRank.of(row.rank_code),
     billingAnchorDay: row.billing_anchor_day,
-    pendingRank: row.pending_rank ? MemberRank.of(row.pending_rank) : null,
     stripeCustomerId: row.stripe_customer_id,
-    stripeSubscriptionId: row.stripe_subscription_id,
-    stripeSubscriptionScheduleId: row.stripe_subscription_schedule_id,
-    initialFeePaidRank: row.initial_fee_paid_rank
-      ? MemberRank.of(row.initial_fee_paid_rank)
+    initialFeePaidRank: row.initial_fee_paid_rank_code
+      ? MemberRank.of(row.initial_fee_paid_rank_code)
       : null,
     deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
   });
 }
 
 const SELECT_FIELDS =
-  "id, clerk_org_id, name, representative_name, phone_number, postal_code, prefecture, city, address_line1, address_line2, invoice_registration_number, onboarding_completed, rank, billing_anchor_day, pending_rank, stripe_customer_id, stripe_subscription_id, stripe_subscription_schedule_id, initial_fee_paid_rank, deleted_at";
+  "id, clerk_org_id, name, representative_name, phone_number, postal_code, prefecture, city, address_line1, address_line2, invoice_registration_number, onboarding_completed, rank_code, billing_anchor_day, stripe_customer_id, initial_fee_paid_rank_code, deleted_at";
 
 export class SupabaseOrganizationRepository implements OrganizationRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -102,14 +96,11 @@ export class SupabaseOrganizationRepository implements OrganizationRepository {
       address_line2: organization.addressLine2,
       invoice_registration_number: organization.invoiceRegistrationNumber,
       onboarding_completed: organization.onboardingCompleted,
-      rank: organization.rank.value,
+      rank_code: organization.rank.value,
       billing_anchor_day: organization.billingAnchorDay,
-      pending_rank: organization.pendingRank?.value ?? null,
       stripe_customer_id: organization.stripeCustomerId,
-      stripe_subscription_id: organization.stripeSubscriptionId,
-      stripe_subscription_schedule_id:
-        organization.stripeSubscriptionScheduleId,
-      initial_fee_paid_rank: organization.initialFeePaidRank?.value ?? null,
+      initial_fee_paid_rank_code:
+        organization.initialFeePaidRank?.value ?? null,
       deleted_at: organization.deletedAt?.toISOString() ?? null,
     });
   }
