@@ -21,7 +21,7 @@ const baseOrder = {
   user_id: USER_ID,
   shipping_address_snapshot: {},
   billing_address_snapshot: {},
-  rank_at_order: "starter",
+  rank_at_order: "starter" as const,
   monthly_limit_at_order: 0,
 };
 
