@@ -69,13 +69,13 @@ test.describe("法人セルフサインアップ", () => {
 
     const { data: organization } = await supabaseAdmin()
       .from("organizations")
-      .select("id, rank, onboarding_completed")
+      .select("id, rank_code, onboarding_completed")
       .eq("name", organizationName)
       .single();
     expect(organization).not.toBeNull();
-    // rankは決済ページ遷移前に仮保存されるが、onboarding_completedは
+    // rank_codeは決済ページ遷移前に仮保存されるが、onboarding_completedは
     // Stripe Webhook（決済完了）を経てから確定するため、この時点ではfalseのまま
-    expect(organization!.rank).toBe("starter");
+    expect(organization!.rank_code).toBe("starter");
     expect(organization!.onboarding_completed).toBe(false);
 
     const { data: memberships } = await supabaseAdmin()

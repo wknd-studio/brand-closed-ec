@@ -132,7 +132,7 @@ export async function signUpAndCompleteOnboarding(
     .from("users")
     .update({
       onboarding_completed: true,
-      subscribed_at: new Date().toISOString(),
+      billing_anchor_day: Math.min(new Date().getDate(), 28),
     })
     .eq("email", emailAddress);
   if (error) {
