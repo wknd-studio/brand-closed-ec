@@ -2,9 +2,10 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
 import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, type Page } from "@playwright/test";
+import type { Database } from "@/types/database.types";
 
 function supabaseAdmin() {
-  return createClient(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );

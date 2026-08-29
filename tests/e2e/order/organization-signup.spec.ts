@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import {
   signUpViaInvitation,
   cleanupTestUser,
@@ -10,7 +11,7 @@ const TEST_EMAIL = "info+clerk_test_org_signup@wknd-studio.com";
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 function supabaseAdmin() {
-  return createClient(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
