@@ -12,27 +12,26 @@ function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
     phoneNumber: "09012345678",
     profileCompletedAt: new Date(2026, 0, 10),
     rank: MemberRank.of("basic"),
-    subscribedAt: new Date(2026, 0, 10),
+    billingAnchorDay: 10,
     onboardingCompleted: true,
     deletedAt: null,
     stripeCustomerId: null,
-    stripeSubscriptionId: null,
     ...overrides,
   });
 }
 
 describe("User", () => {
   describe("getMonthlyPeriod()", () => {
-    it("subscribedAt の日付を基準にした月次期間を返す", () => {
-      const user = makeUser({ subscribedAt: new Date(2026, 0, 10) });
+    it("billingAnchorDayを基準にした月次期間を返す", () => {
+      const user = makeUser({ billingAnchorDay: 10 });
       const now = new Date(2026, 5, 15);
       const period = user.getMonthlyPeriod(now);
       expect(period.start).toEqual(new Date(2026, 5, 10));
       expect(period.end).toEqual(new Date(2026, 6, 10));
     });
 
-    it("subscribedAt が null のとき当月1日〜翌月1日", () => {
-      const user = makeUser({ subscribedAt: null });
+    it("billingAnchorDayがnullのとき当月1日〜翌月1日", () => {
+      const user = makeUser({ billingAnchorDay: null });
       const now = new Date(2026, 5, 15);
       const period = user.getMonthlyPeriod(now);
       expect(period.start).toEqual(new Date(2026, 5, 1));

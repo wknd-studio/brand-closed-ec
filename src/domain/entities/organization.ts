@@ -17,10 +17,7 @@ interface OrganizationProps {
   onboardingCompleted: boolean;
   rank: MemberRank;
   billingAnchorDay: number | null;
-  pendingRank: MemberRank | null;
   stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  stripeSubscriptionScheduleId: string | null;
   initialFeePaidRank: MemberRank | null;
   deletedAt: Date | null;
 }
@@ -40,10 +37,7 @@ export class Organization {
   readonly onboardingCompleted: boolean;
   readonly rank: MemberRank;
   readonly billingAnchorDay: number | null;
-  readonly pendingRank: MemberRank | null;
   readonly stripeCustomerId: string | null;
-  readonly stripeSubscriptionId: string | null;
-  readonly stripeSubscriptionScheduleId: string | null;
   readonly initialFeePaidRank: MemberRank | null;
   readonly deletedAt: Date | null;
 
@@ -62,10 +56,7 @@ export class Organization {
     this.onboardingCompleted = props.onboardingCompleted;
     this.rank = props.rank;
     this.billingAnchorDay = props.billingAnchorDay;
-    this.pendingRank = props.pendingRank;
     this.stripeCustomerId = props.stripeCustomerId;
-    this.stripeSubscriptionId = props.stripeSubscriptionId;
-    this.stripeSubscriptionScheduleId = props.stripeSubscriptionScheduleId;
     this.initialFeePaidRank = props.initialFeePaidRank;
     this.deletedAt = props.deletedAt;
   }
@@ -94,10 +85,7 @@ export class Organization {
       onboardingCompleted: this.onboardingCompleted,
       rank: this.rank,
       billingAnchorDay: this.billingAnchorDay,
-      pendingRank: this.pendingRank,
       stripeCustomerId: this.stripeCustomerId,
-      stripeSubscriptionId: this.stripeSubscriptionId,
-      stripeSubscriptionScheduleId: this.stripeSubscriptionScheduleId,
       initialFeePaidRank: this.initialFeePaidRank,
       deletedAt: this.deletedAt,
     };

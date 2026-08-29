@@ -26,11 +26,10 @@ export async function createUser(
     phoneNumber: "",
     profileCompletedAt: null,
     rank: MemberRank.of("starter"),
-    subscribedAt: null,
+    billingAnchorDay: null,
     onboardingCompleted: false,
     deletedAt: null,
     stripeCustomerId: null,
-    stripeSubscriptionId: null,
   });
 
   await deps.userRepo.save(user);

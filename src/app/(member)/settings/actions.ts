@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import type { AddressType } from "@/domain/entities/address";
@@ -132,6 +133,7 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
       {
         userRepo: new SupabaseUserRepository(supabase),
         orderRepo: new SupabaseOrderRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
         subscriptionGateway: new StripeSubscriptionGateway(),
         accountGateway: new ClerkAccountGateway(),
       }

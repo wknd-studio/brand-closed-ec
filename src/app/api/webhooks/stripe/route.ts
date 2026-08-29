@@ -10,8 +10,13 @@ import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
+import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import {
+  toSubscriptionStatus,
+  toSubscriptionPeriod,
+} from "@/infrastructure/stripe/stripe-subscription-mapper";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
 export async function POST(req: Request) {
@@ -78,6 +83,13 @@ export async function POST(req: Request) {
       }
 
       try {
+        const subscription = await getStripe().subscriptions.retrieve(
+          session.subscription as string
+        );
+        const { currentPeriodStart, currentPeriodEnd } =
+          toSubscriptionPeriod(subscription);
+        const status = toSubscriptionStatus(subscription.status);
+
         if (organizationId) {
           await Sentry.startSpan(
             {
@@ -92,12 +104,18 @@ export async function POST(req: Request) {
                   plan,
                   stripeCustomerId: session.customer as string,
                   stripeSubscriptionId: session.subscription as string,
+                  status,
+                  currentPeriodStart,
+                  currentPeriodEnd,
                 },
                 {
                   organizationRepo: new SupabaseOrganizationRepository(
                     createAdminClient()
                   ),
                   userRepo: new SupabaseUserRepository(createAdminClient()),
+                  subscriptionRepo: new SupabaseSubscriptionRepository(
+                    createAdminClient()
+                  ),
                   accountGateway: new ClerkAccountGateway(),
                 }
               )
@@ -112,9 +130,15 @@ export async function POST(req: Request) {
                   plan,
                   stripeCustomerId: session.customer as string,
                   stripeSubscriptionId: session.subscription as string,
+                  status,
+                  currentPeriodStart,
+                  currentPeriodEnd,
                 },
                 {
                   userRepo: new SupabaseUserRepository(createAdminClient()),
+                  subscriptionRepo: new SupabaseSubscriptionRepository(
+                    createAdminClient()
+                  ),
                   accountGateway: new ClerkAccountGateway(),
                 }
               )

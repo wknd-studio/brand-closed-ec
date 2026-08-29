@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "next-sanity";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import {
   cleanupTestUser,
   signUpAndCompleteOnboarding,
@@ -30,7 +31,7 @@ function sanityWriteClient() {
 }
 
 function supabaseAdmin() {
-  return createSupabaseClient(
+  return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );

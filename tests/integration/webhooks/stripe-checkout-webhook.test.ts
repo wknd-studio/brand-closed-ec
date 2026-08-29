@@ -79,9 +79,9 @@ beforeAll(async () => {
     email: "stripe-checkout-webhook-test@example.com",
     first_name: "テスト",
     last_name: "太郎",
-    rank: "starter",
+    rank_code: "starter",
     onboarding_completed: true,
-    subscribed_at: new Date().toISOString(),
+    billing_anchor_day: 1,
   });
 
   await supabase.from("addresses").insert({
