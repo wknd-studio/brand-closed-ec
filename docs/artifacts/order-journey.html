@@ -1,0 +1,940 @@
+<title>商品が届くまで</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --paper: #faf8f2;
+    --paper-raised: #ffffff;
+    --ink: #221f1a;
+    --ink-muted: #5a5445;
+    --ink-faint: #83795f;
+    --line: #e6e0d0;
+    --line-strong: #d6cdb8;
+    --accent: #8a6316;
+    --accent-foreground: #2a1f08;
+    --accent-soft: #f4ead0;
+    --accent-line: #e3c98a;
+    --success: #15803d;
+    --success-soft: #e3f3e8;
+    --warning: #9a4508;
+    --warning-soft: #faedd9;
+    --danger: #b91c1c;
+    --danger-soft: #fbe4e4;
+    --lane-customer: #8a6316;
+    --lane-system: #5b6472;
+    --lane-admin: #2a1f08;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17150f;
+      --paper: #1d1a13;
+      --paper-raised: #232017;
+      --ink: #f3efe2;
+      --ink-muted: #d3c9ae;
+      --ink-faint: #a89b7c;
+      --line: #3a3325;
+      --line-strong: #4a422f;
+      --accent: #e8c766;
+      --accent-foreground: #2a1f08;
+      --accent-soft: #372b12;
+      --accent-line: #5c4a1e;
+      --success: #4ade80;
+      --success-soft: #16321f;
+      --warning: #f0a94e;
+      --warning-soft: #3a2a12;
+      --danger: #f5a3a3;
+      --danger-soft: #3a1616;
+      --lane-customer: #e8c766;
+      --lane-system: #b7bfca;
+      --lane-admin: #f3efe2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17150f;
+    --paper: #1d1a13;
+    --paper-raised: #232017;
+    --ink: #f3efe2;
+    --ink-muted: #d3c9ae;
+    --ink-faint: #a89b7c;
+    --line: #3a3325;
+    --line-strong: #4a422f;
+    --accent: #e8c766;
+    --accent-foreground: #2a1f08;
+    --accent-soft: #372b12;
+    --accent-line: #5c4a1e;
+    --success: #4ade80;
+    --success-soft: #16321f;
+    --warning: #f0a94e;
+    --warning-soft: #3a2a12;
+    --danger: #f5a3a3;
+    --danger-soft: #3a1616;
+    --lane-customer: #e8c766;
+    --lane-system: #b7bfca;
+    --lane-admin: #f3efe2;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", -apple-system, sans-serif;
+    line-height: 1.9;
+    -webkit-font-smoothing: antialiased;
+  }
+  .serif {
+    font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "Noto Serif JP", serif;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 0 24px 120px; }
+
+  /* ---------- Hero ---------- */
+  header.hero {
+    padding: 88px 0 56px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 64px;
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 22px;
+  }
+  .eyebrow::before, .eyebrow::after {
+    content: "";
+    width: 28px;
+    height: 1px;
+    background: var(--accent-line);
+  }
+  h1.title {
+    font-size: clamp(2rem, 5vw, 2.8rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: 46em;
+    margin: 0 auto 20px;
+    color: var(--ink-muted);
+    font-size: 1.05rem;
+  }
+  .hero-note {
+    max-width: 40em;
+    margin: 0 auto;
+    color: var(--ink-faint);
+    font-size: 0.84rem;
+  }
+
+  section { margin: 96px 0; }
+  section:first-of-type { margin-top: 0; }
+  .section-head { margin-bottom: 36px; }
+  .section-num {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  h2 {
+    font-size: 1.55rem;
+    font-weight: 600;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  .section-desc { color: var(--ink-muted); max-width: 46em; font-size: 0.98rem; }
+  h3 { font-size: 1.08rem; font-weight: 700; margin: 40px 0 14px; }
+  h3:first-child { margin-top: 0; }
+  h4 { font-size: 0.98rem; font-weight: 700; margin: 0 0 8px; }
+  p { margin: 0 0 1em; }
+  p:last-child { margin-bottom: 0; }
+  .lead-p { font-size: 0.98rem; color: var(--ink); }
+  .sub-p { font-size: 0.92rem; color: var(--ink-muted); }
+  ul.detail-list, ol.detail-list {
+    margin: 0 0 1em;
+    padding-left: 1.3em;
+    font-size: 0.92rem;
+    color: var(--ink-muted);
+  }
+  .detail-list li { margin-bottom: 8px; }
+  .detail-list li::marker { color: var(--accent); }
+  .detail-list strong { color: var(--ink); font-weight: 700; }
+
+  /* ---------- Overview swimlane ---------- */
+  .swimlane-wrap {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper);
+    padding: 28px;
+    overflow-x: auto;
+  }
+  .swimlane {
+    display: grid;
+    grid-template-columns: 108px repeat(7, minmax(108px, 1fr));
+    gap: 2px;
+    min-width: 900px;
+  }
+  .lane-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 14px 10px;
+    color: var(--ink);
+  }
+  .lane-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .stage-head {
+    text-align: center;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--ink-muted);
+    padding: 0 6px 14px;
+    border-bottom: 2px solid var(--line-strong);
+  }
+  .cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 6px;
+    border-top: 1px solid var(--line);
+  }
+  .cell .mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cell .mark::after { content: ""; width: 10px; height: 10px; border-radius: 50%; }
+  .mark.customer { background: color-mix(in srgb, var(--lane-customer) 18%, transparent); }
+  .mark.customer::after { background: var(--lane-customer); }
+  .mark.system { background: color-mix(in srgb, var(--lane-system) 18%, transparent); }
+  .mark.system::after { background: var(--lane-system); }
+  .mark.admin { background: color-mix(in srgb, var(--lane-admin) 18%, transparent); }
+  .mark.admin::after { background: var(--lane-admin); }
+
+  .swimlane-legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 0.82rem;
+    color: var(--ink-muted);
+  }
+  .swimlane-legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swimlane-legend .dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  /* ---------- Step flow ---------- */
+  .step-flow {
+    display: flex;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding: 8px 4px 4px;
+    gap: 0;
+  }
+  .step {
+    flex: 1 0 auto;
+    min-width: 132px;
+    position: relative;
+    text-align: center;
+  }
+  .step::after {
+    content: "";
+    position: absolute;
+    top: 17px;
+    left: 54%;
+    width: 100%;
+    height: 2px;
+    background: var(--line-strong);
+    z-index: 0;
+  }
+  .step:last-child::after { display: none; }
+  .step-dot {
+    position: relative;
+    z-index: 1;
+    width: 34px;
+    height: 34px;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    background: var(--paper-raised);
+    border: 2px solid var(--line-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--ink-muted);
+  }
+  .step-dot.done { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-foreground); }
+  .step-label { font-size: 0.82rem; font-weight: 600; line-height: 1.5; }
+  .step-sub { font-size: 0.76rem; color: var(--ink-muted); margin-top: 2px; }
+
+  /* ---------- Definition table ---------- */
+  .def-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin: 20px 0;
+  }
+  .def-table th, .def-table td {
+    text-align: left;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .def-table th {
+    background: var(--paper);
+    font-weight: 700;
+    width: 30%;
+    color: var(--ink);
+  }
+  .def-table td { color: var(--ink-muted); }
+  .table-scroll { overflow-x: auto; }
+  .table-scroll table { min-width: 560px; }
+
+  /* ---------- Two-path cards ---------- */
+  .path-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin: 24px 0;
+  }
+  .path-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+    padding: 24px;
+  }
+  .path-card .path-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .path-card .path-key {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin-left: 8px;
+  }
+  .path-card p { font-size: 0.92rem; color: var(--ink-muted); }
+  .path-card ol { margin: 14px 0 0; padding-left: 1.3em; font-size: 0.88rem; color: var(--ink-muted); }
+  .path-card li { margin-bottom: 6px; }
+  .path-card li::marker { color: var(--accent); font-weight: 700; }
+
+  /* ---------- Admin screen mock ---------- */
+  .screen-mock {
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--paper-raised);
+    box-shadow: 0 20px 40px -28px rgba(42, 31, 8, 0.35);
+    margin: 24px 0;
+  }
+  .screen-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+  }
+  .screen-topbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+  .screen-topbar .screen-title {
+    margin-left: 8px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--ink-muted);
+  }
+  .screen-body { padding: 18px 20px; overflow-x: auto; }
+  .mock-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; min-width: 480px; }
+  .mock-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    color: var(--ink-faint);
+    font-weight: 700;
+    padding: 0 10px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mock-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; color: var(--ink); }
+  .mock-table tr:last-child td { border-bottom: none; }
+  .mock-table .cell-muted { color: var(--ink-muted); font-size: 0.82rem; }
+  .mock-check {
+    width: 17px; height: 17px; border-radius: 5px; border: 2px solid var(--line-strong);
+    display: inline-block; flex: none;
+  }
+  .mock-check.on { background: var(--accent); border-color: var(--accent); position: relative; }
+  .mock-check.on::after {
+    content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--accent-foreground); font-size: 11px; font-weight: 900;
+  }
+  .mock-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding: 16px 20px; background: var(--paper); border-top: 1px solid var(--line);
+  }
+  .mock-total { font-size: 0.86rem; color: var(--ink-muted); }
+  .mock-total strong { color: var(--ink); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  .mock-btn {
+    background: var(--accent); color: var(--accent-foreground);
+    border: none; border-radius: 9px; padding: 10px 20px;
+    font-size: 0.86rem; font-weight: 700; font-family: inherit;
+    white-space: nowrap;
+  }
+  .mock-btn.ghost {
+    background: transparent; color: var(--ink-muted); border: 1px solid var(--line-strong);
+  }
+  .mock-warning {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin: 0 20px 18px; padding: 12px 14px;
+    background: var(--warning-soft); border: 1px solid var(--warning); border-radius: 10px;
+    font-size: 0.82rem; color: var(--ink);
+  }
+  .mock-warning .icon { flex: none; color: var(--warning); font-weight: 900; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+  .badge.warn { background: var(--warning-soft); color: var(--warning); }
+  .badge.wait { background: var(--accent-soft); color: var(--accent); }
+  .badge.ok { background: var(--success-soft); color: var(--success); }
+  .badge.danger { background: var(--danger-soft); color: var(--danger); }
+  .screen-caption {
+    font-size: 0.84rem; color: var(--ink-muted); margin-top: 10px; padding-left: 2px;
+  }
+
+  /* ---------- Callout ---------- */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 12px 12px 0;
+    padding: 18px 22px;
+    margin: 26px 0;
+    font-size: 0.92rem;
+    color: var(--ink);
+  }
+  .callout strong { font-weight: 700; color: var(--ink); }
+  .callout.warn { border-left-color: var(--warning); background: var(--warning-soft); }
+  .callout.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+
+  /* ---------- Note (fine print) ---------- */
+  .note {
+    font-size: 0.82rem;
+    color: var(--ink-muted);
+    padding: 14px 16px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    margin: 18px 0;
+  }
+  .note strong { color: var(--ink); }
+
+  /* ---------- Route cards (procurement 2-path) ---------- */
+  .route-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin: 24px 0; }
+  .route-card { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--paper); }
+  .route-icon { font-size: 1.4rem; margin-bottom: 10px; }
+  .route-card h4 { margin: 0 0 6px; font-size: 0.98rem; }
+  .route-card p { font-size: 0.86rem; color: var(--ink-muted); margin: 0; }
+
+  /* ---------- Policy box ---------- */
+  .policy-box {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin: 24px 0;
+  }
+  .policy-item {
+    border-radius: 14px;
+    padding: 20px;
+    border: 1px solid var(--line);
+  }
+  .policy-item.deny { background: var(--warning-soft); border-color: var(--warning); }
+  .policy-item.allow { background: var(--success-soft); border-color: var(--success); }
+  .policy-item h4 { margin: 0 0 8px; font-size: 0.95rem; }
+  .policy-item.deny h4 { color: var(--warning); }
+  .policy-item.allow h4 { color: var(--success); }
+  .policy-item p { font-size: 0.86rem; color: var(--ink); margin: 0; }
+
+  /* ---------- Returns pattern cards ---------- */
+  .pattern-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+    margin: 20px 0;
+    background: var(--paper);
+  }
+  .pattern-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .pattern-num {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.9rem;
+  }
+  .pattern-title { font-size: 1rem; font-weight: 700; }
+  .pattern-scope { font-size: 0.78rem; color: var(--ink-muted); background: var(--paper-raised); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .pattern-card p { font-size: 0.9rem; color: var(--ink-muted); }
+  .pattern-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 16px; }
+  .pattern-outcome {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: var(--paper-raised);
+  }
+  .pattern-outcome .label { font-size: 0.78rem; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .pattern-outcome .value { font-size: 0.9rem; color: var(--ink); }
+
+  footer.closing {
+    margin-top: 96px;
+    padding-top: 36px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: 0.84rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    section { animation: rise 0.5s ease both; }
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
+<div class="page">
+
+  <header class="hero">
+    <div class="eyebrow">業務マニュアル</div>
+    <h1 class="title serif">商品が届くまで</h1>
+    <p class="lede">会員が商品を探し始めてから、代金の受け渡し・仕入れ・発送・そして必要であれば返品対応までを終えるまでの、業務の全体像です。顧客・システム・運営者それぞれが「何を」「どのタイミングで」行うかを、実際の画面イメージつきで説明します。</p>
+    <p class="hero-note">この資料だけで仕組みが理解できるよう、判断基準や例外ケースまで書き出しています。読みながら気になった点はそのまま質問箇所として残しておいてください。</p>
+  </header>
+
+  <section id="overview">
+    <div class="section-head">
+      <span class="section-num serif">全体像</span>
+      <h2 class="serif">誰が、いつ、何をするか</h2>
+      <p class="section-desc">まず全体を1枚で俯瞰します。以降の章で、この図の各列を1つずつ詳しく説明していきます。</p>
+    </div>
+
+    <div class="swimlane-wrap">
+      <div class="swimlane">
+        <div></div>
+        <div class="stage-head">商品を探す</div>
+        <div class="stage-head">カートに入れる</div>
+        <div class="stage-head">注文を確定する</div>
+        <div class="stage-head">支払う</div>
+        <div class="stage-head">仕入れる</div>
+        <div class="stage-head">発送する</div>
+        <div class="stage-head">受け取る</div>
+
+        <div class="lane-label"><span class="lane-dot" style="background:var(--lane-customer)"></span>顧客</div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="mark customer"></span></div>
+
+        <div class="lane-label"><span class="lane-dot" style="background:var(--lane-system)"></span>システム</div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"></div>
+
+        <div class="lane-label"><span class="lane-dot" style="background:var(--lane-admin)"></span>運営者</div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="mark admin"></span></div>
+        <div class="cell"><span class="mark admin"></span></div>
+        <div class="cell"><span class="mark admin"></span></div>
+        <div class="cell"></div>
+      </div>
+      <div class="swimlane-legend">
+        <span><span class="dot" style="background:var(--lane-customer)"></span>顧客が操作する場面</span>
+        <span><span class="dot" style="background:var(--lane-system)"></span>システムが自動で処理する場面</span>
+        <span><span class="dot" style="background:var(--lane-admin)"></span>運営者が画面で操作する場面</span>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>「支払う」と「仕入れる」の両方に運営者が登場するのはなぜか。</strong>すべての商品が同じ支払いタイミングではないからです。商品には2種類あり、注文と同時にその場でカード決済が完了するもの（<strong>先払い商品</strong>）と、運営者が仕入れを終えたあと任意のタイミングで請求するもの（<strong>後払い商品</strong>）に分かれます。後者は支払いより先に仕入れが進むため、この2つの列に運営者の操作が現れます。仕組みの詳細は「02 支払う」で説明します。
+    </div>
+
+    <div class="table-scroll">
+      <table class="def-table">
+        <tr><th>この資料で使う言葉</th><th>意味</th></tr>
+        <tr><td>先払い商品<span class="path-key">at_order</span></td><td>注文確定と同時に代金の請求が発生する商品。カード決済で即時に支払いが完了する。</td></tr>
+        <tr><td>後払い商品<span class="path-key">after_order</span></td><td>注文確定時点では請求が発生せず、運営者が任意のタイミングで請求書を発行する商品。</td></tr>
+        <tr><td>決済単位</td><td>「誰が・いつ・いくら支払うか」を表す1つの請求のまとまり。先払いなら注文確定時に、後払いなら運営者が請求書を作成した時に生成される。</td></tr>
+        <tr><td>対応待ちキュー</td><td>まだ運営者の対応（請求作成・発注・出荷など）が済んでいない案件が並ぶ一覧画面。各フェーズごとに用意されている。</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="browse">
+    <div class="section-head">
+      <span class="section-num serif">01</span>
+      <h2 class="serif">商品を探す → 注文を確定する</h2>
+      <p class="section-desc">顧客が行う、ここまでの一連の操作です。</p>
+    </div>
+
+    <div class="step-flow">
+      <div class="step"><div class="step-dot done">1</div><div class="step-label">ブランドを見る</div><div class="step-sub">一覧・検索</div></div>
+      <div class="step"><div class="step-dot done">2</div><div class="step-label">カートに入れる</div><div class="step-sub">お気に入りも可</div></div>
+      <div class="step"><div class="step-dot done">3</div><div class="step-label">内容を確認する</div><div class="step-sub">配送先・請求先</div></div>
+      <div class="step"><div class="step-dot done">4</div><div class="step-label">注文を確定する</div></div>
+    </div>
+
+    <h3>1つの注文に、支払いタイミングが違う商品が混在してよい</h3>
+    <p class="lead-p">先払い商品と後払い商品を、顧客が意識して分けてカートに入れる必要はありません。カートに入れた通りに、まとめて1回の注文として確定できます。どちらの支払いタイミングになるかは商品ごとにあらかじめ決まっており、顧客が選ぶものではありません。</p>
+
+    <h3>注文確定の際に行われるチェック</h3>
+    <p class="sub-p">「注文を確定する」ボタンを押した瞬間、システムは以下を自動で確認します。</p>
+    <ul class="detail-list">
+      <li><strong>月々使える金額の上限チェック</strong> — 会員ランクに応じて、1ヶ月に発注できる金額の上限が決まっています。「今月すでに確定している金額（まだ請求していない後払い商品の分も含む）」に「今回のカート合計」を足した額が上限を超える場合、注文を確定できません。後払い商品は請求前でも「発注が進んでいる」時点で枠を使ったものとして扱われるため、請求し忘れたまま枠だけ空いて見える、ということが起きない仕組みになっています。</li>
+      <li><strong>在庫は持たないため、このチェックのみで注文が確定します</strong> — 当社は無在庫の卸売モデルのため、注文確定は「在庫を確保する」処理ではなく「仕入れ手配を開始してよいか判断する」処理です。</li>
+    </ul>
+
+    <div class="note">
+      月間上限を超えている場合、注文はその場で確定できず、顧客にはエラーとして表示されます。超えた分だけ後日にまわす、といった自動での部分確定は行いません（顧客自身でカートを調整して再度確定していただきます）。
+    </div>
+  </section>
+
+  <section id="payment">
+    <div class="section-head">
+      <span class="section-num serif">02</span>
+      <h2 class="serif">支払う</h2>
+      <p class="section-desc">商品ごとに、2つの支払い方法のどちらかがあらかじめ設定されています。ここが本サービス最大の特徴的な仕組みなので、少し詳しく説明します。</p>
+    </div>
+
+    <div class="path-grid">
+      <div class="path-card">
+        <span class="path-badge">先払い商品<span class="path-key">at_order</span></span>
+        <p>注文を確定すると、その場でカード決済（Stripe Checkout）の画面に進みます。決済が完了した時点で、この商品の決済単位が「支払い済み」になり、仕入れフェーズに入ります。</p>
+        <ol>
+          <li>注文確定と同時に決済ページへ遷移</li>
+          <li>カード情報を入力し支払う</li>
+          <li>支払い完了 → 即座に仕入れフェーズへ</li>
+        </ol>
+      </div>
+      <div class="path-card">
+        <span class="path-badge">後払い商品<span class="path-key">after_order</span></span>
+        <p>注文確定の時点では、まだ請求（決済単位）自体が作られません。先に仕入れフェーズへ進み、運営者が「請求作成」の操作を行った時点で、初めて請求書（Stripe Invoice）が発行されます。</p>
+        <ol>
+          <li>注文確定 → その場では課金されず仕入れフェーズへ</li>
+          <li>運営者が任意のタイミングで請求書を発行</li>
+          <li>顧客が請求書（メール）を受け取り、期限内に支払う</li>
+        </ol>
+      </div>
+    </div>
+
+    <h3>運営者の画面: 後払い商品の請求をまとめて作成する</h3>
+    <p class="sub-p">運営者は、仕入れが進んでいる後払い商品を一覧で確認し、請求書を発行するタイミングを自分で選べます。多くの場合は「事務所に商品が入荷したタイミング」でまとめて請求しますが、これはシステムが強制するルールではなく運用上の目安です。まだ仕入れ中の商品にチェックを入れて先に請求することも可能です。</p>
+    <div class="screen-mock">
+      <div class="screen-topbar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="screen-title">後払い商品 — 請求待ちの一覧</span>
+      </div>
+      <div class="screen-body">
+        <table class="mock-table">
+          <thead>
+            <tr><th></th><th>商品</th><th>顧客</th><th>状態</th><th>金額</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mock-check on"></span></td>
+              <td>フェイスケアデバイス</td><td>株式会社ノース商事</td>
+              <td><span class="badge ok">事務所に入荷済み</span></td><td>¥128,000</td>
+            </tr>
+            <tr>
+              <td><span class="mock-check on"></span></td>
+              <td>ヘアドライヤー Pro</td><td>ビューティーサロン花</td>
+              <td><span class="badge ok">事務所に入荷済み</span></td><td>¥42,000</td>
+            </tr>
+            <tr>
+              <td><span class="mock-check"></span></td>
+              <td>美容ローラー3点セット</td><td>株式会社リンク商会</td>
+              <td><span class="badge wait">仕入れ手配中</span></td><td>¥68,000</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mock-foot">
+        <div class="mock-total">選択中の合計 <strong>¥170,000</strong>　（この顧客の今月の残り枠: ¥2,830,000）</div>
+        <button class="mock-btn">請求書を作成する</button>
+      </div>
+    </div>
+    <p class="screen-caption">「請求書を作成する」を押すと、選択した明細ぶんのStripe請求書（Invoice）が生成され、顧客にメールで送付されます。支払い期限は発行日から7日間です。</p>
+
+    <h3>請求が期限内に支払われなかった場合</h3>
+    <p class="sub-p">後払い商品は、先に仕入れ・発送が進む可能性があるため、支払われないまま商品だけが動いてしまうリスクがあります。これに対して以下の仕組みで備えています。</p>
+    <ul class="detail-list">
+      <li><strong>出荷時の警告表示</strong> — 対応する決済単位が「支払い済み」でない明細を出荷しようとすると、運営者の画面に警告が表示されます（出荷自体を止める強制ブロックではなく、気づかず未払いのまま発送してしまうことを防ぐための注意喚起です）。</li>
+      <li><strong>督促・回収不能の判断</strong> — 期限を過ぎても支払われない場合、運営者が督促するか、回収の見込みが立たないと判断すれば「回収不能」として処理します（詳細は「05 返品・返金の考え方」）。</li>
+    </ul>
+
+    <h3>月間上限チェックは「上限超過」を通常発生させない設計になっている</h3>
+    <p class="lead-p">後払い商品は、請求書がまだ発行されていない（支払いがまだ発生していない）段階でも、注文が確定した瞬間から「今月すでに使った枠」として計上されます。そのため、ある注文を確定する時点で行うチェックには、それより前に確定した他の注文の分がすでに正しく反映されています。後から請求書を発行する操作は、その計上済みの金額を実際の請求という形に変換するだけで、新たに枠を消費するわけではありません。</p>
+    <p class="sub-p">残るとすれば「全く同じ瞬間に2つの処理が同時に走り、両方とも古い残り枠を見たまま通ってしまう」という競合だけですが、これは同一顧客に対する処理をデータベースの行ロックで直列化することで防いでいます。この2つを組み合わせることで、<strong>通常の運用で月間上限を超えたまま請求作成に進んでしまうことは想定していません。</strong></p>
+    <div class="note">
+      それでも「上限超過」という状態と、それを解消する運営者向けの回復手順（保留一覧の確認・保留分のキャンセル・翌月の自動キャンセル）はシステムから削除せず残しています。実装上の不具合やデータ不整合など、本来起きてはならないことが万一起きてしまった場合に、超過した金額のままStripeへ請求書が送られてしまうのを防ぐための安全網です。日常的に運営者が対応することを想定した画面ではありません。
+    </div>
+  </section>
+
+  <section id="procurement">
+    <div class="section-head">
+      <span class="section-num serif">03</span>
+      <h2 class="serif">仕入れる</h2>
+      <p class="section-desc">注文が確定した（先払いなら支払いが完了した、後払いならその時点で）商品を、運営者がメーカー・仕入れ先へ発注します。</p>
+    </div>
+
+    <h3>運営者の画面: 対応待ちの商品をまとめて発注する</h3>
+    <p class="sub-p">対応待ちキューには、発注がまだ済んでいない商品の明細が並びます。同じ商品であれば、注文元の顧客が違っても1回の発注（発注タスク）にまとめられます。</p>
+    <div class="screen-mock">
+      <div class="screen-topbar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="screen-title">対応待ちキュー</span>
+      </div>
+      <div class="screen-body">
+        <table class="mock-table">
+          <thead>
+            <tr><th></th><th>商品</th><th>数量</th><th>注文元</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="mock-check on"></span></td><td>フェイスケアデバイス</td><td>1</td><td>株式会社ノース商事</td></tr>
+            <tr><td><span class="mock-check on"></span></td><td>フェイスケアデバイス</td><td>2</td><td>ビューティーサロン花</td></tr>
+            <tr><td><span class="mock-check"></span></td><td>ヘアドライヤー Pro</td><td>1</td><td>株式会社リンク商会</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mock-foot">
+        <div class="mock-total">並び順は「対応待ちになった順」（先着順）</div>
+        <button class="mock-btn">発注タスクを作成（計3個）</button>
+      </div>
+    </div>
+    <p class="screen-caption">発注タスクを作成すると、仕入れ先への連絡（電話・メール等）を運営者が1回行うだけで、複数の顧客の注文をまとめて処理できます。</p>
+
+    <h3>発注タスクの進み方</h3>
+    <div class="step-flow">
+      <div class="step"><div class="step-dot">1</div><div class="step-label">未着手</div></div>
+      <div class="step"><div class="step-dot done">2</div><div class="step-label">担当者が着手</div><div class="step-sub">他の担当者と重複しない</div></div>
+      <div class="step"><div class="step-dot done">3</div><div class="step-label">仕入れ先へ発注確定</div></div>
+      <div class="step"><div class="step-dot done">4</div><div class="step-label">入荷・検品</div><div class="step-sub">明細ごとに記録</div></div>
+    </div>
+    <p class="sub-p">「担当者が着手」ボタンを押すと、そのタスクは自分の担当として確保され、他の運営スタッフが同じ相手に重複して発注してしまうことを防ぎます。「発注確定」は仕入れ先へ実際に発注した後、1回の電話・メールに対応する単一の操作として記録します。</p>
+
+    <h3>入荷は明細ごとに記録する（部分入荷への対応）</h3>
+    <p class="lead-p">1回の発注タスクにまとめた商品でも、仕入れ先からの納品が同じタイミングで揃うとは限りません。そのため「入荷したかどうか」は発注タスク単位ではなく、注文の明細ごとに記録します。一部の商品だけ先に届いた場合も、届いた分から検品・請求・発送を進めることができます。</p>
+    <ul class="detail-list">
+      <li>検品して不良品が見つかった場合、その明細は「入荷済み」として記録しません。仕入れ先とのやり取り（交換・返送）が完了し、良品が確認できてから記録します。</li>
+    </ul>
+
+    <h3>商品の届き方には2つの経路がある</h3>
+    <div class="route-grid">
+      <div class="route-card">
+        <div class="route-icon">🏢</div>
+        <h4>事務所経由</h4>
+        <p>仕入れ先から一度事務所に届き、検品してから梱包・発送します。品質確認をしっかり行いたい商品向けです。</p>
+      </div>
+      <div class="route-card">
+        <div class="route-icon">📮</div>
+        <h4>仕入れ先直送</h4>
+        <p>事務所を経由せず、仕入れ先から直接お客様へ届きます。事務所での作業が発生しないため、より早くお届けできます。</p>
+      </div>
+    </div>
+    <p class="sub-p">どちらの経路になるかは商品側であらかじめ決まっています。事務所経由の場合は「05 発送する」の梱包・発送作業が発生し、直送の場合はその作業自体が発生しません（発注確定後、仕入れ先からの発送をもって完了とみなします）。</p>
+  </section>
+
+  <section id="shipping">
+    <div class="section-head">
+      <span class="section-num serif">04</span>
+      <h2 class="serif">発送する</h2>
+      <p class="section-desc">事務所に入荷した商品を、順番に梱包・発送していきます。</p>
+    </div>
+
+    <div class="callout">
+      <strong>1つの注文でも、複数の箱に分かれて届くことがあります。</strong>商品ごとに仕入れ先や入荷タイミングが違うため、すべてが揃うのを待たず、準備が整った商品から先に発送します。お客様を無駄に待たせない代わりに、同じ注文の商品が別々の日に届く場合がある、という前提でご理解ください。
+    </div>
+
+    <h3>出荷の進み方</h3>
+    <div class="step-flow">
+      <div class="step"><div class="step-dot done">1</div><div class="step-label">準備中</div><div class="step-sub">担当者を割当て</div></div>
+      <div class="step"><div class="step-dot done">2</div><div class="step-label">発送</div><div class="step-sub">追跡番号を通知</div></div>
+      <div class="step"><div class="step-dot done">3</div><div class="step-label">配達完了</div></div>
+    </div>
+
+    <h3>運営者の画面: 出荷可能な明細から発送を記録する</h3>
+    <div class="screen-mock">
+      <div class="screen-topbar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="screen-title">出荷準備 — フェイスケアデバイス / 株式会社ノース商事</span>
+      </div>
+      <div class="mock-warning">
+        <span class="icon">!</span>
+        <span>この明細に対応する請求はまだ支払われていません。発送は可能ですが、請求状況を確認することをおすすめします。</span>
+      </div>
+      <div class="mock-foot">
+        <div class="mock-total">配送先: ノース商事株式会社 本社 <span class="badge warn">未払い</span></div>
+        <button class="mock-btn">発送を記録する</button>
+      </div>
+    </div>
+    <p class="screen-caption">未払いの明細を発送しようとした場合に表示される警告の例です。発送自体を止めるものではなく、確認漏れに気づくための注意喚起です。</p>
+
+    <h3>配達トラブルへの対応</h3>
+    <p class="sub-p">配達の遅延や不在による再配達などは、配送業者が追跡番号をもとに顧客と直接やり取りして解決します。システム側に専用の状態や画面は用意していません。荷物が紛失した場合など、業者側での解決が難しいケースのみ、運営者が個別に再送・返金の対応を行います。</p>
+  </section>
+
+  <section id="returns">
+    <div class="section-head">
+      <span class="section-num serif">05</span>
+      <h2 class="serif">返品・返金の考え方</h2>
+      <p class="section-desc">一般的な通販サイトとは方針が異なります。理由と、実際に起こりうるケースごとの扱いを説明します。</p>
+    </div>
+
+    <h3>なぜ「原則対応しない」のか</h3>
+    <p class="lead-p">当社は商品を在庫として持たず、注文が入るたびに仕入れ先へ発注する卸売モデルです。そのため、一度仕入れた商品はお客様都合ではキャンセル・返品を受け付けません。理由は次の2点です。</p>
+    <ul class="detail-list">
+      <li><strong>仕入れた商品を他のお客様に転売できない</strong> — 一般的な通販のように在庫として再販することができません。</li>
+      <li><strong>決済手数料は返金されない</strong> — カード決済の処理手数料は、返金を行っても当社に戻ってきません。お客様都合の返品を受けるほど、当社側の負担だけが積み重なります。</li>
+    </ul>
+
+    <div class="policy-box">
+      <div class="policy-item deny">
+        <h4>✕ 原則対応しません</h4>
+        <p>「気が変わった」「やっぱり不要になった」等、お客様都合でのキャンセル・返品。</p>
+      </div>
+      <div class="policy-item allow">
+        <h4>◯ 対応します</h4>
+        <p>不良品・誤配送・仕入れ側の欠陥など、当社に原因がある場合のみ、返品・返金を受け付けます。</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <strong>後払い商品は、注文確定後の原則キャンセル不可を利用規約に明記します。</strong>後払い商品は支払いより先に仕入れが始まるため、「まだ支払っていないからキャンセルできるはず」という誤解が起きがちです。実際には支払い状況にかかわらず、注文確定と同時に仕入れの手配が始まるため、原則キャンセルできない旨をあらかじめご案内します。
+    </div>
+
+    <h3>状況ごとの扱い（3つのパターン）</h3>
+    <p class="sub-p">「いつの段階か」「先払いか後払いか」によって、キャンセル・返品の扱いが3つのパターンに分かれます。</p>
+
+    <div class="pattern-card">
+      <div class="pattern-head">
+        <span class="pattern-num">1</span>
+        <span class="pattern-title">支払い前のキャンセル</span>
+        <span class="pattern-scope">先払い商品のみ・支払い完了前</span>
+      </div>
+      <p>先払い商品で、カード決済がまだ完了していない状態（決済ページから離脱した等）。この段階では仕入れも一切始まっていないため、無条件・無料でキャンセルできます。顧客からの申請も運営者の承認も不要です。</p>
+      <div class="pattern-grid">
+        <div class="pattern-outcome"><div class="label">対応方法</div><div class="value">申請・承認は不要。決済が30分間完了しなければシステムが自動的に注文をキャンセルします。</div></div>
+        <div class="pattern-outcome"><div class="label">返金</div><div class="value">支払いが発生していないため返金自体が存在しません。</div></div>
+      </div>
+    </div>
+
+    <div class="pattern-card">
+      <div class="pattern-head">
+        <span class="pattern-num">2</span>
+        <span class="pattern-title">出荷前のキャンセル・返品</span>
+        <span class="pattern-scope">先払い（支払い済み・未出荷）／後払い（支払い状況を問わない）</span>
+      </div>
+      <p>不良品・誤配送・仕入れ側の欠陥など、当社に原因があると認められる場合に限り受け付けます。まだ出荷していないため、現物の返送は発生しません。</p>
+      <div class="pattern-grid">
+        <div class="pattern-outcome"><div class="label">対応方法</div><div class="value">顧客が返品を申請 → 運営者が内容を確認し、承認または却下（承認は管理者ロールのみが行えます）</div></div>
+        <div class="pattern-outcome"><div class="label">返金</div><div class="value">支払い済みなら Stripe 上でカード返金を実行。未払いなら発行済みの請求書を無効化するだけで、実際のお金のやり取りは発生しません。</div></div>
+      </div>
+    </div>
+
+    <div class="pattern-card">
+      <div class="pattern-head">
+        <span class="pattern-num">3</span>
+        <span class="pattern-title">出荷後の返品（不良品・誤配送のみ）</span>
+        <span class="pattern-scope">すでに発送済みの商品</span>
+      </div>
+      <p>お客様の手元に届いたあとに不良や誤配送が判明した場合です。商品を事務所へご返送いただいた上で対応します。返送にかかる送料は当社が負担します。</p>
+      <div class="pattern-grid">
+        <div class="pattern-outcome"><div class="label">対応方法</div><div class="value">申請 → 承認 → 事務所での現物受け取り・確認 → 返金または請求の取り消し</div></div>
+        <div class="pattern-outcome"><div class="label">返金</div><div class="value">パターン②と同様、支払い済みならカード返金、未払いなら請求書の無効化。</div></div>
+      </div>
+    </div>
+
+    <h3>お客様が支払いに応じない場合（回収不能の処理）</h3>
+    <p class="lead-p">後払い商品では、すでに仕入れ・発送まで進んでいるにもかかわらず、お客様が請求に応じないケースが起こり得ます。この場合、通常の返品フロー（顧客からの申請を起点とする）を待たず、運営者が主導して「回収不能」の処理を開始できます。督促を尽くしても支払いの見込みが立たない場合の、最終的な貸し倒れ処理です。この操作も管理者ロールのみが行えます。</p>
+
+    <h3>発注タスクとの連動</h3>
+    <p class="sub-p">返品が承認されると、対応する発注タスクの状況に応じて次のように扱われます。</p>
+    <ul class="detail-list">
+      <li><strong>まだ仕入れ先へ発注していない場合</strong> — 対象の明細は自動的に発注タスクから外れます。他のお客様の分と一緒にまとめていた場合でも、他の明細には影響しません。</li>
+      <li><strong>すでに仕入れ先へ発注確定している場合</strong> — システムは自動では外さず、警告のみを表示します。すでに仕入れ先に伝えてしまっている分の調整（キャンセル可否の交渉等）は、運営者が仕入れ先と直接やり取りした上で、手動で発注タスクから外します。</li>
+    </ul>
+
+    <h3>返品受付のプロセス</h3>
+    <div class="step-flow">
+      <div class="step"><div class="step-dot done">1</div><div class="step-label">お客様が申請</div><div class="step-sub">回収不能は運営者が起点</div></div>
+      <div class="step"><div class="step-dot done">2</div><div class="step-label">運営者が確認</div><div class="step-sub">承認 / 却下（管理者のみ）</div></div>
+      <div class="step"><div class="step-dot done">3</div><div class="step-label">必要なら商品を返送</div><div class="step-sub">出荷後のみ・送料当社負担</div></div>
+      <div class="step"><div class="step-dot done">4</div><div class="step-label">返金 または 請求取消</div></div>
+    </div>
+  </section>
+
+  <section id="recap">
+    <div class="section-head">
+      <span class="section-num serif">おさらい</span>
+      <h2 class="serif">もう一度、全体を通しで</h2>
+      <p class="section-desc">ここまでの内容を踏まえて、最初の全体図をもう一度ご覧ください。</p>
+    </div>
+
+    <div class="swimlane-wrap">
+      <div class="swimlane">
+        <div></div>
+        <div class="stage-head">商品を探す</div>
+        <div class="stage-head">カートに入れる</div>
+        <div class="stage-head">注文を確定する</div>
+        <div class="stage-head">支払う</div>
+        <div class="stage-head">仕入れる</div>
+        <div class="stage-head">発送する</div>
+        <div class="stage-head">受け取る</div>
+
+        <div class="lane-label"><span class="lane-dot" style="background:var(--lane-customer)"></span>顧客</div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"><span class="mark customer"></span></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="mark customer"></span></div>
+
+        <div class="lane-label"><span class="lane-dot" style="background:var(--lane-system)"></span>システム</div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"><span class="mark system"></span></div>
+        <div class="cell"></div>
+
+        <div class="lane-label"><span class="lane-dot" style="background:var(--lane-admin)"></span>運営者</div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="mark admin"></span></div>
+        <div class="cell"><span class="mark admin"></span></div>
+        <div class="cell"><span class="mark admin"></span></div>
+        <div class="cell"></div>
+      </div>
+    </div>
+
+    <p class="sub-p" style="margin-top: 24px;">返品・返金は、このどのタイミングからでも発生しうる例外フローとして、常に「05 返品・返金の考え方」のルールに沿って処理されます。</p>
+  </section>
+
+  <footer class="closing serif">商品が届くまで</footer>
+
+</div>
