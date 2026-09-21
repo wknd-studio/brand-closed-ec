@@ -80,7 +80,7 @@
 
 ### まだ決まっていない・要確認事項
 
-- 🔲 **月間仕入れ上限（`monthly_limit_amount`）の確定値**: `archive/service-spec.md`では全ランクTBD。コード側（`member-rank.ts`）には暫定値が入っているが、`specs/001-seven-rank-pricing/research.md`に基づく暫定であり正式決定ではない
+- ✅ ~~月間仕入れ上限（`monthly_limit_amount`）の確定値~~（2026-09-21解決）: 現状ハードコードされている値（starter:30万/basic:100万/standard:500万/pro:2000万/advanced:5000万/premium:1億/enterprise:実質無制限）を正式な暫定値として採用。`member_ranks`テーブル参照への切り替え（issue #210）が完了すれば、以後の変更はDB更新のみで済む
 - 🔲 **ENTERPRISEの月額費用・初期費用**: 個別契約のため定価なし。「要相談」のまま
 - 🔲 **旧5ランクモデル時代の付加機能（専任担当者サポート・優先対応・専用ライン等）の扱い**: `docs/glossary.md`に「要確認」として残っており、新7ランクモデルでどのランクに何が付くか、あるいは廃止されたかが未確定
 - 🔲 **`billing_anchor_day`の確定スキーマ配置**: `docs/plan-change-flow.md`は`users`単体への追加を前提に書かれていたが、`db-schema-redesign.md`では`users`と`organizations`の両方に対称的に追加する設計に更新されている（下記「参考資料」参照）。本ドキュメントは後者（新しい設計）を正として記述している
