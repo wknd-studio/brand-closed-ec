@@ -210,9 +210,11 @@ export type Database = {
           is_negotiable: boolean;
           negotiated_unit_price: number | null;
           order_id: string;
+          payment_timing: string;
           product_name_snapshot: string;
           quantity: number;
           sanity_product_id: string;
+          settlement_id: string | null;
           unit_price_snapshot: number | null;
         };
         Insert: {
@@ -221,9 +223,11 @@ export type Database = {
           is_negotiable?: boolean;
           negotiated_unit_price?: number | null;
           order_id: string;
+          payment_timing: string;
           product_name_snapshot: string;
           quantity: number;
           sanity_product_id: string;
+          settlement_id?: string | null;
           unit_price_snapshot?: number | null;
         };
         Update: {
@@ -232,9 +236,11 @@ export type Database = {
           is_negotiable?: boolean;
           negotiated_unit_price?: number | null;
           order_id?: string;
+          payment_timing?: string;
           product_name_snapshot?: string;
           quantity?: number;
           sanity_product_id?: string;
+          settlement_id?: string | null;
           unit_price_snapshot?: number | null;
         };
         Relationships: [
@@ -245,89 +251,108 @@ export type Database = {
             referencedRelation: "orders";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "order_items_settlement_id_fkey";
+            columns: ["settlement_id"];
+            isOneToOne: false;
+            referencedRelation: "order_settlements";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      order_settlements: {
+        Row: {
+          amount_snapshot: number;
+          cancelled_at: string | null;
+          created_at: string;
+          flow: string;
+          id: string;
+          order_id: string;
+          paid_at: string | null;
+          status: string;
+          stripe_checkout_session_id: string | null;
+          stripe_invoice_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          amount_snapshot: number;
+          cancelled_at?: string | null;
+          created_at?: string;
+          flow: string;
+          id?: string;
+          order_id: string;
+          paid_at?: string | null;
+          status: string;
+          stripe_checkout_session_id?: string | null;
+          stripe_invoice_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          amount_snapshot?: number;
+          cancelled_at?: string | null;
+          created_at?: string;
+          flow?: string;
+          id?: string;
+          order_id?: string;
+          paid_at?: string | null;
+          status?: string;
+          stripe_checkout_session_id?: string | null;
+          stripe_invoice_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "order_settlements_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
         ];
       };
       orders: {
         Row: {
-          approval_status: string | null;
-          approved_at: string | null;
-          approved_by_user_id: string | null;
           billing_address_snapshot: Json;
           created_at: string;
           id: string;
           monthly_limit_at_order: number;
           organization_id: string | null;
-          payment_flow: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
-          requested_by_user_id: string | null;
           shipping_address_snapshot: Json;
-          split_group_id: string | null;
           status: string;
-          stripe_checkout_session_id: string | null;
-          stripe_invoice_id: string | null;
           updated_at: string;
           user_id: string;
         };
         Insert: {
-          approval_status?: string | null;
-          approved_at?: string | null;
-          approved_by_user_id?: string | null;
           billing_address_snapshot: Json;
           created_at?: string;
           id?: string;
           monthly_limit_at_order: number;
           organization_id?: string | null;
-          payment_flow: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
-          requested_by_user_id?: string | null;
           shipping_address_snapshot: Json;
-          split_group_id?: string | null;
           status?: string;
-          stripe_checkout_session_id?: string | null;
-          stripe_invoice_id?: string | null;
           updated_at?: string;
           user_id: string;
         };
         Update: {
-          approval_status?: string | null;
-          approved_at?: string | null;
-          approved_by_user_id?: string | null;
           billing_address_snapshot?: Json;
           created_at?: string;
           id?: string;
           monthly_limit_at_order?: number;
           organization_id?: string | null;
-          payment_flow?: string;
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
-          requested_by_user_id?: string | null;
           shipping_address_snapshot?: Json;
-          split_group_id?: string | null;
           status?: string;
-          stripe_checkout_session_id?: string | null;
-          stripe_invoice_id?: string | null;
           updated_at?: string;
           user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "orders_approved_by_user_id_fkey";
-            columns: ["approved_by_user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "orders_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "orders_requested_by_user_id_fkey";
-            columns: ["requested_by_user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
             referencedColumns: ["id"];
           },
           {
