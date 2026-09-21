@@ -2,31 +2,35 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
-import { pickRelatedOrder } from "@/lib/order/related-order";
-import InvoiceForm from "./invoice-form";
-import StatusStepper from "./status-stepper";
+import CancelOrderButton from "./cancel-order-button";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  pending_payment: "決済待ち",
-  confirming: "注文確認中",
+  processing: "対応中",
   limit_exceeded: "上限超過・発行停止",
-  invoice_sent: "請求書送付済み",
   paid: "入金確認済み",
-  sourcing: "手配中",
-  ordered: "発注完了",
-  preparing: "発送準備中",
-  shipping: "配送中",
-  delivered: "配送完了",
   cancelled: "キャンセル",
 };
 
-const PAYMENT_FLOW_LABEL: Record<string, string> = {
+const SETTLEMENT_STATUS_LABEL: Record<string, string> = {
+  pending_payment: "決済待ち",
+  invoice_sent: "請求書送付済み",
+  limit_exceeded: "上限超過・発行停止",
+  paid: "入金確認済み",
+  cancelled: "キャンセル",
+};
+
+const FLOW_LABEL: Record<string, string> = {
   checkout: "先払い（Checkout）",
   invoice: "後払い（Invoice）",
+};
+
+const TIMING_LABEL: Record<string, string> = {
+  at_order: "注文時払い",
+  after_order: "注文後払い",
 };
 
 export default async function AdminOrderDetailPage({ params }: Props) {
@@ -37,23 +41,14 @@ export default async function AdminOrderDetailPage({ params }: Props) {
   const order = await orderRepo.findByIdWithUser(id);
   if (!order) notFound();
 
-  const relatedOrder = order.splitGroupId
-    ? pickRelatedOrder(
-        order.id,
-        (await orderRepo.findBySplitGroupId(order.splitGroupId)).map((o) => ({
-          id: o.id,
-          paymentFlow: o.paymentFlow,
-          status: o.status.value,
-        }))
-      )
-    : null;
-
-  const fixedItems = order.items.filter((i) => !i.isNegotiable);
-  const negotiableItems = order.items.filter((i) => i.isNegotiable);
-  const fixedTotal = fixedItems.reduce(
+  const settlementById = new Map(order.settlements.map((s) => [s.id, s]));
+  const total = order.items.reduce(
     (sum, i) => sum + (i.unitPriceSnapshot ?? 0) * i.quantity,
     0
   );
+  const canCancel =
+    (order.status === "processing" || order.status === "limit_exceeded") &&
+    !order.settlements.some((s) => s.status === "paid");
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -73,36 +68,16 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       </div>
 
       <div className="space-y-6">
-        {/* 分割注文の関連付け */}
-        {relatedOrder && (
-          <section className="rounded-lg border border-blue-200 bg-blue-50 p-5">
-            <p className="text-sm font-medium text-blue-800">
-              この注文は分割チェックアウトにより、関連する注文があります。
+        {order.status === "limit_exceeded" && (
+          <section className="rounded-lg border border-red-200 bg-red-50 p-5">
+            <p className="text-sm font-medium text-red-700">
+              月次仕入れ上限超過のため請求書を発行できません
             </p>
-            <Link
-              href={`/admin/orders/${relatedOrder.id}`}
-              className="mt-2 inline-flex items-center gap-2 text-sm text-blue-700 underline underline-offset-2 hover:text-blue-900"
-            >
-              関連注文 {relatedOrder.id.slice(0, 8).toUpperCase()}（
-              {PAYMENT_FLOW_LABEL[relatedOrder.paymentFlow] ??
-                relatedOrder.paymentFlow}
-              ・{STATUS_LABEL[relatedOrder.status] ?? relatedOrder.status}
-              ）を見る
-            </Link>
+            <p className="mt-1 text-xs text-red-600">
+              会員に上限超過の通知メールを送信済みです。
+            </p>
           </section>
         )}
-
-        {/* ステータスステッパー */}
-        <section className="rounded-lg border p-5">
-          <h2 className="mb-4 text-sm font-medium text-gray-700">
-            注文ステータス
-          </h2>
-          <StatusStepper
-            orderId={order.id}
-            currentStatus={order.status}
-            paymentFlow={order.paymentFlow}
-          />
-        </section>
 
         {/* 会員情報 */}
         <section className="rounded-lg border p-5">
@@ -127,21 +102,59 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </dl>
         </section>
 
-        {/* 固定価格商品 */}
-        {fixedItems.length > 0 && (
-          <section className="rounded-lg border p-5">
-            <h2 className="mb-3 text-sm font-medium text-gray-700">
-              固定価格商品
-            </h2>
+        {/* 決済単位 */}
+        <section className="rounded-lg border p-5">
+          <h2 className="mb-3 text-sm font-medium text-gray-700">決済単位</h2>
+          {order.settlements.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              決済単位はまだありません（後払い商品は請求作成前です）
+            </p>
+          ) : (
             <ul className="divide-y">
-              {fixedItems.map((item) => (
+              {order.settlements.map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center justify-between py-2 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {FLOW_LABEL[s.flow] ?? s.flow}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {SETTLEMENT_STATUS_LABEL[s.status] ?? s.status}
+                    </p>
+                  </div>
+                  <p className="tabular-nums">¥{s.amount.toLocaleString()}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* 注文明細 */}
+        <section className="rounded-lg border p-5">
+          <h2 className="mb-3 text-sm font-medium text-gray-700">注文明細</h2>
+          <ul className="divide-y">
+            {order.items.map((item) => {
+              const settlement = item.settlementId
+                ? settlementById.get(item.settlementId)
+                : undefined;
+              return (
                 <li
                   key={item.id}
                   className="flex items-center justify-between py-2 text-sm"
                 >
                   <div>
                     <p className="font-medium">{item.productNameSnapshot}</p>
-                    <p className="text-xs text-gray-500">× {item.quantity}</p>
+                    <p className="text-xs text-gray-500">
+                      × {item.quantity} ／{" "}
+                      {TIMING_LABEL[item.paymentTiming] ?? item.paymentTiming}{" "}
+                      ／{" "}
+                      {settlement
+                        ? (SETTLEMENT_STATUS_LABEL[settlement.status] ??
+                          settlement.status)
+                        : "未請求"}
+                    </p>
                   </div>
                   <p className="tabular-nums">
                     ¥
@@ -150,66 +163,16 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                     ).toLocaleString()}
                   </p>
                 </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex justify-between border-t pt-3 text-sm font-medium">
-              <span>固定価格小計</span>
-              <span className="tabular-nums">
-                ¥{fixedTotal.toLocaleString()}
-              </span>
-            </div>
-          </section>
-        )}
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex justify-between border-t pt-3 text-sm font-medium">
+            <span>合計</span>
+            <span className="tabular-nums">¥{total.toLocaleString()}</span>
+          </div>
+        </section>
 
-        {/* 要相談商品 */}
-        {negotiableItems.length > 0 && (
-          <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-            <h2 className="mb-3 text-sm font-medium text-amber-800">
-              要相談商品
-            </h2>
-            <ul className="divide-y divide-amber-200">
-              {negotiableItems.map((item) => (
-                <li key={item.id} className="py-2 text-sm">
-                  <p className="font-medium">{item.productNameSnapshot}</p>
-                  <p className="text-xs text-amber-700">
-                    数量：{item.quantity}
-                    {item.unitPriceSnapshot !== null &&
-                      ` / ¥${item.unitPriceSnapshot.toLocaleString()}`}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* 上限超過通知バナー */}
-        {order.status === "limit_exceeded" && (
-          <section className="rounded-lg border border-red-200 bg-red-50 p-5">
-            <p className="text-sm font-medium text-red-700">
-              月次仕入れ上限超過のため請求書を発行できません
-            </p>
-            <p className="mt-1 text-xs text-red-600">
-              会員に上限超過の通知メールを送信済みです。会員がプランをアップグレードした後、再度発行を試みてください。
-            </p>
-          </section>
-        )}
-
-        {/* Invoice発行フォーム（confirming の場合。要相談商品が0件でも、
-            固定価格×後払いのみの注文として発行できる必要がある） */}
-        {order.status === "confirming" && (
-          <section className="rounded-lg border p-5">
-            <InvoiceForm
-              orderId={order.id}
-              negotiableItems={negotiableItems.map((i) => ({
-                id: i.id,
-                product_name_snapshot: i.productNameSnapshot,
-                quantity: i.quantity,
-                unit_price_snapshot: i.unitPriceSnapshot,
-                is_negotiable: i.isNegotiable,
-              }))}
-            />
-          </section>
-        )}
+        {canCancel && <CancelOrderButton orderId={order.id} />}
       </div>
     </div>
   );

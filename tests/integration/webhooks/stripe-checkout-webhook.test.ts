@@ -31,6 +31,7 @@ async function cleanup() {
   const orderIds = orders?.map((o) => o.id) ?? [];
   if (orderIds.length > 0) {
     await supabase.from("order_items").delete().in("order_id", orderIds);
+    await supabase.from("order_settlements").delete().in("order_id", orderIds);
     await supabase.from("orders").delete().in("id", orderIds);
   }
   await supabase.from("addresses").delete().eq("id", TEST_ADDRESS_ID);
@@ -103,7 +104,7 @@ beforeAll(async () => {
   const addressRepo = new SupabaseAddressRepository(supabase);
   const { productRepo, paymentGateway, notificationService } = makeDeps();
 
-  // 実際にplaceOrderユースケース経由で注文（pending_payment、stripeCheckoutSessionIdあり）を作成する
+  // 実際にplaceOrderユースケース経由で注文（Checkout決済単位: pending_payment、stripeCheckoutSessionIdあり）を作成する
   await placeOrder(
     {
       clerkUserId: TEST_CLERK_ID,
@@ -134,13 +135,14 @@ afterAll(async () => {
 });
 
 describe("Stripe Checkout決済確定Webhook（実DB・署名検証込み）", () => {
-  it("checkout.session.completed（mode: payment）を受信すると、対象注文がpaidになる", async () => {
+  it("checkout.session.completed（mode: payment）を受信すると、対象の決済単位と注文がpaidになる", async () => {
     const { data: before } = await supabase
       .from("orders")
-      .select("status")
+      .select("status, order_settlements(status)")
       .eq("user_id", TEST_USER_ID)
       .single();
-    expect(before?.status).toBe("pending_payment");
+    expect(before?.status).toBe("processing");
+    expect(before?.order_settlements[0]?.status).toBe("pending_payment");
 
     const secret = process.env.STRIPE_WEBHOOK_SECRET!;
     const payload = JSON.stringify({
@@ -172,9 +174,53 @@ describe("Stripe Checkout決済確定Webhook（実DB・署名検証込み）", (
 
     const { data: after } = await supabase
       .from("orders")
-      .select("status")
+      .select("status, order_settlements(status, paid_at)")
       .eq("user_id", TEST_USER_ID)
       .single();
     expect(after?.status).toBe("paid");
+    expect(after?.order_settlements[0]?.status).toBe("paid");
+    expect(after?.order_settlements[0]?.paid_at).not.toBeNull();
+  });
+
+  it("同じイベントが再配信されても冪等（paid_atが変わらず200を返す）", async () => {
+    const { data: before } = await supabase
+      .from("order_settlements")
+      .select("paid_at, order_id")
+      .eq("stripe_checkout_session_id", TEST_SESSION_ID)
+      .single();
+
+    const secret = process.env.STRIPE_WEBHOOK_SECRET!;
+    const payload = JSON.stringify({
+      id: "evt_test_stripe_checkout_webhook_retry",
+      object: "event",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: TEST_SESSION_ID,
+          object: "checkout.session",
+          mode: "payment",
+        },
+      },
+    });
+    const signature = getStripe().webhooks.generateTestHeaderString({
+      payload,
+      secret,
+    });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: { "stripe-signature": signature },
+        body: payload,
+      })
+    );
+    expect(response.status).toBe(200);
+
+    const { data: after } = await supabase
+      .from("order_settlements")
+      .select("paid_at")
+      .eq("stripe_checkout_session_id", TEST_SESSION_ID)
+      .single();
+    expect(after?.paid_at).toBe(before?.paid_at);
   });
 });

@@ -1,5 +1,7 @@
 import { Money } from "@/domain/value-objects/money";
 
+export type PaymentTiming = "at_order" | "after_order";
+
 interface OrderItemProps {
   id: string;
   sanityProductId: string;
@@ -8,6 +10,10 @@ interface OrderItemProps {
   quantity: number;
   isNegotiable: boolean;
   negotiatedUnitPrice: Money | null;
+  /** 注文確定時点の支払いタイミングのスナップショット */
+  paymentTiming: PaymentTiming;
+  /** 属する決済単位。NULL＝まだ決済単位が作られていない（請求作成前のafter_order等） */
+  settlementId: string | null;
 }
 
 export class OrderItem {
@@ -18,6 +24,8 @@ export class OrderItem {
   readonly quantity: number;
   readonly isNegotiable: boolean;
   readonly negotiatedUnitPrice: Money | null;
+  readonly paymentTiming: PaymentTiming;
+  readonly settlementId: string | null;
 
   private constructor(props: OrderItemProps) {
     this.id = props.id;
@@ -27,6 +35,8 @@ export class OrderItem {
     this.quantity = props.quantity;
     this.isNegotiable = props.isNegotiable;
     this.negotiatedUnitPrice = props.negotiatedUnitPrice;
+    this.paymentTiming = props.paymentTiming;
+    this.settlementId = props.settlementId;
   }
 
   static of(props: OrderItemProps): OrderItem {
@@ -42,6 +52,8 @@ export class OrderItem {
       quantity: this.quantity,
       isNegotiable: this.isNegotiable,
       negotiatedUnitPrice: this.negotiatedUnitPrice,
+      paymentTiming: this.paymentTiming,
+      settlementId: this.settlementId,
       ...overrides,
     });
   }

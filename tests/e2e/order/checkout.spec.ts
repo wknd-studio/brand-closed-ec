@@ -144,7 +144,6 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
     await supabaseAdmin().from("orders").insert({
       id: "00000000-0000-0000-0000-000000000060",
       user_id: userId,
-      payment_flow: "checkout",
       status: "paid",
       rank_at_order: "starter",
       monthly_limit_at_order: 300_000,
@@ -158,6 +157,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
       unit_price_snapshot: 290_000,
       quantity: 1,
       is_negotiable: false,
+      payment_timing: "at_order",
     });
 
     await page.goto("/order/checkout");

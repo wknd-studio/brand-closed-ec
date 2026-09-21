@@ -31,6 +31,7 @@ async function cleanup() {
   const orderIds = orders?.map((o) => o.id) ?? [];
   if (orderIds.length > 0) {
     await supabase.from("order_items").delete().in("order_id", orderIds);
+    await supabase.from("order_settlements").delete().in("order_id", orderIds);
     await supabase.from("orders").delete().in("id", orderIds);
   }
   await supabase.from("addresses").delete().eq("id", TEST_ADDRESS_ID);
@@ -53,10 +54,11 @@ function makeDeps(
     findByIds: vi.fn().mockResolvedValue(products),
   };
   const paymentGateway: PaymentGateway = {
-    createCheckoutSession: vi.fn().mockResolvedValue({
-      sessionId: "cs_test_place_order_infra",
+    // 実Stripeのセッションはユニークなため、決済単位のUNIQUE制約に合わせて呼び出しごとに採番する
+    createCheckoutSession: vi.fn().mockImplementation(async () => ({
+      sessionId: `cs_test_place_order_infra_${crypto.randomUUID()}`,
       url: "https://checkout.stripe.com/test",
-    }),
+    })),
     createInvoiceForOrder: vi.fn(),
     ensureCustomer: vi.fn(),
   };
@@ -175,6 +177,7 @@ async function cleanupSplitUser() {
   const orderIds = orders?.map((o) => o.id) ?? [];
   if (orderIds.length > 0) {
     await supabase.from("order_items").delete().in("order_id", orderIds);
+    await supabase.from("order_settlements").delete().in("order_id", orderIds);
     await supabase.from("orders").delete().in("id", orderIds);
   }
   await supabase.from("addresses").delete().eq("id", SPLIT_TEST_ADDRESS_ID);
@@ -208,7 +211,7 @@ async function seedSplitUser() {
   });
 }
 
-describe("placeOrder（実DB・支払いタイミング混在の分割チェックアウト）", () => {
+describe("placeOrder（実DB・支払いタイミング混在の決済単位）", () => {
   beforeAll(async () => {
     await cleanupSplitUser();
     await seedSplitUser();
@@ -218,7 +221,10 @@ describe("placeOrder（実DB・支払いタイミング混在の分割チェッ�
     await cleanupSplitUser();
   });
 
-  it("支払いタイミングが混在するカートは同一split_group_idを持つ2件のOrderとしてDBに保存される", async () => {
+  it("支払いタイミングが混在するカートは1件のOrderとして保存され、at_order明細だけがCheckout決済単位に紐づく", async () => {
+    await cleanupSplitUser();
+    await seedSplitUser();
+
     const userRepo = new SupabaseUserRepository(supabase);
     const orderRepo = new SupabaseOrderRepository(supabase);
     const addressRepo = new SupabaseAddressRepository(supabase);
@@ -274,29 +280,97 @@ describe("placeOrder（実DB・支払いタイミング混在の分割チェッ�
 
     const { data: orders } = await supabase
       .from("orders")
-      .select("id, payment_flow, split_group_id, status")
+      .select(
+        "id, status, order_settlements(id, flow, status, amount_snapshot, stripe_checkout_session_id), order_items(sanity_product_id, payment_timing, settlement_id)"
+      )
       .eq("user_id", SPLIT_TEST_USER_ID);
 
-    expect(orders).toHaveLength(2);
+    expect(orders).toHaveLength(1);
+    const order = orders![0];
+    expect(order.status).toBe("processing");
 
-    const splitGroupIds = new Set(orders!.map((o) => o.split_group_id));
-    expect(splitGroupIds.size).toBe(1);
-    expect([...splitGroupIds][0]).not.toBeNull();
+    expect(order.order_settlements).toHaveLength(1);
+    const settlement = order.order_settlements[0];
+    expect(settlement).toMatchObject({
+      flow: "checkout",
+      status: "pending_payment",
+      amount_snapshot: 30_000,
+      stripe_checkout_session_id: expect.stringMatching(
+        /^cs_test_place_order_infra_/
+      ),
+    });
 
-    const checkoutOrder = orders!.find((o) => o.payment_flow === "checkout");
-    const invoiceOrder = orders!.find((o) => o.payment_flow === "invoice");
-    expect(checkoutOrder?.status).toBe("pending_payment");
-    expect(invoiceOrder?.status).toBe("confirming");
-
-    const foundBySplitGroup = await orderRepo.findBySplitGroupId(
-      [...splitGroupIds][0]!
+    const atOrder = order.order_items.find(
+      (i) => i.sanity_product_id === "prod-split-at-order"
     );
-    expect(foundBySplitGroup.map((o) => o.id).sort()).toEqual(
-      orders!.map((o) => o.id).sort()
+    const afterOrder = order.order_items.find(
+      (i) => i.sanity_product_id === "prod-split-after-order"
     );
+    expect(atOrder).toMatchObject({
+      payment_timing: "at_order",
+      settlement_id: settlement.id,
+    });
+    expect(afterOrder).toMatchObject({
+      payment_timing: "after_order",
+      settlement_id: null,
+    });
   });
 
-  it("単一タイミングのみのカートはsplit_group_idがnullの1件のOrderとして保存される（後方互換）", async () => {
+  it("after_orderのみのカートは決済単位を作らず、明細はsettlement_id=NULLで保存される", async () => {
+    await cleanupSplitUser();
+    await seedSplitUser();
+
+    const userRepo = new SupabaseUserRepository(supabase);
+    const orderRepo = new SupabaseOrderRepository(supabase);
+    const addressRepo = new SupabaseAddressRepository(supabase);
+    const { productRepo, paymentGateway, notificationService } = makeDeps([
+      {
+        sanityProductId: "prod-after-only",
+        productName: "後払い商品",
+        unitPrice: Money.of(70_000),
+        isNegotiable: false,
+        minRank: "starter",
+        paymentTiming: "after_order",
+      },
+    ]);
+
+    const result = await placeOrder(
+      {
+        clerkUserId: SPLIT_TEST_CLERK_ID,
+        cartItems: [
+          {
+            sanityProductId: "prod-after-only",
+            quantity: 1,
+            productName: "後払い商品",
+          },
+        ],
+        shippingAddressId: SPLIT_TEST_ADDRESS_ID,
+        billingAddressId: SPLIT_TEST_ADDRESS_ID,
+        baseUrl: "http://localhost:3000",
+      },
+      {
+        userRepo,
+        orderRepo,
+        addressRepo,
+        productRepo,
+        paymentGateway,
+        notificationService,
+      }
+    );
+
+    expect(result.redirectUrl).toContain("/order/invoice-complete?order_id=");
+    expect(paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
+
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("id, order_settlements(id), order_items(settlement_id)")
+      .eq("user_id", SPLIT_TEST_USER_ID);
+    expect(orders).toHaveLength(1);
+    expect(orders![0].order_settlements).toEqual([]);
+    expect(orders![0].order_items[0].settlement_id).toBeNull();
+  });
+
+  it("単一タイミング（at_order）のみのカートは1件のOrderと1件のCheckout決済単位として保存される", async () => {
     await cleanupSplitUser();
     await seedSplitUser();
 
@@ -331,10 +405,12 @@ describe("placeOrder（実DB・支払いタイミング混在の分割チェッ�
 
     const { data: orders } = await supabase
       .from("orders")
-      .select("id, split_group_id")
+      .select("id, order_settlements(flow, status)")
       .eq("user_id", SPLIT_TEST_USER_ID);
 
     expect(orders).toHaveLength(1);
-    expect(orders![0].split_group_id).toBeNull();
+    expect(orders![0].order_settlements).toEqual([
+      { flow: "checkout", status: "pending_payment" },
+    ]);
   });
 });

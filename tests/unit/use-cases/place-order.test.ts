@@ -40,10 +40,26 @@ describe("placeOrder", () => {
 
     expect(result.redirectUrl).toBe("https://stripe.com/pay/sess_1");
     expect(deps.paymentGateway.createCheckoutSession).toHaveBeenCalled();
+    // 決済単位を含む注文の保存 → Checkout Session IDを決済単位に反映して再保存
     expect(deps.orderRepo.save).toHaveBeenCalledTimes(2);
 
-    const savedOrder = vi.mocked(deps.orderRepo.save).mock.calls[0][0];
-    expect(savedOrder.splitGroupId).toBeNull();
+    const firstSaved = vi.mocked(deps.orderRepo.save).mock.calls[0][0];
+    expect(firstSaved.status.value).toBe("processing");
+    expect(firstSaved.settlements).toHaveLength(1);
+    expect(firstSaved.settlements[0]).toMatchObject({
+      flow: "checkout",
+      status: "pending_payment",
+      stripeCheckoutSessionId: null,
+    });
+    expect(firstSaved.settlements[0].amount.amount).toBe(100_000);
+    expect(firstSaved.items).toHaveLength(1);
+    expect(firstSaved.items[0]).toMatchObject({
+      paymentTiming: "at_order",
+      settlementId: firstSaved.settlements[0].id,
+    });
+
+    const lastSaved = vi.mocked(deps.orderRepo.save).mock.calls[1][0];
+    expect(lastSaved.settlements[0].stripeCheckoutSessionId).toBe("sess_1");
   });
 
   it("交渉商品を含む場合はinvoiceフローで invoice-complete URLを返す", async () => {
@@ -68,10 +84,51 @@ describe("placeOrder", () => {
 
     expect(result.redirectUrl).toContain("/order/invoice-complete");
     expect(deps.orderRepo.save).toHaveBeenCalledTimes(1);
+    expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
     expect(deps.notificationService.sendOrderConfirming).toHaveBeenCalled();
     expect(
       deps.notificationService.sendOrderOperatorNotification
     ).toHaveBeenCalled();
+
+    // after_orderの明細は決済単位を作らず、settlement_id=NULLのまま対応待ちになる
+    const saved = vi.mocked(deps.orderRepo.save).mock.calls[0][0];
+    expect(saved.settlements).toEqual([]);
+    expect(saved.items[0]).toMatchObject({
+      paymentTiming: "after_order",
+      settlementId: null,
+    });
+  });
+
+  it("after_orderの固定価格商品のみの場合も決済単位を作らずinvoice-completeへ進む", async () => {
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([afterOrderFixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+    };
+
+    const result = await placeOrder(
+      {
+        ...baseInput,
+        cartItems: [
+          {
+            sanityProductId: "prod-3",
+            quantity: 1,
+            productName: "後払い固定商品",
+          },
+        ],
+      },
+      deps
+    );
+
+    const saved = vi.mocked(deps.orderRepo.save).mock.calls[0][0];
+    expect(result.redirectUrl).toBe(
+      `/order/invoice-complete?order_id=${saved.id}`
+    );
+    expect(saved.settlements).toEqual([]);
+    expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it("月次上限を超えた場合はLimitExceededErrorを投げる", async () => {
@@ -97,7 +154,7 @@ describe("placeOrder", () => {
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
   });
 
-  it("支払いタイミングが混在するカートでも、分割前の合計で上限超過ならOrderが1件も作成されない", async () => {
+  it("支払いタイミングが混在するカートでも、合計で上限超過ならOrderが作成されない", async () => {
     const orderRepo = makeOrderRepo();
     vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockResolvedValue(
       4_000_000
@@ -182,7 +239,7 @@ describe("placeOrder", () => {
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
   });
 
-  it("支払いタイミングが混在する場合は2件のOrderを同一splitGroupIdで作成し、checkoutのURLを返す", async () => {
+  it("支払いタイミングが混在するカートでも注文は1件のまま。at_order明細だけをCheckout決済単位に紐付け、after_order明細は未紐付けにする", async () => {
     const orderRepo = makeOrderRepo();
     const deps = {
       userRepo: makeUserRepo(),
@@ -200,7 +257,7 @@ describe("placeOrder", () => {
           { sanityProductId: "prod-1", quantity: 1, productName: "固定商品" },
           {
             sanityProductId: "prod-3",
-            quantity: 1,
+            quantity: 2,
             productName: "後払い固定商品",
           },
         ],
@@ -209,64 +266,95 @@ describe("placeOrder", () => {
     );
 
     expect(result.redirectUrl).toBe("https://stripe.com/pay/sess_1");
-    expect(deps.paymentGateway.createCheckoutSession).toHaveBeenCalled();
+    expect(deps.paymentGateway.createCheckoutSession).toHaveBeenCalledTimes(1);
 
     const savedOrders = vi
       .mocked(orderRepo.save)
       .mock.calls.map(([order]) => order);
-    const uniqueOrderIds = new Set(savedOrders.map((o) => o.id));
-    expect(uniqueOrderIds.size).toBe(2);
+    expect(new Set(savedOrders.map((o) => o.id)).size).toBe(1);
 
-    const splitGroupIds = new Set(savedOrders.map((o) => o.splitGroupId));
-    expect(splitGroupIds.size).toBe(1);
-    expect([...splitGroupIds][0]).not.toBeNull();
+    const order = savedOrders[0];
+    expect(order.items).toHaveLength(2);
+    expect(order.settlements).toHaveLength(1);
+    // 決済単位の金額はat_order明細のみ（after_orderは請求作成時に別の決済単位になる）
+    expect(order.settlements[0].amount.amount).toBe(100_000);
 
+    const atOrderItem = order.items.find((i) => i.paymentTiming === "at_order");
+    const afterOrderItem = order.items.find(
+      (i) => i.paymentTiming === "after_order"
+    );
+    expect(atOrderItem?.settlementId).toBe(order.settlements[0].id);
+    expect(afterOrderItem?.settlementId).toBeNull();
+
+    // Checkoutに渡す明細もat_orderのみ
+    const [, lineItems] = vi.mocked(deps.paymentGateway.createCheckoutSession)
+      .mock.calls[0];
+    expect(lineItems).toEqual([
+      { productName: "固定商品", unitPrice: 100_000, quantity: 1 },
+    ]);
+
+    // after_orderが含まれるので運営者・会員へ確認通知を送る
     expect(deps.notificationService.sendOrderConfirming).toHaveBeenCalled();
     expect(
       deps.notificationService.sendOrderOperatorNotification
     ).toHaveBeenCalled();
   });
 
-  it("Order Bの保存が失敗した場合、保存済みのOrder Aを削除しエラーを伝播する（原子性）", async () => {
+  it("at_orderのみの注文ではafter_order向けの確認通知は送らない", async () => {
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+    };
+
+    await placeOrder(baseInput, deps);
+
+    expect(deps.notificationService.sendOrderConfirming).not.toHaveBeenCalled();
+  });
+
+  it("注文の保存に失敗した場合、途中まで保存された注文を削除しエラーを伝播する（原子性）", async () => {
     const orderRepo = makeOrderRepo();
-    let saveCallCount = 0;
-    const savedOrderIds: string[] = [];
-    vi.mocked(orderRepo.save).mockImplementation(async (order) => {
-      saveCallCount++;
-      if (saveCallCount === 2) throw new Error("DB接続エラー");
-      savedOrderIds.push(order.id);
-    });
+    vi.mocked(orderRepo.save).mockRejectedValue(new Error("DB接続エラー"));
 
     const deps = {
       userRepo: makeUserRepo(),
       orderRepo,
       addressRepo: makeAddressRepo(),
-      productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
+      productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
     };
 
-    await expect(
-      placeOrder(
-        {
-          ...baseInput,
-          cartItems: [
-            { sanityProductId: "prod-1", quantity: 1, productName: "固定商品" },
-            {
-              sanityProductId: "prod-3",
-              quantity: 1,
-              productName: "後払い固定商品",
-            },
-          ],
-        },
-        deps
-      )
-    ).rejects.toThrow("DB接続エラー");
+    await expect(placeOrder(baseInput, deps)).rejects.toThrow("DB接続エラー");
 
-    expect(savedOrderIds).toHaveLength(1);
     expect(orderRepo.delete).toHaveBeenCalledTimes(1);
-    expect(orderRepo.delete).toHaveBeenCalledWith(savedOrderIds[0]);
     expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
+    expect(deps.notificationService.sendOrderConfirming).not.toHaveBeenCalled();
+  });
+
+  it("Checkout Session作成に失敗した場合、保存済みの注文を削除しエラーを伝播する", async () => {
+    const orderRepo = makeOrderRepo();
+    const paymentGateway = makePaymentGateway();
+    vi.mocked(paymentGateway.createCheckoutSession).mockRejectedValue(
+      new Error("Stripeエラー")
+    );
+
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway,
+      notificationService: makeNotificationService(),
+    };
+
+    await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
+
+    const savedOrderId = vi.mocked(orderRepo.save).mock.calls[0][0].id;
+    expect(orderRepo.delete).toHaveBeenCalledWith(savedOrderId);
   });
 
   it("cartItemsにpaymentTimingを注入してもサーバー側ProductSnapshotの値が優先される（カート改竄対策）", async () => {

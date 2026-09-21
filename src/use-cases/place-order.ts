@@ -6,6 +6,7 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
+import { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
@@ -94,7 +95,7 @@ export async function placeOrder(
     user.id,
     period
   );
-  // 月次上限チェックは分割前のカート合計に対して1回だけ判定する（超過時はCheckout・Invoice両方をブロック）
+  // 月次上限チェックはカート全体（at_order・after_order両方）の合計に対して1回だけ判定する
   checkMonthlyLimit(user, cartItems, Money.of(confirmedAmount));
 
   const { atOrderItems, afterOrderItems } = splitCartByPaymentTiming(cartItems);
@@ -109,7 +110,18 @@ export async function placeOrder(
   if (!shippingAddress || !billingAddress)
     throw new Error("住所が見つかりません");
 
-  const toOrderItems = (items: CartItem[]): OrderItem[] =>
+  // 注文は常に1回のチェックアウト操作＝1件。支払いタイミングが混在していても分割しない
+  // （docs/domain/settlement.md）。
+  // - at_order: 注文確定と同時にCheckout決済単位を作り、明細を紐付ける
+  // - after_order: 決済単位は作らない（settlement_id=NULL）。運営者の「請求作成」で後から紐付く
+  const orderId = crypto.randomUUID();
+  const settlementId = atOrderItems.length > 0 ? crypto.randomUUID() : null;
+
+  const toOrderItems = (
+    items: CartItem[],
+    paymentTiming: "at_order" | "after_order",
+    itemSettlementId: string | null
+  ): OrderItem[] =>
     items.map((c) =>
       OrderItem.of({
         id: crypto.randomUUID(),
@@ -119,110 +131,116 @@ export async function placeOrder(
         quantity: c.quantity,
         isNegotiable: c.isNegotiable,
         negotiatedUnitPrice: null,
+        paymentTiming,
+        settlementId: itemSettlementId,
       })
     );
 
-  const isSplit = atOrderItems.length > 0 && afterOrderItems.length > 0;
-  const splitGroupId = isSplit ? crypto.randomUUID() : null;
-
-  const buildOrder = (
-    paymentFlow: "checkout" | "invoice",
-    items: OrderItem[]
-  ): Order =>
-    Order.of({
-      id: crypto.randomUUID(),
-      userId: user.id,
-      paymentFlow,
-      status: OrderStatus.of(
-        paymentFlow === "checkout" ? "pending_payment" : "confirming"
-      ),
-      shippingAddress: shippingAddress.toSnapshot(),
-      billingAddress: billingAddress.toSnapshot(),
-      rankAtOrder: user.rank,
-      monthlyLimitAtOrder: user.getMonthlyLimit(),
-      stripeCheckoutSessionId: null,
-      stripeInvoiceId: null,
-      splitGroupId,
-      items,
-      createdAt: new Date(),
-    });
-
-  const checkoutOrder =
-    atOrderItems.length > 0
-      ? buildOrder("checkout", toOrderItems(atOrderItems))
-      : null;
-  const invoiceOrder =
-    afterOrderItems.length > 0
-      ? buildOrder("invoice", toOrderItems(afterOrderItems))
+  const settlement =
+    settlementId !== null
+      ? OrderSettlement.of({
+          id: settlementId,
+          orderId,
+          flow: "checkout",
+          status: "pending_payment",
+          stripeCheckoutSessionId: null,
+          stripeInvoiceId: null,
+          amount: atOrderItems.reduce(
+            (sum, c) => sum.add(c.getSubtotal()),
+            Money.zero()
+          ),
+          paidAt: null,
+          cancelledAt: null,
+        })
       : null;
 
-  const ordersToSave = [checkoutOrder, invoiceOrder].filter(
-    (o): o is Order => o !== null
-  );
-  await saveOrdersAtomically(ordersToSave, orderRepo);
+  const order = Order.of({
+    id: orderId,
+    userId: user.id,
+    status: OrderStatus.of("processing"),
+    shippingAddress: shippingAddress.toSnapshot(),
+    billingAddress: billingAddress.toSnapshot(),
+    rankAtOrder: user.rank,
+    monthlyLimitAtOrder: user.getMonthlyLimit(),
+    items: [
+      ...toOrderItems(atOrderItems, "at_order", settlementId),
+      ...toOrderItems(afterOrderItems, "after_order", null),
+    ],
+    settlements: settlement ? [settlement] : [],
+    createdAt: new Date(),
+  });
 
-  const productsForOrder = (order: Order): ProductSnapshot[] => {
-    const ids = new Set(order.items.map((i) => i.sanityProductId));
+  // 途中で失敗した場合に注文が中途半端に残らないよう、補償削除してからエラーを伝播する
+  const deleteOrderQuietly = async () => {
+    try {
+      await orderRepo.delete(order.id);
+    } catch {
+      // 補償削除の失敗で元のエラーを隠さない
+    }
+  };
+
+  try {
+    await orderRepo.save(order);
+  } catch (error) {
+    await deleteOrderQuietly();
+    throw error;
+  }
+
+  const afterOrderProducts = (): ProductSnapshot[] => {
+    const ids = new Set(afterOrderItems.map((i) => i.sanityProductId));
     return products.filter((p) => ids.has(p.sanityProductId));
   };
 
-  const notifyInvoiceOrder = async (order: Order) => {
+  const notifyAfterOrderItems = async () => {
     await Promise.all([
       notificationService.sendOrderConfirming(
         order,
         user,
-        productsForOrder(order)
+        afterOrderProducts()
       ),
       notificationService.sendOrderOperatorNotification(
         order,
         user.email,
-        productsForOrder(order)
+        afterOrderProducts()
       ),
     ]);
   };
 
-  if (checkoutOrder) {
+  if (settlement) {
     const lineItems: CheckoutLineItem[] = atOrderItems.map((c) => ({
       productName: c.productName,
       unitPrice: c.unitPrice.amount,
       quantity: c.quantity,
     }));
-    const session = await paymentGateway.createCheckoutSession(
-      checkoutOrder,
-      lineItems,
-      input.baseUrl
-    );
+
+    let session;
+    try {
+      session = await paymentGateway.createCheckoutSession(
+        order,
+        lineItems,
+        input.baseUrl
+      );
+    } catch (error) {
+      await deleteOrderQuietly();
+      throw error;
+    }
     await orderRepo.save(
-      checkoutOrder.with({ stripeCheckoutSessionId: session.sessionId })
+      order.applySettlement(
+        settlement.with({ stripeCheckoutSessionId: session.sessionId })
+      )
     );
 
-    if (invoiceOrder) {
-      await notifyInvoiceOrder(invoiceOrder);
+    if (afterOrderItems.length > 0) {
+      await notifyAfterOrderItems();
     }
 
     return { redirectUrl: session.url };
   }
 
-  // ここに到達する場合、afterOrderItemsが非空(invoiceOrderが必ず存在)であることが
-  // atOrderItems.length === 0 && afterOrderItems.length === 0 が発生しない前提から保証される
-  await notifyInvoiceOrder(invoiceOrder!);
+  // ここに到達する場合、atOrderItemsが空のためafterOrderItemsは必ず非空
+  // （両方空のケースは上で「カートに商品がありません」としてエラー済み）
+  await notifyAfterOrderItems();
   return {
-    redirectUrl: `/order/invoice-complete?order_id=${invoiceOrder!.id}`,
+    redirectUrl: `/order/invoice-complete?order_id=${order.id}`,
   };
-}
-
-async function saveOrdersAtomically(
-  orders: Order[],
-  orderRepo: OrderRepository
-): Promise<void> {
-  const saved: Order[] = [];
-  try {
-    for (const order of orders) {
-      await orderRepo.save(order);
-      saved.push(order);
-    }
-  } catch (error) {
-    await Promise.all(saved.map((order) => orderRepo.delete(order.id)));
-    throw error;
-  }
 }

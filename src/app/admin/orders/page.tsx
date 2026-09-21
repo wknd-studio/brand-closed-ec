@@ -3,25 +3,15 @@ import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 
 const STATUS_LABEL: Record<string, string> = {
-  confirming: "注文確認中",
+  processing: "対応中",
   limit_exceeded: "上限超過・発行停止",
-  invoice_sent: "請求書送付済み",
   paid: "入金確認済み",
-  sourcing: "手配中",
-  ordered: "発注完了",
-  preparing: "発送準備中",
-  shipping: "配送中",
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  confirming: "bg-amber-100 text-amber-700",
+  processing: "bg-amber-100 text-amber-700",
   limit_exceeded: "bg-red-100 text-red-700",
-  invoice_sent: "bg-blue-100 text-blue-700",
   paid: "bg-green-100 text-green-700",
-  sourcing: "bg-purple-100 text-purple-700",
-  ordered: "bg-purple-100 text-purple-700",
-  preparing: "bg-orange-100 text-orange-700",
-  shipping: "bg-indigo-100 text-indigo-700",
 };
 
 export default async function AdminOrdersPage() {

@@ -11,6 +11,8 @@ function makeItem(overrides: Partial<Parameters<typeof OrderItem.of>[0]> = {}) {
     quantity: 2,
     isNegotiable: false,
     negotiatedUnitPrice: null,
+    paymentTiming: "at_order",
+    settlementId: null,
     ...overrides,
   });
 }

@@ -80,6 +80,8 @@ describe("StripePaymentGateway - 冪等性キー", () => {
           quantity: 1,
           isNegotiable: false,
           negotiatedUnitPrice: null,
+          paymentTiming: "after_order",
+          settlementId: null,
         }),
         OrderItem.of({
           id: "item-2",
@@ -89,6 +91,8 @@ describe("StripePaymentGateway - 冪等性キー", () => {
           quantity: 2,
           isNegotiable: false,
           negotiatedUnitPrice: null,
+          paymentTiming: "after_order",
+          settlementId: null,
         }),
       ],
     });

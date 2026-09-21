@@ -54,6 +54,8 @@ const ADDRESS_A_ID = "00000000-0000-0000-0000-0000000000a3";
 const ADDRESS_B_ID = "00000000-0000-0000-0000-0000000000b3";
 const ORDER_A_ID = "00000000-0000-0000-0000-0000000000a4";
 const ORDER_B_ID = "00000000-0000-0000-0000-0000000000b4";
+const SETTLEMENT_A_ID = "00000000-0000-0000-0000-0000000000a5";
+const SETTLEMENT_B_ID = "00000000-0000-0000-0000-0000000000b5";
 const CLERK_ORG_A = "org_test_rls_a";
 const CLERK_ORG_B = "org_test_rls_b";
 const CLERK_USER_A = "clerk_test_rls_a";
@@ -64,6 +66,10 @@ beforeAll(async () => {
     .from("addresses")
     .delete()
     .in("id", [ADDRESS_A_ID, ADDRESS_B_ID]);
+  await adminClient
+    .from("order_settlements")
+    .delete()
+    .in("id", [SETTLEMENT_A_ID, SETTLEMENT_B_ID]);
   await adminClient.from("orders").delete().in("id", [ORDER_A_ID, ORDER_B_ID]);
   await adminClient
     .from("organization_memberships")
@@ -158,7 +164,6 @@ beforeAll(async () => {
       id: ORDER_A_ID,
       user_id: USER_A_ID,
       organization_id: ORG_A_ID,
-      payment_flow: "checkout",
       shipping_address_snapshot: {},
       billing_address_snapshot: {},
       rank_at_order: "standard",
@@ -168,11 +173,27 @@ beforeAll(async () => {
       id: ORDER_B_ID,
       user_id: USER_B_ID,
       organization_id: ORG_B_ID,
-      payment_flow: "checkout",
       shipping_address_snapshot: {},
       billing_address_snapshot: {},
       rank_at_order: "standard",
       monthly_limit_at_order: 5_000_000,
+    },
+  ]);
+
+  await adminClient.from("order_settlements").insert([
+    {
+      id: SETTLEMENT_A_ID,
+      order_id: ORDER_A_ID,
+      flow: "checkout",
+      status: "pending_payment",
+      amount_snapshot: 1000,
+    },
+    {
+      id: SETTLEMENT_B_ID,
+      order_id: ORDER_B_ID,
+      flow: "checkout",
+      status: "pending_payment",
+      amount_snapshot: 2000,
     },
   ]);
 });
@@ -220,6 +241,29 @@ describe("組織スコープのRLSアクセス制御（FR-014）", () => {
       .select("id")
       .in("id", [ORDER_A_ID, ORDER_B_ID]);
     expect((data ?? []).map((r) => r.id)).toEqual([ORDER_A_ID]);
+  });
+
+  it("組織Aのメンバーは組織Bのorder_settlementsを参照できない", async () => {
+    const asUserA = clientAs({ sub: CLERK_USER_A, org_id: CLERK_ORG_A });
+    const { data } = await asUserA
+      .from("order_settlements")
+      .select("id")
+      .in("id", [SETTLEMENT_A_ID, SETTLEMENT_B_ID]);
+    expect((data ?? []).map((r) => r.id)).toEqual([SETTLEMENT_A_ID]);
+  });
+
+  it("組織Aのメンバーはorder_settlementsを書き込めない（Webhook・ユースケース経由のみ）", async () => {
+    const asUserA = clientAs({ sub: CLERK_USER_A, org_id: CLERK_ORG_A });
+    await asUserA
+      .from("order_settlements")
+      .update({ status: "paid" })
+      .eq("id", SETTLEMENT_A_ID);
+    const { data } = await adminClient
+      .from("order_settlements")
+      .select("status")
+      .eq("id", SETTLEMENT_A_ID)
+      .single();
+    expect(data?.status).toBe("pending_payment");
   });
 
   it("組織Aのメンバーは組織Bのaddressesを参照できない", async () => {

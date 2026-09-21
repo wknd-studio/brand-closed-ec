@@ -54,7 +54,6 @@ beforeAll(async () => {
   await supabase.from("orders").insert({
     id: TEST_ORDER_CONFIRMED_ID,
     user_id: TEST_USER_ID,
-    payment_flow: "checkout",
     status: "paid",
     rank_at_order: "advanced",
     monthly_limit_at_order: 50_000_000,
@@ -68,13 +67,13 @@ beforeAll(async () => {
     unit_price_snapshot: 1_000_000,
     quantity: 3,
     is_negotiable: false,
+    payment_timing: "at_order",
   });
 
   // キャンセル済み注文は月間確定金額の計算に含まれないことを確認するための対照データ
   await supabase.from("orders").insert({
     id: TEST_ORDER_CANCELLED_ID,
     user_id: TEST_USER_ID,
-    payment_flow: "checkout",
     status: "cancelled",
     rank_at_order: "advanced",
     monthly_limit_at_order: 50_000_000,
@@ -88,6 +87,7 @@ beforeAll(async () => {
     unit_price_snapshot: 100_000_000,
     quantity: 1,
     is_negotiable: false,
+    payment_timing: "at_order",
   });
 });
 

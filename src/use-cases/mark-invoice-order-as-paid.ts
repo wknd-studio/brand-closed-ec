@@ -1,4 +1,3 @@
-import { OrderStatus } from "@/domain/value-objects/order-status";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { NotificationService } from "@/repositories/notification-service";
@@ -10,6 +9,7 @@ export type MarkInvoiceOrderAsPaidDeps = {
   notificationService: NotificationService;
 };
 
+/** Stripe Invoiceの入金を、対応する決済単位のpaidとして記録する */
 export async function markInvoiceOrderAsPaid(
   input: MarkInvoiceOrderAsPaidInput,
   deps: MarkInvoiceOrderAsPaidDeps
@@ -17,10 +17,17 @@ export async function markInvoiceOrderAsPaid(
   const { orderRepo, userRepo, notificationService } = deps;
 
   const order = await orderRepo.findByStripeInvoiceId(input.stripeInvoiceId);
+  // サブスクリプション請求など、注文に紐づかないInvoiceは対象外
   if (!order) return;
-  if (order.status.value === "paid") return;
 
-  const paidOrder = order.with({ status: OrderStatus.of("paid") });
+  const settlement = order.settlements.find(
+    (s) => s.stripeInvoiceId === input.stripeInvoiceId
+  );
+  if (!settlement) return;
+  // Webhookの再配信に対する冪等性
+  if (settlement.isPaid()) return;
+
+  const paidOrder = order.applySettlement(settlement.markPaid(new Date()));
   await orderRepo.save(paidOrder);
 
   const user = await userRepo.findById(order.userId);

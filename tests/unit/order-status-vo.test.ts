@@ -1,89 +1,52 @@
 import { describe, it, expect } from "vitest";
 import { OrderStatus } from "@/domain/value-objects/order-status";
-import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 
+// orders.statusは配下のorder_settlements・order_itemsから算出するロールアップ値
+// （docs/domain/settlement.md）。値は4種類のみ。
 describe("OrderStatus", () => {
   describe("of()", () => {
-    it("有効な値を受け付ける", () => {
-      expect(OrderStatus.of("paid").value).toBe("paid");
-    });
-
-    it("pending_approval を受け付ける", () => {
-      expect(OrderStatus.of("pending_approval").value).toBe("pending_approval");
-    });
-
-    it("無効な値はエラーになる", () => {
-      expect(() => OrderStatus.of("unknown")).toThrow();
-    });
-  });
-
-  describe("canAdvance() — admin が手動で進める遷移", () => {
-    it.each(["paid", "sourcing", "ordered", "preparing", "shipping"])(
-      "%s はtrue",
+    it.each(["cancelled", "processing", "limit_exceeded", "paid"])(
+      "%s を受け付ける",
       (status) => {
-        expect(OrderStatus.of(status).canAdvance()).toBe(true);
+        expect(OrderStatus.of(status).value).toBe(status);
       }
     );
 
     it.each([
+      "pending_approval",
       "pending_payment",
       "confirming",
-      "limit_exceeded",
       "invoice_sent",
-      "delivered",
-      "cancelled",
-    ])("%s はfalse", (status) => {
-      expect(OrderStatus.of(status).canAdvance()).toBe(false);
-    });
-  });
-
-  describe("next()", () => {
-    it.each([
-      ["paid", "sourcing"],
-      ["sourcing", "ordered"],
-      ["ordered", "preparing"],
-      ["preparing", "shipping"],
-      ["shipping", "delivered"],
-    ] as const)("%s → %s", (from, to) => {
-      expect(OrderStatus.of(from).next().value).toBe(to);
-    });
-
-    it("canAdvance() が false のステータスは InvalidStatusTransitionError", () => {
-      expect(() => OrderStatus.of("pending_payment").next()).toThrow(
-        InvalidStatusTransitionError
-      );
-    });
-  });
-
-  describe("isTerminal()", () => {
-    it.each(["delivered", "cancelled"])("%s はtrue", (status) => {
-      expect(OrderStatus.of(status).isTerminal()).toBe(true);
-    });
-
-    it("paid はfalse", () => {
-      expect(OrderStatus.of("paid").isTerminal()).toBe(false);
-    });
-  });
-
-  describe("isCancellable()", () => {
-    it.each([
-      "pending_payment",
-      "confirming",
-      "limit_exceeded",
-      "invoice_sent",
-    ])("%s はtrue", (status) => {
-      expect(OrderStatus.of(status).isCancellable()).toBe(true);
-    });
-
-    it.each([
-      "paid",
       "sourcing",
       "ordered",
       "preparing",
       "shipping",
       "delivered",
-      "cancelled",
-    ])("%s はfalse", (status) => {
+      "unknown",
+    ])("旧ステータス・不正値 %s はエラーになる", (status) => {
+      expect(() => OrderStatus.of(status)).toThrow();
+    });
+  });
+
+  describe("isTerminal()", () => {
+    it("cancelled はtrue", () => {
+      expect(OrderStatus.of("cancelled").isTerminal()).toBe(true);
+    });
+
+    it.each(["processing", "limit_exceeded", "paid"])(
+      "%s はfalse",
+      (status) => {
+        expect(OrderStatus.of(status).isTerminal()).toBe(false);
+      }
+    );
+  });
+
+  describe("isCancellable()", () => {
+    it.each(["processing", "limit_exceeded"])("%s はtrue", (status) => {
+      expect(OrderStatus.of(status).isCancellable()).toBe(true);
+    });
+
+    it.each(["paid", "cancelled"])("%s はfalse", (status) => {
       expect(OrderStatus.of(status).isCancellable()).toBe(false);
     });
   });
@@ -94,7 +57,7 @@ describe("OrderStatus", () => {
     });
 
     it("異なる値はfalse", () => {
-      expect(OrderStatus.of("paid").equals(OrderStatus.of("sourcing"))).toBe(
+      expect(OrderStatus.of("paid").equals(OrderStatus.of("processing"))).toBe(
         false
       );
     });
