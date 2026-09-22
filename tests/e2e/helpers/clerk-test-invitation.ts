@@ -185,9 +185,12 @@ export async function cleanupTestUser(emailAddress: string) {
     .select("id")
     .eq("email", emailAddress);
 
-  // usersを直接削除しようとすると、テスト中に作成したaddresses/ordersが
-  // user_idを参照しているため外部キー制約違反で失敗し、それに気づかないまま
-  // usersの行が残り続けてしまう。参照している行を先に削除してから消す
+  // usersを直接削除しようとすると、テスト中に作成したaddresses/orders/
+  // cart_items/favoritesがuser_idを参照しているため外部キー制約違反で
+  // 失敗し、それに気づかないままusersの行が残り続けてしまう（実際に
+  // stg環境でこれが発生し、次のテスト実行時にメールアドレス重複で
+  // .single()がクラッシュする不具合を引き起こしていた）。
+  // 参照している行を先に削除し、最後の削除はエラーを握りつぶさず検知する
   for (const user of users ?? []) {
     const { data: orders } = await supabase
       .from("orders")
@@ -202,9 +205,17 @@ export async function cleanupTestUser(emailAddress: string) {
     }
     await supabase.from("orders").delete().eq("user_id", user.id);
     await supabase.from("addresses").delete().eq("user_id", user.id);
+    await supabase.from("cart_items").delete().eq("user_id", user.id);
+    await supabase.from("favorites").delete().eq("user_id", user.id);
   }
 
-  await supabase.from("users").delete().eq("email", emailAddress);
+  const { error } = await supabase
+    .from("users")
+    .delete()
+    .eq("email", emailAddress);
+  if (error) {
+    throw new Error(`テスト用会員行の削除に失敗しました: ${error.message}`);
+  }
 }
 
 /**
@@ -221,11 +232,23 @@ export async function cleanupTestOrganization(name: string) {
     .maybeSingle();
   if (!org) return;
 
+  // addressesがorganization_idを参照しているため、先に削除しないと
+  // organizationsの削除が外部キー制約違反で失敗し（エラーを検知せず
+  // 気づかないまま）、組織が残り続けてしまう
+  // （呼び出し側のcleanupTestUserがuser_idで同じ行を消す場合もあるが、
+  // 呼び出し順に依存させないためここでも消しておく）
+  await supabase.from("addresses").delete().eq("organization_id", org.id);
   await supabase
     .from("organization_memberships")
     .delete()
     .eq("organization_id", org.id);
-  await supabase.from("organizations").delete().eq("id", org.id);
+  const { error } = await supabase
+    .from("organizations")
+    .delete()
+    .eq("id", org.id);
+  if (error) {
+    throw new Error(`テスト用組織の削除に失敗しました: ${error.message}`);
+  }
 
   try {
     const clerk = await clerkClient();
