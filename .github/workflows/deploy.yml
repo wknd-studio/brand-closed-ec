@@ -103,13 +103,6 @@ jobs:
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     environment: staging
-    # 共有Clerk開発インスタンスのレート制限により、このリポジトリで日常的に
-    # 発生している複数ブランチの同時CI実行・複数セッションの並列開発とは
-    # 無関係に、テスト実行そのものが失敗する状態が続いている（2026-09-22時点）。
-    # 原因はアプリコード側になく対処もできないため、E2Eの実行・レポートは
-    # 続けつつマージ・開発のブロッカーにはしない。Clerk側の制限が解消したら
-    # このcontinue-on-errorは外すこと
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -150,6 +143,15 @@ jobs:
         # localhost:3000へ転送）で、これがないと決済確定後のWebhook処理がテストで
         # 検証できない。署名シークレット（STRIPE_WEBHOOK_SECRET）はStripeアカウント
         # に紐づく固定値のため、Doppler側に設定済みの値をそのまま使う
+        #
+        # 共有Clerk開発インスタンスのレート制限により、このリポジトリで日常的に
+        # 発生している複数ブランチの同時CI実行・複数セッションの並列開発とは
+        # 無関係に、テスト実行そのものが失敗する状態が続いている（2026-09-22時点）。
+        # 原因はアプリコード側になく対処もできないため、continue-on-errorで
+        # このステップの失敗ではジョブ・PRのマージをブロックしないようにしている。
+        # Clerk側の制限が解消したら外すこと
+        id: e2e
+        continue-on-error: true
         run: |
           eval "$(supabase status -o env | sed 's/^/export /')"
           doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe &
@@ -164,8 +166,10 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
-        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする
-        if: failure()
+        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする。
+        # 上のE2EステップはcontinueOnErrorのためjob全体のfailure()はtrueに
+        # ならず、ステップ自身のoutcomeで判定する必要がある
+        if: steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-pr
@@ -269,13 +273,6 @@ jobs:
     concurrency:
       group: stg-deploy-and-verify
       cancel-in-progress: false
-    # 共有Clerk開発インスタンスのレート制限により、このリポジトリで日常的に
-    # 発生している複数ブランチの同時CI実行・複数セッションの並列開発とは
-    # 無関係に、テスト実行そのものが失敗する状態が続いている（2026-09-22時点）。
-    # 原因はアプリコード側になく対処もできないため、E2Eの実行・レポートは
-    # 続けつつマージ・開発のブロッカーにはしない。Clerk側の制限が解消したら
-    # このcontinue-on-errorは外すこと
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -323,6 +320,14 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Run E2E tests
+        # 共有Clerk開発インスタンスのレート制限により、このリポジトリで日常的に
+        # 発生している複数ブランチの同時CI実行・複数セッションの並列開発とは
+        # 無関係に、テスト実行そのものが失敗する状態が続いている（2026-09-22時点）。
+        # 原因はアプリコード側になく対処もできないため、continue-on-errorで
+        # このステップの失敗ではジョブ・マージをブロックしないようにしている。
+        # Clerk側の制限が解消したら外すこと
+        id: e2e
+        continue-on-error: true
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
@@ -333,8 +338,10 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
-        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする
-        if: failure()
+        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする。
+        # 上のE2EステップはcontinueOnErrorのためjob全体のfailure()はtrueに
+        # ならず、ステップ自身のoutcomeで判定する必要がある
+        if: steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-stg
