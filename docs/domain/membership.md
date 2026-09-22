@@ -7,7 +7,7 @@
 **扱うこと**:
 
 - Waitlist（参加希望送信・管理者承認）を起点とした会員登録フロー
-- 個人としての会員資格（`users`）と、0個以上の法人組織（`organizations`/`organization_memberships`）への所属が両立するというデータモデルの考え方（Clerkのマルチテナントモデルに準拠。詳細は「個人と組織の関係」節）
+- 個人・法人いずれも`users`テーブル1行で表現するというデータモデルの考え方（`member_type`による区別。詳細は「個人と法人の関係」節）
 - 招待の仕組み（会員間の招待・招待記録）
 - アカウント停止・強制退会・退会・再入会のルール
 - Clerkとの役割分担（本人確認・認証の正はどちらか）
@@ -16,23 +16,21 @@
 
 - ランク・サブスクリプション・初期費用・プラン変更そのもののルール（`subscribed_at`起点の月次上限計算やStripe連携の詳細）は[[subscription-billing]]（未着手）が扱う。本ドキュメントは「会員資格を持っているか／持っていないか」までを扱い、「どのランクか」は扱わない
 - 運営スタッフ（管理者・請求顧客担当・調達担当）のロール・権限は`admin-rbac.md`（未着手、`db-schema-redesign.md`策定時点では`admin_users`/`admin_memberships`として設計済み）が扱う。本ドキュメントで「管理者」と書く場合も、あくまで会員側の業務ルールに対する運営者の関わり（強制退会の実行者等）として登場するだけで、権限マトリクスの正はそちらにある
-- **法人会員内の注文承認フローは2026-09-13廃止**: 本格的な法人組織対応（複数メンバー・担当者の発注を管理者が承認する運用）はVer1では実装しないと決定したため、`org:admin`のみが注文を承認できるというルール自体が不要になった（[[ordering]]参照）。本ドキュメントは`organization_memberships`が「誰がどの組織に所属しているか」を表す集約としての側面のみを扱う
+- **複数メンバー共有型の法人組織はVer1では実装しない（2026-09-12方針転換、GitHub issue #200）**: 1つの契約・1つの月次上限を複数メンバーで共有する`organizations`/`organization_memberships`（Clerkのマルチテナントモデル）は実装量削減のため見送り、法人会員も個人と同じ「1アカウント＝1担当者」として扱う。旧方針（2026-09-06〜2026-09-12、下記「個人と組織の関係」節）や複数メンバー対応自体を再導入する場合の移行手順は「将来の複数メンバー対応（Ver2以降）」節を参照
 
 ## 主要な概念・用語
 
 `docs/glossary.md`の「会員・ランク」「招待」セクションと整合させる。以下は本ドキュメントで新たに補足する用語（`glossary.md`側への追記が必要）。
 
-| 用語                                                         | 定義                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Waitlist**                                                 | Clerkの`Waitlist` signup mode。ユーザーが`/waitlist`でメールアドレスを送信すると`pending`状態の`waitlistEntry`が作成され、管理者の承認（`invite()`）で招待メールが送られる                                                                                                        |
-| **個人会員**                                                 | Clerkの個人User。DB上は`users`テーブルの1行に対応する。**全てのユーザーが常に持つ**（法人組織に所属していても消えない）。個人としてのランク・月次上限を持つ                                                                                                                       |
-| **法人会員（組織）**                                         | ClerkのOrganization。DB上は`organizations`テーブルの1行に対応する。ランク・月次上限は組織単位で共有される。ユーザーは個人としての`users`行を保持したまま、追加で0個以上の組織に所属できる                                                                                         |
-| **アクティブコンテキスト**                                   | 今どの立場（個人／特定の組織）で操作しているかを表す状態。Clerkの`<OrganizationSwitcher>`で切り替える。発注等ランクに依存する操作は、切り替え時点でのアクティブコンテキストのランク・月次上限を参照する（旧「アカウント種別選択」を置き換える概念。詳細は「個人と組織の関係」節） |
-| **代表者**                                                   | 法人組織を作成したユーザー。Clerk上その組織の`org:admin`として登録され、`users`側にも代表者本人の氏名・電話番号が反映される。個人としての`users`行は組織作成後も維持される                                                                                                        |
-| **一般担当者**                                               | 法人組織に後から招待され所属するユーザー。組織のコンテキストで操作する場合は組織のランク・月次上限を、個人のコンテキストで操作する場合は自分自身のランク・月次上限を使う                                                                                                          |
-| **停止**                                                     | 管理者がアクセスをブロックし課金を一時停止する、可逆的な操作。強制退会とは異なり関係は継続する                                                                                                                                                                                    |
-| **強制退会**                                                 | 管理者権限で会員を退会させる、不可逆な操作。会員自身の退会ブロック条件（後述）を迂回できる                                                                                                                                                                                        |
-| **初期費用支払い済みランク（`initial_fee_paid_rank_code`）** | 退会・再入会をまたいでも保持される「支払い済み最高ランク」のキャッシュ。再入会時・アップグレード時の初期費用二重課金判定に使う。詳細な金額計算は[[subscription-billing]]が扱う                                                                                                    |
+| 用語                                                         | 定義                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Waitlist**                                                 | Clerkの`Waitlist` signup mode。ユーザーが`/waitlist`でメールアドレスを送信すると`pending`状態の`waitlistEntry`が作成され、管理者の承認（`invite()`）で招待メールが送られる                                                                                                                                |
+| **個人会員**                                                 | `users.member_type = 'individual'`の会員。**全てのユーザーがどちらか一方の`member_type`を持つ**（デフォルト）。個人としてのランク・月次上限を持つ                                                                                                                                                         |
+| **法人会員**                                                 | `users.member_type = 'corporate'`の会員。個人会員と同じ`users`テーブル1行で表現され、追加で`company_name`（会社名）・`invoice_registration_number`（適格請求書発行事業者登録番号）を持つ。1アカウント＝1担当者であり、複数メンバーで契約・月次上限を共有する仕組みは無い（Ver1の方針、GitHub issue #200） |
+| **代表者**                                                   | 法人としてアカウントを作成したユーザー本人。法人会員は個人会員と同じ1つの`users`行がそのまま契約主体になるため、「代表者」と「アカウント本人」は常に同一人物である                                                                                                                                        |
+| **停止**                                                     | 管理者がアクセスをブロックし課金を一時停止する、可逆的な操作。強制退会とは異なり関係は継続する                                                                                                                                                                                                            |
+| **強制退会**                                                 | 管理者権限で会員を退会させる、不可逆な操作。会員自身の退会ブロック条件（後述）を迂回できる                                                                                                                                                                                                                |
+| **初期費用支払い済みランク（`initial_fee_paid_rank_code`）** | 退会・再入会をまたいでも保持される「支払い済み最高ランク」のキャッシュ。再入会時・アップグレード時の初期費用二重課金判定に使う。詳細な金額計算は[[subscription-billing]]が扱う                                                                                                                            |
 
 ## 業務ルール・不変条件
 
@@ -43,18 +41,28 @@
 - **登録には招待が必須**。招待なしでは登録できない（`archive/service-spec.md`「共通ルール」）。
 - **アクセス制限の方式はWaitlist**: ユーザーが`/waitlist`で参加希望を送信し、管理者が`/admin/waitlist`で承認した人のみ`/sign-up`以降のフローに進める。旧「管理者がメールアドレスを直接指定して招待する」方式（Restricted signup mode + `/admin/invitations`）は廃止済み（`docs/waitlist-migration-plan.md`、PR #144）。
 - **利用規約・プライバシーポリシーへの同意はClerk標準機能**（`compliance.legal_consent`）で必須化する。独自の同意ページは持たない。
-- **個人と組織は両立する（Clerkのマルチテナントモデルに準拠）**: 1ユーザーは常に個人としての`users`行を持ち、それとは別に0個以上の法人組織に所属できる。「個人/法人のどちらかを選ぶ」という排他的な状態は存在しない。詳細は「個人と組織の関係」節（旧: `specs/005-b2b-organization` FR-022が定めていた排他ルールは撤回。2026-09-06、Clerkの設計思想に合わせる形で方針転換）。
-- **決済は個人・法人で共通**: どちらもStripe Checkoutで初期費用・月額費用を決済し、確定はStripe Webhook（`checkout.session.completed`）による非同期処理で行う（決済・ランクの詳細は[[subscription-billing]]）。個人としての契約と、所属する組織の契約は独立した別々のStripe契約として共存する。
-- **氏名・電話番号は各オンボーディング画面内で収集する**: 個人は`/onboarding/plan`、法人代表者は`/onboarding/organization`。汎用のプロフィール入力ゲート画面は意図的に作らない（`docs/signup-flow.md`設計決定事項#10）。
-- **Webhookとサーバーアクションの二重upsert**: Clerkの`user.created`Webhookはベストエフォート配信のため、`selectPlan`・`createOrganization`側でも`users`が存在しなければ作成することで整合性を保証する。
+- **法人会員も個人と同じ1アカウント方式（2026-09-12方針転換、GitHub issue #200）**: 「個人/法人のどちらかを選ぶ」という択一の状態として`users.member_type`（`individual`/`corporate`）を持つ。個人と法人を両立させる（1ユーザーが個人契約と法人契約を両方持つ）モデルは採用しない。詳細は「個人と法人の関係」節。
+- **決済は個人・法人で共通**: どちらもStripe Checkoutで初期費用・月額費用を決済し、確定はStripe Webhook（`checkout.session.completed`）による非同期処理で行う（決済・ランクの詳細は[[subscription-billing]]）。
+- **氏名・電話番号・法人情報は同じオンボーディング画面内で収集する**: `/onboarding/plan`で氏名・電話番号を収集し、`member_type='corporate'`の場合は同画面で追加で会社名・適格請求書発行事業者登録番号も入力する。汎用のプロフィール入力ゲート画面は意図的に作らない（`docs/signup-flow.md`設計決定事項#10）。
+- **Webhookとサーバーアクションの二重upsert**: Clerkの`user.created`Webhookはベストエフォート配信のため、`selectPlan`側でも`users`が存在しなければ作成することで整合性を保証する。
 
-#### 個人と組織の関係（2026-09-06方針転換）
+#### 個人と法人の関係（2026-09-12方針転換、GitHub issue #200）
 
-- **1ユーザー・複数コンテキスト**: 個人としての`users`行は、法人組織に所属していても消えない。Clerkが標準で提供する「個人（Personal account）」と「所属組織」を行き来できるモデルをそのまま採用する。
-- **アクティブコンテキストの解決**: `<OrganizationSwitcher>`（Clerk標準UI）で選択した現在のコンテキスト（個人／組織のいずれか1つ）が、そのときの操作（発注・月次上限判定・商品閲覧可否等）に使うランク・上限を一意に決める。同時に2つのコンテキストを跨いだ操作（例: 個人の上限と組織の上限を合算する）は発生しない。
-- **既存の個人会員も法人組織に所属できる**: 招待を受ける側が既に個人会員として登録済みであっても、追加で組織に参加できる（旧FR-023の拒否ルールは撤回）。同一メールアドレスでの二重登録を禁止する制約ではなく、Clerkの1ユーザーに複数の所属を許すモデルに合わせる。
-- **組織からの離脱・除外**: 組織を抜けても、個人としての`users`行・個人としてのランク・契約は元々別のライフサイクルなのでそのまま存続する。「離脱後に個人会員として再登録できるか」という問いそのものが発生しない（個人会員である状態を一度もやめていないため）。
-- **想定していた悪用リスクについて**: 「個人の安いプランと法人契約を使い分けて悪用するのでは」という懸念があったが、各注文は必ずどちらか一方のアクティブコンテキストに紐づき、コンテキストを跨いだ合算・付け替えは発生しないため、正当な2つの契約を使い分けているだけであり悪用には当たらない。
+- **1ユーザー＝1アカウント＝1担当者**: 法人会員も個人会員と全く同じ`users`テーブル1行で表現される。`member_type='corporate'`の行は追加で`company_name`・`invoice_registration_number`を持つ（`member_type='corporate'`の場合は両方NOT NULL、CHECK制約で強制）。
+- **複数メンバーでの契約・月次上限の共有は無い**: 1つの法人が複数の担当者アカウントを持ちたい場合は、各担当者がそれぞれ独立した`users`行（＝独立した契約・独立した月次上限）を持つ。同じ会社の複数アカウント間で予算枠を合算・按分する仕組みは存在しない。
+- **ランク変更後もmember_typeは変わらない**: `member_type`はオンボーディング時に確定し、以降のランク変更（アップグレード・ダウングレード）では変化しない。
+
+##### 将来、複数メンバー対応（Ver2以降）を実装する際の移行手順
+
+複数メンバーが同一予算枠を共有する法人組織モデルを再導入する場合、以下の手順で移行する（GitHub issue #200参照）。
+
+1. `organizations`テーブルを再作成する
+2. `member_type='corporate'`の各`users`行について、対応する`organizations`行を作成する（`company_name`→`name`、`invoice_registration_number`、`rank_code`をコピー）
+3. その`users`行の`subscriptions`を`organization_id`に付け替える
+4. `organization_memberships`にその人を`org:admin`として登録する
+5. `users.member_type`/`company_name`/`invoice_registration_number`を削除する
+
+旧設計（2026-09-06〜2026-09-12に採用していた、`organizations`/`organization_memberships`によるClerkマルチテナントモデル準拠の複数メンバー対応）の詳細は、この移行手順の逆操作として`git log`上の本ドキュメント・`docs/db-schema-redesign.md`の該当時点の版、および`specs/005-b2b-organization`を参照。
 
 #### 招待（会員間） — 2026-09-13時点、Ver1では実装しない
 
@@ -78,16 +86,15 @@
   - 決済単位が1件も無い（後払い明細が未請求のまま）注文もブロックしない: まだ何も請求されていないため
   - 経緯: 旧ルール「`paid`以降（`paid`/`sourcing`/`ordered`/`preparing`/`shipping`）の注文が1件でもあればブロック、`paid`より前はブロックしない」は、決済単位分離（[[settlement]]、issue #219以降）により`orders.status`が決済単位のロールアップ値になったため判定不能になった（決済前・支払い済みの両方が同じ`processing`になりうる）。加えて旧ルールの実装（`status NOT IN ('delivered','cancelled')`）は決済前の注文もブロックしてしまうバグを持っていた（issue #208）。決済単位ベースの新ルールはこの2つの問題を同時に解消する
 - 強制退会は上記の自己退会ブロック条件を迂回できる（後述「アカウント停止・強制退会」節）。決済・配送が未解決のまま強制退会させた場合の運用は運営側の手動対応に委ねる
-- 退会後もデータは保持する（論理削除、`users.deleted_at`/`organizations.deleted_at`）。退会と同時にStripeサブスクリプションを解約する。
+- 退会後もデータは保持する（論理削除、`users.deleted_at`）。退会と同時にStripeサブスクリプションを解約する。
 - 再入会時: 注文履歴・住所などのデータは論理削除のため引き継がれる。プランは再入会時に改めて選択する。初期費用は`initial_fee_paid_rank_code`を基準に、選択プランがそれ以下なら免除、上回れば差分を請求する（差分計算のルールは[[subscription-billing]]）。
 - **退会はアプリ独自の`/settings`画面・`withdraw.ts`経由に一本化する**（2026-09-13確認）: Clerkには`<UserProfile />`から会員が直接Clerkアカウントを削除できる「Self Service Delete」機能があるが、これは**有効にしてはならない**。現状`user.deleted` Webhookハンドラーが存在せず、この経路でアカウントが消えると`users.deleted_at`が更新されず・Stripeサブスクリプションが解約されないまま課金が続き・上記の退会ブロック条件（6ヶ月未満・アクティブ注文あり）も完全にバイパスされる。ログイン情報変更（メール・パスワード・MFA）に`<UserProfile />`を使う場合も、Self Service Deleteは無効のまま維持し、退会導線は露出させない（issue #212）。
 
 #### データモデル（`db-schema-redesign.md`より）
 
-- `users.clerk_user_id`と`organizations.clerk_org_id`はいずれも`WHERE deleted_at IS NULL`の**部分UNIQUE**にする。退会（論理削除）後に同じClerkアカウント・同じ組織で再登録すると、通常のUNIQUEでは一意制約違反になるため。
-- `users`/`organizations`とも`rank_code`をNOT NULL・非正規化キャッシュとして持つ。更新は必ず`rank_changes`へのINSERTと同一トランザクションで行う（詳細は[[subscription-billing]]）。
-- `organizations`の住所カラム（`postal_code`等）は廃止され、`addresses`（`type='headquarters'`）に統合されている。組織の本店所在地は`addresses`テーブル側で1組織1件の部分UNIQUEインデックスで保証する。
-- `organization_memberships.clerk_role`はCHECK制約を持たない意図的な設計（詳細な理由は`admin-rbac.md`「ロールのバリデーションについて」と同じトレードオフ）。認可判定はアプリケーション層の`has({ permission })`が担う。
+- `users.clerk_user_id`は`WHERE deleted_at IS NULL`の**部分UNIQUE**にする。退会（論理削除）後に同じClerkアカウントで再登録すると、通常のUNIQUEでは一意制約違反になるため。
+- `users.rank_code`をNOT NULL・非正規化キャッシュとして持つ。更新は必ず`rank_changes`へのINSERTと同一トランザクションで行う（詳細は[[subscription-billing]]）。
+- `users.member_type`（`individual`/`corporate`、CHECK制約）・`company_name`・`invoice_registration_number`（"T"+13桁のCHECK制約）を持つ。`member_type='corporate'`の場合、`company_name`/`invoice_registration_number`の両方がNOT NULLであることをCHECK制約で強制する。
 
 ### まだ決まっていない・要確認事項
 
@@ -105,10 +112,10 @@
 
 ## 参考資料
 
-- `db-schema-redesign.md`: `member_ranks`・`users`・`organizations`・`organization_memberships`節（会員登録・個人/法人・退会に関わる部分。`subscriptions`/`rank_changes`は主に[[subscription-billing]]の管掌）
+- `db-schema-redesign.md`: `member_ranks`・`users`節（会員登録・個人/法人・退会に関わる部分。`subscriptions`/`rank_changes`は主に[[subscription-billing]]の管掌）。`organizations`/`organization_memberships`を含む旧設計は2026-09-12方針転換（GitHub issue #200）前の版を参照
 - `archive/service-spec.md`: 「利用者」「共通ルール」「招待システム」「ランク変更ルール」「アカウント停止」「退会・再入会」節（凍結済みスナップショット）
 - `docs/signup-flow.md`: 現行実装のオンボーディングフロー（Waitlist〜アカウント種別選択〜プラン選択〜Stripe決済）の図・ルーティング表
 - `docs/waitlist-migration-plan.md`: Restricted mode → Waitlist modeへの移行の経緯・決定事項
 - `docs/glossary.md`: 「会員・ランク」「招待」節
-- `specs/005-b2b-organization`: 氏名電話番号収集（FR-020）等の実装済みspec。個人/法人の排他性（旧FR-022/FR-023）は2026-09-06に撤回済み（GitHub issue #186参照）
-- 実装コード: `src/app/onboarding/*`（アカウント種別選択・プラン選択・組織作成）、`src/app/api/webhooks/clerk`（`user.created`ハンドラー）、`src/app/waitlist`・`src/app/admin/waitlist`
+- `specs/005-b2b-organization`: 氏名電話番号収集（FR-020）等の実装済みspec。複数メンバー共有型の法人組織対応（`organizations`/`organization_memberships`）は2026-09-12に見送りとなった（GitHub issue #200、旧issue #186）。Ver2以降で再導入する場合の参考資料として残す
+- 実装コード: `src/app/onboarding/*`（アカウント種別選択・プラン選択）、`src/app/api/webhooks/clerk`（`user.created`ハンドラー）、`src/app/waitlist`・`src/app/admin/waitlist`
