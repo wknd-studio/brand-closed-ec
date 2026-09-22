@@ -1,52 +1,45 @@
 # 並列worktree実装の手引き
 
-複数のissueを、1台のPC上で完全に分離した環境（別git worktree・別ポート・別ローカルSupabase）で、最大4並列で実装するための基盤。
-
-## できること・できないこと
-
-| 分離対象                               | 状態                                                                      |
-| -------------------------------------- | ------------------------------------------------------------------------- |
-| ファイルシステム（git worktree）       | 完全分離                                                                  |
-| ローカルSupabase（Docker）             | 完全分離（本仕組みで対応）                                                |
-| Next.js/Playwrightの開発サーバーポート | 完全分離（本仕組みで対応）                                                |
-| Clerk・Stripe・Sanity                  | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う） |
-
-Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。Stripeの決済イベントは全worktreeの`stripe listen`に転送されるため、他worktree宛てのイベントによる無害な404ログが出ることがある（実害なし）。
+複数のissueを、1台のPC上で完全に分離した環境（別git worktree・別ポート・別ローカルSupabase）で、最大4並列で実装するための仕組み。
 
 ## 使い方
 
-```bash
-# worktree作成（issue番号226、スロット2）
-task worktree:new -- 226 2
+1. 並列させたい数だけClaude Codeセッションを別ウィンドウで立ち上げる
+2. 各セッションで `/work-on-issue <issue番号>` を実行する
+3. あとはセッションに任せる。環境構築（worktree作成・空きスロット検出・ポート調整・Supabase起動）から実装・テスト・push・PR作成までスキルが自走する
+4. ユーザーがやることは「どのセッションにどのissueを割り振るか」の意思決定だけ
 
-# VS Codeで開く
-code ../wt-226
+具体的な手順は `.claude/skills/work-on-issue/SKILL.md` を参照。このドキュメントは背景・制約のリファレンス。
 
-# そのworktree内で
-task test:integration:worktree   # スロット専用のSupabaseに対して統合テスト
-task test:e2e:worktree           # スロット専用のポート・Supabaseに対してE2Eテスト
+## できること・できないこと
 
-# 片付け（Supabase停止 + worktree削除）
-task worktree:teardown -- 226
-```
+| 分離対象                                                           | 状態                                                                                   |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| ファイルシステム（git worktree、Claude Code標準の`EnterWorktree`） | 完全分離                                                                               |
+| ローカルSupabase（Docker）                                         | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
+| Next.js/Playwrightの開発サーバーポート                             | 完全分離（`PORT`環境変数で可変）                                                       |
+| Clerk・Stripe・Sanity                                              | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
+
+Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。Stripeの決済イベントは全worktreeの`stripe listen`に転送されるため、他worktree宛てのイベントによる無害な404ログが出ることがある（実害なし）。
 
 ## スロット割り当て
 
-| スロット | アプリポート | Supabase project_id       | 備考                             |
-| -------- | ------------ | ------------------------- | -------------------------------- |
-| 1        | 3000         | `brand-closed-ec`（既定） | メインの作業用worktreeで使う想定 |
-| 2        | 4000         | `brand-closed-ec-slot2`   |                                  |
-| 3        | 5000         | `brand-closed-ec-slot3`   |                                  |
-| 4        | 6000         | `brand-closed-ec-slot4`   |                                  |
+| スロット | アプリポート | Supabase project_id       |
+| -------- | ------------ | ------------------------- |
+| 1        | 3000         | `brand-closed-ec`（既定） |
+| 2        | 4000         | `brand-closed-ec-slot2`   |
+| 3        | 5000         | `brand-closed-ec-slot3`   |
+| 4        | 6000         | `brand-closed-ec-slot4`   |
 
-同じスロット番号を2つのworktreeで同時に使わないこと（ポート・Dockerコンテナ名が衝突する）。`task worktree:list`で使用中のworktree一覧を確認できる。
+同じスロット番号を2つのworktreeで同時に使わないこと（ポート・Dockerコンテナ名が衝突する）。稼働中のスロットは `docker ps` のコンテナ名（`-slotN`サフィックス）か `task worktree:list` で確認できる。
 
-## 内部の仕組み
+## 運用ルール
 
-- `scripts/patch-supabase-slot.py`: そのworktree自身の`supabase/config.toml`のポート・`project_id`をスロット番号に応じて書き換える。書き換え後は`git update-index --skip-worktree`で、誤ってこのローカル専用変更をコミットしないようにする
-- `scripts/worktree-setup.sh`: worktree作成→config.toml書き換え→`pnpm install`→`supabase start`（既定ではCIと同じ最小構成: api/db/authのみ。`--full`でStudio等を含むフルスタック）→`supabase db reset`→`.env.worktree`生成までを1コマンド化
-- `playwright.config.ts`: `PORT`環境変数でアプリポートを可変にし、`WORKTREE_SLOT`が設定されている場合は`pnpm dev`（内部でdoppler runをネストする）を避け、CIと同じ理由で素の`next dev`を使う
+- **着手前**: `gh issue view 165` の依存グラフで、担当するissueの依存issueが完了しているか確認する
+- **同時に走らせて安全な組み合わせ**: 依存グラフで枝分かれしているトラック（調達/返品/カタログ/会員機能の大半）は安全。`#200`（organizations削除）のような破壊的変更は単独で走らせる
+- **マージ順の衝突**: 同じファイルを触るissue（`#224`と`#261〜264`など）は、同時に別worktreeで走らせず順番に処理する
+- **push・PR**: `/work-on-issue`経由の実装に限り、テストがgreenになったらユーザー承認を待たずpush・PR作成まで進めてよい取り決め（通常の1対1のやり取りでは引き続き承認を待つ）
 
 ## Docker負荷の目安
 
-既定（最小構成: api/db/auth）なら1worktreeあたり2〜3コンテナ。4並列でも8〜12コンテナ程度に収まる。`--full`（Studio等含む）を使う場合は1worktreeあたり8〜10コンテナに増えるため、並列数はマシンのCPU/メモリと相談すること。
+既定（最小構成: api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり2〜3コンテナ。4並列でも8〜12コンテナ程度に収まる。

@@ -45,48 +45,10 @@ tasks:
     cmds:
       - doppler run -- pnpm test:integration
 
-  worktree:new:
-    desc: "並列実装用worktreeを新規作成する（例: task worktree:new -- 226 2）"
-    cmds:
-      - scripts/worktree-setup.sh {{.CLI_ARGS}}
-
   worktree:list:
-    desc: 既存worktree一覧を表示する
+    desc: 既存worktree一覧を表示する（並列実装中のworktreeを確認する用途。/work-on-issueスキル参照）
     cmds:
       - git worktree list
-
-  test:integration:worktree:
-    desc: worktree専用のSupabase（.env.worktree）に対して統合テストを実行する
-    cmds:
-      - |
-        set -a
-        source .env.worktree
-        set +a
-        doppler run -- env NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" pnpm test:integration
-
-  test:e2e:worktree:
-    desc: worktree専用のSupabase・ポート（.env.worktree）に対してE2Eテストを実行する
-    cmds:
-      - |
-        set -a
-        source .env.worktree
-        set +a
-        doppler run -- env NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" NEXT_PUBLIC_APP_URL="$NEXT_PUBLIC_APP_URL" BASE_URL="$NEXT_PUBLIC_APP_URL" PORT="$PORT" WORKTREE_SLOT="$WORKTREE_SLOT" pnpm test:e2e
-
-  worktree:teardown:
-    desc: "worktreeを片付ける（Supabase停止 + worktree削除。例: task worktree:teardown -- 226）"
-    cmds:
-      - |
-        ISSUE_REF="{{.CLI_ARGS}}"
-        WT_DIR="$(cd .. && pwd)/wt-${ISSUE_REF}"
-        if [ -d "$WT_DIR" ]; then
-          (cd "$WT_DIR" && supabase stop) || true
-          git worktree remove "$WT_DIR" --force
-          echo "削除しました: $WT_DIR"
-        else
-          echo "見つかりません: $WT_DIR" >&2
-          exit 1
-        fi
 
   preview:
     desc: Cloudflare Workers本番相当ビルドをローカルでプレビュー（wrangler dev）
