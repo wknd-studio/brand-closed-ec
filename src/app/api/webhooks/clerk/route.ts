@@ -2,8 +2,18 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createUser } from "@/use-cases/create-user";
+import { syncAdminMembership } from "@/use-cases/sync-admin-membership";
+import { removeAdminMembership } from "@/use-cases/remove-admin-membership";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";
+import { SupabaseAdminMembershipRepository } from "@/infrastructure/supabase/supabase-admin-membership-repository";
+
+function getAdminOrganizationId(): string {
+  const orgId = process.env.CLERK_ADMIN_ORGANIZATION_ID;
+  if (!orgId) throw new Error("CLERK_ADMIN_ORGANIZATION_ID が未設定です");
+  return orgId;
+}
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -54,6 +64,58 @@ export async function POST(req: Request) {
       },
       { userRepo: new SupabaseUserRepository(createAdminClient()) }
     );
+  }
+
+  if (
+    event.type === "organizationMembership.created" ||
+    event.type === "organizationMembership.updated"
+  ) {
+    const data = event.data as {
+      organization: { id: string };
+      public_user_data: {
+        user_id: string;
+        first_name: string | null;
+        last_name: string | null;
+        identifier: string;
+      };
+      role: string;
+    };
+
+    if (data.organization.id === getAdminOrganizationId()) {
+      await syncAdminMembership(
+        {
+          clerkUserId: data.public_user_data.user_id,
+          name: `${data.public_user_data.first_name ?? ""} ${data.public_user_data.last_name ?? ""}`.trim(),
+          email: data.public_user_data.identifier,
+          clerkRole: data.role,
+        },
+        {
+          adminUserRepo: new SupabaseAdminUserRepository(createAdminClient()),
+          adminMembershipRepo: new SupabaseAdminMembershipRepository(
+            createAdminClient()
+          ),
+        }
+      );
+    }
+  }
+
+  if (event.type === "organizationMembership.deleted") {
+    const data = event.data as {
+      organization: { id: string };
+      public_user_data: { user_id: string };
+    };
+
+    if (data.organization.id === getAdminOrganizationId()) {
+      await removeAdminMembership(
+        { clerkUserId: data.public_user_data.user_id },
+        {
+          adminUserRepo: new SupabaseAdminUserRepository(createAdminClient()),
+          adminMembershipRepo: new SupabaseAdminMembershipRepository(
+            createAdminClient()
+          ),
+        }
+      );
+    }
   }
 
   return NextResponse.json({ received: true });

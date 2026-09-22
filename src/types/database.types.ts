@@ -103,6 +103,62 @@ export type Database = {
           },
         ];
       };
+      admin_memberships: {
+        Row: {
+          admin_user_id: string;
+          clerk_role: string;
+          created_at: string;
+          id: string;
+          updated_at: string;
+        };
+        Insert: {
+          admin_user_id: string;
+          clerk_role: string;
+          created_at?: string;
+          id?: string;
+          updated_at?: string;
+        };
+        Update: {
+          admin_user_id?: string;
+          clerk_role?: string;
+          created_at?: string;
+          id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_memberships_admin_user_id_fkey";
+            columns: ["admin_user_id"];
+            isOneToOne: true;
+            referencedRelation: "admin_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      admin_users: {
+        Row: {
+          clerk_user_id: string;
+          created_at: string;
+          email: string;
+          id: string;
+          name: string;
+        };
+        Insert: {
+          clerk_user_id: string;
+          created_at?: string;
+          email: string;
+          id?: string;
+          name: string;
+        };
+        Update: {
+          clerk_user_id?: string;
+          created_at?: string;
+          email?: string;
+          id?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
       cart_items: {
         Row: {
           created_at: string;
@@ -724,6 +780,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_current_admin_user_id: { Args: never; Returns: string };
       get_current_org_id: { Args: never; Returns: string };
       get_current_org_ids: { Args: never; Returns: string[] };
       get_current_user_id: { Args: never; Returns: string };
