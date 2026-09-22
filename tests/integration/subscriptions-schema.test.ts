@@ -46,14 +46,11 @@ function clientAs(claims: Record<string, unknown>) {
   });
 }
 
-const ORG_A_ID = "00000000-0000-0000-0000-0000000010a1";
 const USER_A_ID = "00000000-0000-0000-0000-0000000010a2";
 const USER_B_ID = "00000000-0000-0000-0000-0000000010b2";
-const CLERK_ORG_A = "org_test_subscriptions_a";
 const CLERK_USER_A = "clerk_test_subscriptions_a";
 const CLERK_USER_B = "clerk_test_subscriptions_b";
 const SUBSCRIPTION_USER_A_ID = "00000000-0000-0000-0000-0000000010c1";
-const SUBSCRIPTION_ORG_A_ID = "00000000-0000-0000-0000-0000000010c2";
 const RANK_CHANGE_USER_A_ID = "00000000-0000-0000-0000-0000000010d1";
 
 async function cleanup() {
@@ -64,13 +61,8 @@ async function cleanup() {
   await adminClient
     .from("subscriptions")
     .delete()
-    .in("id", [SUBSCRIPTION_USER_A_ID, SUBSCRIPTION_ORG_A_ID]);
-  await adminClient
-    .from("organization_memberships")
-    .delete()
-    .eq("organization_id", ORG_A_ID);
+    .eq("id", SUBSCRIPTION_USER_A_ID);
   await adminClient.from("users").delete().in("id", [USER_A_ID, USER_B_ID]);
-  await adminClient.from("organizations").delete().eq("id", ORG_A_ID);
   await adminClient
     .from("stripe_webhook_events")
     .delete()
@@ -82,16 +74,6 @@ async function cleanup() {
 
 beforeAll(async () => {
   await cleanup();
-
-  const { error: orgError } = await adminClient.from("organizations").insert({
-    id: ORG_A_ID,
-    clerk_org_id: CLERK_ORG_A,
-    name: "組織A",
-    representative_name: "代表A",
-    phone_number: "0300000001",
-    invoice_registration_number: "T1000000000010",
-  });
-  if (orgError) throw orgError;
 
   const { error: usersError } = await adminClient.from("users").insert([
     {
@@ -110,15 +92,6 @@ beforeAll(async () => {
     },
   ]);
   if (usersError) throw usersError;
-
-  const { error: membershipError } = await adminClient
-    .from("organization_memberships")
-    .insert({
-      organization_id: ORG_A_ID,
-      user_id: USER_A_ID,
-      clerk_role: "org:admin",
-    });
-  if (membershipError) throw membershipError;
 });
 
 afterAll(async () => {
@@ -130,10 +103,11 @@ describe("subscriptions", () => {
     await adminClient
       .from("subscriptions")
       .delete()
-      .in("id", [SUBSCRIPTION_USER_A_ID, SUBSCRIPTION_ORG_A_ID]);
+      .eq("id", SUBSCRIPTION_USER_A_ID);
   });
 
-  it("user_id/organization_idのどちらか一方のみ設定できる（両方NULLは拒否）", async () => {
+  it("user_idがNULLだと拒否される", async () => {
+    // @ts-expect-error user_idはNOT NULL（型定義上は必須）。DB制約自体を確認する
     const { error } = await adminClient.from("subscriptions").insert({
       stripe_customer_id: "cus_test_neither",
       stripe_subscription_id: "sub_test_neither",
@@ -145,21 +119,7 @@ describe("subscriptions", () => {
     expect(error).not.toBeNull();
   });
 
-  it("user_id/organization_idの両方を設定すると拒否される", async () => {
-    const { error } = await adminClient.from("subscriptions").insert({
-      user_id: USER_A_ID,
-      organization_id: ORG_A_ID,
-      stripe_customer_id: "cus_test_both",
-      stripe_subscription_id: "sub_test_both",
-      status: "active",
-      rank_code: "starter",
-      current_period_start: new Date().toISOString(),
-      current_period_end: new Date().toISOString(),
-    });
-    expect(error).not.toBeNull();
-  });
-
-  it("同じ所有者に解約済みでないサブスクリプションを2件作れない（部分UNIQUE）", async () => {
+  it("同じuser_idに解約済みでないサブスクリプションを2件作れない（部分UNIQUE）", async () => {
     const { error: firstError } = await adminClient
       .from("subscriptions")
       .insert({
@@ -189,41 +149,25 @@ describe("subscriptions", () => {
   });
 
   it("本人は自分のsubscriptionsを参照できるが、他人のものは参照できない", async () => {
-    await adminClient.from("subscriptions").insert({
-      id: SUBSCRIPTION_ORG_A_ID,
-      organization_id: ORG_A_ID,
-      stripe_customer_id: "cus_test_org_a",
-      stripe_subscription_id: "sub_test_org_a",
-      status: "active",
-      rank_code: "standard",
-      current_period_start: new Date().toISOString(),
-      current_period_end: new Date().toISOString(),
-    });
-
-    const asUserA = clientAs({ sub: CLERK_USER_A, org_id: CLERK_ORG_A });
+    const asUserA = clientAs({ sub: CLERK_USER_A });
     const { data: ownData } = await asUserA
       .from("subscriptions")
       .select("id")
       .eq("id", SUBSCRIPTION_USER_A_ID);
     expect((ownData ?? []).map((r) => r.id)).toEqual([SUBSCRIPTION_USER_A_ID]);
 
-    const { data: orgData } = await asUserA
-      .from("subscriptions")
-      .select("id")
-      .eq("id", SUBSCRIPTION_ORG_A_ID);
-    expect((orgData ?? []).map((r) => r.id)).toEqual([SUBSCRIPTION_ORG_A_ID]);
-
     const asUserB = clientAs({ sub: CLERK_USER_B });
     const { data: otherData } = await asUserB
       .from("subscriptions")
       .select("id")
-      .in("id", [SUBSCRIPTION_USER_A_ID, SUBSCRIPTION_ORG_A_ID]);
+      .eq("id", SUBSCRIPTION_USER_A_ID);
     expect(otherData ?? []).toEqual([]);
   });
 });
 
 describe("rank_changes", () => {
-  it("user_id/organization_idの排他制約が効いている", async () => {
+  it("user_idがNULLだと拒否される", async () => {
+    // @ts-expect-error user_idはNOT NULL（型定義上は必須）。DB制約自体を確認する
     const { error } = await adminClient.from("rank_changes").insert({
       to_rank_code: "starter",
       changed_by: "system",
