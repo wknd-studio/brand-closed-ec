@@ -97,21 +97,35 @@ export async function fetchProductsByIds(ids: string[]): Promise<Product[]> {
 export async function fetchProducts({
   allowedRanks,
   brand,
+  keyword,
   offset = 0,
 }: {
   allowedRanks: string[];
-  brand: string;
+  brand?: string;
+  keyword?: string;
   offset?: number;
 }): Promise<{ products: Product[]; total: number }> {
+  const conditions = [
+    `_type=="product"`,
+    `min_rank in $allowedRanks`,
+    `availability!="discontinued"`,
+  ];
+  if (brand) conditions.push(`brand->name==$brand`);
+  if (keyword)
+    conditions.push(`(name match $keyword || brand->name match $keyword)`);
+  const filter = conditions.join("&&");
+  const params = {
+    allowedRanks,
+    ...(brand ? { brand } : {}),
+    ...(keyword ? { keyword: `*${keyword}*` } : {}),
+  };
+
   const [products, total] = await Promise.all([
     sanityClient.fetch<Product[]>(
-      `*[_type=="product"&&min_rank in $allowedRanks&&availability!="discontinued"&&brand->name==$brand]|order(_createdAt desc)[$start...$end]{_id,name,"brand":brand->name,retail_price,is_negotiable,prices,min_rank,availability,"thumbnail":images[0].asset->url}`,
-      { allowedRanks, brand, start: offset, end: offset + PAGE_SIZE - 1 }
+      `*[${filter}]|order(_createdAt desc)[$start...$end]{_id,name,"brand":brand->name,retail_price,is_negotiable,prices,min_rank,availability,"thumbnail":images[0].asset->url}`,
+      { ...params, start: offset, end: offset + PAGE_SIZE - 1 }
     ),
-    sanityClient.fetch<number>(
-      `count(*[_type=="product"&&min_rank in $allowedRanks&&availability!="discontinued"&&brand->name==$brand])`,
-      { allowedRanks, brand }
-    ),
+    sanityClient.fetch<number>(`count(*[${filter}])`, params),
   ]);
   return { products, total };
 }

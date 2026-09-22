@@ -10,7 +10,7 @@ import {
 
 export async function fetchMoreProducts(
   offset: number,
-  brand: string
+  params: { brand?: string; keyword?: string }
 ): Promise<Product[]> {
   const { userId } = await requireAuth();
   if (!userId) return [];
@@ -23,6 +23,6 @@ export async function fetchMoreProducts(
     .single();
 
   const allowedRanks = getAllowedRanks(user?.rank_code ?? "starter");
-  const { products } = await fetchProducts({ allowedRanks, brand, offset });
+  const { products } = await fetchProducts({ allowedRanks, offset, ...params });
   return products;
 }
