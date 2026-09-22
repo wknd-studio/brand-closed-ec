@@ -38,13 +38,13 @@ export default function AccountTypeForm() {
           <input
             type="radio"
             name="accountType"
-            value="organization"
+            value="corporate"
             className="h-4 w-4"
           />
           <div>
             <p className="font-medium">法人として登録</p>
             <p className="text-sm text-gray-500">
-              法人組織を作成し、代表者として管理します
+              会社名・インボイス番号を追加で入力します
             </p>
           </div>
         </label>
