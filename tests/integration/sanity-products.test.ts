@@ -91,4 +91,35 @@ describe("7ランクでのカタログ取得（実Sanity）", () => {
     expect(starterCount).toBe(1);
     expect(advancedCount).toBe(2);
   });
+
+  it("商品名のキーワードで検索できる", async () => {
+    const allowedRanks = getAllowedRanks("starter");
+    const { products } = await fetchProducts({
+      allowedRanks,
+      keyword: "STARTER閲覧可",
+    });
+    const ids = products.map((p) => p._id);
+    expect(ids).toContain(TEST_PRODUCT_STARTER_ID);
+  });
+
+  it("ブランド名のキーワードで検索できる", async () => {
+    const allowedRanks = getAllowedRanks("starter");
+    const { products } = await fetchProducts({
+      allowedRanks,
+      keyword: "7ランク検証用",
+    });
+    const ids = products.map((p) => p._id);
+    expect(ids).toContain(TEST_PRODUCT_STARTER_ID);
+  });
+
+  it("キーワード検索でもランク制限を超える商品は含まれない", async () => {
+    const allowedRanks = getAllowedRanks("starter");
+    const { products } = await fetchProducts({
+      allowedRanks,
+      keyword: "テスト商品",
+    });
+    const ids = products.map((p) => p._id);
+    expect(ids).toContain(TEST_PRODUCT_STARTER_ID);
+    expect(ids).not.toContain(TEST_PRODUCT_ADVANCED_ID);
+  });
 });
