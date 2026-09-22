@@ -1,6 +1,8 @@
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MemberType } from "@/domain/value-objects/member-type";
 import { Money } from "@/domain/value-objects/money";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 
 interface UserProps {
   id: string;
@@ -15,6 +17,9 @@ interface UserProps {
   onboardingCompleted: boolean;
   deletedAt: Date | null;
   stripeCustomerId: string | null;
+  memberType?: MemberType;
+  companyName?: string | null;
+  invoiceRegistrationNumber?: string | null;
 }
 
 export class User {
@@ -30,8 +35,20 @@ export class User {
   readonly onboardingCompleted: boolean;
   readonly deletedAt: Date | null;
   readonly stripeCustomerId: string | null;
+  readonly memberType: MemberType;
+  readonly companyName: string | null;
+  readonly invoiceRegistrationNumber: string | null;
 
   private constructor(props: UserProps) {
+    const memberType = props.memberType ?? MemberType.of("individual");
+    const companyName = props.companyName ?? null;
+    const invoiceRegistrationNumber = props.invoiceRegistrationNumber ?? null;
+    if (
+      memberType.isCorporate() &&
+      (!companyName || !invoiceRegistrationNumber)
+    ) {
+      throw new MissingCorporateProfileError();
+    }
     this.id = props.id;
     this.clerkUserId = props.clerkUserId;
     this.email = props.email;
@@ -44,6 +61,9 @@ export class User {
     this.onboardingCompleted = props.onboardingCompleted;
     this.deletedAt = props.deletedAt;
     this.stripeCustomerId = props.stripeCustomerId;
+    this.memberType = memberType;
+    this.companyName = companyName;
+    this.invoiceRegistrationNumber = invoiceRegistrationNumber;
   }
 
   static of(props: UserProps): User {
@@ -68,6 +88,9 @@ export class User {
       onboardingCompleted: this.onboardingCompleted,
       deletedAt: this.deletedAt,
       stripeCustomerId: this.stripeCustomerId,
+      memberType: this.memberType,
+      companyName: this.companyName,
+      invoiceRegistrationNumber: this.invoiceRegistrationNumber,
     };
   }
 

@@ -3,15 +3,13 @@ import { OrganizationMembership } from "@/domain/entities/organization-membershi
 import { User } from "@/domain/entities/user";
 import { Address } from "@/domain/entities/address";
 import { MemberRank } from "@/domain/value-objects/member-rank";
-import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
+import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
 import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
 import type { OrganizationGateway } from "@/repositories/organization-gateway";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
-
-const INVOICE_REGISTRATION_NUMBER_PATTERN = /^T\d{13}$/;
 
 export type CreateOrganizationInput = {
   clerkUserId: string;
@@ -60,14 +58,9 @@ export async function createOrganization(
     addressRepo,
   } = deps;
 
-  if (
-    !INVOICE_REGISTRATION_NUMBER_PATTERN.test(input.invoiceRegistrationNumber)
-  ) {
-    throw new InvalidInvoiceRegistrationNumberError(
-      input.invoiceRegistrationNumber
-    );
-  }
-
+  const invoiceRegistrationNumber = InvoiceRegistrationNumber.of(
+    input.invoiceRegistrationNumber
+  );
   const phoneNumber = PhoneNumber.of(input.phoneNumber);
 
   const existing = await organizationRepo.findByName(input.organizationName);
@@ -112,7 +105,7 @@ export async function createOrganization(
     name: input.organizationName,
     representativeName: `${input.representativeLastName}${input.representativeFirstName}`,
     phoneNumber: phoneNumber.value,
-    invoiceRegistrationNumber: input.invoiceRegistrationNumber,
+    invoiceRegistrationNumber: invoiceRegistrationNumber.value,
     onboardingCompleted: false,
     rank: MemberRank.of("starter"),
     billingAnchorDay: null,

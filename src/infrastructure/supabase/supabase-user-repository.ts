@@ -3,6 +3,7 @@ import type { Database } from "@/types/database.types";
 import type { UserRepository } from "@/repositories/user-repository";
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MemberType } from "@/domain/value-objects/member-type";
 
 type UserRow = {
   id: string;
@@ -17,6 +18,9 @@ type UserRow = {
   onboarding_completed: boolean;
   deleted_at: string | null;
   stripe_customer_id: string | null;
+  member_type: string;
+  company_name: string | null;
+  invoice_registration_number: string | null;
 };
 
 function toUser(row: UserRow): User {
@@ -35,11 +39,14 @@ function toUser(row: UserRow): User {
     onboardingCompleted: row.onboarding_completed,
     deletedAt: row.deleted_at ? new Date(row.deleted_at) : null,
     stripeCustomerId: row.stripe_customer_id,
+    memberType: MemberType.of(row.member_type),
+    companyName: row.company_name,
+    invoiceRegistrationNumber: row.invoice_registration_number,
   });
 }
 
 const SELECT_FIELDS =
-  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id";
+  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id, member_type, company_name, invoice_registration_number";
 
 export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
@@ -76,6 +83,9 @@ export class SupabaseUserRepository implements UserRepository {
       onboarding_completed: user.onboardingCompleted,
       deleted_at: user.deletedAt?.toISOString() ?? null,
       stripe_customer_id: user.stripeCustomerId,
+      member_type: user.memberType.value,
+      company_name: user.companyName,
+      invoice_registration_number: user.invoiceRegistrationNumber,
     });
   }
 }
