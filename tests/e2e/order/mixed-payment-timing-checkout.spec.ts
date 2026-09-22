@@ -5,19 +5,23 @@ import type { Database } from "@/types/database.types";
 import {
   cleanupTestUser,
   signUpAndCompleteOnboarding,
+  slotEmail,
+  withSlotSuffix,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_split_checkout@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_split_checkout@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 // 既存シードデータのpayment_timingは投入タイミングに依存するため、支払いタイミングが
 // 確実に混在するテスト専用のブランド・商品を固定の明示的なIDで作成する
 // （tests/e2e/order/invoice.spec.tsで確立したパターンを踏襲）
-const TEST_BRAND_ID = "test-split-checkout-brand-004";
+const TEST_BRAND_ID = withSlotSuffix("test-split-checkout-brand-004");
 const TEST_BRAND_NAME = "TestSplitCheckoutBrand";
-const AT_ORDER_PRODUCT_ID = "test-split-checkout-at-order-004";
+const AT_ORDER_PRODUCT_ID = withSlotSuffix("test-split-checkout-at-order-004");
 const AT_ORDER_PRODUCT_NAME = "テスト先払い商品";
-const AFTER_ORDER_PRODUCT_ID = "test-split-checkout-after-order-004";
+const AFTER_ORDER_PRODUCT_ID = withSlotSuffix(
+  "test-split-checkout-after-order-004"
+);
 const AFTER_ORDER_PRODUCT_NAME = "テスト後払い商品";
 
 function sanityWriteClient() {

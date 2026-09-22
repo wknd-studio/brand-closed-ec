@@ -4,9 +4,10 @@ import type { Database } from "@/types/database.types";
 import {
   cleanupTestUser,
   signUpAndCompleteOnboarding,
+  slotEmail,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_checkout@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_checkout@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 function supabaseAdmin() {

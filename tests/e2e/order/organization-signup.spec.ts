@@ -5,9 +5,10 @@ import {
   signUpViaInvitation,
   cleanupTestUser,
   cleanupTestOrganization,
+  slotEmail,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_org_signup@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_org_signup@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 function supabaseAdmin() {

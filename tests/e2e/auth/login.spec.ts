@@ -3,9 +3,10 @@ import { test, expect } from "@playwright/test";
 import {
   signUpViaInvitation,
   cleanupTestUser,
+  slotEmail,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_login@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_login@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 /**

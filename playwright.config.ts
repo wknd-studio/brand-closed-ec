@@ -2,6 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 // シークレットは.env.localではなくDopplerで一元管理する。
 // ローカル実行時は`task test:e2e`（内部で`doppler run -- pnpm test:e2e`）を使うこと
+//
+// 並列worktree実行（scripts/worktree-setup.sh、WORKTREE_SLOTが設定される）では、
+// worktreeごとに別ポート・別のローカルSupabaseを使うため、CIと同じ理由で
+// "pnpm dev"（内部でdoppler runをネストする）を避ける必要がある（下記command参照）
+const PORT = process.env.PORT ?? "3000";
+const IS_WORKTREE = !!process.env.WORKTREE_SLOT;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -13,7 +20,7 @@ export default defineConfig({
   timeout: process.env.CI ? 60000 : 30000,
   reporter: "html",
   use: {
-    baseURL: process.env.BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.BASE_URL ?? `http://localhost:${PORT}`,
     trace: "retain-on-failure",
     video: "retain-on-failure",
   },
@@ -24,8 +31,9 @@ export default defineConfig({
       // 明示的に上書きしているが、"pnpm dev"は内部で"doppler run -- next dev"を実行するため、
       // このネストしたdoppler run呼び出しがDopplerの設定値（本物の共有Supabaseプロジェクト）で
       // 上書きを覆してしまい、テストプロセスとサーバープロセスが別のDBに接続する不具合があった。
-      // CIでは素のコマンドを直接起動し、Playwright自身の環境（既に正しい値が入っている）を
-      // そのまま継承させることでこれを回避する。
+      // CI・worktree並列実行（いずれもローカルephemeral Supabaseを使う）では素のコマンドを
+      // 直接起動し、Playwright自身の環境（既に正しい値が入っている）をそのまま継承させることで
+      // これを回避する。
       //
       // また、CIでは開発モード（next dev）ではなく、実際にデプロイされる形と同じ
       // Cloudflare Workers本番ビルド（opennextjs-cloudflare build → wrangler dev）を使う。
@@ -45,10 +53,16 @@ export default defineConfig({
       // Workerのenvへ渡すためのCloudflare公式の仕組み（.dev.vars未使用時のみ有効。実機検証済み）。
       // NEXT_PUBLIC_*系はクライアントバンドルにビルド時に埋め込まれるため、
       // ビルド（opennextjs-cloudflare build）もこの正しい環境変数がある状態で実行する必要がある
+      //
+      // worktree並列実行はCIほど低速なランナーではないため、本番ビルドまでは行わず
+      // 素の"next dev"（doppler runを経由しない）で十分（初回コンパイルの遅延は
+      // ローカルマシンでは問題にならない）
       command: process.env.CI
-        ? "pnpm run build:cloudflare && CLOUDFLARE_INCLUDE_PROCESS_ENV=true pnpm exec wrangler dev --port 3000"
-        : "pnpm dev",
-      url: "http://localhost:3000",
+        ? `pnpm run build:cloudflare && CLOUDFLARE_INCLUDE_PROCESS_ENV=true pnpm exec wrangler dev --port ${PORT}`
+        : IS_WORKTREE
+          ? `pnpm exec next dev --port ${PORT}`
+          : "pnpm dev",
+      url: `http://localhost:${PORT}`,
       reuseExistingServer: !process.env.CI,
       // ビルド自体に数十秒〜数分かかるため、サーバー起動待ちのタイムアウトを延長する
       timeout: process.env.CI ? 300000 : 120000,

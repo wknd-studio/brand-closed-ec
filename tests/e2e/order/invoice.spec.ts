@@ -5,18 +5,20 @@ import type { Database } from "@/types/database.types";
 import {
   cleanupTestUser,
   signUpAndCompleteOnboarding,
+  slotEmail,
+  withSlotSuffix,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_invoice@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_invoice@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 // 既存シードデータには要相談商品（is_negotiable: true）が1件も存在しないため、
 // テスト専用のブランド・商品を固定の明示的なIDで作成する。
 // delete(id)は指定したIDの行のみを削除する操作のため、既存データに影響しない
 // （tests/integration/sanity-products.test.tsで確立したパターンを踏襲）
-const TEST_BRAND_ID = "test-invoice-brand-003";
+const TEST_BRAND_ID = withSlotSuffix("test-invoice-brand-003");
 const TEST_BRAND_NAME = "TestInvoiceBrand";
-const TEST_PRODUCT_ID = "test-invoice-product-003";
+const TEST_PRODUCT_ID = withSlotSuffix("test-invoice-product-003");
 const TEST_PRODUCT_NAME = "テスト要相談商品";
 
 function sanityWriteClient() {
