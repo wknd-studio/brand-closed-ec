@@ -126,6 +126,25 @@ export class Order {
     return OrderStatus.of(allPaid ? "paid" : "processing");
   }
 
+  /**
+   * 退会ブロック判定用（issue #208・#268、docs/domain/membership.md参照）:
+   * 未解決の決済（請求済みでまだ未払い＝invoice_sent、または上限超過で運営者の
+   * 対応待ち＝limit_exceeded）を持つ決済単位が1件でもあるか。
+   *
+   * orders.statusは決済単位のロールアップ値であり、決済前（pending_payment）も
+   * 支払い済み（paid）も同じ値になりうるため、orders.statusではなく決済単位の
+   * 状態で直接判定する。pending_paymentは自動キャンセル（#202）の対象であり
+   * ブロックしない。paidは配送完了の判定手段が現状無い（procurement/fulfillment
+   * 未実装）ため、退会をブロックする根拠にしない（[[settlement]]の決済・配送
+   * 分離方針に従い、配送起因のブロックはfulfillment/returnsドメイン実装後に
+   * そちら側で改めて導入する）。
+   */
+  hasUnresolvedSettlement(): boolean {
+    return this.settlements.some(
+      (s) => s.status === "invoice_sent" || s.status === "limit_exceeded"
+    );
+  }
+
   /** 決済単位を差し替え（無ければ追加）、statusをロールアップし直した注文を返す */
   applySettlement(settlement: OrderSettlement): Order {
     const exists = this.settlements.some((s) => s.id === settlement.id);

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
 import { CartItem } from "@/domain/value-objects/cart-item";
@@ -171,20 +172,36 @@ export async function placeOrder(
   });
 
   // 途中で失敗した場合に注文が中途半端に残らないよう、補償削除してからエラーを伝播する
-  const deleteOrderQuietly = async () => {
+  const deleteOrderQuietly = async (cause: unknown) => {
     try {
       await orderRepo.delete(order.id);
-    } catch {
-      // 補償削除の失敗で元のエラーを隠さない
+    } catch (deleteError) {
+      // 補償削除自体の失敗は、孤児化した注文が残っていることに誰も気づけなくなる
+      // ため、元のエラーとは別にSentryへ送信する（docs/ai-prompts/sentry.md、issue #272）
+      Sentry.captureException(deleteError, {
+        tags: { useCase: "placeOrder", step: "compensatingDelete" },
+        extra: { orderId: order.id, cause },
+      });
+      console.error(
+        `[placeOrder] 補償削除に失敗しました。注文${order.id}が孤児化している可能性があります:`,
+        deleteError
+      );
     }
   };
 
-  try {
-    await orderRepo.save(order);
-  } catch (error) {
-    await deleteOrderQuietly();
-    throw error;
-  }
+  // 月次上限チェック（行ロック込み）と注文・明細・決済単位の保存を、
+  // 1回のDB呼び出し（RPC）でアトミックに行う（issue #220・#267）。関数はPostgresの
+  // トランザクション内で完結するため、失敗時（上限超過含む）は何も保存されず、
+  // 補償削除は不要
+  const cartFixedTotal = cartItems
+    .filter((c) => !c.isNegotiable)
+    .reduce((sum, c) => sum.add(c.getSubtotal()), Money.zero());
+  await orderRepo.saveNewOrderWithLimitCheck(
+    order,
+    period,
+    user.getMonthlyLimit(),
+    cartFixedTotal
+  );
 
   const afterOrderProducts = (): ProductSnapshot[] => {
     const ids = new Set(afterOrderItems.map((i) => i.sanityProductId));
@@ -221,7 +238,7 @@ export async function placeOrder(
         input.baseUrl
       );
     } catch (error) {
-      await deleteOrderQuietly();
+      await deleteOrderQuietly(error);
       throw error;
     }
     await orderRepo.save(

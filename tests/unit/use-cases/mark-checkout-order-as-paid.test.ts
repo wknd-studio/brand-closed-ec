@@ -1,4 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@sentry/nextjs", () => ({
+  captureException: vi.fn(),
+}));
+
+import * as Sentry from "@sentry/nextjs";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import {
   makeOrderRepo,
@@ -97,5 +103,36 @@ describe("markCheckoutOrderAsPaid", () => {
       )
     ).rejects.toThrow("決済単位が見つかりません");
     expect(orderRepo.save).not.toHaveBeenCalled();
+  });
+
+  // issue #270: 運営者が未払い決済単位をキャンセルした後、顧客が古いCheckoutページで
+  // 決済を完了させる、またはStripeが遅延Webhookを再送すると発生しうる
+  it("キャンセル済みの決済単位への入金は例外を投げず、Sentryに記録して正常終了する（Webhookに200を返しStripeのリトライを止めるため）", async () => {
+    const order = makeOrder({
+      status: "cancelled",
+      settlements: [
+        makeSettlement({ status: "cancelled", cancelledAt: new Date() }),
+      ],
+    });
+    const orderRepo = makeOrderRepo(order);
+    const notificationService = makeNotificationService();
+
+    await expect(
+      markCheckoutOrderAsPaid(
+        { stripeCheckoutSessionId: "sess_1" },
+        { orderRepo, userRepo: makeUserRepo(), notificationService }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(notificationService.sendCheckoutPaid).not.toHaveBeenCalled();
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          useCase: "markCheckoutOrderAsPaid",
+        }),
+      })
+    );
   });
 });

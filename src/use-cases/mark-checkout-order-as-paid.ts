@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { NotificationService } from "@/repositories/notification-service";
@@ -28,11 +29,31 @@ export async function markCheckoutOrderAsPaid(
   // Webhookの再配信に対する冪等性
   if (settlement.isPaid()) return;
 
-  const paidOrder = order.applySettlement(settlement.markPaid(new Date()));
+  if (settlement.isCancelled()) {
+    // 運営者が未払い決済単位をキャンセルした後、顧客が古いCheckoutページで決済を
+    // 完了させた、またはStripeが遅延Webhookを再送したケース（issue #270）。
+    // 例外を投げてWebhookに500を返すとStripeが最大3日間リトライを続けてしまうため、
+    // 要手動対応としてSentryに記録した上で200を返す（入金自体は実際にされている）
+    Sentry.captureException(
+      new Error("キャンセル済みの決済単位への入金Webhookを受信しました"),
+      {
+        tags: { useCase: "markCheckoutOrderAsPaid" },
+        extra: {
+          orderId: order.id,
+          settlementId: settlement.id,
+          stripeCheckoutSessionId: input.stripeCheckoutSessionId,
+        },
+      }
+    );
+    return;
+  }
+
+  const paidSettlement = settlement.markPaid(new Date());
+  const paidOrder = order.applySettlement(paidSettlement);
   await orderRepo.save(paidOrder);
 
   const user = await userRepo.findById(order.userId);
   if (user) {
-    await notificationService.sendCheckoutPaid(paidOrder, user);
+    await notificationService.sendCheckoutPaid(paidOrder, paidSettlement, user);
   }
 }

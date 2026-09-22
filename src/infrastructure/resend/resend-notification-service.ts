@@ -1,5 +1,6 @@
 import type { NotificationService } from "@/repositories/notification-service";
 import type { Order } from "@/domain/entities/order";
+import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
 import { sendOrderConfirmingEmail } from "@/lib/email/order-confirming";
@@ -67,13 +68,21 @@ export class ResendNotificationService implements NotificationService {
     await sendDeliveryNotificationEmail({ orderId, memberEmail });
   }
 
-  async sendCheckoutPaid(order: Order, user: User): Promise<void> {
-    const lineItems = order.items.map((item) => ({
-      productName: item.productNameSnapshot,
-      quantity: item.quantity,
-      unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
-      isNegotiable: item.isNegotiable,
-    }));
+  async sendCheckoutPaid(
+    order: Order,
+    settlement: OrderSettlement,
+    user: User
+  ): Promise<void> {
+    // この決済単位に紐づく明細のみを対象にする。まだ未払いの他の明細（他の決済単位・
+    // 未請求のafter_order）を「支払い完了」として誤案内しないため（issue #269）
+    const lineItems = order.items
+      .filter((item) => item.settlementId === settlement.id)
+      .map((item) => ({
+        productName: item.productNameSnapshot,
+        quantity: item.quantity,
+        unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
+        isNegotiable: item.isNegotiable,
+      }));
     await sendCheckoutPaidEmails({
       orderId: order.id,
       memberEmail: user.email,

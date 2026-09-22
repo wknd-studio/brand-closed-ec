@@ -727,6 +727,19 @@ export type Database = {
       get_current_org_id: { Args: never; Returns: string };
       get_current_org_ids: { Args: never; Returns: string[] };
       get_current_user_id: { Args: never; Returns: string };
+      place_order_with_limit_check: {
+        Args: {
+          p_cart_fixed_total: number;
+          p_items: Json;
+          p_monthly_limit: number;
+          p_order: Json;
+          p_period_end: string;
+          p_period_start: string;
+          p_settlement: Json;
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       member_rank:

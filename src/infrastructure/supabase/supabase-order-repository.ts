@@ -13,9 +13,64 @@ import {
 } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
+import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+
+function toOrderRowForInsert(order: Order) {
+  const addrToJson = (s: AddressSnapshot): Json =>
+    ({
+      recipientLastName: s.recipientLastName,
+      recipientFirstName: s.recipientFirstName,
+      postalCode: s.postalCode,
+      prefecture: s.prefecture,
+      city: s.city,
+      addressLine1: s.addressLine1,
+      addressLine2: s.addressLine2,
+      phoneNumber: s.phoneNumber,
+    }) as Json;
+
+  return {
+    id: order.id,
+    user_id: order.userId,
+    status: order.status.value,
+    shipping_address_snapshot: addrToJson(order.shippingAddress),
+    billing_address_snapshot: addrToJson(order.billingAddress),
+    rank_at_order: order.rankAtOrder.value,
+    monthly_limit_at_order: order.monthlyLimitAtOrder.amount,
+    created_at: order.createdAt.toISOString(),
+  };
+}
+
+function toSettlementRowsForInsert(order: Order) {
+  return order.settlements.map((s) => ({
+    id: s.id,
+    order_id: order.id,
+    flow: s.flow,
+    status: s.status,
+    stripe_checkout_session_id: s.stripeCheckoutSessionId,
+    stripe_invoice_id: s.stripeInvoiceId,
+    amount_snapshot: s.amount.amount,
+  }));
+}
+
+function toItemRowsForInsert(order: Order) {
+  return order.items.map((item) => ({
+    id: item.id,
+    order_id: order.id,
+    sanity_product_id: item.sanityProductId,
+    product_name_snapshot: item.productNameSnapshot,
+    unit_price_snapshot: item.isNegotiable
+      ? null
+      : item.unitPriceSnapshot.amount,
+    quantity: item.quantity,
+    is_negotiable: item.isNegotiable,
+    negotiated_unit_price: item.negotiatedUnitPrice?.amount ?? null,
+    payment_timing: item.paymentTiming,
+    settlement_id: item.settlementId,
+  }));
+}
 import type { Json } from "@/types/database.types";
 
 type AddressSnapshotJson = {
@@ -281,7 +336,9 @@ export class SupabaseOrderRepository implements OrderRepository {
       .select(ORDER_SELECT)
       .eq("user_id", userId)
       .neq("status", "cancelled");
-    return (data ?? []).map((row) => toOrder(row as unknown as OrderRow));
+    return (data ?? [])
+      .map((row) => toOrder(row as unknown as OrderRow))
+      .filter((order) => order.hasUnresolvedSettlement());
   }
 
   async findActiveOrdersWithUser(): Promise<OrderWithUser[]> {
@@ -307,47 +364,21 @@ export class SupabaseOrderRepository implements OrderRepository {
   }
 
   async save(order: Order): Promise<void> {
-    const addrToJson = (s: AddressSnapshot): Json =>
-      ({
-        recipientLastName: s.recipientLastName,
-        recipientFirstName: s.recipientFirstName,
-        postalCode: s.postalCode,
-        prefecture: s.prefecture,
-        city: s.city,
-        addressLine1: s.addressLine1,
-        addressLine2: s.addressLine2,
-        phoneNumber: s.phoneNumber,
-      }) as Json;
-
-    const { error: orderError } = await this.db.from("orders").upsert({
-      id: order.id,
-      user_id: order.userId,
-      status: order.status.value,
-      shipping_address_snapshot: addrToJson(order.shippingAddress),
-      billing_address_snapshot: addrToJson(order.billingAddress),
-      rank_at_order: order.rankAtOrder.value,
-      monthly_limit_at_order: order.monthlyLimitAtOrder.amount,
-      created_at: order.createdAt.toISOString(),
-    });
+    const { error: orderError } = await this.db
+      .from("orders")
+      .upsert(toOrderRowForInsert(order));
     if (orderError) throw new Error(`Order保存に失敗: ${orderError.message}`);
 
     // order_items.settlement_idのFKがあるため、決済単位を明細より先に保存する
     if (order.settlements.length > 0) {
+      const rows = toSettlementRowsForInsert(order).map((row, i) => ({
+        ...row,
+        paid_at: order.settlements[i].paidAt?.toISOString() ?? null,
+        cancelled_at: order.settlements[i].cancelledAt?.toISOString() ?? null,
+      }));
       const { error: settlementsError } = await this.db
         .from("order_settlements")
-        .upsert(
-          order.settlements.map((s) => ({
-            id: s.id,
-            order_id: order.id,
-            flow: s.flow,
-            status: s.status,
-            stripe_checkout_session_id: s.stripeCheckoutSessionId,
-            stripe_invoice_id: s.stripeInvoiceId,
-            amount_snapshot: s.amount.amount,
-            paid_at: s.paidAt?.toISOString() ?? null,
-            cancelled_at: s.cancelledAt?.toISOString() ?? null,
-          }))
-        );
+        .upsert(rows);
       if (settlementsError)
         throw new Error(
           `OrderSettlement保存に失敗: ${settlementsError.message}`
@@ -355,24 +386,48 @@ export class SupabaseOrderRepository implements OrderRepository {
     }
 
     if (order.items.length > 0) {
-      const { error: itemsError } = await this.db.from("order_items").upsert(
-        order.items.map((item) => ({
-          id: item.id,
-          order_id: order.id,
-          sanity_product_id: item.sanityProductId,
-          product_name_snapshot: item.productNameSnapshot,
-          unit_price_snapshot: item.isNegotiable
-            ? null
-            : item.unitPriceSnapshot.amount,
-          quantity: item.quantity,
-          is_negotiable: item.isNegotiable,
-          negotiated_unit_price: item.negotiatedUnitPrice?.amount ?? null,
-          payment_timing: item.paymentTiming,
-          settlement_id: item.settlementId,
-        }))
-      );
+      const { error: itemsError } = await this.db
+        .from("order_items")
+        .upsert(toItemRowsForInsert(order));
       if (itemsError)
         throw new Error(`OrderItem保存に失敗: ${itemsError.message}`);
+    }
+  }
+
+  async saveNewOrderWithLimitCheck(
+    order: Order,
+    period: MonthlyPeriod,
+    monthlyLimit: Money,
+    cartFixedTotal: Money
+  ): Promise<void> {
+    const settlementRows = toSettlementRowsForInsert(order);
+    if (settlementRows.length > 1) {
+      // place-orderは常にat_order用の決済単位を最大1件しか作らない
+      // （docs/domain/settlement.md）。増えた場合は関数側の実装漏れの可能性が高い
+      throw new Error(
+        "saveNewOrderWithLimitCheckは決済単位0〜1件の新規注文のみ対応しています"
+      );
+    }
+
+    const { error } = await this.db.rpc("place_order_with_limit_check", {
+      p_user_id: order.userId,
+      p_period_start: period.start.toISOString(),
+      p_period_end: period.end.toISOString(),
+      p_monthly_limit: monthlyLimit.amount,
+      p_cart_fixed_total: cartFixedTotal.amount,
+      p_order: toOrderRowForInsert(order) as unknown as Json,
+      p_items: toItemRowsForInsert(order) as unknown as Json,
+      p_settlement: (settlementRows[0] ?? null) as unknown as Json,
+    });
+
+    if (error) {
+      if (error.message.includes("monthly_limit_exceeded")) {
+        throw new LimitExceededError(
+          cartFixedTotal.amount,
+          monthlyLimit.amount
+        );
+      }
+      throw new Error(`Order保存（上限チェック込み）に失敗: ${error.message}`);
     }
   }
 }

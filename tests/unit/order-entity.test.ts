@@ -298,4 +298,52 @@ describe("Order", () => {
       expect(updated.settlements).toHaveLength(1);
     });
   });
+
+  // 退会ブロック判定用（issue #208・#268）。docs/domain/membership.md参照。
+  // orders.statusは決済前(pre-payment)も支払い済み(paid)も同じ値になりうるため、
+  // 決済単位の未解決状態（請求済み未払い・上限超過で運営者対応待ち）でのみ判定する
+  describe("hasUnresolvedSettlement()", () => {
+    it("invoice_sentの決済単位があればtrue", () => {
+      const order = makeOrder({
+        settlements: [makeSettlement({ status: "invoice_sent" })],
+      });
+      expect(order.hasUnresolvedSettlement()).toBe(true);
+    });
+
+    it("limit_exceededの決済単位があればtrue", () => {
+      const order = makeOrder({
+        settlements: [makeSettlement({ status: "limit_exceeded" })],
+      });
+      expect(order.hasUnresolvedSettlement()).toBe(true);
+    });
+
+    it("pending_paymentのみ（決済前）はfalse", () => {
+      const order = makeOrder({
+        settlements: [makeSettlement({ status: "pending_payment" })],
+      });
+      expect(order.hasUnresolvedSettlement()).toBe(false);
+    });
+
+    it("paid済みのみ（支払い解決済み）はfalse", () => {
+      const order = makeOrder({
+        settlements: [makeSettlement({ status: "paid", paidAt: new Date() })],
+      });
+      expect(order.hasUnresolvedSettlement()).toBe(false);
+    });
+
+    it("cancelled済みのみはfalse", () => {
+      const order = makeOrder({
+        settlements: [
+          makeSettlement({ status: "cancelled", cancelledAt: new Date() }),
+        ],
+      });
+      expect(order.hasUnresolvedSettlement()).toBe(false);
+    });
+
+    it("決済単位が1件も無ければfalse", () => {
+      expect(makeOrder({ settlements: [] }).hasUnresolvedSettlement()).toBe(
+        false
+      );
+    });
+  });
 });
