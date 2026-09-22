@@ -13,6 +13,7 @@ import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
+import type { FavoriteRepository } from "@/repositories/favorite-repository";
 import type {
   ProductRepository,
   ProductSnapshot,
@@ -212,6 +213,16 @@ export function makeAddressRepo(): AddressRepository {
     update: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     clearDefault: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeFavoriteRepo(
+  sanityProductIds: string[] = []
+): FavoriteRepository {
+  return {
+    findSanityProductIdsByUserId: vi.fn().mockResolvedValue(sanityProductIds),
+    add: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
   };
 }
 

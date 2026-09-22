@@ -13,6 +13,7 @@ import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ImageGallery from "./image-gallery";
 import AddToCartButton from "./add-to-cart-button";
+import FavoriteButton from "@/components/favorite-button";
 
 export default async function ProductDetailPage({
   params,
@@ -57,9 +58,12 @@ export default async function ProductDetailPage({
           <div className="space-y-6">
             <div className="space-y-1">
               <p className="text-sm text-gray-500">{product.brand}</p>
-              <h1 className="text-2xl font-semibold text-brand-primary">
-                {product.name}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold text-brand-primary">
+                  {product.name}
+                </h1>
+                <FavoriteButton sanityProductId={id} className="shrink-0" />
+              </div>
               {product.categories && product.categories.length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-1">
                   {product.categories.map((c) => (
