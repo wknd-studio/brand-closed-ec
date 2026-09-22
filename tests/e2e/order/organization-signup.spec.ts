@@ -6,6 +6,7 @@ import {
   cleanupTestUser,
   cleanupTestOrganization,
   slotEmail,
+  withSlotSuffix,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_EMAIL = slotEmail("info+clerk_test_org_signup@wknd-studio.com");
@@ -20,7 +21,7 @@ function supabaseAdmin() {
 
 // quickstart.md シナリオ1: 代表者のセルフサインアップによる法人組織作成
 test.describe("法人セルフサインアップ", () => {
-  const organizationName = "E2Eテスト株式会社";
+  const organizationName = withSlotSuffix("E2Eテスト株式会社");
 
   test.afterEach(async ({ page }) => {
     await page.goto("/");

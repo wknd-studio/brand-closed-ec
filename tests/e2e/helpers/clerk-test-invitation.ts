@@ -12,23 +12,34 @@ function supabaseAdmin() {
 }
 
 /**
- * E2Eテストが使う固定のメールアドレス・Sanity ID等を、並列worktree実行時に
- * worktree間で衝突しないよう一意化するためのサフィックスを付与する。
- * WORKTREE_SLOT未設定時（通常のローカル実行・CI）は何も付けず、既存の挙動を維持する
- * （scripts/worktree-setup.sh参照）。
+ * E2Eテストが使う固定のメールアドレス・Sanity ID等を、同時に走る複数の実行間で
+ * 衝突しないよう一意化するためのサフィックスを付与する。
+ *
+ * ローカルの並列worktree実行ではWORKTREE_SLOTを使う（scripts/worktree-setup.sh参照）。
+ * CIではWORKTREE_SLOTは設定されないが、複数のPR/ブランチのCIが同時に走ることが
+ * 日常的にあり、固定メールアドレスのままだと共有のClerk開発インスタンス上で
+ * invitationの作成・revokeがレースし「The invitation was revoked.」で
+ * signUpViaInvitationが失敗する不具合が実際に発生していた。
+ * GITHUB_RUN_ID（ワークフロー実行ごとに一意、同一実行内のPlaywrightリトライ間では
+ * 不変）でCI実行間も一意化する。ローカルのシングル実行（WORKTREE_SLOTもCIも
+ * 未設定）時は何も付けず、既存の挙動を維持する。
  */
-export function withSlotSuffix(base: string): string {
-  const slot = process.env.WORKTREE_SLOT;
-  if (!slot) return base;
-  return `${base}_slot${slot}`;
+function isolationKey(): string | undefined {
+  return process.env.WORKTREE_SLOT ?? process.env.GITHUB_RUN_ID;
 }
 
-/** メールアドレスの@より前にスロットサフィックスを挿入する */
+export function withSlotSuffix(base: string): string {
+  const key = isolationKey();
+  if (!key) return base;
+  return `${base}_slot${key}`;
+}
+
+/** メールアドレスの@より前に一意化サフィックスを挿入する */
 export function slotEmail(email: string): string {
-  const slot = process.env.WORKTREE_SLOT;
-  if (!slot) return email;
+  const key = isolationKey();
+  if (!key) return email;
   const [local, domain] = email.split("@");
-  return `${local}_slot${slot}@${domain}`;
+  return `${local}_slot${key}@${domain}`;
 }
 
 export async function getClerkUserIdByEmail(
