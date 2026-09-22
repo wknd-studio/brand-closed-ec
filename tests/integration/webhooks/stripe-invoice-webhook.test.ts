@@ -39,6 +39,10 @@ async function cleanup() {
   }
   await supabase.from("addresses").delete().eq("id", TEST_ADDRESS_ID);
   await supabase.from("users").delete().eq("id", TEST_USER_ID);
+  await supabase
+    .from("stripe_webhook_events")
+    .delete()
+    .eq("event_id", "evt_test_stripe_invoice_webhook");
 }
 
 function makeDeps() {
@@ -210,5 +214,43 @@ describe("Stripe請求書決済確定Webhook（実DB・署名検証込み）", (
     expect(after?.status).toBe("paid");
     expect(after?.order_settlements[0]?.status).toBe("paid");
     expect(after?.order_settlements[0]?.paid_at).not.toBeNull();
+
+    const { data: webhookEvent } = await supabase
+      .from("stripe_webhook_events")
+      .select("status, processed_at")
+      .eq("event_id", "evt_test_stripe_invoice_webhook")
+      .single();
+    expect(webhookEvent?.status).toBe("processed");
+    expect(webhookEvent?.processed_at).not.toBeNull();
+  });
+
+  it("同一event_idの再送はDBレベルの冪等性チェックでスキップされる（issue #221）", async () => {
+    const secret = process.env.STRIPE_WEBHOOK_SECRET!;
+    const payload = JSON.stringify({
+      id: "evt_test_stripe_invoice_webhook",
+      object: "event",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: TEST_INVOICE_ID,
+          object: "invoice",
+        },
+      },
+    });
+    const signature = getStripe().webhooks.generateTestHeaderString({
+      payload,
+      secret,
+    });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: { "stripe-signature": signature },
+        body: payload,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, skipped: true });
   });
 });
