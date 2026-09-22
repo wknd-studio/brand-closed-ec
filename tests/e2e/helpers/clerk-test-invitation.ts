@@ -206,31 +206,3 @@ export async function cleanupTestUser(emailAddress: string) {
 
   await supabase.from("users").delete().eq("email", emailAddress);
 }
-
-/**
- * organization-signup.spec.ts等の法人E2Eテストで作成した組織を後片付けする。
- * Supabase側だけでなく、createOrganizationUseCaseが作成したClerk Organization
- * リソースも削除しないと、Clerk Dashboard上にテスト用組織が残り続ける。
- */
-export async function cleanupTestOrganization(name: string) {
-  const supabase = supabaseAdmin();
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("id, clerk_org_id")
-    .eq("name", name)
-    .maybeSingle();
-  if (!org) return;
-
-  await supabase
-    .from("organization_memberships")
-    .delete()
-    .eq("organization_id", org.id);
-  await supabase.from("organizations").delete().eq("id", org.id);
-
-  try {
-    const clerk = await clerkClient();
-    await clerk.organizations.deleteOrganization(org.clerk_org_id);
-  } catch {
-    // ベストエフォート。Clerk側の後片付けに失敗してもSupabase側の削除は完了している
-  }
-}

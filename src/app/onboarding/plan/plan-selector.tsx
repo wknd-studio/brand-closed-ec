@@ -45,9 +45,9 @@ const PLANS = RANK_ORDER.filter((rank) => rank !== "enterprise").map(
 );
 
 export default function PlanSelector({
-  organizationId,
+  isCorporate,
 }: {
-  organizationId?: string;
+  isCorporate: boolean;
 }) {
   const { session } = useClerk();
   const router = useRouter();
@@ -67,45 +67,74 @@ export default function PlanSelector({
 
   return (
     <form action={action} className="space-y-4">
-      {organizationId && (
-        <input type="hidden" name="organizationId" value={organizationId} />
+      {isCorporate && (
+        <input type="hidden" name="accountType" value="corporate" />
       )}
-      {!organizationId && (
-        <div className="space-y-4 rounded border p-4">
-          <p className="text-sm font-medium">ご本人情報</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="lastName" className="block text-sm font-medium">
-                姓
-              </label>
-              <input
-                id="lastName"
-                name="lastName"
-                required
-                className="mt-1 w-full rounded border p-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="firstName" className="block text-sm font-medium">
-                名
-              </label>
-              <input
-                id="firstName"
-                name="firstName"
-                required
-                className="mt-1 w-full rounded border p-2"
-              />
-            </div>
-          </div>
+      <div className="space-y-4 rounded border p-4">
+        <p className="text-sm font-medium">ご本人情報</p>
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="phoneNumber" className="block text-sm font-medium">
-              電話番号
+            <label htmlFor="lastName" className="block text-sm font-medium">
+              姓
             </label>
             <input
-              id="phoneNumber"
-              name="phoneNumber"
+              id="lastName"
+              name="lastName"
               required
-              placeholder="09012345678"
+              className="mt-1 w-full rounded border p-2"
+            />
+          </div>
+          <div>
+            <label htmlFor="firstName" className="block text-sm font-medium">
+              名
+            </label>
+            <input
+              id="firstName"
+              name="firstName"
+              required
+              className="mt-1 w-full rounded border p-2"
+            />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="phoneNumber" className="block text-sm font-medium">
+            電話番号
+          </label>
+          <input
+            id="phoneNumber"
+            name="phoneNumber"
+            required
+            placeholder="09012345678"
+            className="mt-1 w-full rounded border p-2"
+          />
+        </div>
+      </div>
+      {isCorporate && (
+        <div className="space-y-4 rounded border p-4">
+          <p className="text-sm font-medium">法人情報</p>
+          <div>
+            <label htmlFor="companyName" className="block text-sm font-medium">
+              会社名
+            </label>
+            <input
+              id="companyName"
+              name="companyName"
+              required
+              className="mt-1 w-full rounded border p-2"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="invoiceRegistrationNumber"
+              className="block text-sm font-medium"
+            >
+              適格請求書発行事業者登録番号
+            </label>
+            <input
+              id="invoiceRegistrationNumber"
+              name="invoiceRegistrationNumber"
+              required
+              placeholder="T1234567890123"
               className="mt-1 w-full rounded border p-2"
             />
           </div>

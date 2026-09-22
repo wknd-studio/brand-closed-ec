@@ -16,8 +16,8 @@ export async function selectAccountType(
 
   return {
     redirectTo:
-      accountType === "organization"
-        ? "/onboarding/organization"
+      accountType === "corporate"
+        ? "/onboarding/plan?accountType=corporate"
         : "/onboarding/plan",
   };
 }
