@@ -8,6 +8,7 @@ import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscriptio
 import { completeOrganizationSubscriptionOnboarding } from "@/use-cases/complete-organization-subscription-onboarding";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { SupabaseStripeWebhookEventRepository } from "@/infrastructure/supabase/supabase-stripe-webhook-event-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrganizationRepository } from "@/infrastructure/supabase/supabase-organization-repository";
 import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
@@ -44,6 +45,21 @@ export async function POST(req: Request) {
     const session = event.data.object;
 
     if (session.mode === "payment") {
+      const webhookEventRepo = new SupabaseStripeWebhookEventRepository(
+        createAdminClient()
+      );
+      // stripe_webhook_eventsによるDBレベルの冪等性チェック（issue #221）。
+      // 処理中/処理済みの再送であればここでスキップし、後続のuse case側の
+      // ステータスチェック（settlement.isPaid()）とあわせて二重の防御とする
+      const claimed = await webhookEventRepo.claim({
+        eventId: event.id,
+        type: event.type,
+        payload: event,
+      });
+      if (!claimed) {
+        return NextResponse.json({ received: true, skipped: true });
+      }
+
       const deps = {
         orderRepo: new SupabaseOrderRepository(createAdminClient()),
         userRepo: new SupabaseUserRepository(createAdminClient()),
@@ -59,7 +75,10 @@ export async function POST(req: Request) {
               deps
             )
         );
+        await webhookEventRepo.markProcessed(event.id);
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await webhookEventRepo.markFailed(event.id, message);
         Sentry.captureException(err, {
           tags: { webhook: "stripe", eventType: event.type },
           extra: { stripeCheckoutSessionId: session.id, eventId: event.id },
@@ -165,6 +184,18 @@ export async function POST(req: Request) {
 
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
+    const webhookEventRepo = new SupabaseStripeWebhookEventRepository(
+      createAdminClient()
+    );
+    const claimed = await webhookEventRepo.claim({
+      eventId: event.id,
+      type: event.type,
+      payload: event,
+    });
+    if (!claimed) {
+      return NextResponse.json({ received: true, skipped: true });
+    }
+
     const deps = {
       orderRepo: new SupabaseOrderRepository(createAdminClient()),
       userRepo: new SupabaseUserRepository(createAdminClient()),
@@ -176,7 +207,10 @@ export async function POST(req: Request) {
         { name: "markInvoiceOrderAsPaid", op: SPAN_OP.webhook },
         () => markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id }, deps)
       );
+      await webhookEventRepo.markProcessed(event.id);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await webhookEventRepo.markFailed(event.id, message);
       Sentry.captureException(err, {
         tags: { webhook: "stripe", eventType: event.type },
         extra: { stripeInvoiceId: invoice.id, eventId: event.id },

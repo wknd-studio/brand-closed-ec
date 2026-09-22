@@ -31,6 +31,20 @@ vi.mock("@/lib/supabase/server-admin", () => ({
 vi.mock("@/infrastructure/supabase/supabase-order-repository", () => ({
   SupabaseOrderRepository: vi.fn(),
 }));
+vi.mock(
+  "@/infrastructure/supabase/supabase-stripe-webhook-event-repository",
+  () => ({
+    SupabaseStripeWebhookEventRepository: vi
+      .fn()
+      .mockImplementation(function () {
+        return {
+          claim: vi.fn().mockResolvedValue(true),
+          markProcessed: vi.fn().mockResolvedValue(undefined),
+          markFailed: vi.fn().mockResolvedValue(undefined),
+        };
+      }),
+  })
+);
 vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
   SupabaseUserRepository: vi.fn(),
 }));

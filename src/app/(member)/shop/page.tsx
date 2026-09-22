@@ -17,7 +17,15 @@ export default async function ShopPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="mb-8 text-xl font-semibold">ブランドから探す</h1>
+      <div className="mb-8 flex items-center justify-between">
+        <h1 className="text-xl font-semibold">ブランドから探す</h1>
+        <Link
+          href="/shop/search"
+          className="text-sm text-gray-500 hover:text-gray-900"
+        >
+          商品を検索する →
+        </Link>
+      </div>
       {brands.length === 0 ? (
         <p className="text-center text-sm text-gray-400">
           表示できるブランドがありません
