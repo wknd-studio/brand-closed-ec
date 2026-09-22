@@ -97,13 +97,13 @@
 - `returns.md`（未着手）: 発注・配送済み商品の返品・返金は扱わない。注文確定時のキャンセル・返金方針（未確定事項）は将来`returns.md`との境界を明確にする必要がある
 - [[subscription-billing]]: ランク・月次仕入れ上限の定義・金額計算そのものはこちらの責務。本ドキュメントは注文確定時点の`rank_code_at_order`/`monthly_limit_at_order`としてスナップショットする側であり、上限判定のロジック自体（7ランクの上限値・確定金額計算）の正はそちらにある
 - [[catalog]]: カートに入れる前の商品閲覧・価格計算・支払いタイミング属性（`payment_timing`）の設定は扱わない。本ドキュメントはカートに入った後の商品情報を注文明細としてスナップショットするところから始まる
-- [[membership]]: 法人組織の作成・メンバー招待・`org:admin`/`org:member`ロールの定義そのものは扱わない。退会ブロック条件（`paid`以降の注文有無）の判定基準になる注文ステータスの定義は本ドキュメントが正
+- [[membership]]: 法人組織の作成・メンバー招待・`org:admin`/`org:member`ロールの定義そのものは扱わない。退会ブロック条件（2026-09-22改訂: 決済単位が`invoice_sent`/`limit_exceeded`かどうかで判定。旧「`paid`以降の注文有無」から変更、issue #208・#268・[[settlement]]参照）の判定基準になる決済単位のステータス定義は[[settlement]]が正
 - `admin-rbac.md`: 運営スタッフ（請求顧客担当等）がInvoice発行・注文管理画面で何を実行できるかの権限マトリクスの正はそちら。本ドキュメントはその権限が使われた結果として注文がどう遷移するか（業務ルール）のみを扱う
 
 ## 参考資料
 
 - [[settlement]]: 決済フローの分岐・決済単位（`order_settlements`）の状態遷移・月次仕入れ上限チェックの実行タイミング（2026-09-13、本ドキュメントの旧「チェックアウト分割」設計を置き換え）
-- `docs/db-schema-redesign.md`: `orders`（変更）節・`order_status_changes`（新設・追記専用）節・`order_items`（変更）節・`addresses`（変更）節・`cart_items`（変更なし）節・`favorites`（変更なし）節（`order_settlements`は未反映、[[settlement]]参照）
+- `docs/db-schema-redesign.md`: `orders`（変更）節・`order_status_changes`（新設・追記専用）節・`order_items`（変更）節・`addresses`（変更）節・`cart_items`（変更なし）節・`favorites`（変更なし）節（`order_settlements`は本ドキュメントの範囲外。[[settlement]]と`db-schema-redesign.md`の`order_settlements`節を参照）
 - （旧`docs/archive/order-flow.md`: 注文ステータス遷移（`paid`〜`delivered`を単一`status`で表現）を前提にした決済フロー図を材料に執筆。`paid`より先の遷移は[[procurement]]/`fulfillment.md`側の新設計に置き換わっている。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - `specs/003-checkout-invoice-e2e`: カタログ〜チェックアウト・決済確定までのE2E/統合テスト網羅の仕様（住所選択2経路・月次上限超過時のブロック・Webhookによる`paid`化）
 - `specs/004-split-order-payment-timing`: 商品別支払いタイミング設定・チェックアウト分割の仕様（`payment_timing`・`split_group_id`・カート画面のグループ表示）

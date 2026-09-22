@@ -19,13 +19,18 @@ export default async function InvoiceCompletePage({ searchParams }: Props) {
   const orderRepo = new SupabaseOrderRepository(supabase);
 
   const order = await orderRepo.findById(order_id);
-  if (!order || order.paymentFlow !== "invoice") redirect("/shop");
+  if (!order) redirect("/shop");
+  // 後払い（after_order）の明細を含む注文のみが対象
+  const afterOrderItems = order.items.filter(
+    (item) => item.paymentTiming === "after_order"
+  );
+  if (afterOrderItems.length === 0) redirect("/shop");
 
   return (
     <InvoiceCompleteClient
       orderId={order.id}
       createdAt={order.createdAt.toISOString()}
-      items={order.items.map((item) => ({
+      items={afterOrderItems.map((item) => ({
         id: item.id,
         productNameSnapshot: item.productNameSnapshot,
         quantity: item.quantity,

@@ -175,6 +175,10 @@ export async function cleanupTestUser(emailAddress: string) {
       .eq("user_id", user.id);
     for (const order of orders ?? []) {
       await supabase.from("order_items").delete().eq("order_id", order.id);
+      await supabase
+        .from("order_settlements")
+        .delete()
+        .eq("order_id", order.id);
     }
     await supabase.from("orders").delete().eq("user_id", user.id);
     await supabase.from("addresses").delete().eq("user_id", user.id);

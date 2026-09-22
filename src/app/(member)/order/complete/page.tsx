@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
-import { pickRelatedOrder } from "@/lib/order/related-order";
 import OrderCompleteClient from "./order-complete-client";
 
 type Props = {
@@ -22,31 +21,24 @@ export default async function OrderCompletePage({ searchParams }: Props) {
   const order = await orderRepo.findByStripeCheckoutSessionId(session_id);
   if (!order) redirect("/shop");
 
-  const relatedOrder = order.splitGroupId
-    ? pickRelatedOrder(
-        order.id,
-        (await orderRepo.findBySplitGroupId(order.splitGroupId)).map((o) => ({
-          id: o.id,
-          paymentFlow: o.paymentFlow,
-          status: o.status.value,
-        }))
-      )
-    : null;
+  const toClientItem = (item: (typeof order.items)[number]) => ({
+    id: item.id,
+    productNameSnapshot: item.productNameSnapshot,
+    quantity: item.quantity,
+    unitPriceSnapshot: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
+    isNegotiable: item.isNegotiable,
+  });
 
   return (
     <OrderCompleteClient
       orderId={order.id}
       createdAt={order.createdAt.toISOString()}
-      items={order.items.map((item) => ({
-        id: item.id,
-        productNameSnapshot: item.productNameSnapshot,
-        quantity: item.quantity,
-        unitPriceSnapshot: item.isNegotiable
-          ? null
-          : item.unitPriceSnapshot.amount,
-        isNegotiable: item.isNegotiable,
-      }))}
-      relatedOrder={relatedOrder}
+      items={order.items
+        .filter((item) => item.paymentTiming === "at_order")
+        .map(toClientItem)}
+      afterOrderItems={order.items
+        .filter((item) => item.paymentTiming === "after_order")
+        .map(toClientItem)}
     />
   );
 }

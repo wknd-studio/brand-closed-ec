@@ -149,12 +149,19 @@ test.describe("要相談商品の見積依頼フロー", () => {
       page.getByRole("heading", { name: "ご注文ありがとうございます" })
     ).toBeVisible();
 
+    // 後払い（after_order）の明細は決済単位を作らず、settlement_id=NULLのまま
+    // 運営者の請求作成を待つ。注文自体は対応中（processing）
     const { data: order } = await supabaseAdmin()
       .from("orders")
-      .select("payment_flow, status")
+      .select(
+        "status, order_settlements(id), order_items(payment_timing, settlement_id)"
+      )
       .eq("user_id", userId)
       .single();
-    expect(order?.payment_flow).toBe("invoice");
-    expect(order?.status).toBe("confirming");
+    expect(order?.status).toBe("processing");
+    expect(order?.order_settlements).toEqual([]);
+    expect(order?.order_items).toEqual([
+      { payment_timing: "after_order", settlement_id: null },
+    ]);
   });
 });

@@ -46,7 +46,7 @@ async function getTestUserId(): Promise<string> {
   return data!.id;
 }
 
-test.describe("支払いタイミングが混在するカートの分割チェックアウト", () => {
+test.describe("支払いタイミングが混在するカートのチェックアウト", () => {
   test.beforeAll(async () => {
     const client = sanityWriteClient();
     await client.createOrReplace({
@@ -93,7 +93,7 @@ test.describe("支払いタイミングが混在するカートの分割チェ�
     await cleanupTestUser(TEST_EMAIL);
   });
 
-  test("先払い商品と後払い商品を両方カートに入れて注文確定すると、Stripe Checkoutへ遷移し、同一split_group_idを持つ2件のOrderが作成される", async ({
+  test("先払い商品と後払い商品を両方カートに入れて注文確定すると、Stripe Checkoutへ遷移し、1件のOrderに先払い分のCheckout決済単位だけが作成される", async ({
     page,
   }) => {
     await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
@@ -169,24 +169,39 @@ test.describe("支払いタイミングが混在するカートの分割チェ�
 
     await page.getByRole("button", { name: "注文を確定する" }).click();
 
-    // at_order商品のOrderに対してのみStripe Checkoutセッションが作られ、
+    // at_order商品の決済単位に対してのみStripe Checkoutセッションが作られ、
     // そちらへリダイレクトされる
     await expect(page).toHaveURL(/checkout\.stripe\.com/, { timeout: 15000 });
 
+    // 注文は分割せず1件。at_order明細だけがCheckout決済単位に紐づき、
+    // after_order明細は決済単位を持たない（運営者の請求作成を待つ）
     const { data: orders } = await supabaseAdmin()
       .from("orders")
-      .select("payment_flow, status, split_group_id")
+      .select(
+        "status, order_settlements(id, flow, status, amount_snapshot), order_items(product_name_snapshot, payment_timing, settlement_id)"
+      )
       .eq("user_id", userId);
 
-    expect(orders).toHaveLength(2);
+    expect(orders).toHaveLength(1);
+    const order = orders![0];
+    expect(order.status).toBe("processing");
 
-    const splitGroupIds = new Set(orders!.map((o) => o.split_group_id));
-    expect(splitGroupIds.size).toBe(1);
-    expect([...splitGroupIds][0]).not.toBeNull();
+    expect(order.order_settlements).toHaveLength(1);
+    const settlement = order.order_settlements[0];
+    expect(settlement.flow).toBe("checkout");
+    expect(settlement.status).toBe("pending_payment");
+    expect(settlement.amount_snapshot).toBe(80_000);
 
-    const checkoutOrder = orders!.find((o) => o.payment_flow === "checkout");
-    const invoiceOrder = orders!.find((o) => o.payment_flow === "invoice");
-    expect(checkoutOrder?.status).toBe("pending_payment");
-    expect(invoiceOrder?.status).toBe("confirming");
+    expect(order.order_items).toHaveLength(2);
+    const atOrderItem = order.order_items.find(
+      (i) => i.product_name_snapshot === AT_ORDER_PRODUCT_NAME
+    );
+    const afterOrderItem = order.order_items.find(
+      (i) => i.product_name_snapshot === AFTER_ORDER_PRODUCT_NAME
+    );
+    expect(atOrderItem?.payment_timing).toBe("at_order");
+    expect(atOrderItem?.settlement_id).toBe(settlement.id);
+    expect(afterOrderItem?.payment_timing).toBe("after_order");
+    expect(afterOrderItem?.settlement_id).toBeNull();
   });
 });

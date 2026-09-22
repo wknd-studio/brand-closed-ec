@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { User } from "@/domain/entities/user";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
+import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { Address } from "@/domain/entities/address";
 import { Organization } from "@/domain/entities/organization";
 import { OrganizationMembership } from "@/domain/entities/organization-membership";
@@ -83,10 +84,14 @@ export function makeAddressSnapshot() {
   });
 }
 
+export const SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a1";
+
 export function makeOrderItem(
   overrides?: Partial<{
     isNegotiable: boolean;
     negotiatedUnitPrice: Money | null;
+    paymentTiming: "at_order" | "after_order";
+    settlementId: string | null;
   }>
 ) {
   return OrderItem.of({
@@ -97,30 +102,47 @@ export function makeOrderItem(
     quantity: 1,
     isNegotiable: overrides?.isNegotiable ?? false,
     negotiatedUnitPrice: overrides?.negotiatedUnitPrice ?? null,
+    paymentTiming: overrides?.paymentTiming ?? "at_order",
+    settlementId:
+      overrides?.settlementId === undefined
+        ? SETTLEMENT_ID
+        : overrides.settlementId,
   });
 }
 
+export function makeSettlement(
+  overrides?: Partial<Parameters<typeof OrderSettlement.of>[0]>
+) {
+  return OrderSettlement.of({
+    id: SETTLEMENT_ID,
+    orderId: "00000000-0000-0000-0000-000000000001",
+    flow: "checkout",
+    status: "pending_payment",
+    stripeCheckoutSessionId: "sess_1",
+    stripeInvoiceId: null,
+    amount: Money.of(100_000),
+    paidAt: null,
+    cancelledAt: null,
+    ...overrides,
+  });
+}
+
+/** デフォルトは「at_order明細1件が、未払いのCheckout決済単位に紐づく」注文 */
 export function makeOrder(overrides?: {
   status?: string;
-  paymentFlow?: "checkout" | "invoice";
   items?: OrderItem[];
-  stripeCheckoutSessionId?: string | null;
-  stripeInvoiceId?: string | null;
-  splitGroupId?: string | null;
+  settlements?: OrderSettlement[];
 }) {
   return Order.of({
     id: "00000000-0000-0000-0000-000000000001",
     userId: "00000000-0000-0000-0000-000000000001",
-    paymentFlow: overrides?.paymentFlow ?? "checkout",
-    status: OrderStatus.of(overrides?.status ?? "pending_payment"),
+    status: OrderStatus.of(overrides?.status ?? "processing"),
     shippingAddress: makeAddressSnapshot(),
     billingAddress: makeAddressSnapshot(),
     rankAtOrder: MemberRank.of("standard"),
     monthlyLimitAtOrder: Money.of(5_000_000),
-    stripeCheckoutSessionId: overrides?.stripeCheckoutSessionId ?? null,
-    stripeInvoiceId: overrides?.stripeInvoiceId ?? null,
-    splitGroupId: overrides?.splitGroupId ?? null,
     items: overrides?.items ?? [makeOrderItem()],
+    settlements: overrides?.settlements ?? [makeSettlement()],
     createdAt: new Date(2026, 5, 1),
   });
 }
@@ -167,7 +189,7 @@ export function makeOrderRepo(order?: Order): OrderRepository {
     findByStripeInvoiceId: vi.fn().mockResolvedValue(order ?? null),
     sumConfirmedAmountByUserId: vi.fn().mockResolvedValue(0),
     save: vi.fn().mockResolvedValue(undefined),
-    findBySplitGroupId: vi.fn().mockResolvedValue([]),
+    saveNewOrderWithLimitCheck: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     findActiveByUserId: vi.fn().mockResolvedValue([]),
     findActiveOrdersWithUser: vi.fn().mockResolvedValue([]),

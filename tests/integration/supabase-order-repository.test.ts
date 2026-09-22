@@ -4,6 +4,7 @@ import type { Database } from "@/types/database.types";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
+import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -17,10 +18,29 @@ const supabase = createClient<Database>(
 );
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000020";
-const TEST_ORDER_ID = "00000000-0000-0000-0000-000000000001";
-const TEST_ORDER_ID_2 = "00000000-0000-0000-0000-000000000002";
-const TEST_STRIPE_SESSION_ID = "cs_test_infra_001";
-const TEST_SPLIT_GROUP_ID = "00000000-0000-0000-0000-0000000000ab";
+const OTHER_USER_ID = "00000000-0000-0000-0000-000000000021";
+const ORDER_ID = "00000000-0000-0000-0000-000000000001";
+const ORDER_ID_2 = "00000000-0000-0000-0000-000000000002";
+const ORDER_ID_3 = "00000000-0000-0000-0000-000000000003";
+const CANCELLED_ORDER_ID = "00000000-0000-0000-0000-000000000004";
+const ORDER_INVOICE_SENT_ID = "00000000-0000-0000-0000-000000000005";
+const ORDER_LIMIT_EXCEEDED_ID = "00000000-0000-0000-0000-000000000006";
+const SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a1";
+const SETTLEMENT_ID_3 = "00000000-0000-0000-0000-0000000000a3";
+const CANCELLED_ORDER_SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a4";
+const SETTLEMENT_ID_5 = "00000000-0000-0000-0000-0000000000a5";
+const SETTLEMENT_ID_6 = "00000000-0000-0000-0000-0000000000a6";
+const STRIPE_SESSION_ID = "cs_test_infra_001";
+const STRIPE_INVOICE_ID = "in_test_infra_001";
+
+const ALL_ORDER_IDS = [
+  ORDER_ID,
+  ORDER_ID_2,
+  ORDER_ID_3,
+  CANCELLED_ORDER_ID,
+  ORDER_INVOICE_SENT_ID,
+  ORDER_LIMIT_EXCEEDED_ID,
+];
 
 const snapshotProps = {
   recipientLastName: "テスト",
@@ -33,193 +53,392 @@ const snapshotProps = {
   phoneNumber: "03-1234-5678",
 };
 
+function makeItem(
+  id: string,
+  overrides: Partial<Parameters<typeof OrderItem.of>[0]> = {}
+) {
+  return OrderItem.of({
+    id,
+    sanityProductId: "prod-001",
+    productNameSnapshot: "テスト商品",
+    unitPriceSnapshot: Money.of(50_000),
+    quantity: 2,
+    isNegotiable: false,
+    negotiatedUnitPrice: null,
+    paymentTiming: "at_order",
+    settlementId: null,
+    ...overrides,
+  });
+}
+
+function makeSettlement(
+  overrides: Partial<Parameters<typeof OrderSettlement.of>[0]> = {}
+) {
+  return OrderSettlement.of({
+    id: SETTLEMENT_ID,
+    orderId: ORDER_ID,
+    flow: "checkout",
+    status: "pending_payment",
+    stripeCheckoutSessionId: STRIPE_SESSION_ID,
+    stripeInvoiceId: null,
+    amount: Money.of(100_000),
+    paidAt: null,
+    cancelledAt: null,
+    ...overrides,
+  });
+}
+
 function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
   return Order.of({
-    id: TEST_ORDER_ID,
+    id: ORDER_ID,
     userId: TEST_USER_ID,
-    paymentFlow: "checkout",
-    status: OrderStatus.of("pending_payment"),
+    status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
     rankAtOrder: MemberRank.of("basic"),
     monthlyLimitAtOrder: Money.of(1_000_000),
-    stripeCheckoutSessionId: TEST_STRIPE_SESSION_ID,
-    stripeInvoiceId: null,
-    splitGroupId: null,
     items: [
-      OrderItem.of({
-        id: "00000000-0000-0000-0000-000000000031",
-        sanityProductId: "prod-001",
-        productNameSnapshot: "テスト商品",
-        unitPriceSnapshot: Money.of(50_000),
-        quantity: 2,
-        isNegotiable: false,
-        negotiatedUnitPrice: null,
+      makeItem("00000000-0000-0000-0000-000000000031", {
+        settlementId: SETTLEMENT_ID,
       }),
     ],
+    settlements: [makeSettlement()],
     createdAt: new Date(2026, 5, 12),
     ...overrides,
   });
 }
 
+async function cleanup() {
+  await supabase.from("order_items").delete().in("order_id", ALL_ORDER_IDS);
+  await supabase
+    .from("order_settlements")
+    .delete()
+    .in("order_id", ALL_ORDER_IDS);
+  await supabase.from("orders").delete().in("id", ALL_ORDER_IDS);
+}
+
 beforeAll(async () => {
-  await supabase.from("users").delete().eq("id", TEST_USER_ID);
-  await supabase.from("users").insert({
-    id: TEST_USER_ID,
-    clerk_user_id: "clerk_test_order_infra",
-    email: "order-infra-test@example.com",
-    first_name: "テスト",
-    last_name: "太郎",
-    rank_code: "basic",
-    onboarding_completed: true,
-    billing_anchor_day: 10,
-  });
+  await cleanup();
+  for (const [id, clerkId] of [
+    [TEST_USER_ID, "clerk_test_order_infra"],
+    [OTHER_USER_ID, "clerk_test_order_infra_other"],
+  ]) {
+    await supabase.from("users").delete().eq("id", id);
+    const { error } = await supabase.from("users").insert({
+      id,
+      clerk_user_id: clerkId,
+      email: `${clerkId}@example.com`,
+      first_name: "テスト",
+      last_name: "太郎",
+      rank_code: "basic",
+      onboarding_completed: true,
+      billing_anchor_day: 10,
+    });
+    if (error) throw error;
+  }
 });
 
 afterAll(async () => {
-  await supabase.from("order_items").delete().eq("order_id", TEST_ORDER_ID);
-  await supabase.from("order_items").delete().eq("order_id", TEST_ORDER_ID_2);
-  await supabase.from("orders").delete().eq("id", TEST_ORDER_ID);
-  await supabase.from("orders").delete().eq("id", TEST_ORDER_ID_2);
-  await supabase.from("users").delete().eq("id", TEST_USER_ID);
+  await cleanup();
+  await supabase.from("users").delete().in("id", [TEST_USER_ID, OTHER_USER_ID]);
 });
 
 describe("SupabaseOrderRepository", () => {
   const repo = new SupabaseOrderRepository(supabase);
 
   describe("save() — 新規作成", () => {
-    it("Order と OrderItem を保存できる", async () => {
+    it("Order・OrderItem・OrderSettlementを保存し、明細を決済単位に紐付けられる", async () => {
       await repo.save(makeOrder());
 
-      const { data } = await supabase
+      const { data: order } = await supabase
         .from("orders")
         .select("id, status")
-        .eq("id", TEST_ORDER_ID)
+        .eq("id", ORDER_ID)
         .single();
-      expect(data?.id).toBe(TEST_ORDER_ID);
-      expect(data?.status).toBe("pending_payment");
+      expect(order?.status).toBe("processing");
+
+      const { data: settlement } = await supabase
+        .from("order_settlements")
+        .select("flow, status, amount_snapshot, stripe_checkout_session_id")
+        .eq("id", SETTLEMENT_ID)
+        .single();
+      expect(settlement).toEqual({
+        flow: "checkout",
+        status: "pending_payment",
+        amount_snapshot: 100_000,
+        stripe_checkout_session_id: STRIPE_SESSION_ID,
+      });
+
+      const { data: item } = await supabase
+        .from("order_items")
+        .select("payment_timing, settlement_id")
+        .eq("order_id", ORDER_ID)
+        .single();
+      expect(item).toEqual({
+        payment_timing: "at_order",
+        settlement_id: SETTLEMENT_ID,
+      });
+    });
+
+    it("決済単位を持たないafter_order明細（settlement_id=NULL）も保存できる", async () => {
+      await repo.save(
+        makeOrder({
+          id: ORDER_ID_2,
+          items: [
+            makeItem("00000000-0000-0000-0000-000000000032", {
+              paymentTiming: "after_order",
+              settlementId: null,
+            }),
+          ],
+          settlements: [],
+        })
+      );
+
+      const reloaded = await repo.findById(ORDER_ID_2);
+      expect(reloaded!.settlements).toEqual([]);
+      expect(reloaded!.items[0]?.paymentTiming).toBe("after_order");
+      expect(reloaded!.items[0]?.settlementId).toBeNull();
     });
   });
 
   describe("findById()", () => {
-    it("保存済みの Order を返す", async () => {
-      const order = await repo.findById(TEST_ORDER_ID);
+    it("保存済みのOrderを、明細と決済単位込みで返す", async () => {
+      const order = await repo.findById(ORDER_ID);
       expect(order).not.toBeNull();
-      expect(order!.status.value).toBe("pending_payment");
+      expect(order!.status.value).toBe("processing");
       expect(order!.items).toHaveLength(1);
-      expect(order!.items[0].unitPriceSnapshot.amount).toBe(50_000);
+      expect(order!.items[0]?.unitPriceSnapshot.amount).toBe(50_000);
+      expect(order!.items[0]?.settlementId).toBe(SETTLEMENT_ID);
+      expect(order!.settlements).toHaveLength(1);
+      expect(order!.settlements[0]?.amount.amount).toBe(100_000);
+      expect(order!.settlements[0]?.flow).toBe("checkout");
     });
 
-    it("存在しない ID は null を返す", async () => {
-      const order = await repo.findById("00000000-0000-0000-0000-000000000000");
-      expect(order).toBeNull();
+    it("存在しないIDはnullを返す", async () => {
+      expect(
+        await repo.findById("00000000-0000-0000-0000-000000000000")
+      ).toBeNull();
     });
   });
 
   describe("findByStripeCheckoutSessionId()", () => {
-    it("セッションIDで注文を検索できる", async () => {
-      const order = await repo.findByStripeCheckoutSessionId(
-        TEST_STRIPE_SESSION_ID
-      );
-      expect(order).not.toBeNull();
-      expect(order!.id).toBe(TEST_ORDER_ID);
+    it("決済単位のセッションIDで注文を検索できる", async () => {
+      const order = await repo.findByStripeCheckoutSessionId(STRIPE_SESSION_ID);
+      expect(order!.id).toBe(ORDER_ID);
+      expect(order!.settlements[0]?.id).toBe(SETTLEMENT_ID);
     });
 
-    it("存在しないセッションIDは null を返す", async () => {
-      const order = await repo.findByStripeCheckoutSessionId("cs_nonexistent");
-      expect(order).toBeNull();
+    it("存在しないセッションIDはnullを返す", async () => {
+      expect(await repo.findByStripeCheckoutSessionId("cs_nonexistent")).toBe(
+        null
+      );
     });
   });
 
-  describe("save() — ステータス更新", () => {
-    it("ステータスを paid に更新できる", async () => {
-      const order = await repo.findById(TEST_ORDER_ID);
-      await repo.save(order!.with({ status: OrderStatus.of("paid") }));
-
-      const reloaded = await repo.findById(TEST_ORDER_ID);
-      expect(reloaded!.status.value).toBe("paid");
-    });
-  });
-
-  describe("sumConfirmedAmountByUserId()", () => {
-    it("当月期間内の固定価格合計を返す（100,000円 = 50,000 × 2）", async () => {
-      const period = MonthlyPeriod.fromSubscribedAt(
-        new Date(2026, 0, 10),
-        new Date(2026, 5, 15)
-      );
-      const total = await repo.sumConfirmedAmountByUserId(TEST_USER_ID, period);
-      expect(total).toBe(100_000);
-    });
-
-    it("キャンセル注文は合計に含まれない", async () => {
-      const period = MonthlyPeriod.fromSubscribedAt(
-        null,
-        new Date(2026, 5, 15)
-      );
-      const total = await repo.sumConfirmedAmountByUserId(
-        "00000000-0000-0000-0000-000000000000",
-        period
-      );
-      expect(total).toBe(0);
-    });
-  });
-
-  describe("split_group_id の永続化", () => {
-    it("save()・findById()でsplitGroupIdを読み書きできる", async () => {
-      const order = await repo.findById(TEST_ORDER_ID);
-      await repo.save(order!.with({ splitGroupId: TEST_SPLIT_GROUP_ID }));
-
-      const reloaded = await repo.findById(TEST_ORDER_ID);
-      expect(reloaded!.splitGroupId).toBe(TEST_SPLIT_GROUP_ID);
-    });
-
-    it("findByIdWithUser()でもsplitGroupIdを取得できる", async () => {
-      const order = await repo.findByIdWithUser(TEST_ORDER_ID);
-      expect(order!.splitGroupId).toBe(TEST_SPLIT_GROUP_ID);
-    });
-  });
-
-  describe("findBySplitGroupId()", () => {
-    it("同一splitGroupIdを持つOrderを全件返す", async () => {
+  describe("findByStripeInvoiceId()", () => {
+    it("invoice決済単位のInvoice IDで注文を検索できる", async () => {
       await repo.save(
         makeOrder({
-          id: TEST_ORDER_ID_2,
-          paymentFlow: "invoice",
-          status: OrderStatus.of("confirming"),
-          stripeCheckoutSessionId: null,
-          splitGroupId: TEST_SPLIT_GROUP_ID,
+          id: ORDER_ID_3,
           items: [
-            OrderItem.of({
-              id: "00000000-0000-0000-0000-000000000032",
-              sanityProductId: "prod-002",
-              productNameSnapshot: "テスト商品2",
-              unitPriceSnapshot: Money.of(30_000),
-              quantity: 1,
-              isNegotiable: false,
-              negotiatedUnitPrice: null,
+            makeItem("00000000-0000-0000-0000-000000000033", {
+              paymentTiming: "after_order",
+              settlementId: SETTLEMENT_ID_3,
+            }),
+          ],
+          settlements: [
+            makeSettlement({
+              id: SETTLEMENT_ID_3,
+              orderId: ORDER_ID_3,
+              flow: "invoice",
+              status: "invoice_sent",
+              stripeCheckoutSessionId: null,
+              stripeInvoiceId: STRIPE_INVOICE_ID,
             }),
           ],
         })
       );
 
-      const orders = await repo.findBySplitGroupId(TEST_SPLIT_GROUP_ID);
-      const ids = orders.map((o) => o.id).sort();
-      expect(ids).toEqual([TEST_ORDER_ID, TEST_ORDER_ID_2].sort());
+      const order = await repo.findByStripeInvoiceId(STRIPE_INVOICE_ID);
+      expect(order!.id).toBe(ORDER_ID_3);
+      expect(order!.settlements[0]?.status).toBe("invoice_sent");
     });
 
-    it("該当するOrderがなければ空配列を返す", async () => {
-      const orders = await repo.findBySplitGroupId(
-        "00000000-0000-0000-0000-000000000000"
+    it("存在しないInvoice IDはnullを返す", async () => {
+      expect(await repo.findByStripeInvoiceId("in_nonexistent")).toBeNull();
+    });
+  });
+
+  describe("save() — 更新", () => {
+    it("決済単位をpaidにしてロールアップしたstatusを保存できる", async () => {
+      const order = await repo.findById(ORDER_ID);
+      const paidAt = new Date(2026, 5, 13);
+      await repo.save(
+        order!.applySettlement(order!.settlements[0]!.markPaid(paidAt))
       );
-      expect(orders).toEqual([]);
+
+      const reloaded = await repo.findById(ORDER_ID);
+      expect(reloaded!.status.value).toBe("paid");
+      expect(reloaded!.settlements[0]?.status).toBe("paid");
+      expect(reloaded!.settlements[0]?.paidAt?.toISOString()).toBe(
+        paidAt.toISOString()
+      );
+    });
+  });
+
+  // docs/domain/settlement.md「今月すでに確定している金額」は明細単位で算出する
+  describe("sumConfirmedAmountByUserId()", () => {
+    const period = MonthlyPeriod.fromSubscribedAt(
+      new Date(2026, 0, 10),
+      new Date(2026, 5, 15)
+    );
+
+    it("キャンセルされていない注文の明細を合計する（決済済み100,000 + 決済単位未作成のafter_order 100,000）", async () => {
+      const total = await repo.sumConfirmedAmountByUserId(TEST_USER_ID, period);
+      // ORDER_ID: paid決済単位の明細 50,000×2 / ORDER_ID_2: settlement_id=NULLのafter_order 50,000×2
+      // ORDER_ID_3: invoice_sent決済単位の明細 50,000×2
+      expect(total).toBe(300_000);
+    });
+
+    it("cancelledの決済単位に属する明細は含めない", async () => {
+      const order = await repo.findById(ORDER_ID_3);
+      await repo.save(
+        order!.applySettlement(order!.settlements[0]!.cancel(new Date()))
+      );
+
+      const total = await repo.sumConfirmedAmountByUserId(TEST_USER_ID, period);
+      expect(total).toBe(200_000);
+    });
+
+    it("cancelledの注文の明細は含めない", async () => {
+      await repo.save(
+        makeOrder({
+          id: CANCELLED_ORDER_ID,
+          status: OrderStatus.of("cancelled"),
+          items: [
+            makeItem("00000000-0000-0000-0000-000000000034", {
+              settlementId: CANCELLED_ORDER_SETTLEMENT_ID,
+            }),
+          ],
+          settlements: [
+            makeSettlement({
+              id: CANCELLED_ORDER_SETTLEMENT_ID,
+              orderId: CANCELLED_ORDER_ID,
+              stripeCheckoutSessionId: null,
+            }),
+          ],
+        })
+      );
+
+      const total = await repo.sumConfirmedAmountByUserId(TEST_USER_ID, period);
+      expect(total).toBe(200_000);
+    });
+
+    it("他ユーザーの注文は含めない", async () => {
+      expect(await repo.sumConfirmedAmountByUserId(OTHER_USER_ID, period)).toBe(
+        0
+      );
+    });
+  });
+
+  describe("findByIdWithUser()", () => {
+    it("ユーザー情報・明細・決済単位を返す", async () => {
+      const order = await repo.findByIdWithUser(ORDER_ID);
+      expect(order!.user?.email).toBe("clerk_test_order_infra@example.com");
+      expect(order!.status).toBe("paid");
+      expect(order!.items[0]).toMatchObject({
+        paymentTiming: "at_order",
+        settlementId: SETTLEMENT_ID,
+      });
+      expect(order!.settlements).toEqual([
+        expect.objectContaining({
+          id: SETTLEMENT_ID,
+          flow: "checkout",
+          status: "paid",
+          amount: 100_000,
+        }),
+      ]);
+    });
+  });
+
+  // 退会ブロック判定用（issue #208・#268）。docs/domain/membership.md参照。
+  // orders.statusは決済前・支払い済みが同じ値になりうるため、決済単位の
+  // 未解決状態（invoice_sent・limit_exceeded）でのみ「アクティブ」を判定する
+  describe("findActiveByUserId()", () => {
+    it("invoice_sent・limit_exceededの決済単位を持つ注文のみ含む（決済前・支払い済み・キャンセル済みは含まない）", async () => {
+      await repo.save(
+        makeOrder({
+          id: ORDER_INVOICE_SENT_ID,
+          items: [
+            makeItem("00000000-0000-0000-0000-000000000035", {
+              paymentTiming: "after_order",
+              settlementId: SETTLEMENT_ID_5,
+            }),
+          ],
+          settlements: [
+            makeSettlement({
+              id: SETTLEMENT_ID_5,
+              orderId: ORDER_INVOICE_SENT_ID,
+              flow: "invoice",
+              status: "invoice_sent",
+              stripeCheckoutSessionId: null,
+              stripeInvoiceId: "in_test_active_005",
+            }),
+          ],
+        })
+      );
+      await repo.save(
+        makeOrder({
+          id: ORDER_LIMIT_EXCEEDED_ID,
+          items: [
+            makeItem("00000000-0000-0000-0000-000000000036", {
+              paymentTiming: "after_order",
+              settlementId: SETTLEMENT_ID_6,
+            }),
+          ],
+          settlements: [
+            makeSettlement({
+              id: SETTLEMENT_ID_6,
+              orderId: ORDER_LIMIT_EXCEEDED_ID,
+              flow: "invoice",
+              status: "limit_exceeded",
+              stripeCheckoutSessionId: null,
+            }),
+          ],
+        })
+      );
+
+      const orders = await repo.findActiveByUserId(TEST_USER_ID);
+      const ids = orders.map((o) => o.id);
+
+      expect(ids).toContain(ORDER_INVOICE_SENT_ID);
+      expect(ids).toContain(ORDER_LIMIT_EXCEEDED_ID);
+      // ORDER_ID: 決済単位はこの時点でpaid（「save() — 更新」テストで支払い済みに更新済み）
+      expect(ids).not.toContain(ORDER_ID);
+      // ORDER_ID_2: 決済単位未作成（後払い未請求）
+      expect(ids).not.toContain(ORDER_ID_2);
+      // ORDER_ID_3: 決済単位がキャンセル済み
+      expect(ids).not.toContain(ORDER_ID_3);
+      // CANCELLED_ORDER_ID: 注文自体がキャンセル済み
+      expect(ids).not.toContain(CANCELLED_ORDER_ID);
     });
   });
 
   describe("delete()", () => {
-    it("指定したOrderを削除する", async () => {
-      await repo.delete(TEST_ORDER_ID_2);
-      const order = await repo.findById(TEST_ORDER_ID_2);
-      expect(order).toBeNull();
+    it("Order・明細・決済単位をまとめて削除する", async () => {
+      await repo.delete(ORDER_ID_3);
+
+      expect(await repo.findById(ORDER_ID_3)).toBeNull();
+      const { data: settlements } = await supabase
+        .from("order_settlements")
+        .select("id")
+        .eq("order_id", ORDER_ID_3);
+      expect(settlements).toEqual([]);
+      const { data: items } = await supabase
+        .from("order_items")
+        .select("id")
+        .eq("order_id", ORDER_ID_3);
+      expect(items).toEqual([]);
     });
   });
 });

@@ -159,7 +159,7 @@ flowchart TD
 
 ### まだ決まっていない・要確認事項
 
-- ✅ ~~`order_settlements`のテーブル定義そのもの~~（2026-09-20解決）: `docs/db-schema-redesign.md`に正式な列定義を反映済み。マイグレーション自体はissue #219で実装する
+- ✅ ~~`order_settlements`のテーブル定義そのもの~~（2026-09-20解決）: `docs/db-schema-redesign.md`に正式な列定義を反映済み。マイグレーションはissue #219で実装済み（`supabase/migrations/20260921120000_create_order_settlements.sql`）
 - ✅ ~~「請求作成」の実装方法~~（2026-09-13解決）: Stripe Invoice/InvoiceItemを使い、PDF生成・メール送信・支払い催促はStripe任せにする方針が確定（上記「「請求作成」の実装方法」参照）
 - 🔲 **「請求作成」画面の具体的なUIデザイン**: 実装方法（Stripe連携の手順）は確定したが、画面上の見た目・操作の細部（複数注文にまたがる明細を1回の請求にまとめられるか等）は未設計（issue #224で実装時に確定）
 - 🔲 **`orders.status`ロールアップの再計算方式**: DBトリガーで同期的に更新するか、アプリケーション層で明示的に再計算・保存するかは未確定（issue #223で実装時に確定）

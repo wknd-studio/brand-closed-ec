@@ -1,40 +1,20 @@
-import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
-
+/**
+ * orders.statusは正のデータではなく、配下のorder_settlements・order_itemsから
+ * 算出する表示用のロールアップ値（docs/domain/settlement.md）。
+ * 調達・出荷の進捗（旧sourcing〜delivered）はprocurement/fulfillment側の責務のため含まない。
+ */
 export const ORDER_STATUS_VALUES = [
-  "pending_approval",
-  "pending_payment",
-  "confirming",
-  "limit_exceeded",
-  "invoice_sent",
-  "paid",
-  "sourcing",
-  "ordered",
-  "preparing",
-  "shipping",
-  "delivered",
   "cancelled",
+  "processing",
+  "limit_exceeded",
+  "paid",
 ] as const;
 
 export type OrderStatusValue = (typeof ORDER_STATUS_VALUES)[number];
 
-const ADMIN_TRANSITIONS: Partial<Record<OrderStatusValue, OrderStatusValue>> = {
-  paid: "sourcing",
-  sourcing: "ordered",
-  ordered: "preparing",
-  preparing: "shipping",
-  shipping: "delivered",
-};
-
-const TERMINAL_STATUSES: Set<OrderStatusValue> = new Set([
-  "delivered",
-  "cancelled",
-]);
-
 const CANCELLABLE_STATUSES: Set<OrderStatusValue> = new Set([
-  "pending_payment",
-  "confirming",
+  "processing",
   "limit_exceeded",
-  "invoice_sent",
 ]);
 
 export class OrderStatus {
@@ -47,20 +27,8 @@ export class OrderStatus {
     return new OrderStatus(value as OrderStatusValue);
   }
 
-  canAdvance(): boolean {
-    return this.value in ADMIN_TRANSITIONS;
-  }
-
-  next(): OrderStatus {
-    const nextValue = ADMIN_TRANSITIONS[this.value];
-    if (!nextValue) {
-      throw new InvalidStatusTransitionError(this.value, "?");
-    }
-    return new OrderStatus(nextValue);
-  }
-
   isTerminal(): boolean {
-    return TERMINAL_STATUSES.has(this.value);
+    return this.value === "cancelled";
   }
 
   isCancellable(): boolean {

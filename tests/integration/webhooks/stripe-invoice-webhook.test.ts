@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { placeOrder } from "@/use-cases/place-order";
-import { issueInvoice } from "@/use-cases/issue-invoice";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
@@ -10,6 +9,7 @@ import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import { Money } from "@/domain/value-objects/money";
+import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { getStripe } from "@/lib/stripe";
 import { POST } from "@/app/api/webhooks/stripe/route";
 
@@ -24,7 +24,7 @@ const TEST_CLERK_ID = "clerk_test_stripe_invoice_webhook";
 const TEST_ADDRESS_ID = "00000000-0000-0000-0000-000000000081";
 const TEST_STRIPE_CUSTOMER_ID = "cus_test_stripe_invoice_webhook_080";
 const TEST_INVOICE_ID = "in_test_stripe_invoice_webhook_080";
-const NEGOTIATED_UNIT_PRICE = 200_000;
+const UNIT_PRICE = 200_000;
 
 async function cleanup() {
   const { data: orders } = await supabase
@@ -34,6 +34,7 @@ async function cleanup() {
   const orderIds = orders?.map((o) => o.id) ?? [];
   if (orderIds.length > 0) {
     await supabase.from("order_items").delete().in("order_id", orderIds);
+    await supabase.from("order_settlements").delete().in("order_id", orderIds);
     await supabase.from("orders").delete().in("id", orderIds);
   }
   await supabase.from("addresses").delete().eq("id", TEST_ADDRESS_ID);
@@ -44,10 +45,10 @@ function makeDeps() {
   const productRepo: ProductRepository = {
     findByIds: vi.fn().mockResolvedValue([
       {
-        sanityProductId: "prod-negotiable-test",
-        productName: "テスト要相談商品",
-        unitPrice: Money.zero(),
-        isNegotiable: true,
+        sanityProductId: "prod-after-order-test",
+        productName: "テスト後払い商品",
+        unitPrice: Money.of(UNIT_PRICE),
+        isNegotiable: false,
         minRank: "starter",
         paymentTiming: "after_order",
       },
@@ -103,15 +104,16 @@ beforeAll(async () => {
   const addressRepo = new SupabaseAddressRepository(supabase);
   const { productRepo, paymentGateway, notificationService } = makeDeps();
 
-  // 実際にplaceOrderユースケース経由で要相談商品の注文（confirming、invoiceフロー）を作成する
+  // 実際にplaceOrderユースケース経由で後払い（after_order）商品の注文を作成する。
+  // この時点では決済単位は作られず、明細のsettlement_idはNULLのまま
   await placeOrder(
     {
       clerkUserId: TEST_CLERK_ID,
       cartItems: [
         {
-          sanityProductId: "prod-negotiable-test",
+          sanityProductId: "prod-after-order-test",
           quantity: 1,
-          productName: "テスト要相談商品",
+          productName: "テスト後払い商品",
         },
       ],
       shippingAddressId: TEST_ADDRESS_ID,
@@ -133,20 +135,29 @@ beforeAll(async () => {
     .select("id")
     .eq("user_id", TEST_USER_ID)
     .single();
-  const { data: orderItem } = await supabase
-    .from("order_items")
-    .select("id")
-    .eq("order_id", order!.id)
-    .single();
 
-  // 運営者による見積金額の確定・請求書発行（issueInvoiceユースケース経由）を行い、
-  // invoice_sent・stripeInvoiceIdありの前提状態を作る（発行操作自体はBRAND-137で別スコープ）
-  await issueInvoice(
-    {
-      orderId: order!.id,
-      negotiatedPrices: { [orderItem!.id]: NEGOTIATED_UNIT_PRICE },
-    },
-    { orderRepo, userRepo, paymentGateway, notificationService }
+  // 運営者の「請求作成」（issue #224で実装予定）に相当する状態を、リポジトリ経由で直接作る:
+  // invoice決済単位（invoice_sent・stripe_invoice_idあり）を作成し、明細を紐付ける
+  const placed = await orderRepo.findById(order!.id);
+  const settlement = OrderSettlement.of({
+    id: crypto.randomUUID(),
+    orderId: placed!.id,
+    flow: "invoice",
+    status: "invoice_sent",
+    stripeCheckoutSessionId: null,
+    stripeInvoiceId: TEST_INVOICE_ID,
+    amount: Money.of(UNIT_PRICE),
+    paidAt: null,
+    cancelledAt: null,
+  });
+  await orderRepo.save(
+    placed!
+      .with({
+        items: placed!.items.map((i) =>
+          i.with({ settlementId: settlement.id })
+        ),
+      })
+      .applySettlement(settlement)
   );
 });
 
@@ -155,13 +166,14 @@ afterAll(async () => {
 });
 
 describe("Stripe請求書決済確定Webhook（実DB・署名検証込み）", () => {
-  it("invoice.paidを受信すると、対象注文がpaidになる", async () => {
+  it("invoice.paidを受信すると、対象の決済単位と注文がpaidになる", async () => {
     const { data: before } = await supabase
       .from("orders")
-      .select("status")
+      .select("status, order_settlements(status)")
       .eq("user_id", TEST_USER_ID)
       .single();
-    expect(before?.status).toBe("invoice_sent");
+    expect(before?.status).toBe("processing");
+    expect(before?.order_settlements[0]?.status).toBe("invoice_sent");
 
     const secret = process.env.STRIPE_WEBHOOK_SECRET!;
     const payload = JSON.stringify({
@@ -192,9 +204,11 @@ describe("Stripe請求書決済確定Webhook（実DB・署名検証込み）", (
 
     const { data: after } = await supabase
       .from("orders")
-      .select("status")
+      .select("status, order_settlements(status, paid_at)")
       .eq("user_id", TEST_USER_ID)
       .single();
     expect(after?.status).toBe("paid");
+    expect(after?.order_settlements[0]?.status).toBe("paid");
+    expect(after?.order_settlements[0]?.paid_at).not.toBeNull();
   });
 });
