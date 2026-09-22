@@ -36,6 +36,13 @@ async function cleanup() {
   }
   await supabase.from("addresses").delete().eq("id", TEST_ADDRESS_ID);
   await supabase.from("users").delete().eq("id", TEST_USER_ID);
+  await supabase
+    .from("stripe_webhook_events")
+    .delete()
+    .in("event_id", [
+      "evt_test_stripe_checkout_webhook",
+      "evt_test_stripe_checkout_webhook_retry",
+    ]);
 }
 
 function makeDeps() {
@@ -180,9 +187,48 @@ describe("Stripe Checkout決済確定Webhook（実DB・署名検証込み）", (
     expect(after?.status).toBe("paid");
     expect(after?.order_settlements[0]?.status).toBe("paid");
     expect(after?.order_settlements[0]?.paid_at).not.toBeNull();
+
+    const { data: webhookEvent } = await supabase
+      .from("stripe_webhook_events")
+      .select("status, processed_at")
+      .eq("event_id", "evt_test_stripe_checkout_webhook")
+      .single();
+    expect(webhookEvent?.status).toBe("processed");
+    expect(webhookEvent?.processed_at).not.toBeNull();
   });
 
-  it("同じイベントが再配信されても冪等（paid_atが変わらず200を返す）", async () => {
+  it("同一event_idの再送はDBレベルの冪等性チェックでスキップされる（issue #221）", async () => {
+    const secret = process.env.STRIPE_WEBHOOK_SECRET!;
+    const payload = JSON.stringify({
+      id: "evt_test_stripe_checkout_webhook",
+      object: "event",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: TEST_SESSION_ID,
+          object: "checkout.session",
+          mode: "payment",
+        },
+      },
+    });
+    const signature = getStripe().webhooks.generateTestHeaderString({
+      payload,
+      secret,
+    });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: { "stripe-signature": signature },
+        body: payload,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, skipped: true });
+  });
+
+  it("同じ決済単位への異なるevent_idの再送も冪等（paid_atが変わらず200を返す）", async () => {
     const { data: before } = await supabase
       .from("order_settlements")
       .select("paid_at, order_id")

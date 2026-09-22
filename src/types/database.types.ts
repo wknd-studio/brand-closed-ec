@@ -780,6 +780,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      claim_stripe_webhook_event: {
+        Args: { p_event_id: string; p_payload: Json; p_type: string };
+        Returns: boolean;
+      };
       get_current_admin_user_id: { Args: never; Returns: string };
       get_current_org_id: { Args: never; Returns: string };
       get_current_org_ids: { Args: never; Returns: string[] };
