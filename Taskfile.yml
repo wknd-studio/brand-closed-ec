@@ -45,6 +45,11 @@ tasks:
     cmds:
       - doppler run -- pnpm test:integration
 
+  worktree:list:
+    desc: 既存worktree一覧を表示する（並列実装中のworktreeを確認する用途。/work-on-issueスキル参照）
+    cmds:
+      - git worktree list
+
   preview:
     desc: Cloudflare Workers本番相当ビルドをローカルでプレビュー（wrangler dev）
     cmds:

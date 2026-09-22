@@ -2,9 +2,10 @@ import { test, expect } from "@playwright/test";
 import {
   signUpAsIndividual,
   cleanupTestUser,
+  slotEmail,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_registration@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_registration@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 test.describe("実際の登録画面を経由した新規会員登録", () => {

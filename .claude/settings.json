@@ -31,6 +31,9 @@
       "Bash(supabase db push --db-url *prod*)"
     ]
   },
+  "worktree": {
+    "baseRef": "head"
+  },
   "hooks": {
     "PostToolUse": [
       {

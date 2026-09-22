@@ -2,9 +2,10 @@ import { test, expect, type Browser, type Page } from "@playwright/test";
 import {
   signUpViaInvitation,
   cleanupTestUser,
+  slotEmail,
 } from "../helpers/clerk-test-invitation";
 
-const TEST_EMAIL = "info+clerk_test_onboarding@wknd-studio.com";
+const TEST_EMAIL = slotEmail("info+clerk_test_onboarding@wknd-studio.com");
 const TEST_PASSWORD = "TestPassw0rd!12345";
 
 // ── 未認証アクセス ─────────────────────────────────────────────

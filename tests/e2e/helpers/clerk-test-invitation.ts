@@ -11,6 +11,26 @@ function supabaseAdmin() {
   );
 }
 
+/**
+ * E2Eテストが使う固定のメールアドレス・Sanity ID等を、並列worktree実行時に
+ * worktree間で衝突しないよう一意化するためのサフィックスを付与する。
+ * WORKTREE_SLOT未設定時（通常のローカル実行・CI）は何も付けず、既存の挙動を維持する
+ * （scripts/worktree-setup.sh参照）。
+ */
+export function withSlotSuffix(base: string): string {
+  const slot = process.env.WORKTREE_SLOT;
+  if (!slot) return base;
+  return `${base}_slot${slot}`;
+}
+
+/** メールアドレスの@より前にスロットサフィックスを挿入する */
+export function slotEmail(email: string): string {
+  const slot = process.env.WORKTREE_SLOT;
+  if (!slot) return email;
+  const [local, domain] = email.split("@");
+  return `${local}_slot${slot}@${domain}`;
+}
+
 export async function getClerkUserIdByEmail(
   email: string
 ): Promise<string | undefined> {
