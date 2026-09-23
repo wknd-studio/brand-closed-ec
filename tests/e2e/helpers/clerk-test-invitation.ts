@@ -12,23 +12,34 @@ function supabaseAdmin() {
 }
 
 /**
- * E2Eテストが使う固定のメールアドレス・Sanity ID等を、並列worktree実行時に
- * worktree間で衝突しないよう一意化するためのサフィックスを付与する。
- * WORKTREE_SLOT未設定時（通常のローカル実行・CI）は何も付けず、既存の挙動を維持する
- * （scripts/worktree-setup.sh参照）。
+ * E2Eテストが使う固定のメールアドレス・Sanity ID等を、同時に走る複数の実行間で
+ * 衝突しないよう一意化するためのサフィックスを付与する。
+ *
+ * ローカルの並列worktree実行ではWORKTREE_SLOTを使う（scripts/worktree-setup.sh参照）。
+ * CIではWORKTREE_SLOTは設定されないが、複数のPR/ブランチのCIが同時に走ることが
+ * 日常的にあり、固定メールアドレスのままだと共有のClerk開発インスタンス上で
+ * invitationの作成・revokeがレースし「The invitation was revoked.」で
+ * signUpViaInvitationが失敗する不具合が実際に発生していた。
+ * GITHUB_RUN_ID（ワークフロー実行ごとに一意、同一実行内のPlaywrightリトライ間では
+ * 不変）でCI実行間も一意化する。ローカルのシングル実行（WORKTREE_SLOTもCIも
+ * 未設定）時は何も付けず、既存の挙動を維持する。
  */
-export function withSlotSuffix(base: string): string {
-  const slot = process.env.WORKTREE_SLOT;
-  if (!slot) return base;
-  return `${base}_slot${slot}`;
+function isolationKey(): string | undefined {
+  return process.env.WORKTREE_SLOT ?? process.env.GITHUB_RUN_ID;
 }
 
-/** メールアドレスの@より前にスロットサフィックスを挿入する */
+export function withSlotSuffix(base: string): string {
+  const key = isolationKey();
+  if (!key) return base;
+  return `${base}_slot${key}`;
+}
+
+/** メールアドレスの@より前に一意化サフィックスを挿入する */
 export function slotEmail(email: string): string {
-  const slot = process.env.WORKTREE_SLOT;
-  if (!slot) return email;
+  const key = isolationKey();
+  if (!key) return email;
   const [local, domain] = email.split("@");
-  return `${local}_slot${slot}@${domain}`;
+  return `${local}_slot${key}@${domain}`;
 }
 
 export async function getClerkUserIdByEmail(
@@ -185,9 +196,12 @@ export async function cleanupTestUser(emailAddress: string) {
     .select("id")
     .eq("email", emailAddress);
 
-  // usersを直接削除しようとすると、テスト中に作成したaddresses/ordersが
-  // user_idを参照しているため外部キー制約違反で失敗し、それに気づかないまま
-  // usersの行が残り続けてしまう。参照している行を先に削除してから消す
+  // usersを直接削除しようとすると、テスト中に作成したaddresses/orders/
+  // cart_items/favoritesがuser_idを参照しているため外部キー制約違反で
+  // 失敗し、それに気づかないままusersの行が残り続けてしまう（実際に
+  // stg環境でこれが発生し、次のテスト実行時にメールアドレス重複で
+  // .single()がクラッシュする不具合を引き起こしていた）。
+  // 参照している行を先に削除し、最後の削除はエラーを握りつぶさず検知する
   for (const user of users ?? []) {
     const { data: orders } = await supabase
       .from("orders")
@@ -202,9 +216,17 @@ export async function cleanupTestUser(emailAddress: string) {
     }
     await supabase.from("orders").delete().eq("user_id", user.id);
     await supabase.from("addresses").delete().eq("user_id", user.id);
+    await supabase.from("cart_items").delete().eq("user_id", user.id);
+    await supabase.from("favorites").delete().eq("user_id", user.id);
   }
 
-  await supabase.from("users").delete().eq("email", emailAddress);
+  const { error } = await supabase
+    .from("users")
+    .delete()
+    .eq("email", emailAddress);
+  if (error) {
+    throw new Error(`テスト用会員行の削除に失敗しました: ${error.message}`);
+  }
 }
 
 /**
@@ -221,11 +243,23 @@ export async function cleanupTestOrganization(name: string) {
     .maybeSingle();
   if (!org) return;
 
+  // addressesがorganization_idを参照しているため、先に削除しないと
+  // organizationsの削除が外部キー制約違反で失敗し（エラーを検知せず
+  // 気づかないまま）、組織が残り続けてしまう
+  // （呼び出し側のcleanupTestUserがuser_idで同じ行を消す場合もあるが、
+  // 呼び出し順に依存させないためここでも消しておく）
+  await supabase.from("addresses").delete().eq("organization_id", org.id);
   await supabase
     .from("organization_memberships")
     .delete()
     .eq("organization_id", org.id);
-  await supabase.from("organizations").delete().eq("id", org.id);
+  const { error } = await supabase
+    .from("organizations")
+    .delete()
+    .eq("id", org.id);
+  if (error) {
+    throw new Error(`テスト用組織の削除に失敗しました: ${error.message}`);
+  }
 
   try {
     const clerk = await clerkClient();

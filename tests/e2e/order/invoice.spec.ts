@@ -17,7 +17,10 @@ const TEST_PASSWORD = "TestPassw0rd!12345";
 // delete(id)は指定したIDの行のみを削除する操作のため、既存データに影響しない
 // （tests/integration/sanity-products.test.tsで確立したパターンを踏襲）
 const TEST_BRAND_ID = withSlotSuffix("test-invoice-brand-003");
-const TEST_BRAND_NAME = "TestInvoiceBrand";
+// ブランド名はURLパスのslugとしてもそのまま使われ、/shop/[brand]は名前で商品を
+// 引き当てる（IDでは絞り込まない）ため、IDだけでなく名前自体も一意化しないと
+// 他のCI実行が作った同名ブランドの商品と混ざって表示されてしまう
+const TEST_BRAND_NAME = withSlotSuffix("TestInvoiceBrand");
 const TEST_PRODUCT_ID = withSlotSuffix("test-invoice-product-003");
 const TEST_PRODUCT_NAME = "テスト要相談商品";
 
