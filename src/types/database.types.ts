@@ -710,13 +710,16 @@ export type Database = {
         Row: {
           billing_anchor_day: number | null;
           clerk_user_id: string;
+          company_name: string | null;
           created_at: string;
           deleted_at: string | null;
           email: string;
           first_name: string;
           id: string;
           initial_fee_paid_rank_code: string | null;
+          invoice_registration_number: string | null;
           last_name: string;
+          member_type: string;
           onboarding_completed: boolean;
           phone_number: string;
           profile_completed_at: string | null;
@@ -727,13 +730,16 @@ export type Database = {
         Insert: {
           billing_anchor_day?: number | null;
           clerk_user_id: string;
+          company_name?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           email: string;
           first_name?: string;
           id?: string;
           initial_fee_paid_rank_code?: string | null;
+          invoice_registration_number?: string | null;
           last_name?: string;
+          member_type?: string;
           onboarding_completed?: boolean;
           phone_number?: string;
           profile_completed_at?: string | null;
@@ -744,13 +750,16 @@ export type Database = {
         Update: {
           billing_anchor_day?: number | null;
           clerk_user_id?: string;
+          company_name?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           email?: string;
           first_name?: string;
           id?: string;
           initial_fee_paid_rank_code?: string | null;
+          invoice_registration_number?: string | null;
           last_name?: string;
+          member_type?: string;
           onboarding_completed?: boolean;
           phone_number?: string;
           profile_completed_at?: string | null;
