@@ -12,6 +12,12 @@ export default function Header() {
         <div className="flex items-center gap-4">
           <CartHeaderControls />
           <Link
+            href="/favorites"
+            className="text-sm text-gray-500 hover:text-gray-900"
+          >
+            お気に入り
+          </Link>
+          <Link
             href="/settings"
             className="text-sm text-gray-500 hover:text-gray-900"
           >
