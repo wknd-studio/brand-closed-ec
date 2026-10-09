@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 export default async function PaymentCancelPage() {
-  const backHref = "/onboarding/plan";
+  // /onboarding/planはaccountTypeクエリを必須とし、欠けていると種別選択へ
+  // 送り返す（plan/page.tsx参照）。ここから直接planへ戻すと必ず弾かれるため、
+  // 戻り先は種別選択にする
+  const backHref = "/onboarding/account-type";
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
