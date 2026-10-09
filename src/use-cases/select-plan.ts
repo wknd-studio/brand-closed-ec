@@ -1,10 +1,11 @@
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import { MemberType } from "@/domain/value-objects/member-type";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
+import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
-import type { OrganizationRepository } from "@/repositories/organization-repository";
 
 export type SelectPlanInput = {
   clerkUserId: string;
@@ -13,42 +14,29 @@ export type SelectPlanInput = {
   lastName: string;
   phoneNumber: string;
   plan: MemberRankValue;
-  // 法人組織のオンボーディング中に呼ばれる場合のみ指定する（T021で作成済みの組織ID）
-  organizationId?: string;
+  // GitHub issue #200: 法人会員は組織を作らず、個人と同じ1アカウントに
+  // member_type='corporate'として会社名・インボイス番号を保持する
+  companyName?: string;
+  invoiceRegistrationNumber?: string;
 };
 
 export type SelectPlanDeps = {
   userRepo: UserRepository;
   accountGateway: AccountGateway;
-  organizationRepo?: OrganizationRepository;
 };
 
 export async function selectPlan(
   input: SelectPlanInput,
   deps: SelectPlanDeps
 ): Promise<{ redirectTo: string }> {
-  const { userRepo, accountGateway, organizationRepo } = deps;
-
-  if (input.organizationId) {
-    if (!organizationRepo) {
-      throw new Error("organizationRepoが指定されていません");
-    }
-    const organization = await organizationRepo.findById(input.organizationId);
-    if (!organization) throw new Error("組織が見つかりません");
-
-    // rankは仮保存し、onboarding_completedはStripe決済完了のWebhook
-    // （completeOrganizationSubscriptionOnboarding）で確定させる。
-    // 個人会員のselectPlanと同じパターン。
-    await organizationRepo.save(
-      organization.with({ rank: MemberRank.of(input.plan) })
-    );
-
-    return {
-      redirectTo: `/onboarding/payment?plan=${input.plan}&organizationId=${input.organizationId}`,
-    };
-  }
+  const { userRepo, accountGateway } = deps;
 
   const phoneNumber = PhoneNumber.of(input.phoneNumber);
+  const isCorporate = input.companyName !== undefined;
+  const memberType = MemberType.of(isCorporate ? "corporate" : "individual");
+  const invoiceRegistrationNumber = input.invoiceRegistrationNumber
+    ? InvoiceRegistrationNumber.of(input.invoiceRegistrationNumber).value
+    : null;
   const existing = await userRepo.findByClerkUserId(input.clerkUserId);
 
   const user = existing
@@ -59,6 +47,9 @@ export async function selectPlan(
         phoneNumber: phoneNumber.value,
         rank: MemberRank.of(input.plan),
         onboardingCompleted: false,
+        memberType,
+        companyName: input.companyName ?? null,
+        invoiceRegistrationNumber,
       })
     : User.of({
         id: crypto.randomUUID(),
@@ -73,6 +64,9 @@ export async function selectPlan(
         onboardingCompleted: false,
         deletedAt: null,
         stripeCustomerId: null,
+        memberType,
+        companyName: input.companyName ?? null,
+        invoiceRegistrationNumber,
       });
 
   await userRepo.save(user);

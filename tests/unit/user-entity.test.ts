@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MemberType } from "@/domain/value-objects/member-type";
+import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 
 function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
   return User.of({
@@ -101,6 +103,33 @@ describe("User", () => {
       expect(
         makeUser({ onboardingCompleted: false }).hasCompletedOnboarding()
       ).toBe(false);
+    });
+  });
+
+  describe("memberType", () => {
+    it("指定しない場合はindividualになる", () => {
+      expect(makeUser().memberType.value).toBe("individual");
+    });
+
+    it("corporateにはcompanyName/invoiceRegistrationNumberが必須", () => {
+      expect(() =>
+        makeUser({
+          memberType: MemberType.of("corporate"),
+          companyName: null,
+          invoiceRegistrationNumber: null,
+        })
+      ).toThrow(MissingCorporateProfileError);
+    });
+
+    it("companyName/invoiceRegistrationNumberを指定すればcorporateにできる", () => {
+      const user = makeUser({
+        memberType: MemberType.of("corporate"),
+        companyName: "テスト株式会社",
+        invoiceRegistrationNumber: "T1234567890123",
+      });
+      expect(user.memberType.value).toBe("corporate");
+      expect(user.companyName).toBe("テスト株式会社");
+      expect(user.invoiceRegistrationNumber).toBe("T1234567890123");
     });
   });
 });

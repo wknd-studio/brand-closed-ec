@@ -1,14 +1,7 @@
 import Link from "next/link";
 
-export default async function PaymentCancelPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ organizationId?: string }>;
-}) {
-  const { organizationId } = await searchParams;
-  const backHref = organizationId
-    ? `/onboarding/plan?organizationId=${organizationId}`
-    : "/onboarding/plan";
+export default async function PaymentCancelPage() {
+  const backHref = "/onboarding/plan";
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8">

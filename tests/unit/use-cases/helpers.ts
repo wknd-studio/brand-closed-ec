@@ -4,8 +4,6 @@ import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
 import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { Address } from "@/domain/entities/address";
-import { Organization } from "@/domain/entities/organization";
-import { OrganizationMembership } from "@/domain/entities/organization-membership";
 import { AdminUser } from "@/domain/entities/admin-user";
 import { AdminMembership } from "@/domain/entities/admin-membership";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -15,6 +13,7 @@ import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
+import type { FavoriteRepository } from "@/repositories/favorite-repository";
 import type {
   ProductRepository,
   ProductSnapshot,
@@ -23,9 +22,6 @@ import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
-import type { OrganizationRepository } from "@/repositories/organization-repository";
-import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
-import type { OrganizationGateway } from "@/repositories/organization-gateway";
 import type { AdminUserRepository } from "@/repositories/admin-user-repository";
 import type { AdminMembershipRepository } from "@/repositories/admin-membership-repository";
 import type {
@@ -219,6 +215,16 @@ export function makeAddressRepo(): AddressRepository {
   };
 }
 
+export function makeFavoriteRepo(
+  sanityProductIds: string[] = []
+): FavoriteRepository {
+  return {
+    findSanityProductIdsByUserId: vi.fn().mockResolvedValue(sanityProductIds),
+    add: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 export function makeProductRepo(
   products: ProductSnapshot[] = [fixedProduct]
 ): ProductRepository {
@@ -280,7 +286,6 @@ export function makeSubscriptionRepo(
 ): SubscriptionRepository {
   return {
     findActiveByUserId: vi.fn().mockResolvedValue(snapshot),
-    findActiveByOrganizationId: vi.fn().mockResolvedValue(snapshot),
     upsert: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -289,75 +294,6 @@ export function makeAccountGateway(): AccountGateway {
   return {
     deleteUser: vi.fn().mockResolvedValue(undefined),
     updateOnboardingMetadata: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
-export function makeOrganization(
-  overrides?: Partial<{ rank: string; billingAnchorDay: number | null }>
-) {
-  return Organization.of({
-    id: "00000000-0000-0000-0000-000000000101",
-    clerkOrgId: "org_test_1",
-    name: "株式会社テスト",
-    representativeName: "山田太郎",
-    phoneNumber: "0312345678",
-    invoiceRegistrationNumber: "T1234567890123",
-    onboardingCompleted: true,
-    rank: MemberRank.of(overrides?.rank ?? "standard"),
-    billingAnchorDay: overrides?.billingAnchorDay ?? 1,
-    stripeCustomerId: null,
-    initialFeePaidRank: null,
-    deletedAt: null,
-  });
-}
-
-export function makeOrganizationMembership(
-  overrides?: Partial<{ clerkRole: "org:admin" | "org:member" }>
-) {
-  return OrganizationMembership.of({
-    id: "00000000-0000-0000-0000-000000000102",
-    organizationId: "00000000-0000-0000-0000-000000000101",
-    userId: "00000000-0000-0000-0000-000000000001",
-    clerkRole: overrides?.clerkRole ?? "org:admin",
-    createdAt: new Date(2026, 0, 1),
-  });
-}
-
-export function makeOrganizationRepo(
-  organization: Organization | null = null
-): OrganizationRepository {
-  return {
-    findById: vi.fn().mockResolvedValue(organization),
-    findByClerkOrgId: vi.fn().mockResolvedValue(organization),
-    findByName: vi.fn().mockResolvedValue(null),
-    save: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
-export function makeOrganizationMembershipRepo(
-  memberships: OrganizationMembership[] = []
-): OrganizationMembershipRepository {
-  return {
-    findByUserId: vi.fn().mockResolvedValue(memberships),
-    findByOrganizationId: vi.fn().mockResolvedValue(memberships),
-    findByOrganizationAndUser: vi
-      .fn()
-      .mockResolvedValue(memberships[0] ?? null),
-    countAdmins: vi
-      .fn()
-      .mockResolvedValue(
-        memberships.filter((m) => m.clerkRole === "org:admin").length
-      ),
-    save: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
-export function makeOrganizationGateway(): OrganizationGateway {
-  return {
-    createOrganization: vi.fn().mockResolvedValue({ clerkOrgId: "org_new_1" }),
-    inviteMember: vi.fn().mockResolvedValue(undefined),
-    deleteOrganization: vi.fn().mockResolvedValue(undefined),
   };
 }
 

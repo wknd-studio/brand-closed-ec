@@ -17,21 +17,21 @@
 - 招待・会員登録（新規登録時のプラン選択画面そのもの）・退会・アカウント停止は[[membership]]が扱う。本ドキュメントは「ランクが決まった後、そのランクがどう課金・変更されるか」に閉じる
 - 商品ごとの掛け率・ランク制限商品の閲覧可否判定ロジックは`catalog.md`（未着手）が扱う。本ドキュメントはランクの序列・月次仕入れ上限の定義までを扱う
 - 月次仕入れ上限を実際にどう消費・判定するか（カート・注文確定時のチェック）は`ordering.md`（未着手）が扱う
-- 法人組織（`organizations`）とそのメンバー管理（`organization_memberships`）の仕組み自体は`ordering.md`が扱う。本ドキュメントは「法人もユーザーと対称的にランク・サブスクリプションを持つ」という前提のみ扱う
+- 法人会員（`users.member_type='corporate'`）と個人会員の区別・オンボーディング時の追加入力（会社名・インボイス番号）の仕組み自体は[[membership]]が扱う。本ドキュメントは「法人も個人と同じ`users`行としてランク・サブスクリプションを持つ」という前提のみ扱う
 
 ## 主要な概念・用語
 
 `docs/glossary.md`の「会員・ランク」「サブスクリプション」を踏まえ、以下を追加で定義する。用語集への追記が必要（後述）。
 
-| 用語                     | 定義                                                                                                                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ランク序列**           | STARTER < BASIC < STANDARD < PRO < ADVANCED < PREMIUM < ENTERPRISEの7段階の順序。DB上は`member_ranks.sort_order`で明示的に持つ                                                               |
-| **月次期間（起算日）**   | 月間仕入れ上限を集計する1ヶ月間。暦月ではなく`billing_anchor_day`（1〜28）を起点に算出する                                                                                                   |
-| **billing_anchor_day**   | 月次期間の起点となる「日」（1〜28）。新規登録日の日付を初期値とし、アップグレード時に今日の日付へリセットされる。29〜31日登録の場合は28に丸める                                              |
-| **ダウングレード予約**   | ダウングレードを申請した時点ではランクは変わらず、現在の請求期間が終わるまで現ランクを維持し、期末に自動で新ランクへ切り替わる予約状態                                                       |
-| **初期費用の差分請求**   | アップグレード時に「新ランクの初期費用 − 支払い済み最高ランクの初期費用」の差額のみを請求すること。ダウングレードでは初期費用の返金は発生しない                                              |
-| **支払い済み最高ランク** | これまでに初期費用を支払った中で最も高いランク（`initial_fee_paid_rank_code`）。退会後も保持し、再入会時の初期費用免除判定に使う                                                             |
-| **ランク変更履歴**       | 「いつ・誰の操作で・どのランクからどのランクに変わったか」を追記専用で記録するログ（`rank_changes`）。現在値（`users`/`organizations`/`subscriptions`の`rank_code`）とは別テーブルで管理する |
+| 用語                     | 定義                                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ランク序列**           | STARTER < BASIC < STANDARD < PRO < ADVANCED < PREMIUM < ENTERPRISEの7段階の順序。DB上は`member_ranks.sort_order`で明示的に持つ                                               |
+| **月次期間（起算日）**   | 月間仕入れ上限を集計する1ヶ月間。暦月ではなく`billing_anchor_day`（1〜28）を起点に算出する                                                                                   |
+| **billing_anchor_day**   | 月次期間の起点となる「日」（1〜28）。新規登録日の日付を初期値とし、アップグレード時に今日の日付へリセットされる。29〜31日登録の場合は28に丸める                              |
+| **ダウングレード予約**   | ダウングレードを申請した時点ではランクは変わらず、現在の請求期間が終わるまで現ランクを維持し、期末に自動で新ランクへ切り替わる予約状態                                       |
+| **初期費用の差分請求**   | アップグレード時に「新ランクの初期費用 − 支払い済み最高ランクの初期費用」の差額のみを請求すること。ダウングレードでは初期費用の返金は発生しない                              |
+| **支払い済み最高ランク** | これまでに初期費用を支払った中で最も高いランク（`initial_fee_paid_rank_code`）。退会後も保持し、再入会時の初期費用免除判定に使う                                             |
+| **ランク変更履歴**       | 「いつ・誰の操作で・どのランクからどのランクに変わったか」を追記専用で記録するログ（`rank_changes`）。現在値（`users`/`subscriptions`の`rank_code`）とは別テーブルで管理する |
 
 ## 業務ルール・不変条件
 
@@ -42,7 +42,7 @@
 - 7ランク制（STARTER / BASIC / STANDARD / PRO / ADVANCED / PREMIUM / ENTERPRISE）。名称・月額費用・初期費用・商品掛け率は`archive/service-spec.md`の「会員プラン」節を正とする（実装済み: `src/domain/value-objects/member-rank.ts`の`RANK_ORDER`）
 - ENTERPRISEはセルフサービスの選択肢に含まれない。管理者がStripeダッシュボードで個別にカスタムプライスのサブスクリプションを作成し会員へ送付する形で契約する（`specs/001-seven-rank-pricing/spec.md` FR-006）
 - 月間仕入れ上限は現時点で暫定値（`src/domain/value-objects/member-rank.ts`の`MONTHLY_LIMITS`にTODOコメント付きで暫定設定済み）。確定次第、コード側の唯一の定義箇所を更新する。**単一の情報源の原則**（`specs/001-seven-rank-pricing/spec.md` SC-003）により、上限値をコード内の複数箇所に書き写さない
-- 個人（`users`）・法人（`organizations`）は対称的にランク・月次期間・サブスクリプションを持つ。法人組織に所属するユーザーは個人としての会員ランクを使用しない（`specs/005-b2b-organization/spec.md` FR-022、排他的な扱い）
+- 個人・法人（`users.member_type`）とも同じ`users`行がランク・月次期間・サブスクリプションを持つ。1アカウント＝1担当者であり、複数メンバーで契約・月次上限を共有する仕組みは無い（2026-09-12方針転換、GitHub issue #200。詳細は[[membership]]「個人と法人の関係」節）
 
 **アップグレード**
 
@@ -83,7 +83,7 @@
 - ✅ ~~月間仕入れ上限（`monthly_limit_amount`）の確定値~~（2026-09-21解決）: 現状ハードコードされている値（starter:30万/basic:100万/standard:500万/pro:2000万/advanced:5000万/premium:1億/enterprise:実質無制限）を正式な暫定値として採用。`member_ranks`テーブル参照への切り替え（issue #210）が完了すれば、以後の変更はDB更新のみで済む
 - 🔲 **ENTERPRISEの月額費用・初期費用**: 個別契約のため定価なし。「要相談」のまま
 - 🔲 **旧5ランクモデル時代の付加機能（専任担当者サポート・優先対応・専用ライン等）の扱い**: `docs/glossary.md`に「要確認」として残っており、新7ランクモデルでどのランクに何が付くか、あるいは廃止されたかが未確定
-- 🔲 **`billing_anchor_day`の確定スキーマ配置**: `docs/plan-change-flow.md`は`users`単体への追加を前提に書かれていたが、`db-schema-redesign.md`では`users`と`organizations`の両方に対称的に追加する設計に更新されている（下記「参考資料」参照）。本ドキュメントは後者（新しい設計）を正として記述している
+- ✅ ~~`billing_anchor_day`の確定スキーマ配置~~（2026-09-22解決）: `users.billing_anchor_day`のみに存在する（2026-09-12方針転換、GitHub issue #200により`organizations`テーブル自体が削除されたため）。法人会員（`member_type='corporate'`）も個人と同じ`users`行の`billing_anchor_day`を使う
 
 ## 他コンテキストとの関係
 
@@ -99,7 +99,7 @@
 
 - カート・注文確定時に「今月あといくら仕入れられるか」を判定するロジック（`仕入れ残枠 = 月間仕入れ上限 − 当月の使用済み額`の集計）は`ordering.md`が扱う。本ドキュメントは上限値そのものの定義・集計期間の起点（`billing_anchor_day`）までを扱う
 - 注文確定時のランクスナップショット（`rank_code_at_order`・`monthly_limit_at_order`）は`orders`テーブル側の話であり`ordering.md`が扱う。本ドキュメントが定義するランク・上限値を「注文時点で固定して残す」という関係
-- 法人組織のメンバー管理は`membership.md`が扱う。本ドキュメントは組織がユーザーと対称的にランク・サブスクリプションを持つという前提のみ扱う。なお法人組織内の注文承認フローはVer1では実装しない（2026-09-13廃止、`ordering.md`参照）
+- 法人会員（`users.member_type='corporate'`）の区別は`membership.md`が扱う。本ドキュメントは法人も個人と同じ`users`行としてランク・サブスクリプションを持つという前提のみ扱う。なお複数メンバー共有型の法人組織・組織内の注文承認フローはVer1では実装しない（2026-09-12方針転換、GitHub issue #200、`ordering.md`参照）
 
 ### [[admin-rbac]]との境界
 
@@ -107,11 +107,12 @@
 
 ## 参考資料
 
-- `docs/db-schema-redesign.md` の`member_ranks`（新設・参照テーブル）節、`users`/`organizations`の`rank_code`・`billing_anchor_day`・`initial_fee_paid_rank_code`列、`subscriptions`（新設）節、`rank_changes`（新設・追記専用）節
+- `docs/db-schema-redesign.md` の`member_ranks`（新設・参照テーブル）節、`users`の`rank_code`・`billing_anchor_day`・`initial_fee_paid_rank_code`・`member_type`列、`subscriptions`（新設）節、`rank_changes`（新設・追記専用）節。`organizations`/`organization_memberships`を含む2026-09-12方針転換（GitHub issue #200）前の設計は、同ドキュメントの当時の版を参照
   - 旧`member_rank` ENUM型は`member_ranks`参照テーブルへ置き換えられる（7ランク移行で2回に分けてマイグレーションする運用負債が発生した反省による）。**`member_ranks`は`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み**（移行方針1番）
-  - 旧`organizations.pending_rank`は`subscriptions.pending_rank_code`へ、`stripe_subscription_id`/`stripe_subscription_schedule_id`は`users`/`organizations`から`subscriptions`へ、それぞれ移動済み。**`subscriptions`/`rank_changes`/`stripe_webhook_events`は`supabase/migrations/20260816175631_create_subscriptions_rank_changes_stripe_webhook_events.sql`で実装済み**（移行方針2番）。`users`/`organizations`の既存Stripeカラムから`subscriptions`へのバックフィル・`rank`/`initial_fee_paid_rank`から`rank_code`/`initial_fee_paid_rank_code`へのリネームも**`supabase/migrations/20260816181934_backfill_subscriptions_from_users_organizations.sql`で実装済み**（移行方針3番）。ただし`users.rank_code`等のキャッシュ更新と`rank_changes`へのINSERTを同一トランザクションで行うアプリケーションコード側（`SupabaseUserRepository`/`SupabaseOrganizationRepository`等）の追従は、親issue #165の方針により12ステップ完走後にまとめて行うため、現時点ではまだ無い（`pnpm typecheck`が意図的に赤い状態）
+  - `subscriptions`/`rank_changes`/`stripe_webhook_events`は`supabase/migrations/20260816175631_create_subscriptions_rank_changes_stripe_webhook_events.sql`で実装済み（移行方針2番）。当初は`user_id`/`organization_id`の排他制約付きで新設したが、2026-09-12方針転換（GitHub issue #200）により`organization_id`列・排他制約は削除し、`user_id`をNOT NULLに変更済み（`supabase/migrations/20260922051428_drop_organizations_and_organization_id_columns.sql`）
+  - `users.member_type`（`individual`/`corporate`）・`company_name`・`invoice_registration_number`は`supabase/migrations/20260922045432_add_member_type_columns_to_users.sql`で実装済み（GitHub issue #200）
 - （旧`docs/archive/service-spec.md`「会員プラン」節・「ランク変更ルール」節を材料に執筆。ドメインドキュメント全体完了に伴いarchiveは削除済み）
 - `docs/plan-change-flow.md` — プラン変更のStripe操作・Webhookハンドラー・`changePlan`統合ユースケースの詳細設計（本ドキュメントの「業務ルール」節は主にこれを要約）
 - `specs/001-seven-rank-pricing/` — 旧5ランクから新7ランクへの移行spec。`data-model.md`に`MemberRank`のコード定義・DB移行手順あり
-- `specs/005-b2b-organization/spec.md` — 法人組織のランク・月次仕入れ上限が個人と独立して管理されるというFR-003・FR-022の定義
+- `specs/005-b2b-organization/spec.md` — 複数メンバー共有型の法人組織モデルの旧spec。2026-09-12方針転換（GitHub issue #200）により実装対象から外れたが、Ver2以降で再導入する場合の参考資料として残す（移行手順は[[membership]]「将来、複数メンバー対応（Ver2以降）を実装する際の移行手順」節参照）
 - 実装: `src/domain/value-objects/member-rank.ts`（`RANK_ORDER`・`MONTHLY_LIMITS`・`MemberRank`クラス）、`src/lib/sanity/products.ts`（`RANK_ORDER`参照）、`src/app/onboarding/plan/`（プラン選択画面。[[membership]]の責務）
