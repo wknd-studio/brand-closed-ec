@@ -257,8 +257,10 @@ export type Database = {
           negotiated_unit_price: number | null;
           order_id: string;
           payment_timing: string;
+          procurement_task_id: string | null;
           product_name_snapshot: string;
           quantity: number;
+          received_at: string | null;
           sanity_product_id: string;
           settlement_id: string | null;
           unit_price_snapshot: number | null;
@@ -270,8 +272,10 @@ export type Database = {
           negotiated_unit_price?: number | null;
           order_id: string;
           payment_timing: string;
+          procurement_task_id?: string | null;
           product_name_snapshot: string;
           quantity: number;
+          received_at?: string | null;
           sanity_product_id: string;
           settlement_id?: string | null;
           unit_price_snapshot?: number | null;
@@ -283,8 +287,10 @@ export type Database = {
           negotiated_unit_price?: number | null;
           order_id?: string;
           payment_timing?: string;
+          procurement_task_id?: string | null;
           product_name_snapshot?: string;
           quantity?: number;
+          received_at?: string | null;
           sanity_product_id?: string;
           settlement_id?: string | null;
           unit_price_snapshot?: number | null;
@@ -295,6 +301,13 @@ export type Database = {
             columns: ["order_id"];
             isOneToOne: false;
             referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_items_procurement_task_id_fkey";
+            columns: ["procurement_task_id"];
+            isOneToOne: false;
+            referencedRelation: "procurement_tasks";
             referencedColumns: ["id"];
           },
           {
@@ -396,6 +409,44 @@ export type Database = {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      procurement_tasks: {
+        Row: {
+          assigned_admin_user_id: string | null;
+          created_at: string;
+          id: string;
+          notes: string | null;
+          ordered_at: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          assigned_admin_user_id?: string | null;
+          created_at?: string;
+          id?: string;
+          notes?: string | null;
+          ordered_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          assigned_admin_user_id?: string | null;
+          created_at?: string;
+          id?: string;
+          notes?: string | null;
+          ordered_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "procurement_tasks_assigned_admin_user_id_fkey";
+            columns: ["assigned_admin_user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_users";
             referencedColumns: ["id"];
           },
         ];
