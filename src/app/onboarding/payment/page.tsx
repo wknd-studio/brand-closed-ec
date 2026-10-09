@@ -10,9 +10,9 @@ const VALID_PLANS = Object.keys(STRIPE_PRICE_IDS) as PaidRank[];
 export default async function OnboardingPaymentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ plan?: string; organizationId?: string }>;
+  searchParams: Promise<{ plan?: string }>;
 }) {
-  const { plan, organizationId } = await searchParams;
+  const { plan } = await searchParams;
 
   if (!plan || !VALID_PLANS.includes(plan as PaidRank)) {
     redirect("/onboarding/plan");
@@ -48,20 +48,15 @@ export default async function OnboardingPaymentPage({
         ],
         customer_email: email,
         success_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: organizationId
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/cancel?plan=${paidRank}&organizationId=${organizationId}`
-          : `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/cancel?plan=${paidRank}`,
+        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/cancel?plan=${paidRank}`,
         metadata: {
           clerk_user_id: userId,
           plan: paidRank,
-          ...(organizationId ? { organization_id: organizationId } : {}),
         },
         locale: "ja",
       },
       {
-        idempotencyKey: organizationId
-          ? `onboarding-checkout-session-org-${organizationId}-${paidRank}`
-          : `onboarding-checkout-session-${userId}-${paidRank}`,
+        idempotencyKey: `onboarding-checkout-session-${userId}-${paidRank}`,
       }
     );
   } catch (err) {
