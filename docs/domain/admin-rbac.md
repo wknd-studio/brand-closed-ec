@@ -110,4 +110,4 @@ RLSは`get_current_admin_user_id()`（`get_current_user_id()`と対になる関�
 
 - `docs/db-schema-redesign.md` の「管理者RBAC・会員側法人RBACへの対応方針」節、「ロールのバリデーションについて」節、`admin_users`/`admin_memberships`テーブル定義節、「RLSポリシー方針への影響」節
 - （旧`docs/archive/service-spec.md`「利用者」節・「運営者ロール」節を材料に執筆。ドメインドキュメント全体完了に伴いarchiveは削除済み）
-- 実装: 本ドキュメント執筆時点では`admin_users`/`admin_memberships`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは別途作成予定）
+- 実装: `admin_users`/`admin_memberships`は[#218](https://github.com/wknd-studio/brand-closed-ec/issues/218)でマイグレーション・`get_current_admin_user_id()`・Clerk Webhookミラーリングまで実装済み（`supabase/migrations/20260922050000_create_admin_users_admin_memberships.sql`）。Clerk側の運営組織作成・カスタムロール/権限の命名確定・アプリ層の`has({ permission })`ホワイトリスト実装は未着手

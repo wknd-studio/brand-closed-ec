@@ -6,6 +6,8 @@ import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { Address } from "@/domain/entities/address";
 import { Organization } from "@/domain/entities/organization";
 import { OrganizationMembership } from "@/domain/entities/organization-membership";
+import { AdminUser } from "@/domain/entities/admin-user";
+import { AdminMembership } from "@/domain/entities/admin-membership";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { Money } from "@/domain/value-objects/money";
 import { OrderStatus } from "@/domain/value-objects/order-status";
@@ -13,6 +15,7 @@ import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
+import type { FavoriteRepository } from "@/repositories/favorite-repository";
 import type {
   ProductRepository,
   ProductSnapshot,
@@ -24,6 +27,8 @@ import type { AccountGateway } from "@/repositories/account-gateway";
 import type { OrganizationRepository } from "@/repositories/organization-repository";
 import type { OrganizationMembershipRepository } from "@/repositories/organization-membership-repository";
 import type { OrganizationGateway } from "@/repositories/organization-gateway";
+import type { AdminUserRepository } from "@/repositories/admin-user-repository";
+import type { AdminMembershipRepository } from "@/repositories/admin-membership-repository";
 import type {
   SubscriptionRepository,
   SubscriptionSnapshot,
@@ -215,6 +220,16 @@ export function makeAddressRepo(): AddressRepository {
   };
 }
 
+export function makeFavoriteRepo(
+  sanityProductIds: string[] = []
+): FavoriteRepository {
+  return {
+    findSanityProductIdsByUserId: vi.fn().mockResolvedValue(sanityProductIds),
+    add: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 export function makeProductRepo(
   products: ProductSnapshot[] = [fixedProduct]
 ): ProductRepository {
@@ -354,5 +369,47 @@ export function makeOrganizationGateway(): OrganizationGateway {
     createOrganization: vi.fn().mockResolvedValue({ clerkOrgId: "org_new_1" }),
     inviteMember: vi.fn().mockResolvedValue(undefined),
     deleteOrganization: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeAdminUser(overrides?: Partial<{ id: string }>) {
+  return AdminUser.of({
+    id: overrides?.id ?? "00000000-0000-0000-0000-000000000301",
+    clerkUserId: "clerk_admin_1",
+    name: "運営 太郎",
+    email: "admin@example.com",
+    createdAt: new Date(2026, 0, 1),
+  });
+}
+
+export function makeAdminMembership(
+  overrides?: Partial<{ adminUserId: string; clerkRole: string }>
+) {
+  return AdminMembership.of({
+    id: "00000000-0000-0000-0000-000000000302",
+    adminUserId:
+      overrides?.adminUserId ?? "00000000-0000-0000-0000-000000000301",
+    clerkRole: overrides?.clerkRole ?? "org:order_manager",
+    createdAt: new Date(2026, 0, 1),
+    updatedAt: new Date(2026, 0, 1),
+  });
+}
+
+export function makeAdminUserRepo(
+  adminUser: AdminUser | null = null
+): AdminUserRepository {
+  return {
+    findByClerkUserId: vi.fn().mockResolvedValue(adminUser),
+    save: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeAdminMembershipRepo(
+  membership: AdminMembership | null = null
+): AdminMembershipRepository {
+  return {
+    findByAdminUserId: vi.fn().mockResolvedValue(membership),
+    save: vi.fn().mockResolvedValue(undefined),
+    deleteByAdminUserId: vi.fn().mockResolvedValue(undefined),
   };
 }
