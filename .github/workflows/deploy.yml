@@ -5,12 +5,23 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+    # editedを追加しているのは、stacked PR（PRのbaseを別のfeatureブランチに
+    # 向けて積む運用）で詰まるのを防ぐため。base側のPRがマージされると
+    # GitHubは下流PRのbaseをdevelopへ自動で付け替えるが、これが発行するのは
+    # editedイベントで、デフォルトのopened/synchronize/reopenedには該当しない。
+    # そのため「baseはdevelopになったがCIが一度も起動せず、必須チェック未充足で
+    # マージできない」状態になり、空コミットをpushして回避する必要があった。
+    # editedはタイトル・本文の編集でも発行されるため、各ジョブ側で
+    # github.event.changes.base の有無を見てbase変更時だけ走るようにしている
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # editedはタイトル・本文の編集でも発行されるため、base変更時だけ走らせる
+    # （上のtypes:のコメント参照）。changes.baseはbaseが変わったときのみ入る
+    if: github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base != null)
     permissions:
       contents: read
       pull-requests: read
@@ -29,7 +40,9 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # editedはタイトル・本文の編集でも発行されるため、base変更時だけ走らせる
+    # （上のtypes:のコメント参照）。changes.baseはbaseが変わったときのみ入る
+    if: github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base != null)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -41,7 +54,9 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # editedはタイトル・本文の編集でも発行されるため、base変更時だけ走らせる
+    # （上のtypes:のコメント参照）。changes.baseはbaseが変わったときのみ入る
+    if: github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base != null)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -54,7 +69,9 @@ jobs:
   schema-types-drift:
     name: Schema Types Drift
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # editedはタイトル・本文の編集でも発行されるため、base変更時だけ走らせる
+    # （上のtypes:のコメント参照）。changes.baseはbaseが変わったときのみ入る
+    if: github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base != null)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -88,7 +105,9 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # editedはタイトル・本文の編集でも発行されるため、base変更時だけ走らせる
+    # （上のtypes:のコメント参照）。changes.baseはbaseが変わったときのみ入る
+    if: github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base != null)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -101,7 +120,9 @@ jobs:
     name: E2E Tests (PR)
     runs-on: ubuntu-latest
     needs: [changes]
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    # editedはタイトル・本文の編集でも発行されるため、base変更時だけ走らせる
+    # （上のtypes:のコメント参照）。changes.baseはbaseが変わったときのみ入る
+    if: github.event_name == 'pull_request' && (github.event.action != 'edited' || github.event.changes.base != null) && needs.changes.outputs.code == 'true'
     environment: staging
     steps:
       - uses: actions/checkout@v4
@@ -204,7 +225,18 @@ jobs:
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
-        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
+        # --include-allを付けているのは、並列worktree運用では
+        # 「supabase migration newした時刻順」と「developへのマージ順」が
+        # 一致しないため。適用済みの最後のマイグレーションより古いタイムスタンプの
+        # ファイルが後から入ると、db pushはそれを拒否してデプロイが止まる
+        # （実際に #283 の 20260922045432 が #284 の 20260922050000 より後に
+        # マージされて stg デプロイが落ち、#290 でリネーム対応した）。
+        # --include-allでも適用はタイムスタンプ順のままで、外れるのは
+        # 「適用済みより古いファイルを拒否する」ガードだけ。
+        # そのガードが本来守る「古いマイグレーションが新しいものの前提を壊す」
+        # ケースは、ローカルとCIの両方で毎回 supabase db reset が
+        # フルに流れているため、stgに到達する前に検出できる
+        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked --include-all'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build
@@ -247,7 +279,10 @@ jobs:
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
-        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
+        # --include-allの理由はdeploy-stgのMigrate DBのコメント参照。
+        # stgとprodで適用ルールを揃えないと、stgで適用できたマイグレーションが
+        # prodで拒否されるというズレが生まれるため、ここでも同じ扱いにする
+        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked --include-all'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build
