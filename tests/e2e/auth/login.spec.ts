@@ -22,8 +22,11 @@ const TEST_PASSWORD = "TestPassw0rd!12345";
  * フローが正しく発生する（作成に使ったコンテキストのままログインすると
  * 同一デバイスとみなされ確認コードが要求されない可能性があるため）。
  */
+// TODO(#281): signUpViaInvitationが呼ぶClerk招待チケットAPIがCIで断続的に
+// FAPI疎通エラー（HTMLエラーページ返却）を起こし、本specがflakyになっている。
+// 原因調査・恒久対応まで一時的にskipする。
 test.describe
-  .serial("実際のログイン画面を経由したログイン（未知デバイスの確認コード込み）", () => {
+  .skip("実際のログイン画面を経由したログイン（未知デバイスの確認コード込み）", () => {
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
