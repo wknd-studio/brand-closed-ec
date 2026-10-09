@@ -3,7 +3,6 @@ import type { Database } from "@/types/database.types";
 import type {
   SubscriptionRepository,
   SubscriptionSnapshot,
-  SubscriptionOwner,
   UpsertSubscriptionInput,
 } from "@/repositories/subscription-repository";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
@@ -56,20 +55,8 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
     return data ? toSnapshot(data as SubscriptionRow) : null;
   }
 
-  async findActiveByOrganizationId(
-    organizationId: string
-  ): Promise<SubscriptionSnapshot | null> {
-    const { data } = await this.db
-      .from("subscriptions")
-      .select(SELECT_FIELDS)
-      .eq("organization_id", organizationId)
-      .neq("status", "canceled")
-      .maybeSingle();
-    return data ? toSnapshot(data as SubscriptionRow) : null;
-  }
-
   async upsert(input: UpsertSubscriptionInput): Promise<void> {
-    const existing = await this.findExisting(input);
+    const existing = await this.findActiveByUserId(input.userId);
 
     const payload = {
       stripe_customer_id: input.stripeCustomerId,
@@ -91,17 +78,7 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
 
     await this.db.from("subscriptions").insert({
       ...payload,
-      user_id: input.userId ?? null,
-      organization_id: input.organizationId ?? null,
+      user_id: input.userId,
     });
-  }
-
-  private async findExisting(
-    owner: SubscriptionOwner
-  ): Promise<SubscriptionSnapshot | null> {
-    if (owner.userId !== undefined) {
-      return this.findActiveByUserId(owner.userId);
-    }
-    return this.findActiveByOrganizationId(owner.organizationId);
   }
 }

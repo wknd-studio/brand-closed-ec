@@ -286,7 +286,6 @@ export function makeSubscriptionRepo(
 ): SubscriptionRepository {
   return {
     findActiveByUserId: vi.fn().mockResolvedValue(snapshot),
-    findActiveByOrganizationId: vi.fn().mockResolvedValue(snapshot),
     upsert: vi.fn().mockResolvedValue(undefined),
   };
 }

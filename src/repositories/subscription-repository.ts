@@ -27,20 +27,15 @@ export type SubscriptionSnapshot = {
   canceledAt: Date | null;
 };
 
-export type SubscriptionOwner =
-  | { userId: string; organizationId?: undefined }
-  | { userId?: undefined; organizationId: string };
-
-export type UpsertSubscriptionInput = SubscriptionOwner &
-  Omit<SubscriptionSnapshot, "id">;
+export type UpsertSubscriptionInput = { userId: string } & Omit<
+  SubscriptionSnapshot,
+  "id"
+>;
 
 export interface SubscriptionRepository {
   findActiveByUserId(userId: string): Promise<SubscriptionSnapshot | null>;
-  findActiveByOrganizationId(
-    organizationId: string
-  ): Promise<SubscriptionSnapshot | null>;
-  // 所有者（user_id/organization_idのどちらか一方）につき解約済みでない行は
-  // 1件までという部分UNIQUE制約（subscriptions_user_active_idx等）を前提に、
-  // 既存のアクティブな行があれば更新、無ければ新規作成する
+  // user_idにつき解約済みでない行は1件までという部分UNIQUE制約
+  // （subscriptions_user_active_idx）を前提に、既存のアクティブな行があれば
+  // 更新、無ければ新規作成する
   upsert(input: UpsertSubscriptionInput): Promise<void>;
 }

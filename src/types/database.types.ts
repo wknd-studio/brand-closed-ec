@@ -42,7 +42,6 @@ export type Database = {
           created_at: string;
           id: string;
           is_default: boolean;
-          organization_id: string | null;
           phone_number: string;
           postal_code: string;
           prefecture: string;
@@ -59,7 +58,6 @@ export type Database = {
           created_at?: string;
           id?: string;
           is_default?: boolean;
-          organization_id?: string | null;
           phone_number: string;
           postal_code: string;
           prefecture: string;
@@ -76,7 +74,6 @@ export type Database = {
           created_at?: string;
           id?: string;
           is_default?: boolean;
-          organization_id?: string | null;
           phone_number?: string;
           postal_code?: string;
           prefecture?: string;
@@ -87,13 +84,6 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
-          {
-            foreignKeyName: "addresses_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "addresses_user_id_fkey";
             columns: ["user_id"];
@@ -372,7 +362,6 @@ export type Database = {
           created_at: string;
           id: string;
           monthly_limit_at_order: number;
-          organization_id: string | null;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status: string;
@@ -384,7 +373,6 @@ export type Database = {
           created_at?: string;
           id?: string;
           monthly_limit_at_order: number;
-          organization_id?: string | null;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status?: string;
@@ -396,7 +384,6 @@ export type Database = {
           created_at?: string;
           id?: string;
           monthly_limit_at_order?: number;
-          organization_id?: string | null;
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot?: Json;
           status?: string;
@@ -405,120 +392,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "orders_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "orders_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          },
-        ];
-      };
-      organization_memberships: {
-        Row: {
-          clerk_role: string;
-          created_at: string;
-          id: string;
-          organization_id: string;
-          user_id: string;
-        };
-        Insert: {
-          clerk_role: string;
-          created_at?: string;
-          id?: string;
-          organization_id: string;
-          user_id: string;
-        };
-        Update: {
-          clerk_role?: string;
-          created_at?: string;
-          id?: string;
-          organization_id?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "organization_memberships_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "organization_memberships_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      organizations: {
-        Row: {
-          billing_anchor_day: number | null;
-          clerk_org_id: string;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          initial_fee_paid_rank_code: string | null;
-          invoice_registration_number: string;
-          name: string;
-          onboarding_completed: boolean;
-          phone_number: string;
-          rank_code: string;
-          representative_name: string;
-          stripe_customer_id: string | null;
-        };
-        Insert: {
-          billing_anchor_day?: number | null;
-          clerk_org_id: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          initial_fee_paid_rank_code?: string | null;
-          invoice_registration_number: string;
-          name: string;
-          onboarding_completed?: boolean;
-          phone_number: string;
-          rank_code?: string;
-          representative_name: string;
-          stripe_customer_id?: string | null;
-        };
-        Update: {
-          billing_anchor_day?: number | null;
-          clerk_org_id?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          initial_fee_paid_rank_code?: string | null;
-          invoice_registration_number?: string;
-          name?: string;
-          onboarding_completed?: boolean;
-          phone_number?: string;
-          rank_code?: string;
-          representative_name?: string;
-          stripe_customer_id?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "organizations_initial_fee_paid_rank_code_fkey";
-            columns: ["initial_fee_paid_rank_code"];
-            isOneToOne: false;
-            referencedRelation: "member_ranks";
-            referencedColumns: ["code"];
-          },
-          {
-            foreignKeyName: "organizations_rank_code_fkey";
-            columns: ["rank_code"];
-            isOneToOne: false;
-            referencedRelation: "member_ranks";
-            referencedColumns: ["code"];
           },
         ];
       };
@@ -530,11 +408,10 @@ export type Database = {
           from_rank_code: string | null;
           id: string;
           initial_fee_charged: boolean;
-          organization_id: string | null;
           reason: string | null;
           stripe_subscription_id: string | null;
           to_rank_code: string;
-          user_id: string | null;
+          user_id: string;
         };
         Insert: {
           changed_by: string;
@@ -543,11 +420,10 @@ export type Database = {
           from_rank_code?: string | null;
           id?: string;
           initial_fee_charged?: boolean;
-          organization_id?: string | null;
           reason?: string | null;
           stripe_subscription_id?: string | null;
           to_rank_code: string;
-          user_id?: string | null;
+          user_id: string;
         };
         Update: {
           changed_by?: string;
@@ -556,11 +432,10 @@ export type Database = {
           from_rank_code?: string | null;
           id?: string;
           initial_fee_charged?: boolean;
-          organization_id?: string | null;
           reason?: string | null;
           stripe_subscription_id?: string | null;
           to_rank_code?: string;
-          user_id?: string | null;
+          user_id?: string;
         };
         Relationships: [
           {
@@ -569,13 +444,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "member_ranks";
             referencedColumns: ["code"];
-          },
-          {
-            foreignKeyName: "rank_changes_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "rank_changes_to_rank_code_fkey";
@@ -631,7 +499,6 @@ export type Database = {
           current_period_end: string;
           current_period_start: string;
           id: string;
-          organization_id: string | null;
           pending_rank_code: string | null;
           rank_code: string;
           status: string;
@@ -639,7 +506,7 @@ export type Database = {
           stripe_subscription_id: string;
           stripe_subscription_schedule_id: string | null;
           updated_at: string;
-          user_id: string | null;
+          user_id: string;
         };
         Insert: {
           cancel_at_period_end?: boolean;
@@ -648,7 +515,6 @@ export type Database = {
           current_period_end: string;
           current_period_start: string;
           id?: string;
-          organization_id?: string | null;
           pending_rank_code?: string | null;
           rank_code: string;
           status: string;
@@ -656,7 +522,7 @@ export type Database = {
           stripe_subscription_id: string;
           stripe_subscription_schedule_id?: string | null;
           updated_at?: string;
-          user_id?: string | null;
+          user_id: string;
         };
         Update: {
           cancel_at_period_end?: boolean;
@@ -665,7 +531,6 @@ export type Database = {
           current_period_end?: string;
           current_period_start?: string;
           id?: string;
-          organization_id?: string | null;
           pending_rank_code?: string | null;
           rank_code?: string;
           status?: string;
@@ -673,16 +538,9 @@ export type Database = {
           stripe_subscription_id?: string;
           stripe_subscription_schedule_id?: string | null;
           updated_at?: string;
-          user_id?: string | null;
+          user_id?: string;
         };
         Relationships: [
-          {
-            foreignKeyName: "subscriptions_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "subscriptions_pending_rank_code_fkey";
             columns: ["pending_rank_code"];
@@ -794,8 +652,6 @@ export type Database = {
         Returns: boolean;
       };
       get_current_admin_user_id: { Args: never; Returns: string };
-      get_current_org_id: { Args: never; Returns: string };
-      get_current_org_ids: { Args: never; Returns: string[] };
       get_current_user_id: { Args: never; Returns: string };
       place_order_with_limit_check: {
         Args: {
