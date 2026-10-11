@@ -172,9 +172,13 @@ jobs:
       - name: Apply local migrations
         run: supabase db reset
       - name: Run E2E tests
-        # Clerk/Stripe/Sanity等のテスト用シークレットはstaging Doppler環境から取得するが、
-        # Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルのSupabaseを
-        # 明示的に上書きして使う（本物のstg DBには一切アクセスしない）。
+        # Clerk/Stripe/Sanity等のテスト用シークレットはDopplerのCI専用config（stg_ci）
+        # から取得するが、Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルの
+        # Supabaseを明示的に上書きして使う（本物のstg DBには一切アクセスしない）。
+        # stg_ciはstgのbranch configで、ClerkのキーだけをCI専用の開発インスタンスの
+        # もので上書きし、それ以外はstgの値を引き継ぐ。ローカルの並列開発セッションと
+        # Clerk Backend APIのレート制限の枠を取り合わないよう、Clerkインスタンスを
+        # 分けている（#299）。DOPPLER_TOKEN_CIはstg_ciに紐づくService Token
         # stripe listenはローカルのtask dev:stripeと同じ役割（Stripe Webhookを
         # localhost:3000へ転送）で、これがないと決済確定後のWebhook処理がテストで
         # 検証できない。署名シークレット（STRIPE_WEBHOOK_SECRET）はStripeアカウント
@@ -199,7 +203,7 @@ jobs:
             DISABLE_EMAIL_SENDING="true" \
             pnpm test:e2e
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
         # 圧迫しないよう、デバッグに使う失敗時だけアップロードする。
