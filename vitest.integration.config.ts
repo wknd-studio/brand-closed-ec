@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/integration/**/*.test.{ts,tsx}"],
+    globalSetup: ["tests/integration/global-setup.ts"],
     setupFiles: ["tests/setup.ts"],
     env: {
       BASE_URL: "http://localhost:3000",
