@@ -133,6 +133,30 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
 
+  build:
+    name: Build (Cloudflare)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: dopplerhq/cli-action@v3
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        # tsc --noEmitでは検出できないServer/Client Componentの境界誤り・Workers
+        # ランタイム非対応のNode API・ビルド時のページ生成エラー等を、developマージ後の
+        # deploy-stgで初めて落ちる前にPR段階で止める。e2e-prでもビルドは走るが、
+        # そちらはcontinue-on-errorのためマージをブロックできない。
+        # NEXT_PUBLIC_*はビルド時にバンドルへ埋め込まれるため、deploy-stgと同じく
+        # staging Doppler環境から渡す
+        run: doppler run -- pnpm build:cloudflare
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+
   e2e-pr:
     name: E2E Tests (PR)
     runs-on: ubuntu-latest
