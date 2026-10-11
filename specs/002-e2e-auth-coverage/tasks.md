@@ -60,7 +60,7 @@ description: "Task list template for feature implementation"
 **Independent Test**: `quickstart.md` シナリオ2
 
 - [x] T005 [US2] `tests/e2e/auth/login.spec.ts` を新規作成する。固定の`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`（既存の`onboarding.spec.ts`と同じ資産）を使い、(1) `/sign-in`でメールアドレス・パスワード入力 (2) `/sign-in/factor-two`へ遷移し確認コード入力欄が表示されることを確認 (3) `page.getByLabel("Enter verification code").fill("424242")`で入力（自動送信されるためContinueクリックは不要） (4) ログイン後の画面（`/onboarding/plan`または`/shop`）へ遷移することを確認 (5) `afterEach`でログアウト・Supabase会員レコードの後始末、を検証する（依存: T001）
-- [x] T006 [US2] 同ファイルに、誤った確認コード（例: `000000`）を入力した場合にエラーが表示されログインが完了しないことを検証するテストを追加する（依存: T005）
+- [x] T006 [US2] 同ファイルに、誤った確認コード（例: `000000`）を入力した場合にエラーが表示されログインが完了しないことを検証するテストを追加する（依存: T005） ※#281で削除（確認コードの判定はClerk自身の機能のため）
 
 **チェックポイント**: 実ログインフローが独立して動作・テスト可能
 
