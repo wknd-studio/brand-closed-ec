@@ -133,6 +133,30 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
 
+  build:
+    name: Build (Cloudflare)
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: dopplerhq/cli-action@v3
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        # tsc --noEmitでは検出できないServer/Client Componentの境界誤り・Workers
+        # ランタイム非対応のNode API・ビルド時のページ生成エラー等を、developマージ後の
+        # deploy-stgで初めて落ちる前にPR段階で止める。e2e-prでもビルドは走るが、
+        # そちらはcontinue-on-errorのためマージをブロックできない。
+        # NEXT_PUBLIC_*はビルド時にバンドルへ埋め込まれるため、deploy-stgと同じく
+        # staging Doppler環境から渡す
+        run: doppler run -- pnpm build:cloudflare
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+
   e2e-pr:
     name: E2E Tests (PR)
     runs-on: ubuntu-latest
@@ -165,6 +189,18 @@ jobs:
         run: pnpm exec playwright install-deps chromium
       - name: Install Stripe CLI
         run: npm install -g @stripe/cli
+      - name: Point local Supabase at the CI Clerk instance
+        # supabase/config.tomlのClerk連携（third_party.clerk.domain）はローカル開発用の
+        # 共有インスタンスを指しており、そのままだとCI専用インスタンスが発行した
+        # トークンをSupabaseが拒否しRLSを通らない。publishable keyはFrontend APIの
+        # ドメインをbase64化したもの（パディング無し）なので、そこから取り出して差し替える
+        run: |
+          key=$(doppler secrets get NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY --plain)
+          domain=$(node -e 'console.log(Buffer.from(process.argv[1].replace(/^pk_test_/, ""), "base64").toString().replace(/\$$/, ""))' "$key")
+          sed -i "s/^domain = \".*\.clerk\.accounts\.dev\"$/domain = \"$domain\"/" supabase/config.toml
+          grep -q "^domain = \"$domain\"$" supabase/config.toml
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
       - name: Start local Supabase
         # このアプリはStorage/Realtime/Edge Functions/Studio/inbucketを使わないため、
         # 未使用コンテナのDocker pull・起動をスキップしてCI時間を短縮する
@@ -172,22 +208,18 @@ jobs:
       - name: Apply local migrations
         run: supabase db reset
       - name: Run E2E tests
-        # Clerk/Stripe/Sanity等のテスト用シークレットはstaging Doppler環境から取得するが、
-        # Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルのSupabaseを
-        # 明示的に上書きして使う（本物のstg DBには一切アクセスしない）。
+        # Clerk/Stripe/Sanity等のテスト用シークレットはDopplerのCI専用config（stg_ci）
+        # から取得するが、Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルの
+        # Supabaseを明示的に上書きして使う（本物のstg DBには一切アクセスしない）。
+        # stg_ciはstgのbranch configで、ClerkのキーだけをCI専用の開発インスタンスの
+        # もので上書きし、それ以外はstgの値を引き継ぐ。ローカルの並列開発セッションと
+        # Clerk Backend APIのレート制限の枠を取り合わないよう、Clerkインスタンスを
+        # 分けている（#299）。DOPPLER_TOKEN_CIはstg_ciに紐づくService Token
         # stripe listenはローカルのtask dev:stripeと同じ役割（Stripe Webhookを
         # localhost:3000へ転送）で、これがないと決済確定後のWebhook処理がテストで
         # 検証できない。署名シークレット（STRIPE_WEBHOOK_SECRET）はStripeアカウント
         # に紐づく固定値のため、Doppler側に設定済みの値をそのまま使う
-        #
-        # 共有Clerk開発インスタンスのレート制限により、このリポジトリで日常的に
-        # 発生している複数ブランチの同時CI実行・複数セッションの並列開発とは
-        # 無関係に、テスト実行そのものが失敗する状態が続いている（2026-09-22時点）。
-        # 原因はアプリコード側になく対処もできないため、continue-on-errorで
-        # このステップの失敗ではジョブ・PRのマージをブロックしないようにしている。
-        # Clerk側の制限が解消したら外すこと
         id: e2e
-        continue-on-error: true
         run: |
           eval "$(supabase status -o env | sed 's/^/export /')"
           doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe &
@@ -199,13 +231,11 @@ jobs:
             DISABLE_EMAIL_SENDING="true" \
             pnpm test:e2e
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
-        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする。
-        # 上のE2EステップはcontinueOnErrorのためjob全体のfailure()はtrueに
-        # ならず、ステップ自身のoutcomeで判定する必要がある
-        if: steps.e2e.outcome == 'failure'
+        # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけアップロードする
+        if: failure() && steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-pr
@@ -356,14 +386,7 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Run E2E tests
-        # 共有Clerk開発インスタンスのレート制限により、このリポジトリで日常的に
-        # 発生している複数ブランチの同時CI実行・複数セッションの並列開発とは
-        # 無関係に、テスト実行そのものが失敗する状態が続いている（2026-09-22時点）。
-        # 原因はアプリコード側になく対処もできないため、continue-on-errorで
-        # このステップの失敗ではジョブ・マージをブロックしないようにしている。
-        # Clerk側の制限が解消したら外すこと
         id: e2e
-        continue-on-error: true
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
@@ -374,10 +397,8 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
-        # 圧迫しないよう、デバッグに使う失敗時だけアップロードする。
-        # 上のE2EステップはcontinueOnErrorのためjob全体のfailure()はtrueに
-        # ならず、ステップ自身のoutcomeで判定する必要がある
-        if: steps.e2e.outcome == 'failure'
+        # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけアップロードする
+        if: failure() && steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-stg
