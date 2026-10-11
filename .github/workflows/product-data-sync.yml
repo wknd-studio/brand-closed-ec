@@ -1,9 +1,11 @@
 name: Product Data Sync
 
 on:
-  schedule:
-    # 毎日 03:00 UTC（日本時間 正午12:00）に実行する
-    - cron: "0 3 * * *"
+  # 実業者のスクレイパーが無く、Doppler のセットアップも未整備で毎日失敗するため一時停止中。
+  # 環境別（main=本番 / develop=stg）実行に揃えたうえで再開する（#314）
+  # schedule:
+  #   # 毎日 03:00 UTC（日本時間 正午12:00）に実行する
+  #   - cron: "0 3 * * *"
   workflow_dispatch: {}
 
 jobs:
