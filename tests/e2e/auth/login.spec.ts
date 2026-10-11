@@ -55,7 +55,10 @@ test.describe("実際のログイン画面を経由したログイン（未知�
     );
     await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
-    await expect(page).toHaveURL(/\/sign-in\/factor-two/);
+    // 未知デバイスの確認画面のURLはClerkインスタンスの設定で異なる（ローカル・stgの
+    // インスタンスはfactor-two、CI専用インスタンスはClient Trust有効でclient-trust）。
+    // どちらも同じメールの確認コード画面（同じ見出し・入力欄）のため両方を許容する
+    await expect(page).toHaveURL(/\/sign-in\/(factor-two|client-trust)/);
     await secondFactorPrepared;
     await expect(
       page.locator('[data-localization-key="signIn.emailCodeMfa.title"]')
