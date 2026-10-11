@@ -1,45 +1,47 @@
 # 並列worktree実装の手引き
 
-複数のissueを、1台のPC上で完全に分離した環境（別git worktree・別ポート・別ローカルSupabase）で、最大4並列で実装するための仕組み。
+複数のissueを、1台のPC上で分離した環境（別git worktree・別ポート・別ローカルSupabase）で並列に実装するための仕組み。ワークツリーとセッションの管理はADEの **Orca** に任せ、このリポジトリはOrcaのsetup/archiveフックから呼ぶスクリプトだけを持つ。
+
+セッションが従うルール（依存の確認・テストの実行方法・自動push・PRの条件）は `CLAUDE.md` の「並列開発（Orca）」を参照。このドキュメントは背景・制約のリファレンス。
 
 ## 使い方
 
-1. 並列させたい数だけClaude Codeセッションを別ウィンドウで立ち上げる
-2. 各セッションで `/work-on-issue <issue番号>` を実行する
-3. あとはセッションに任せる。環境構築（worktree作成・空きスロット検出・ポート調整・Supabase起動）から実装・テスト・push・PR作成までスキルが自走する
-4. ユーザーがやることは「どのセッションにどのissueを割り振るか」の意思決定だけ
+1. Orcaでissueを紐づけてワークツリーとエージェントを起動する（Orcaの画面、または `orca worktree create --issue <番号> --agent claude --prompt "..."`）
+2. Orcaのsetupフックが `scripts/worktree-setup.sh` を実行し、空きスロットの確保・`config.toml` の書き換え・Supabase起動・`.env.worktree` の生成まで行う
+3. あとはセッションに任せる。依存issueが未完了なら止まって報告し、そうでなければ実装からpush・PR作成まで進む
+4. 作業が終わったワークツリーをOrcaで片付けると、archiveフックが `scripts/worktree-archive.sh` を実行し、Supabaseを停止してスロットを解放する
 
-具体的な手順は `.claude/skills/work-on-issue/SKILL.md` を参照。このドキュメントは背景・制約のリファレンス。
+## Orcaのリポジトリ設定（初回のみ・手動）
+
+| 項目              | 値                                 |
+| ----------------- | ---------------------------------- |
+| ベースブランチ    | `origin/develop`                   |
+| setupスクリプト   | `bash scripts/worktree-setup.sh`   |
+| archiveスクリプト | `bash scripts/worktree-archive.sh` |
 
 ## できること・できないこと
 
-| 分離対象                                                           | 状態                                                                                   |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| ファイルシステム（git worktree、Claude Code標準の`EnterWorktree`） | 完全分離                                                                               |
-| ローカルSupabase（Docker）                                         | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
-| Next.js/Playwrightの開発サーバーポート                             | 完全分離（`PORT`環境変数で可変）                                                       |
-| Clerk・Stripe・Sanity                                              | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
+| 分離対象                                  | 状態                                                                                   |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| ファイルシステム（git worktree、Orca）    | 完全分離                                                                               |
+| ローカルSupabase（Docker）                | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
+| Next.js/Playwrightの開発サーバーポート    | 完全分離（`.env.worktree` の `PORT`）                                                  |
+| Clerk・Stripe・Sanity                     | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
+| ngrok・Stripe CLI（`task dev`のフル構成） | **分離しない**。手動確認は同時に1ワークツリー（通常はメインのチェックアウト）で行う    |
 
-Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。Stripeの決済イベントは全worktreeの`stripe listen`に転送されるため、他worktree宛てのイベントによる無害な404ログが出ることがある（実害なし）。
+Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。
 
 ## スロット割り当て
 
-| スロット | アプリポート | Supabase project_id       |
-| -------- | ------------ | ------------------------- |
-| 1        | 3000         | `brand-closed-ec`（既定） |
-| 2        | 4000         | `brand-closed-ec-slot2`   |
-| 3        | 5000         | `brand-closed-ec-slot3`   |
-| 4        | 6000         | `brand-closed-ec-slot4`   |
+| スロット | 使う場所                             | アプリポート    | Supabase API     | project_id                |
+| -------- | ------------------------------------ | --------------- | ---------------- | ------------------------- |
+| 1        | メインのチェックアウト（`task dev`） | 3000            | 54321            | `brand-closed-ec`（既定） |
+| 2〜9     | Orcaのワークツリー                   | 3000+(N-1)×1000 | 54321+(N-1)×1000 | `brand-closed-ec-slotN`   |
 
-同じスロット番号を2つのworktreeで同時に使わないこと（ポート・Dockerコンテナ名が衝突する）。稼働中のスロットは `docker ps` のコンテナ名（`-slotN`サフィックス）か `task worktree:list` で確認できる。
-
-## 運用ルール
-
-- **着手前**: `gh issue view 165` の依存グラフで、担当するissueの依存issueが完了しているか確認する
-- **同時に走らせて安全な組み合わせ**: 依存グラフで枝分かれしているトラック（調達/返品/カタログ/会員機能の大半）は安全。`#200`（organizations削除）のような破壊的変更は単独で走らせる
-- **マージ順の衝突**: 同じファイルを触るissue（`#224`と`#261〜264`など）は、同時に別worktreeで走らせず順番に処理する
-- **push・PR**: `/work-on-issue`経由の実装に限り、テストがgreenになったらユーザー承認を待たずpush・PR作成まで進めてよい取り決め（通常の1対1のやり取りでは引き続き承認を待つ）
+- スロットの確保状況は、全ワークツリーで共有されるgitの共通ディレクトリ（`<git-common-dir>/worktree-slots/<N>/owner`）に記録する。`mkdir` で確保するため、同時にsetupが走っても重複しない
+- 持ち主のワークツリーが消えている確保（archiveが走らなかった場合など）は、次のsetup時に自動で解放・再利用される
+- 確保の記録が無くても、`-slotN` のSupabaseコンテナが残っているスロットは使用中として扱う
 
 ## Docker負荷の目安
 
-既定（最小構成: api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり2〜3コンテナ。4並列でも8〜12コンテナ程度に収まる。
+最小構成（api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり数コンテナ。同時に動かすワークツリーが多いとDocker Desktopのメモリを圧迫するため、使い終わったワークツリーはOrcaで片付ける。
