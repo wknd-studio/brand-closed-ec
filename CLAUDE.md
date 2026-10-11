@@ -101,6 +101,8 @@ feature/* →  Cloudflare Pages Preview URL
 
 **マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。
 
+CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
+
 **コミット形式**: `feat(scope): BRAND-XX 説明` (Conventional Commits)
 
 **言語**: 常に日本語で回答する。
