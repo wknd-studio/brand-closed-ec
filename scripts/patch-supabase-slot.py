@@ -5,12 +5,12 @@ supabase/config.toml のproject_id・全ポートを、worktreeスロット番�
 
 このスクリプトが書き換えるのは、そのworktree自身のワーキングツリー内の
 config.tomlのみ。他worktree・コミット履歴には一切影響しない。
-呼び出し側（scripts/worktree-setup.sh）が、書き換え後に
+呼び出し側（scripts/with-worktree-db.sh）が、書き換え後に
 `git update-index --skip-worktree supabase/config.toml` を実行し、
 誤ってこのローカル専用の変更をコミットしてしまわないようにする。
 
-使い方: patch-supabase-slot.py <config.tomlのパス> <スロット番号 1-4>
-スロット1は素の設定のまま（オフセット0）。2〜4はポートを1000刻みでずらす。
+使い方: patch-supabase-slot.py <config.tomlのパス> <スロット番号 1-9>
+スロット1は素の設定のまま（オフセット0）。2〜9はポートを1000刻みでずらす。
 """
 import re
 import sys
@@ -32,8 +32,8 @@ APP_PORT_BASE = 3000
 
 
 def patch(path: str, slot: int) -> None:
-    if slot < 1 or slot > 4:
-        raise SystemExit(f"スロットは1〜4の範囲で指定してください: {slot}")
+    if slot < 1 or slot > 9:
+        raise SystemExit(f"スロットは1〜9の範囲で指定してください: {slot}")
 
     offset = (slot - 1) * 1000
     with open(path, encoding="utf-8") as f:
