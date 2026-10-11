@@ -100,6 +100,21 @@ export async function signUpViaInvitation(
   password: string
 ): Promise<void> {
   await setupClerkTestingToken({ page });
+  // setupClerkTestingTokenはFAPI（/v1/*）への全リクエストを横取りし、レスポンスを
+  // JSONとして書き換える。招待URL（/v1/tickets/accept）はリダイレクトでHTMLの画面を
+  // 返す画面遷移のためJSON解析が必ず失敗し、同じURLへの再取得を4回繰り返してから
+  // 素通しする（ログの「FAPI request failed ... tickets/accept ... <!DOCTYPE」）。
+  // この無駄な待ち・リクエストがE2Eを不安定にしていたため、招待URLだけは
+  // 横取りせず、ライブラリが最終的に行うのと同じ形（テスティングトークン付き）で
+  // 素通しする。page.routeはcontext.routeより優先される
+  await page.route(/\/v1\/tickets\/accept/, async (route) => {
+    const url = new URL(route.request().url());
+    const testingToken = process.env.CLERK_TESTING_TOKEN;
+    if (testingToken) {
+      url.searchParams.set("__clerk_testing_token", testingToken);
+    }
+    await route.continue({ url: url.toString() });
+  });
 
   const invitationUrl = await createTestInvitation(emailAddress);
   await page.goto(invitationUrl);
