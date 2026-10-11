@@ -97,6 +97,42 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: supabase/setup-cli@v1
+        with: { version: 2.102.0 }
+      - uses: dopplerhq/cli-action@v3
+      - run: pnpm install --frozen-lockfile
+      - name: Start local Supabase
+        # 統合テストはDB（PostgreSQL・RLS・PostgREST）とAuthしか使わないため、
+        # E2E同様に未使用コンテナの起動をスキップして時間を短縮する
+        run: supabase start -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta
+      - name: Apply local migrations
+        run: supabase db reset
+      - name: Run integration tests
+        # Stripe・Clerkの署名シークレット等はstaging Doppler環境から取得するが、
+        # Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルのSupabaseで
+        # 上書きする（本物のstg DBには一切アクセスしない）。
+        # sanity-products.test.tsは共有のSanityデータセットに書き込むため、
+        # RUN_SANITY_INTEGRATIONを渡さずスキップさせる
+        run: |
+          eval "$(supabase status -o env | sed 's/^/export /')"
+          doppler run -- env \
+            NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+            NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUBLISHABLE_KEY" \
+            SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" \
+            pnpm test:integration
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+
   e2e-pr:
     name: E2E Tests (PR)
     runs-on: ubuntu-latest
