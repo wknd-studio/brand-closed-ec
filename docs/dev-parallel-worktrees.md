@@ -1,23 +1,27 @@
 # 並列worktree実装の手引き
 
-複数のissueを、1台のPC上で分離した環境（別git worktree・別ポート・別ローカルSupabase）で並列に実装するための仕組み。ワークツリーとセッションの管理はADEの **Orca** に任せ、このリポジトリはOrcaのsetup/archiveフックから呼ぶスクリプトだけを持つ。
+複数のissueを、1台のPC上で分離した環境（別git worktree・別ポート・別ローカルSupabase）で並列に実装するための仕組み。ワークツリーとセッションの管理はADEの **Orca** に任せる。ローカルSupabaseはワークツリーの作成時ではなく、**DBを使うコマンドを初めて実行したときに起動し、タスクの終わりに片付ける**（DBを使わないissueではコンテナを一切立ち上げない。Orcaのsetup/archiveフックにも依存しない）。
 
-セッションが従うルール（依存の確認・テストの実行方法・自動push・PRの条件）は `CLAUDE.md` の「並列開発（Orca）」を参照。このドキュメントは背景・制約のリファレンス。
+セッションが従うルール（依存の確認・DBを使うコマンドの実行方法・片付け・自動push・PRの条件）は `CLAUDE.md` の「並列開発（Orca）」を参照。このドキュメントは背景・制約のリファレンス。
 
 ## 使い方
 
-1. Orcaでissueを紐づけてワークツリーとエージェントを起動する（Orcaの画面、または `orca worktree create --issue <番号> --agent claude --prompt "..."`）
-2. Orcaのsetupフックが `scripts/worktree-setup.sh` を実行し、空きスロットの確保・`config.toml` の書き換え・Supabase起動・`.env.worktree` の生成まで行う
-3. あとはセッションに任せる。依存issueが未完了なら止まって報告し、そうでなければ実装からpush・PR作成まで進む
-4. 作業が終わったワークツリーをOrcaで片付けると、archiveフックが `scripts/worktree-archive.sh` を実行し、Supabaseを停止してスロットを解放する
+1. Orcaでissueを紐づけてワークツリーとエージェントを起動する（Orcaの画面、または `orca worktree create --issue <番号> --agent claude --prompt "..."`）。Orcaのsetupは `pnpm install` のみでよい
+2. あとはセッションに任せる。依存issueが未完了なら止まって報告し、そうでなければ実装からpush・PR作成まで進む
+3. DBを使うコマンドは `bash scripts/with-worktree-db.sh <コマンド>` で実行する。初回はスロットの確保・`config.toml` の書き換え・Supabase起動（約25秒）まで自動で行い、2回目以降は起動済みのものを使う
+4. PRを作成したら、セッションが `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する
+5. PRがマージされたら、Orcaでワークツリーを削除する
 
-## Orcaのリポジトリ設定（初回のみ・手動）
+## スクリプト
 
-| 項目              | 値                                 |
-| ----------------- | ---------------------------------- |
-| ベースブランチ    | `origin/develop`                   |
-| setupスクリプト   | `bash scripts/worktree-setup.sh`   |
-| archiveスクリプト | `bash scripts/worktree-archive.sh` |
+| スクリプト                       | 役割                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/with-worktree-db.sh`    | スロットの確保（初回）、Supabaseの起動（止まっていれば）、Dopplerの値をこのワークツリーのSupabase・ポートで上書きしてコマンドを実行 |
+| `scripts/worktree-db-stop.sh`    | Supabaseの停止とボリューム削除、`config.toml` の復元、スロットの解放                                                                |
+| `scripts/worktree-slot-lib.sh`   | スロット管理の共通処理                                                                                                              |
+| `scripts/patch-supabase-slot.py` | `config.toml` のポート・project_idをスロット用に書き換える                                                                          |
+
+`with-worktree-db.sh` が上書きする環境変数: `WORKTREE_SLOT`、`PORT`、`NEXT_PUBLIC_APP_URL`、`NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`。
 
 ## できること・できないこと
 
@@ -25,7 +29,7 @@
 | ----------------------------------------- | -------------------------------------------------------------------------------------- |
 | ファイルシステム（git worktree、Orca）    | 完全分離                                                                               |
 | ローカルSupabase（Docker）                | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
-| Next.js/Playwrightの開発サーバーポート    | 完全分離（`.env.worktree` の `PORT`）                                                  |
+| Next.js/Playwrightの開発サーバーポート    | 完全分離（`with-worktree-db.sh` が `PORT` を設定）                                     |
 | Clerk・Stripe・Sanity                     | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
 | ngrok・Stripe CLI（`task dev`のフル構成） | **分離しない**。手動確認は同時に1ワークツリー（通常はメインのチェックアウト）で行う    |
 
@@ -38,10 +42,10 @@ Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID
 | 1        | メインのチェックアウト（`task dev`） | 3000            | 54321            | `brand-closed-ec`（既定） |
 | 2〜9     | Orcaのワークツリー                   | 3000+(N-1)×1000 | 54321+(N-1)×1000 | `brand-closed-ec-slotN`   |
 
-- スロットの確保状況は、全ワークツリーで共有されるgitの共通ディレクトリ（`<git-common-dir>/worktree-slots/<N>/owner`）に記録する。`mkdir` で確保するため、同時にsetupが走っても重複しない
-- 持ち主のワークツリーが消えている確保（archiveが走らなかった場合など）は、次のsetup時に自動で解放・再利用される
-- 確保の記録が無くても、`-slotN` のSupabaseコンテナが残っているスロットは使用中として扱う
+- スロットの確保状況は、全ワークツリーで共有されるgitの共通ディレクトリ（`<git-common-dir>/worktree-slots/<N>/owner`）に記録する。`mkdir` で確保するため、同時に確保が走っても重複しない
+- `worktree-db-stop.sh` を実行せずにワークツリーを削除した場合でも、次に別のワークツリーがスロットを確保するときに、持ち主が消えたスロットの残りのコンテナを停止してから再利用する
+- 確保の記録が無くても、`-slotN` のSupabaseコンテナが残っているスロットは使用中として扱う（停止に失敗した場合も同様）
 
 ## Docker負荷の目安
 
-最小構成（api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり数コンテナ。同時に動かすワークツリーが多いとDocker Desktopのメモリを圧迫するため、使い終わったワークツリーはOrcaで片付ける。
+最小構成（api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり数コンテナ。DBを使うタスクの間だけ起動し、PR作成後に停止するため、同時に動くのは実際にテスト中のワークツリーの分だけになる。

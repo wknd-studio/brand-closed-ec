@@ -15,7 +15,7 @@ function supabaseAdmin() {
  * E2Eテストが使う固定のメールアドレス・Sanity ID等を、同時に走る複数の実行間で
  * 衝突しないよう一意化するためのサフィックスを付与する。
  *
- * ローカルの並列worktree実行ではWORKTREE_SLOTを使う（scripts/worktree-setup.sh参照）。
+ * ローカルの並列worktree実行ではWORKTREE_SLOTを使う（scripts/with-worktree-db.sh参照）。
  * CIではWORKTREE_SLOTは設定されないが、複数のPR/ブランチのCIが同時に走ることが
  * 日常的にあり、固定メールアドレスのままだと共有のClerk開発インスタンス上で
  * invitationの作成・revokeがレースし「The invitation was revoked.」で

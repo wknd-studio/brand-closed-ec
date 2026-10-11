@@ -1,11 +1,17 @@
-# worktree-setup.sh / worktree-archive.sh 共通のスロット管理（source して使う）。
+# with-worktree-db.sh / worktree-db-stop.sh 共通のスロット管理（source して使う）。
 #
 # スロットNの確保 = <git-common-dir>/worktree-slots/N ディレクトリの作成（mkdirは原子的なため、
-# 複数のワークツリーで同時にsetupが走っても同じスロットを二重に確保しない）。
+# 複数のワークツリーで同時に確保が走っても同じスロットを二重に確保しない）。
 # owner ファイルに確保したワークツリーの絶対パスを記録する。
+
+# シェルの設定を読まない環境（GUIアプリから呼ばれた場合等）でもHomebrewのsupabase等を見つけられるようにする
+if [ -x /opt/homebrew/bin/brew ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
 
 SLOT_MIN=2
 SLOT_MAX=9
+PROJECT_ID_BASE="brand-closed-ec"
 SLOTS_DIR="$(git rev-parse --path-format=absolute --git-common-dir)/worktree-slots"
 
 # このワークツリーが確保済みのスロット番号を出力する（無ければ何も出力しない）
@@ -38,8 +44,13 @@ claim_slot() {
   for n in $(seq "$SLOT_MIN" "$SLOT_MAX"); do
     if [ -d "$SLOTS_DIR/$n" ]; then
       owner="$(cat "$SLOTS_DIR/$n/owner" 2>/dev/null || true)"
-      # 持ち主のワークツリーが削除済み（archiveが走らなかった等）の確保は解放して再利用する
+      # 持ち主のワークツリーが削除済み（worktree-db-stop.sh を実行せずに削除した等）の確保は、
+      # 残ったSupabaseコンテナを片付けてから解放して再利用する
       if [ -n "$owner" ] && [ ! -d "$owner" ]; then
+        if slot_has_containers "$n"; then
+          echo "==> 削除済みワークツリー($owner)のスロット${n}に残ったSupabaseを片付けます" >&2
+          supabase stop --project-id "${PROJECT_ID_BASE}-slot${n}" --no-backup >&2 || true
+        fi
         rm -rf "${SLOTS_DIR:?}/$n"
       else
         continue
@@ -53,7 +64,7 @@ claim_slot() {
     fi
   done
 
-  echo "空きスロットがありません（${SLOT_MIN}〜${SLOT_MAX}がすべて使用中）。不要なワークツリーをOrcaで片付けてください" >&2
+  echo "空きスロットがありません（${SLOT_MIN}〜${SLOT_MAX}がすべて使用中）。作業が終わったワークツリーで scripts/worktree-db-stop.sh を実行してください" >&2
   return 1
 }
 

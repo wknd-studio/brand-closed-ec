@@ -5,7 +5,7 @@ supabase/config.toml のproject_id・全ポートを、worktreeスロット番�
 
 このスクリプトが書き換えるのは、そのworktree自身のワーキングツリー内の
 config.tomlのみ。他worktree・コミット履歴には一切影響しない。
-呼び出し側（scripts/worktree-setup.sh）が、書き換え後に
+呼び出し側（scripts/with-worktree-db.sh）が、書き換え後に
 `git update-index --skip-worktree supabase/config.toml` を実行し、
 誤ってこのローカル専用の変更をコミットしてしまわないようにする。
 
