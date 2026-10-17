@@ -15,7 +15,7 @@ export default async function OnboardingPaymentPage({
   const { plan } = await searchParams;
 
   if (!plan || !VALID_PLANS.includes(plan as PaidRank)) {
-    redirect("/onboarding/plan");
+    redirect("/onboarding/account-type");
   }
 
   const paidRank = plan as PaidRank;
@@ -69,7 +69,7 @@ export default async function OnboardingPaymentPage({
       <main className="flex min-h-screen items-center justify-center p-8">
         <div className="space-y-4 text-center">
           <p className="text-red-600">決済ページの準備に失敗しました。</p>
-          <Link href="/onboarding/plan" className="text-sm underline">
+          <Link href="/onboarding/account-type" className="text-sm underline">
             プラン選択に戻る
           </Link>
         </div>
@@ -82,7 +82,7 @@ export default async function OnboardingPaymentPage({
       <main className="flex min-h-screen items-center justify-center p-8">
         <div className="space-y-4 text-center">
           <p className="text-red-600">決済ページの取得に失敗しました。</p>
-          <Link href="/onboarding/plan" className="text-sm underline">
+          <Link href="/onboarding/account-type" className="text-sm underline">
             プラン選択に戻る
           </Link>
         </div>

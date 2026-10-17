@@ -14,10 +14,13 @@ export async function selectAccountType(
 
   const accountType = formData.get("accountType");
 
+  // 個人側もaccountTypeを明示して引き継ぐ。/onboarding/planは
+  // accountTypeが無い・不正なアクセスを種別選択へ送り返すため、
+  // 省略すると個人を選んでもプラン選択画面に到達できない
   return {
     redirectTo:
       accountType === "corporate"
         ? "/onboarding/plan?accountType=corporate"
-        : "/onboarding/plan",
+        : "/onboarding/plan?accountType=individual",
   };
 }
