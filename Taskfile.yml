@@ -58,6 +58,11 @@ tasks:
     cmds:
       - git worktree list
 
+  deps:graph:
+    desc: オープンなissueの依存グラフをHTMLで開く（`-- --json` でAI・スクリプト向けのJSONを出力）。依存の正はGitHubのBlocked by
+    cmds:
+      - pnpm -s tsx scripts/issue-deps-graph.ts {{.CLI_ARGS}}
+
   preview:
     desc: Cloudflare Workers本番相当ビルドをローカルでプレビュー（wrangler dev）
     cmds:
