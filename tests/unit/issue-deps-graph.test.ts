@@ -183,4 +183,10 @@ describe("renderHtml", () => {
     expect(html).toContain("#3 &lt;script&gt;");
     expect(html).not.toContain("#3 <script>");
   });
+
+  it("グラフを拡大縮小・移動できるようにする", () => {
+    const html = renderHtml(sampleGraph(), "now");
+    expect(html).toContain("svg-pan-zoom@3.6.1");
+    expect(html).toContain("svgPanZoom(");
+  });
 });

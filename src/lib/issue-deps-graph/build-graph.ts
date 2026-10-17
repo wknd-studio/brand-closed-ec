@@ -227,8 +227,9 @@ ${group
   h3 { font-size: 14px; margin: 16px 0 4px; }
   .meta { color: #6b7280; font-size: 13px; }
   .chip { border: 1px solid; border-radius: 4px; padding: 2px 8px; font-size: 12px; margin-right: 6px; }
-  .graph { overflow: auto; }
-  .graph svg { max-width: none; }
+  .graph { height: 75vh; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; cursor: grab; }
+  .graph pre { margin: 0; height: 100%; }
+  .graph svg { width: 100%; height: 100%; max-width: none; }
   ul { list-style: none; padding: 0; margin: 0; }
   li { padding: 3px 0; font-size: 14px; }
   a { color: #1d4ed8; text-decoration: none; }
@@ -239,14 +240,19 @@ ${group
 <header>
   <h1>Issue依存グラフ</h1>
   <div>${legend}</div>
-  <span class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックするとissueを開く。生成: ${escapeHtml(generatedAt)}</span>
+  <span class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックするとissueを開く。ホイールで拡大縮小、ドラッグで移動、ダブルクリックで拡大。生成: ${escapeHtml(generatedAt)}</span>
 </header>
 <div class="graph"><pre class="mermaid">${escapeHtml(toMermaid(graph))}</pre></div>
 <h2>依存関係の無いissue</h2>
 ${independent}
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
-  mermaid.initialize({ startOnLoad: true, securityLevel: "loose", flowchart: { useMaxWidth: false } });
+  mermaid.initialize({ startOnLoad: false, securityLevel: "loose", flowchart: { useMaxWidth: false } });
+  await mermaid.run({ querySelector: ".graph .mermaid" });
+  const svg = document.querySelector(".graph svg");
+  svg.removeAttribute("style");
+  svgPanZoom(svg, { controlIconsEnabled: true, fit: true, center: true, minZoom: 0.1, maxZoom: 20, zoomScaleSensitivity: 0.3 });
 </script>
 </body>
 </html>
