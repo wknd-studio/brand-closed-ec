@@ -1,0 +1,60 @@
+name: Issue Deps Graph
+
+# オープンなissueの依存グラフ（task deps:graph と同じHTML）をGitHub Pagesに公開し、常に最新に保つ。
+# 公開先: https://wknd-studio.github.io/brand-closed-ec/
+# issues・scheduleイベントはデフォルトブランチ（develop）のワークフローで動く。
+# Pagesのサイトは1つで、内容はGitHub APIから取るためブランチに依らない。github-pages環境もdevelopからのデプロイのみ許可している
+on:
+  # グラフの生成処理を変更したPRのマージ時にも作り直す
+  push:
+    branches: [develop]
+  issues:
+    types:
+      [
+        opened,
+        edited,
+        closed,
+        reopened,
+        deleted,
+        milestoned,
+        demilestoned,
+        labeled,
+        unlabeled,
+      ]
+  # 依存（Blocked by）の追加・削除と、PRの作成・マージ（「PRあり」の表示）はActionsのトリガーにならないため、定期実行で拾う
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# 連続したイベントで最後の1回だけデプロイすればよい
+concurrency:
+  group: issue-deps-graph
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy issue deps graph
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Generate graph
+        run: pnpm -s tsx scripts/issue-deps-graph.ts --out=_site/index.html
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deployment
+        uses: actions/deploy-pages@v4
