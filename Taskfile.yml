@@ -36,17 +36,25 @@ tasks:
       - doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
   test:e2e:
-    desc: E2Eテストをローカルで実行（Dopplerからシークレットを注入）
+    desc: E2Eテストをローカルで実行（ワークツリーではそのスロットのSupabaseを自動起動して使う）
     cmds:
-      - doppler run -- pnpm test:e2e
+      - bash scripts/with-worktree-db.sh pnpm test:e2e
 
   test:integration:
-    desc: 統合テストをローカルで実行（Dopplerからシークレットを注入、実DBに接続）
+    desc: 統合テストをローカルで実行（ワークツリーではそのスロットのSupabaseを自動起動して使う）
     cmds:
-      - doppler run -- pnpm test:integration
+      - bash scripts/with-worktree-db.sh pnpm test:integration
+
+  check:
+    desc: push・PR作成前の完了チェック（typecheck → lint → ユニットテスト → 統合テスト）。どれかが失敗すると中断する
+    cmds:
+      - pnpm typecheck
+      - pnpm lint
+      - pnpm test
+      - task: test:integration
 
   worktree:list:
-    desc: 既存worktree一覧を表示する（並列実装中のworktreeを確認する用途。/work-on-issueスキル参照）
+    desc: 既存worktree一覧を表示する（並列実装中のworktreeを確認する用途。docs/dev-parallel-worktrees.md参照）
     cmds:
       - git worktree list
 

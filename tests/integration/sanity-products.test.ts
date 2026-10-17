@@ -18,7 +18,14 @@ const TEST_BRAND_ID = "test-catalog-brand-seven-rank";
 const TEST_PRODUCT_STARTER_ID = "test-catalog-product-starter-seven-rank";
 const TEST_PRODUCT_ADVANCED_ID = "test-catalog-product-advanced-seven-rank";
 
-describe("7ランクでのカタログ取得（実Sanity）", () => {
+// 共有の外部Sanityデータセットにテスト用ドキュメントを書き込むため、CIや並列開発中の
+// 他セッションと同時に実行すると互いのデータを上書き・削除しうる。
+// RUN_SANITY_INTEGRATION=true を指定したときだけ実行する（専用データセット化は別途検討）
+const describeWithSanity = describe.skipIf(
+  process.env.RUN_SANITY_INTEGRATION !== "true"
+);
+
+describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   beforeAll(async () => {
     await writeClient.createOrReplace({
       _id: TEST_BRAND_ID,

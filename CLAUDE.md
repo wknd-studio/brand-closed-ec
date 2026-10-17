@@ -10,6 +10,7 @@ pnpm format                     # prettier --write
 pnpm test                       # Vitest（ユニット・統合）
 pnpm test:e2e                   # Playwright E2E
 pnpm test:e2e --ui              # Playwright UIモード
+task check                      # push・PR前の完了チェック（typecheck → lint → ユニット → 統合）
 
 supabase start                  # ローカルDB起動
 supabase migration new <name>   # マイグレーション作成
@@ -58,9 +59,18 @@ feature/* →  Cloudflare Pages Preview URL
 
 ## 行動ルール
 
-**実装順序**: テストを書く → 失敗を確認 → 実装 → テスト通過確認 → コミット（自動）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する。
+**実装順序**: テストを書く → 失敗を確認 → 実装 → テスト通過確認 → コミット（自動）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する（例外は下記「並列開発（Orca）」の自動push・PR条件のみ）。push・PR作成前に `task check`（typecheck → lint → ユニットテスト → 統合テスト）がgreenであること。
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
+
+**並列開発（Orca）**: 複数issueの並列実装はADEのOrcaで、issueごとにワークツリーとセッションを立ち上げて行う（背景・スロット割り当ては `docs/dev-parallel-worktrees.md`）。Orcaのワークツリー内で作業するセッションは以下に従う。
+
+- **環境**: ワークツリーはOrcaが作る。自分で `EnterWorktree` や `git worktree add` をしない
+- **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
+- **依存の確認**: 着手前に `gh api repos/wknd-studio/brand-closed-ec/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
+- **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
+- **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
+- **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、`task check` がgreenなら、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop` まで進めてよい。完了後、issue・実施したテスト・PRのURLを簡潔に報告する。それ以外の場合（`linkedIssue` が無い、担当issue以外の変更を含む等）は通常どおり承認を待つ
 
 **PR サイズ**: 1つのPRは1つの責務に絞る。大きなユーザーストーリーは実装前に小さな単位に分割し、各PRが独立してレビュー・デプロイ可能な状態にする。目安は差分200行以内・変更ファイル5つ以内。分割できない場合はその理由をPR説明に明記する。
 
@@ -90,6 +100,8 @@ feature/* →  Cloudflare Pages Preview URL
 `tests/e2e/`配下のSupabase admin clientは必ず`createClient<Database>(...)`のように型を付ける（型無しの`createClient(...)`は、存在しないカラムを指定してもtscがコンパイルエラーを出さず、実行時までカラム不整合に気づけない。過去に実際にこれで検出漏れが発生した）。
 
 **マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。
+
+CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
 
 **コミット形式**: `feat(scope): BRAND-XX 説明` (Conventional Commits)
 

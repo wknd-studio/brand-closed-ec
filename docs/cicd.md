@@ -107,10 +107,10 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 
 ### CI での実行タイミング（2種類）
 
-1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットは`staging` Doppler環境から取得する。
+1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`stg_ci`、GitHub Secretsの`DOPPLER_TOKEN_CI`で参照）から取得する。`stg_ci`は`stg`のbranch configで、ClerkのキーだけをCI専用のClerk開発インスタンスのもので上書きし、それ以外は`stg`の値を引き継ぐ。ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
 
-どちらも失敗したテストの動画・トレースをGitHub ActionsのArtifacts（`playwright-report-pr`・`playwright-report-stg`）としてアップロードする（保持期間7日）。ダウンロードして`.mp4`をそのまま再生するか、`pnpm exec playwright show-trace <trace.zip>`でトレースビューアを開いて確認できる。
+どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、失敗したテストの動画・トレースをGitHub ActionsのArtifacts（`playwright-report-pr`・`playwright-report-stg`）としてアップロードする（保持期間7日）。ダウンロードして`.mp4`をそのまま再生するか、`pnpm exec playwright show-trace <trace.zip>`でトレースビューアを開いて確認できる。
 
 ### ローカルでの実行
 

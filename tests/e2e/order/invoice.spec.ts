@@ -1,27 +1,18 @@
-import { test, expect } from "@playwright/test";
 import { createClient } from "next-sanity";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import {
-  cleanupTestUser,
-  signUpAndCompleteOnboarding,
-  slotEmail,
-  withSlotSuffix,
-} from "../helpers/clerk-test-invitation";
-
-const TEST_EMAIL = slotEmail("info+clerk_test_invoice@wknd-studio.com");
-const TEST_PASSWORD = "TestPassw0rd!12345";
+import { test, expect, withWorkerSuffix } from "../helpers/test-member";
 
 // 既存シードデータには要相談商品（is_negotiable: true）が1件も存在しないため、
 // テスト専用のブランド・商品を固定の明示的なIDで作成する。
 // delete(id)は指定したIDの行のみを削除する操作のため、既存データに影響しない
 // （tests/integration/sanity-products.test.tsで確立したパターンを踏襲）
-const TEST_BRAND_ID = withSlotSuffix("test-invoice-brand-003");
+const TEST_BRAND_ID = withWorkerSuffix("test-invoice-brand-003");
 // ブランド名はURLパスのslugとしてもそのまま使われ、/shop/[brand]は名前で商品を
 // 引き当てる（IDでは絞り込まない）ため、IDだけでなく名前自体も一意化しないと
 // 他のCI実行が作った同名ブランドの商品と混ざって表示されてしまう
-const TEST_BRAND_NAME = withSlotSuffix("TestInvoiceBrand");
-const TEST_PRODUCT_ID = withSlotSuffix("test-invoice-product-003");
+const TEST_BRAND_NAME = withWorkerSuffix("TestInvoiceBrand");
+const TEST_PRODUCT_ID = withWorkerSuffix("test-invoice-product-003");
 const TEST_PRODUCT_NAME = "テスト要相談商品";
 
 function sanityWriteClient() {
@@ -39,15 +30,6 @@ function supabaseAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-async function getTestUserId(): Promise<string> {
-  const { data } = await supabaseAdmin()
-    .from("users")
-    .select("id")
-    .eq("email", TEST_EMAIL)
-    .single();
-  return data!.id;
 }
 
 test.describe("要相談商品の見積依頼フロー", () => {
@@ -77,16 +59,10 @@ test.describe("要相談商品の見積依頼フロー", () => {
     await client.delete(TEST_BRAND_ID);
   });
 
-  test.afterEach(async ({ page }) => {
-    await page.goto("/");
-    await cleanupTestUser(TEST_EMAIL);
-  });
-
   test("要相談商品をカートに追加して注文確定すると、Stripeへ遷移せず確認完了画面へ遷移する", async ({
     page,
+    member,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
-
     await page.goto("/shop");
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.getByRole("link", { name: new RegExp(TEST_BRAND_NAME) }).click();
@@ -103,7 +79,7 @@ test.describe("要相談商品の見積依頼フロー", () => {
 
     await page.getByRole("button", { name: "カートに追加" }).click();
 
-    const userId = await getTestUserId();
+    const { userId } = member;
     await supabaseAdmin()
       .from("addresses")
       .insert([
