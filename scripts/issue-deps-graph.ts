@@ -17,8 +17,9 @@ import {
  * 使い方:
  *   task deps:graph           HTMLを生成してブラウザで開く（ノードをクリックするとissueへ飛ぶ）
  *   task deps:graph -- --json ノード・エッジ・ステータスをJSONで標準出力に出す（AI・スクリプト向け）
+ *   pnpm tsx scripts/issue-deps-graph.ts --out=<path>  指定したパスにHTMLを書き出す（ブラウザは開かない。GitHub Pagesへのデプロイ用）
  *
- * 前提: gh CLIでログイン済みであること
+ * 前提: gh CLIでログイン済み（CIではGH_TOKENを設定）であること
  */
 
 const REPO_OWNER = "wknd-studio";
@@ -157,10 +158,15 @@ function main() {
   const generatedAt = new Date().toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo",
   });
-  const outPath = path.join(os.tmpdir(), "brand-closed-ec-issue-deps.html");
+  const outArg = process.argv
+    .find((a) => a.startsWith("--out="))
+    ?.slice("--out=".length);
+  const outPath =
+    outArg ?? path.join(os.tmpdir(), "brand-closed-ec-issue-deps.html");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, renderHtml(graph, generatedAt));
   console.log(outPath);
-  if (process.platform === "darwin") {
+  if (!outArg && process.platform === "darwin") {
     execFileSync("open", [outPath]);
   }
 }
