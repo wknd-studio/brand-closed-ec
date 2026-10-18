@@ -46,12 +46,13 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
   async findActiveByUserId(
     userId: string
   ): Promise<SubscriptionSnapshot | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("subscriptions")
       .select(SELECT_FIELDS)
       .eq("user_id", userId)
       .neq("status", "canceled")
       .maybeSingle();
+    if (error) throw error;
     return data ? toSnapshot(data as SubscriptionRow) : null;
   }
 
@@ -72,13 +73,18 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
     };
 
     if (existing) {
-      await this.db.from("subscriptions").update(payload).eq("id", existing.id);
+      const { error } = await this.db
+        .from("subscriptions")
+        .update(payload)
+        .eq("id", existing.id);
+      if (error) throw error;
       return;
     }
 
-    await this.db.from("subscriptions").insert({
+    const { error } = await this.db.from("subscriptions").insert({
       ...payload,
       user_id: input.userId,
     });
+    if (error) throw error;
   }
 }

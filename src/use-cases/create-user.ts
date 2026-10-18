@@ -32,5 +32,6 @@ export async function createUser(
     stripeCustomerId: null,
   });
 
-  await deps.userRepo.save(user);
+  // 再送時やselectPlanが先に行を作っていた場合は、既存行を初期値で上書きしない
+  await deps.userRepo.insertIfAbsent(user);
 }
