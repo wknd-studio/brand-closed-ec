@@ -152,10 +152,12 @@ describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC�
     expect(rankChanges).toHaveLength(0);
   });
 
-  it("途中（ランク変更の記録）で失敗したらusers・subscriptionsも含めて何も残らない", async () => {
+  it("member_ranksに無いランクで失敗したら、usersの更新も含めて何も残らない", async () => {
     await insertUser();
 
-    // member_ranksに無いランクはrank_code・rank_changesのFKで失敗する
+    // subscriptions.rank_codeのFK（即時チェック）で失敗する。subscriptionsの作成後に
+    // ランク変更の記録だけを失敗させる手段はテストから取れないため、そこでの
+    // ロールバックは関数1回の呼び出しが1トランザクションであることに依る
     await expect(
       repo.confirm(
         makeInput({
