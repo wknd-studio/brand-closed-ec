@@ -3,19 +3,33 @@ import type { Database, Json } from "@/types/database.types";
 import type {
   StripeWebhookEventRepository,
   StripeWebhookEventClaimInput,
+  StripeWebhookEventClaimResult,
 } from "@/repositories/stripe-webhook-event-repository";
 
 export class SupabaseStripeWebhookEventRepository implements StripeWebhookEventRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
-  async claim(input: StripeWebhookEventClaimInput): Promise<boolean> {
+  async claim(
+    input: StripeWebhookEventClaimInput
+  ): Promise<StripeWebhookEventClaimResult> {
     const { data, error } = await this.db.rpc("claim_stripe_webhook_event", {
       p_event_id: input.eventId,
       p_type: input.type,
       p_payload: input.payload as Json,
     });
     if (error) throw error;
-    return data === true;
+    if (data === true) return "claimed";
+
+    // 確保できなかったときは状態を読んで処理済みか処理中かを区別する（issue #424）。
+    // RPCの後に元の処理がfailedになった場合も、再送させれば次でclaimできるため
+    // processed以外はすべてprocessingとして扱う
+    const { data: row, error: selectError } = await this.db
+      .from("stripe_webhook_events")
+      .select("status")
+      .eq("event_id", input.eventId)
+      .maybeSingle();
+    if (selectError) throw selectError;
+    return row?.status === "processed" ? "processed" : "processing";
   }
 
   async markProcessed(eventId: string): Promise<void> {

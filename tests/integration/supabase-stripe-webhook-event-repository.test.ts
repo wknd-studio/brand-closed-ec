@@ -30,7 +30,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "checkout.session.completed",
       payload: { id: TEST_EVENT_ID },
     });
-    expect(claimed).toBe(true);
+    expect(claimed).toBe("claimed");
 
     const { data } = await supabase
       .from("stripe_webhook_events")
@@ -41,7 +41,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
     expect(data?.type).toBe("checkout.session.completed");
   });
 
-  it("処理中/処理済みイベントの再送はclaimでfalseを返す（二重処理防止）", async () => {
+  it("処理中のイベントの再送はclaimでprocessing、処理済みの再送はprocessedを返す（二重処理防止・issue #424）", async () => {
     await repo.claim({
       eventId: TEST_EVENT_ID,
       type: "checkout.session.completed",
@@ -53,7 +53,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "checkout.session.completed",
       payload: {},
     });
-    expect(claimedAgainWhileProcessing).toBe(false);
+    expect(claimedAgainWhileProcessing).toBe("processing");
 
     await repo.markProcessed(TEST_EVENT_ID);
 
@@ -62,7 +62,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "checkout.session.completed",
       payload: {},
     });
-    expect(claimedAgainAfterProcessed).toBe(false);
+    expect(claimedAgainAfterProcessed).toBe("processed");
   });
 
   it("markProcessedでstatus/processed_atが更新される", async () => {
@@ -82,7 +82,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
     expect(data?.processed_at).not.toBeNull();
   });
 
-  it("failedで終わったイベントは次の再送でclaimがtrueを返し再処理できる（issue #221コメント対応）", async () => {
+  it("failedで終わったイベントは次の再送でclaimがclaimedを返し再処理できる（issue #221コメント対応）", async () => {
     await repo.claim({
       eventId: TEST_EVENT_ID,
       type: "invoice.paid",
@@ -103,7 +103,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "invoice.paid",
       payload: {},
     });
-    expect(reclaimed).toBe(true);
+    expect(reclaimed).toBe("claimed");
 
     const { data: reclaimedRow } = await supabase
       .from("stripe_webhook_events")
@@ -125,7 +125,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
     if (error) throw error;
   }
 
-  it("processingのまま10分以上たったイベントは次の再送でclaimがtrueを返し再処理できる（issue #409）", async () => {
+  it("processingのまま10分以上たったイベントは次の再送でclaimがclaimedを返し再処理できる（issue #409）", async () => {
     await repo.claim({
       eventId: TEST_EVENT_ID,
       type: "checkout.session.completed",
@@ -138,7 +138,7 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "checkout.session.completed",
       payload: {},
     });
-    expect(reclaimed).toBe(true);
+    expect(reclaimed).toBe("claimed");
 
     const { data } = await supabase
       .from("stripe_webhook_events")
@@ -156,10 +156,10 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "checkout.session.completed",
       payload: {},
     });
-    expect(claimedAgain).toBe(false);
+    expect(claimedAgain).toBe("processing");
   });
 
-  it("processingになってから10分未満のイベントの再送は引き続きclaimでfalseを返す（issue #409）", async () => {
+  it("processingになってから10分未満のイベントの再送は引き続きclaimでprocessingを返す（issue #409）", async () => {
     await repo.claim({
       eventId: TEST_EVENT_ID,
       type: "invoice.paid",
@@ -172,10 +172,10 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "invoice.paid",
       payload: {},
     });
-    expect(claimed).toBe(false);
+    expect(claimed).toBe("processing");
   });
 
-  it("processedのイベントは10分以上たっても再送でclaimがfalseを返す（issue #409）", async () => {
+  it("processedのイベントは10分以上たっても再送でclaimがprocessedを返す（issue #409）", async () => {
     await repo.claim({
       eventId: TEST_EVENT_ID,
       type: "invoice.paid",
@@ -189,6 +189,6 @@ describe("SupabaseStripeWebhookEventRepository", () => {
       type: "invoice.paid",
       payload: {},
     });
-    expect(claimed).toBe(false);
+    expect(claimed).toBe("processed");
   });
 });

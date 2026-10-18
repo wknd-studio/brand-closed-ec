@@ -42,7 +42,10 @@ async function cleanup() {
   await supabase
     .from("stripe_webhook_events")
     .delete()
-    .eq("event_id", "evt_test_stripe_invoice_webhook");
+    .in("event_id", [
+      "evt_test_stripe_invoice_webhook",
+      "evt_test_stripe_invoice_webhook_processing",
+    ]);
 }
 
 function makeDeps() {
@@ -252,5 +255,51 @@ describe("Stripe請求書決済確定Webhook（実DB・署名検証込み）", (
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ received: true, skipped: true });
+  });
+
+  it("処理中（processing）のイベントの再送は409を返し、Stripeに後で再送させる（issue #424）", async () => {
+    const eventId = "evt_test_stripe_invoice_webhook_processing";
+    // 別のリクエストが処理中の状態を作る（claim直後・10分以内）
+    const { error } = await supabase.from("stripe_webhook_events").insert({
+      event_id: eventId,
+      type: "invoice.paid",
+      payload: {},
+      status: "processing",
+    });
+    if (error) throw error;
+
+    const secret = process.env.STRIPE_WEBHOOK_SECRET!;
+    const payload = JSON.stringify({
+      id: eventId,
+      object: "event",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: TEST_INVOICE_ID,
+          object: "invoice",
+        },
+      },
+    });
+    const signature = getStripe().webhooks.generateTestHeaderString({
+      payload,
+      secret,
+    });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: { "stripe-signature": signature },
+        body: payload,
+      })
+    );
+
+    expect(response.status).toBe(409);
+
+    const { data: webhookEvent } = await supabase
+      .from("stripe_webhook_events")
+      .select("status")
+      .eq("event_id", eventId)
+      .single();
+    expect(webhookEvent?.status).toBe("processing");
   });
 });

@@ -483,7 +483,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 | `received_at`  | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                               | Webhookの受信遅延を監視するため                                                                                                      |
 | `processed_at` | TIMESTAMPTZ | NULL可                                                                               | 受信から処理完了までのリードタイムを計測し、性能劣化を検知するため                                                                   |
 
-**処理パターン**: `INSERT ... ON CONFLICT (event_id) DO NOTHING RETURNING event_id`。行が返らなければ「処理済みまたは処理中」と判定してその場でスキップする。処理完了後に`status`/`processed_at`をUPDATE。既存の各use case（`markCheckoutOrderAsPaid`等）の冪等性実装に加えて、DB層でも二重処理を機械的に防ぐ。
+**処理パターン**: `claim_stripe_webhook_event`（`INSERT ... ON CONFLICT (event_id) DO UPDATE ... WHERE`）で先着1件だけを`processing`として確保する。前回`failed`のイベントと、`processing`のまま10分以上たったイベント（処理が途中で落ちたもの、issue #409）は再クレームできる。確保できなければ状態を読み、処理済み（`processed`）なら200でスキップし、処理中なら409を返してStripeに後で再送させる（2xxを返すとStripeは再送をやめ、元の処理が落ちたときに回復できないため。issue #424）。処理完了後に`status`/`processed_at`をUPDATE。既存の各use case（`markCheckoutOrderAsPaid`等）の冪等性実装に加えて、DB層でも二重処理を機械的に防ぐ。
 
 ---
 
