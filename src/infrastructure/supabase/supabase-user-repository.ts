@@ -52,11 +52,15 @@ export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findByClerkUserId(clerkUserId: string): Promise<User | null> {
+    // clerk_user_id の一意制約は deleted_at IS NULL の部分インデックスのため、退会済み行と
+    // 有効な行が併存しうる。有効な行を優先し、無ければ退会済み行を返す
     const { data } = await this.db
       .from("users")
       .select(SELECT_FIELDS)
       .eq("clerk_user_id", clerkUserId)
-      .single();
+      .order("deleted_at", { ascending: false, nullsFirst: true })
+      .limit(1)
+      .maybeSingle();
     return data ? toUser(data as UserRow) : null;
   }
 
