@@ -26,9 +26,18 @@ vi.mock("@/lib/stripe", () => ({
   },
 }));
 
+vi.mock("@/lib/supabase/server-admin", () => ({
+  createAdminClient: vi.fn(() => ({})),
+}));
+
+vi.mock("@/use-cases/resolve-onboarding-checkout", () => ({
+  resolveOnboardingCheckout: vi.fn(),
+}));
+
 import * as Sentry from "@sentry/nextjs";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { resolveOnboardingCheckout } from "@/use-cases/resolve-onboarding-checkout";
 import OnboardingPaymentPage from "@/app/onboarding/payment/page";
 
 describe("OnboardingPaymentPage - Sentry例外送信", () => {
@@ -38,15 +47,17 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
     vi.mocked(currentUser).mockResolvedValue({
       emailAddresses: [{ emailAddress: "test@example.com" }],
     } as never);
+    vi.mocked(resolveOnboardingCheckout).mockResolvedValue({
+      userId: "user-1",
+      rank: "starter",
+    });
   });
 
   it("Checkout Session作成失敗時にSentry.captureExceptionを呼ぶ", async () => {
     const error = new Error("Stripe API エラー");
     createCheckoutSessionMock.mockRejectedValue(error);
 
-    await OnboardingPaymentPage({
-      searchParams: Promise.resolve({ plan: "starter" }),
-    });
+    await OnboardingPaymentPage();
 
     expect(Sentry.captureException).toHaveBeenCalledWith(
       error,
@@ -60,11 +71,9 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
     const error = new Error("ClerkAPIResponseError: Not Found");
     vi.mocked(currentUser).mockRejectedValue(error);
 
-    await expect(
-      OnboardingPaymentPage({
-        searchParams: Promise.resolve({ plan: "starter" }),
-      })
-    ).rejects.toThrow("NEXT_REDIRECT:/sign-in");
+    await expect(OnboardingPaymentPage()).rejects.toThrow(
+      "NEXT_REDIRECT:/sign-in"
+    );
 
     expect(Sentry.captureException).toHaveBeenCalledWith(
       error,
@@ -76,19 +85,36 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
-  it("Checkout Session作成にuserId・planベースのidempotencyKeyを付与する", async () => {
+  it("登録内容が揃っていない場合、Checkout Sessionを作らずに戻り先へリダイレクトする", async () => {
+    vi.mocked(resolveOnboardingCheckout).mockResolvedValue({
+      redirectTo: "/onboarding/account-type",
+    });
+
+    await expect(OnboardingPaymentPage()).rejects.toThrow(
+      "NEXT_REDIRECT:/onboarding/account-type"
+    );
+
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("Checkout Session作成にusersの行・ランクベースのidempotencyKeyを付与し、価格・metadataをDBのランクから決める", async () => {
     createCheckoutSessionMock.mockResolvedValue({
       url: "https://checkout.stripe.com/cs_1",
     });
 
-    await expect(
-      OnboardingPaymentPage({
-        searchParams: Promise.resolve({ plan: "starter" }),
-      })
-    ).rejects.toThrow("NEXT_REDIRECT:https://checkout.stripe.com/cs_1");
+    await expect(OnboardingPaymentPage()).rejects.toThrow(
+      "NEXT_REDIRECT:https://checkout.stripe.com/cs_1"
+    );
 
-    expect(createCheckoutSessionMock).toHaveBeenCalledWith(expect.any(Object), {
-      idempotencyKey: "onboarding-checkout-session-clerk-1-starter",
-    });
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [
+          { price: "price_monthly", quantity: 1 },
+          { price: "price_initial", quantity: 1 },
+        ],
+        metadata: { clerk_user_id: "clerk-1", plan: "starter" },
+      }),
+      { idempotencyKey: "onboarding-checkout-session-user-1-starter" }
+    );
   });
 });
