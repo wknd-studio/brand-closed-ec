@@ -87,17 +87,11 @@ export async function createTestInvitation(emailAddress: string) {
 }
 
 /**
- * 招待受諾→パスワード設定までの、実際の画面操作を伴う新規会員登録フロー
- * （`registration.spec.ts`等で重複していた処理を共通化）。
- * 利用規約・プライバシーポリシーへの同意はClerk標準のLegal Consent機能
- * （サインアップフォーム内のチェックボックス）で行う。
- * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/account-type）の状態になる
- * （next.config.tsのNEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URLで指定）。
+ * 招待URLを開く前の準備。setupClerkTestingTokenに加え、招待URLの受諾リクエストを
+ * 横取りせず素通しする（理由は下記）。
  */
-export async function signUpViaInvitation(
-  page: Page,
-  emailAddress: string,
-  password: string
+export async function setupClerkTestingTokenForInvitation(
+  page: Page
 ): Promise<void> {
   await setupClerkTestingToken({ page });
   // setupClerkTestingTokenはFAPI（/v1/*）への全リクエストを横取りし、レスポンスを
@@ -115,6 +109,22 @@ export async function signUpViaInvitation(
     }
     await route.continue({ url: url.toString() });
   });
+}
+
+/**
+ * 招待受諾→パスワード設定までの、実際の画面操作を伴う新規会員登録フロー
+ * （`registration.spec.ts`等で重複していた処理を共通化）。
+ * 利用規約・プライバシーポリシーへの同意はClerk標準のLegal Consent機能
+ * （サインアップフォーム内のチェックボックス）で行う。
+ * 完了時点でサインイン済み・オンボーディング未完了（/onboarding/account-type）の状態になる
+ * （next.config.tsのNEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URLで指定）。
+ */
+export async function signUpViaInvitation(
+  page: Page,
+  emailAddress: string,
+  password: string
+): Promise<void> {
+  await setupClerkTestingTokenForInvitation(page);
 
   const invitationUrl = await createTestInvitation(emailAddress);
   await page.goto(invitationUrl);
