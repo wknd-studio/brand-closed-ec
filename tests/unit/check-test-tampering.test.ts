@@ -135,7 +135,7 @@ describe("judge_test_tampering", () => {
     expect(output).toContain("file=tests/unit/money.test.ts,line=10");
   });
 
-  it("skip等を削除する変更や、テスト以外のファイルでの .skip( は検出しない", () => {
+  it("skip等を削除する変更や、テスト以外のファイルでの skip 呼び出しは検出しない", () => {
     expect(
       judge(
         modified("tests/unit/money.test.ts", [
