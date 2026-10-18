@@ -2,59 +2,33 @@ name: Migration Order
 
 # developの最新より古いタイムスタンプのマイグレーションを追加したPRを失敗させる（#318）。
 # stg・prodの `supabase db push --linked` は適用済みの最新より古いファイルを拒否するため、
-# マージ順とタイムスタンプ順のずれをPRの段階で止める
+# マージ順とタイムスタンプ順のずれをマージ前に止める
 on:
   # 必須チェックに登録するため、マイグレーションを変更しないPRでも常に実行する
   # （変更が無ければスクリプトが即成功する）
   pull_request:
     branches: [develop]
-  # チェック通過後に別のPRがより新しいマイグレーションをdevelopへマージした場合の取りこぼしを塞ぐ
-  push:
-    branches: [develop]
-    paths: ["supabase/migrations/**"]
+  # merge queue（#329）。PRのチェック後に別のPRがより新しいマイグレーションをマージしていても、
+  # キューの一時ブランチ（最新のdevelop＋前に並んだPR＋このPR）で比べ直すため取りこぼさない
+  merge_group:
+    types: [checks_requested]
 
 jobs:
   migration-order:
     name: Migration Order
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - name: Check migration timestamps against the latest on base branch
-        # 再実行（下のrecheckジョブ）でも最新のベースと比較するよう、毎回fetchし直す
+        if: github.event_name == 'pull_request'
         run: |
           git fetch --no-tags origin "${{ github.base_ref }}"
           bash scripts/ci/check-migration-order.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
-
-  recheck-open-prs:
-    name: Recheck open PRs
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    permissions:
-      actions: write
-      contents: read
-      pull-requests: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-      - name: Re-run Migration Order on open PRs that change migrations
-        # developのブランチ保護はstrict（最新化の要求）がオフのため、各PRの最新の
-        # Migration Orderの実行を再実行し、新しいdevelopと比較し直した結果で上書きする
+      - name: Check migration timestamps in merge queue order
+        if: github.event_name == 'merge_group'
         run: |
-          gh pr list --base develop --state open --limit 100 \
-            --json number,headRefOid,files \
-            --jq '.[] | select(any(.files[]; .path | startswith("supabase/migrations/"))) | "\(.number) \(.headRefOid)"' |
-          while read -r number sha; do
-            run_id="$(gh run list --workflow migration-order.yml --event pull_request --commit "$sha" \
-              --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-            if [[ -z "$run_id" ]]; then
-              echo "::warning::PR #${number}: Migration Orderの実行が見つかりません（${sha}）"
-              continue
-            fi
-            echo "PR #${number}: run ${run_id} を再実行します"
-            gh run rerun "$run_id" || echo "::warning::PR #${number}: run ${run_id} を再実行できませんでした（実行中の可能性）"
-          done
+          bash scripts/ci/check-migration-order.sh --merge-group \
+            "${{ github.event.merge_group.base_sha }}" "${{ github.event.merge_group.head_sha }}"

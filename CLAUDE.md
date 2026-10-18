@@ -53,6 +53,11 @@ feature/* →  Cloudflare Pages Preview URL
 - `feature/*` から `main` への直接 PR・マージ（絶対禁止）
 - `main` への直接 push（絶対禁止）
 
+**develop の merge queue**: develop 宛てのPRは「Merge when ready」でmerge queueに入れてマージする（マージ方式はMerge commit）。キューは「最新のdevelop＋前に並んだPR＋このPR」の一時ブランチで必須チェックを全部走らせ、通ったものだけをマージする。そのため「Update branch」は不要。必須チェックを出すワークフローには `merge_group` トリガーを必ず入れる（1つでも出ないとキューが進まない）。
+
+- **バイパスしない**: 管理者を含め、キューを飛ばして直接マージしない。キューで E2E が落ちたら、まず flaky でないかを確認し、flaky なら直してから入れ直す
+- hotfix は main 宛てなのでキューの影響を受けない。hotfix の develop へのバックマージもキュー経由で行う
+
 詳細は `requirements.md` の「4. Gitブランチ戦略」を参照。
 
 ---

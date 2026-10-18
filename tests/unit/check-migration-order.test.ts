@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const SCRIPT = path.resolve(
@@ -70,5 +72,91 @@ describe("judge_migration_order", () => {
     expect(
       judge([], ["supabase/migrations/20260101000000_init.sql"]).status
     ).toBe(0);
+  });
+});
+
+// merge queue の一時ブランチを模した git リポジトリを作り、キューのモードで実行する
+describe("check-migration-order.sh --merge-group", () => {
+  let repo: string;
+
+  function git(...args: string[]) {
+    const r = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    if (r.status !== 0) throw new Error(r.stderr);
+    return r.stdout.trim();
+  }
+
+  function commitMigration(name: string) {
+    mkdirSync(path.join(repo, "supabase/migrations"), { recursive: true });
+    writeFileSync(path.join(repo, "supabase/migrations", name), "select 1;\n");
+    git("add", ".");
+    git("commit", "-q", "-m", name);
+  }
+
+  // develop（またはキューの1つ前）の上に、PRのブランチを --no-ff でマージする
+  function queuePr(branch: string, migration: string) {
+    const base = git("rev-parse", "HEAD");
+    git("switch", "-q", "-c", branch, "develop");
+    commitMigration(migration);
+    git("switch", "-q", "--detach", base);
+    git("merge", "-q", "--no-ff", "-m", `merge ${branch}`, branch);
+    return git("rev-parse", "HEAD");
+  }
+
+  function run(baseSha: string, headSha: string) {
+    const r = spawnSync("bash", [SCRIPT, "--merge-group", baseSha, headSha], {
+      cwd: repo,
+      encoding: "utf8",
+    });
+    return { status: r.status, output: r.stdout + r.stderr };
+  }
+
+  beforeEach(() => {
+    repo = mkdtempSync(path.join(tmpdir(), "migration-order-"));
+    git("init", "-q", "-b", "develop");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "test");
+    commitMigration("20260922050100_base.sql");
+  });
+
+  afterEach(() => {
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it("キューの先頭のPRがdevelopの最新より新しければ成功する", () => {
+    const base = git("rev-parse", "develop");
+    const head = queuePr("pr-a", "20260922050101_a.sql");
+    expect(run(base, head).status).toBe(0);
+  });
+
+  it("キューの先頭のPRがdevelopの最新より古ければ失敗する", () => {
+    const base = git("rev-parse", "develop");
+    const head = queuePr("pr-a", "20260922040000_a.sql");
+    const { status, output } = run(base, head);
+    expect(status).toBe(1);
+    expect(output).toContain("20260922040000_a.sql");
+  });
+
+  it("キューで前に並んだPRのマイグレーションより古ければ失敗する", () => {
+    const base = git("rev-parse", "develop");
+    git("switch", "-q", "--detach", base);
+    queuePr("pr-a", "20260923000000_a.sql");
+    const head = queuePr("pr-b", "20260922060000_b.sql");
+    const { status, output } = run(base, head);
+    expect(status).toBe(1);
+    expect(output).toContain("20260922060000_b.sql");
+    expect(output).toContain("20260923000000");
+  });
+
+  it("キューの各PRが順にタイムスタンプが新しければ成功する", () => {
+    const base = git("rev-parse", "develop");
+    git("switch", "-q", "--detach", base);
+    queuePr("pr-a", "20260923000000_a.sql");
+    const head = queuePr("pr-b", "20260924000000_b.sql");
+    expect(run(base, head).status).toBe(0);
+  });
+
+  it("存在しないSHAを渡されたら、チェック不要として素通りさせず失敗する", () => {
+    const head = git("rev-parse", "develop");
+    expect(run("0".repeat(40), head).status).not.toBe(0);
   });
 });

@@ -5,12 +5,17 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # developのmerge queue（#329）。キューの一時ブランチ（最新のdevelop＋前に並んだPR＋このPR）で
+  # 必須チェックを走らせる。必須チェックのジョブが1つでもここで出ないとキューが進まないため、
+  # PR用のジョブはすべてpull_requestとmerge_groupの両方で動かす
+  merge_group:
+    types: [checks_requested]
 
 jobs:
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     permissions:
       contents: read
       pull-requests: read
@@ -18,9 +23,15 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
     steps:
       - uses: actions/checkout@v4
+        # merge_groupではAPIでなくgitの差分で判定するため、ベースのコミットまで取得する
+        with: { fetch-depth: 0 }
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # pull_requestではどちらも無視され、PRの変更ファイル（API）で判定する。
+          # merge_groupではキューのベース（developの最新）からの差分で判定する
+          base: ${{ github.event.merge_group.base_sha }}
+          ref: ${{ github.event.merge_group.head_sha }}
           # docs/・specs/・*.mdのみの変更（仕様駆動開発のドキュメントPR等）ではE2Eを走らせない
           filters: |
             code:
@@ -29,7 +40,7 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -41,7 +52,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -54,7 +65,7 @@ jobs:
   schema-types-drift:
     name: Schema Types Drift
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -88,7 +99,7 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -100,7 +111,7 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     environment: staging
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +148,7 @@ jobs:
     name: Build (Cloudflare)
     runs-on: ubuntu-latest
     needs: [changes]
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    if: (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.changes.outputs.code == 'true'
     environment: staging
     steps:
       - uses: actions/checkout@v4
@@ -149,8 +160,8 @@ jobs:
       - name: Build
         # tsc --noEmitでは検出できないServer/Client Componentの境界誤り・Workers
         # ランタイム非対応のNode API・ビルド時のページ生成エラー等を、developマージ後の
-        # deploy-stgで初めて落ちる前にPR段階で止める。e2e-prでもビルドは走るが、
-        # そちらはcontinue-on-errorのためマージをブロックできない。
+        # deploy-stgで初めて落ちる前にPR段階で止める。e2e-prのwebServerでも同じビルドは
+        # 走るが、ビルドの失敗をE2Eの失敗と区別して示すため、独立した必須チェックにしている。
         # NEXT_PUBLIC_*はビルド時にバンドルへ埋め込まれるため、deploy-stgと同じく
         # staging Doppler環境から渡す
         run: doppler run -- pnpm build:cloudflare
@@ -161,7 +172,7 @@ jobs:
     name: E2E Tests (PR)
     runs-on: ubuntu-latest
     needs: [changes]
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    if: (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.changes.outputs.code == 'true'
     environment: staging
     steps:
       - uses: actions/checkout@v4
