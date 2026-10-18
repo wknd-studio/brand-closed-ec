@@ -73,6 +73,6 @@ export async function selectPlan(
   await accountGateway.updateOnboardingMetadata(input.clerkUserId, false);
 
   return {
-    redirectTo: `/onboarding/payment?plan=${input.plan}`,
+    redirectTo: "/onboarding/payment",
   };
 }

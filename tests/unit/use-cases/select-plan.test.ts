@@ -23,7 +23,7 @@ describe("selectPlan", () => {
       { userRepo, accountGateway }
     );
 
-    expect(result).toEqual({ redirectTo: "/onboarding/payment?plan=starter" });
+    expect(result).toEqual({ redirectTo: "/onboarding/payment" });
     const saved = vi.mocked(userRepo.save).mock.calls[0][0];
     expect(saved.rank.value).toBe("starter");
     expect(saved.onboardingCompleted).toBe(false);
