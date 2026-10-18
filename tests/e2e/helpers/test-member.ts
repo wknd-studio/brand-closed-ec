@@ -3,7 +3,11 @@ import { clerk } from "@clerk/testing/playwright";
 import { test as base, type BrowserContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { slotEmail, withSlotSuffix } from "./clerk-test-invitation";
+import {
+  cleanupTestUser,
+  slotEmail,
+  withSlotSuffix,
+} from "./clerk-test-invitation";
 
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
@@ -30,9 +34,7 @@ export function withWorkerSuffix(base: string): string {
 }
 
 /**
- * Clerk上のテスト会員を用意する。既に存在すれば再利用し、毎回の削除・再作成はしない
- * （Backend APIの呼び出し回数をテスト数に比例させず、共有開発インスタンスの
- * レート制限に当たらないようにするため）
+ * Clerk上のテスト会員を用意する。前回の実行が中断され削除されずに残っていれば再利用する
  */
 async function ensureClerkUser(email: string): Promise<string> {
   const clerkApi = await clerkClient();
@@ -108,7 +110,7 @@ async function ensureOnboardedMember(
 
 /**
  * テスト中に作成された注文・住所・カート等を削除する。会員（Clerkユーザー・users行）
- * 自体は次のテストで使い回すため削除しない
+ * 自体は同じワーカーの次のテストで使い回すため削除しない
  */
 async function cleanupMemberData(userId: string): Promise<void> {
   const supabase = supabaseAdmin();
@@ -148,6 +150,9 @@ async function cleanupMemberData(userId: string): Promise<void> {
  * 会員をワーカーごとに分けるのは、テストがカート・注文などサーバー側の状態を
  * 書き換えるため（Playwright公式の「one account per parallel worker」パターン）。
  * Clerk Backend APIの呼び出しはワーカー数に比例し、テスト数には比例しない。
+ *
+ * ワーカー終了時に会員をClerk・DBから削除する。CIではメールアドレスにGITHUB_RUN_IDが
+ * 付き実行ごとに別の会員になるため、削除しないとClerk上にテスト会員が溜まり続ける
  */
 // fixtureの第2引数は慣例では`use`だが、React Hooksのlintルールがフックと誤認するため別名にする
 export const test = base.extend<
@@ -173,6 +178,11 @@ export const test = base.extend<
       await context.close();
 
       await provide({ email, userId, storageState });
+      // worker scopeの後片付けが例外を投げると、全テストが成功していても実行全体が
+      // 失敗扱いになる。会員が残っても次の実行で再利用されるだけなのでベストエフォートにする
+      await cleanupTestUser(email).catch((error) => {
+        console.warn(`テスト会員の削除に失敗しました: ${email}`, error);
+      });
     },
     { scope: "worker" },
   ],
