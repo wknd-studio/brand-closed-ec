@@ -206,6 +206,10 @@ test.describe.serial("法人として登録", () => {
     await expect(
       page.getByText(/適格請求書発行事業者登録番号の形式が正しくありません/)
     ).toBeVisible();
+    await expect(page.getByLabel("会社名")).toHaveValue("株式会社テスト");
+    await expect(page.getByLabel("適格請求書発行事業者登録番号")).toHaveValue(
+      "T123"
+    );
   });
 
   test("法人情報を入力して STARTER を選ぶと corporate として保存される", async () => {
