@@ -178,7 +178,11 @@ export const test = base.extend<
       await context.close();
 
       await provide({ email, userId, storageState });
-      await cleanupTestUser(email);
+      // worker scopeの後片付けが例外を投げると、全テストが成功していても実行全体が
+      // 失敗扱いになる。会員が残っても次の実行で再利用されるだけなのでベストエフォートにする
+      await cleanupTestUser(email).catch((error) => {
+        console.warn(`テスト会員の削除に失敗しました: ${email}`, error);
+      });
     },
     { scope: "worker" },
   ],
