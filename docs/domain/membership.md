@@ -24,7 +24,7 @@
 
 | 用語                                                         | 定義                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Waitlist**                                                 | Clerkの`Waitlist` signup mode。ユーザーが`/waitlist`でメールアドレスを送信すると`pending`状態の`waitlistEntry`が作成され、管理者の承認（`invite()`）で招待メールが送られる                                                                                                                                |
+| **Waitlist**                                                 | Clerkの`Waitlist` signup mode。ユーザーが`/waitlist`でメールアドレスを送信すると`pending`状態の`waitlistEntry`が作成され、管理者の承認（`invitations.createInvitation()`）で招待メールが送られる                                                                                                          |
 | **個人会員**                                                 | `users.member_type = 'individual'`の会員。**全てのユーザーがどちらか一方の`member_type`を持つ**（デフォルト）。個人としてのランク・月次上限を持つ                                                                                                                                                         |
 | **法人会員**                                                 | `users.member_type = 'corporate'`の会員。個人会員と同じ`users`テーブル1行で表現され、追加で`company_name`（会社名）・`invoice_registration_number`（適格請求書発行事業者登録番号）を持つ。1アカウント＝1担当者であり、複数メンバーで契約・月次上限を共有する仕組みは無い（Ver1の方針、GitHub issue #200） |
 | **代表者**                                                   | 法人としてアカウントを作成したユーザー本人。法人会員は個人会員と同じ1つの`users`行がそのまま契約主体になるため、「代表者」と「アカウント本人」は常に同一人物である                                                                                                                                        |
@@ -40,6 +40,8 @@
 
 - **登録には招待が必須**。招待なしでは登録できない（`archive/service-spec.md`「共通ルール」）。
 - **アクセス制限の方式はWaitlist**: ユーザーが`/waitlist`で参加希望を送信し、管理者が`/admin/waitlist`で承認した人のみ`/sign-up`以降のフローに進める。旧「管理者がメールアドレスを直接指定して招待する」方式（Restricted signup mode + `/admin/invitations`）は廃止済み（`docs/waitlist-migration-plan.md`、PR #144）。
+- **承認は`invitations.createInvitation()`で招待を発行する**: `waitlistEntries.invite()`は招待リンクの遷移先（`redirectUrl`）を指定できず、Clerkホスト型ページ（Account Portal、英語固定）を必ず経由するため使わない。`createInvitation()`に`NEXT_PUBLIC_APP_URL`起点の絶対URLの`/sign-up`を渡し、自社ドメインの登録画面に招待リンクを向ける。このため`waitlistEntry`の`status`は承認後も`pending`のままで、承認済みかどうかは同じメールアドレス宛の有効（`pending`/`accepted`）な招待があるかで判定する（`src/app/admin/waitlist/`）。
+- **却下すると未使用の招待も取り消す**（GitHub issue #408）: 承認後に却下した場合でも招待リンクから登録できないよう、却下時に同じメールアドレス宛の`pending`の招待を`revokeInvitation()`で取り消してから`waitlistEntries.reject()`を呼ぶ。取り消した招待のリンクは使えなくなる（Clerk仕様）。招待を使って登録済み（`accepted`）の人を後から却下しても、アカウントは残る（下記「まだ決まっていない・要確認事項」）。
 - **利用規約・プライバシーポリシーへの同意はClerk標準機能**（`compliance.legal_consent`）で必須化する。独自の同意ページは持たない。
 - **法人会員も個人と同じ1アカウント方式（2026-09-12方針転換、GitHub issue #200）**: 「個人/法人のどちらかを選ぶ」という択一の状態として`users.member_type`（`individual`/`corporate`）を持つ。個人と法人を両立させる（1ユーザーが個人契約と法人契約を両方持つ）モデルは採用しない。詳細は「個人と法人の関係」節。
 - **決済は個人・法人で共通**: どちらもStripe Checkoutで初期費用・月額費用を決済し、確定はStripe Webhook（`checkout.session.completed`）による非同期処理で行う（決済・ランクの詳細は[[subscription-billing]]）。
@@ -98,10 +100,10 @@
 
 ### まだ決まっていない・要確認事項
 
+- 🔲 **登録済みの人を後から却下した場合の扱い**: 却下で取り消すのは未使用（`pending`）の招待のみで、招待を使って登録済み（`accepted`）の人のアカウントには何もしない。停止・強制退会に連動させるかは未決定。
 - 🔲 **アフィリエイト特典の内容**: 招待した会員・招待された会員それぞれへの特典内容は未定。「誰が誰を招待したか」の記録（`invited_by_user_id`）は実装済みのため、特典ロジックは後から追加可能（`archive/service-spec.md`）。
 - 🔲 **付加機能（専任担当者サポート・優先対応・専用ライン・月次仕入れレポート・カスタムレポート）のランク別提供**: `glossary.md`に旧5ランクモデル時代の記述が残っているが、現行`service-spec.md`にはランクごとの付加機能の記載が無く、新7ランクモデルでどのランクに何が付くか（あるいは廃止されたか）が未確定。`SLA対応`（ENTERPRISE）のみ現行仕様でも有効と確認済み。
 - 🔲 **既存会員への氏名・電話番号の遡及対応**: 本番未リリースのため対象ユーザーがおらず、本リリースのスコープ外とされている（`specs/005-b2b-organization/spec.md` FR-020）。`users.profile_completed_at`は将来の遡及対応判定用に予約されているカラムだが、実装は未着手。
-- 🔲 **Waitlist招待メールのリンク遷移**: `waitlistEntries.invite()`は`createInvitation()`と異なり`redirectUrl`を指定できないため、招待リンクは必ずClerkホスト型ページ（Account Portal）を経由する。この制約によるE2Eテストのカバレッジ縮小（`docs/signup-flow.md`設計決定事項#13）は許容されているが、恒久対応（自社ドメインでのホスト型ページ運用等）は検討されていない。
 
 ## 他コンテキストとの関係
 

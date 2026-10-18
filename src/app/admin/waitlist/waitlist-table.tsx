@@ -33,7 +33,7 @@ export function WaitlistTable({ entries }: { entries: WaitlistEntryRow[] }) {
   function handleReject(id: string, emailAddress: string) {
     if (!confirm(`${emailAddress} の参加希望を却下しますか？`)) return;
     startTransition(async () => {
-      const result = await rejectWaitlistEntry(id);
+      const result = await rejectWaitlistEntry(id, emailAddress);
       if (result?.error) {
         showToast(`エラー: ${result.error}`);
       } else {
