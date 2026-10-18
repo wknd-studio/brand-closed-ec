@@ -6,6 +6,10 @@ import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import {
+  MissingRequiredProfileFieldsError,
+  type RequiredProfileField,
+} from "@/domain/errors/missing-required-profile-fields-error";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
 
@@ -49,31 +53,48 @@ export async function selectPlan(
     throw new OnboardingAlreadyCompletedError();
   }
 
-  const phoneNumber = PhoneNumber.of(input.phoneNumber);
   const isCorporate = input.companyName !== undefined;
+  const lastName = input.lastName.trim();
+  const firstName = input.firstName.trim();
+  const companyName = input.companyName?.trim();
+  const invoiceRegistrationNumberRaw =
+    input.invoiceRegistrationNumber?.trim() ?? "";
+
+  const missingFields: RequiredProfileField[] = [];
+  if (!lastName) missingFields.push("lastName");
+  if (!firstName) missingFields.push("firstName");
+  if (isCorporate && !companyName) missingFields.push("companyName");
+  if (isCorporate && !invoiceRegistrationNumberRaw) {
+    missingFields.push("invoiceRegistrationNumber");
+  }
+  if (missingFields.length > 0) {
+    throw new MissingRequiredProfileFieldsError(missingFields);
+  }
+
+  const phoneNumber = PhoneNumber.of(input.phoneNumber);
   const memberType = MemberType.of(isCorporate ? "corporate" : "individual");
-  const invoiceRegistrationNumber = input.invoiceRegistrationNumber
-    ? InvoiceRegistrationNumber.of(input.invoiceRegistrationNumber).value
+  const invoiceRegistrationNumber = isCorporate
+    ? InvoiceRegistrationNumber.of(invoiceRegistrationNumberRaw).value
     : null;
 
   const user = existing
     ? existing.with({
         email: input.email,
-        firstName: input.firstName,
-        lastName: input.lastName,
+        firstName,
+        lastName,
         phoneNumber: phoneNumber.value,
         rank: MemberRank.of(input.plan),
         onboardingCompleted: false,
         memberType,
-        companyName: input.companyName ?? null,
+        companyName: companyName ?? null,
         invoiceRegistrationNumber,
       })
     : User.of({
         id: crypto.randomUUID(),
         clerkUserId: input.clerkUserId,
         email: input.email,
-        firstName: input.firstName,
-        lastName: input.lastName,
+        firstName,
+        lastName,
         phoneNumber: phoneNumber.value,
         profileCompletedAt: null,
         rank: MemberRank.of(input.plan),
@@ -82,7 +103,7 @@ export async function selectPlan(
         deletedAt: null,
         stripeCustomerId: null,
         memberType,
-        companyName: input.companyName ?? null,
+        companyName: companyName ?? null,
         invoiceRegistrationNumber,
       });
 

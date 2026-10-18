@@ -112,6 +112,39 @@ test.describe.serial("認証済みアクセス", () => {
     await expect(page.getByLabel("適格請求書発行事業者登録番号")).toBeHidden();
   });
 
+  // React 19の<form action>は送信後に非制御入力をリセットするため、
+  // サーバーが返した入力値で再表示しないと、失敗のたびに入力が消える
+  test("電話番号の形式エラーのあとも、氏名とプランの選択が残っている", async () => {
+    await page.goto("/onboarding/plan?accountType=individual");
+    await page.getByLabel("姓", { exact: true }).fill("山田");
+    await page.getByLabel("名", { exact: true }).fill("太郎");
+    await page.getByLabel("電話番号").fill("12345");
+    await page.getByRole("radio", { name: /STANDARD/ }).check();
+    await page.getByRole("button", { name: /このプランで始める/ }).click();
+
+    await expect(
+      page.getByText("電話番号の形式が正しくありません")
+    ).toBeVisible();
+    await expect(page.getByLabel("姓", { exact: true })).toHaveValue("山田");
+    await expect(page.getByLabel("名", { exact: true })).toHaveValue("太郎");
+    await expect(page.getByLabel("電話番号")).toHaveValue("12345");
+    await expect(page.getByRole("radio", { name: /STANDARD/ })).toBeChecked();
+  });
+
+  // HTMLのrequiredは空白だけの入力を通すため、サーバー側で拒否する
+  test("姓・名が空白だけの場合は項目ごとのエラーが表示される", async () => {
+    await page.goto("/onboarding/plan?accountType=individual");
+    await page.getByLabel("姓", { exact: true }).fill("　");
+    await page.getByLabel("名", { exact: true }).fill(" ");
+    await page.getByLabel("電話番号").fill("09012345678");
+    await page.getByRole("radio", { name: /STARTER/ }).check();
+    await page.getByRole("button", { name: /このプランで始める/ }).click();
+
+    await expect(page.getByText("姓を入力してください")).toBeVisible();
+    await expect(page.getByText("名を入力してください")).toBeVisible();
+    await expect(page).toHaveURL(/\/onboarding\/plan/);
+  });
+
   test("STARTER プランを選択すると Stripe Checkout へリダイレクトされる", async () => {
     await page.goto("/onboarding/plan?accountType=individual");
     await page.locator('input[name="lastName"]').fill("山田");
