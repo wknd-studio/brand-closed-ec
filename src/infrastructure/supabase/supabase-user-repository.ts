@@ -112,12 +112,19 @@ export class SupabaseUserRepository implements UserRepository {
     if (!isActiveClerkUserIdConflict(error)) throw error;
 
     // user.created Webhookが先に別のidで行を作っていた場合は、その有効な行を更新する
-    const { error: updateError } = await this.db
+    const { data, error: updateError } = await this.db
       .from("users")
       .update(fields)
       .eq("clerk_user_id", user.clerkUserId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .select("id");
     if (updateError) throw updateError;
+    // 衝突相手がその間に退会した場合など、入力内容がどこにも保存されないまま成功扱いにしない
+    if (data.length === 0) {
+      throw new Error(
+        `users の保存に失敗しました（clerk_user_id=${user.clerkUserId} の有効な行が見つかりません）`
+      );
+    }
   }
 
   async insertIfAbsent(user: User): Promise<void> {
