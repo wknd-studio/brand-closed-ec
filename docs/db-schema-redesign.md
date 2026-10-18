@@ -834,9 +834,11 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ## 移行方針（概要・詳細はマイグレーション作成時に確定）
 
-進捗はGitHub issue [#165](https://github.com/wknd-studio/brand-closed-ec/issues/165)（親issue）・各ステップの子issueで管理する（Linear issue作成上限のため、当面はGitHub issueで代替。[[project_db_schema_migration_plan]]参照）。
+ステップ1〜6の進捗はGitHub issue [#165](https://github.com/wknd-studio/brand-closed-ec/issues/165)（親issue・クローズ済み）と子issue #166〜#176で管理した。ステップ7以降は注文確定後の業務設計を詰めた上で #218〜#238 に分解し直し、GitHub ProjectのMilestoneとissue依存関係で管理している。
 
 > **2026-08-17更新**: サービスは未リリースで実データが無いため（`develop`/stg含む）、以下は無停止移行・バックフィルの慎重な手順を前提にした記述だが、**実際にはデータ保全を気にせず直接`ALTER TABLE`で書き換えてよい**。スキーマを最短で12ステップ完走させることを優先し、アプリケーションコード側の追従（`MemberRank`のDB参照化・各種UI実装等）は12ステップ完了後にまとめて行う。以下の番号付きリストはテーブル新設の目的・関係性の記録として残すが、手順の慎重さの記述は参考程度に読むこと。
+>
+> **例外**: この前提は実データが無い間だけ有効。リリースが近づいた時点で、本番（`main`）に対しても直接書き換えてよいかを必ず再確認する。リリース後は、無停止移行・バックフィルの手順に従う。
 
 1. ✅ `member_ranks`を作成し、現行7ランク分のマスタ行を投入する。（`supabase/migrations/20260816151000_create_member_ranks.sql`で実装済み。[PR #164](https://github.com/wknd-studio/brand-closed-ec/pull/164)）
 2. ✅ [#166](https://github.com/wknd-studio/brand-closed-ec/issues/166) `subscriptions`/`rank_changes`/`stripe_webhook_events`を新設。（`supabase/migrations/20260816175631_create_subscriptions_rank_changes_stripe_webhook_events.sql`で実装済み）

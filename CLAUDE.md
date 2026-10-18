@@ -10,6 +10,7 @@ pnpm format                     # prettier --write
 pnpm test                       # Vitest（ユニット・統合）
 pnpm test:e2e                   # Playwright E2E
 pnpm test:e2e --ui              # Playwright UIモード
+task check                      # push・PR前の完了チェック（typecheck → lint → ユニット → 統合）
 
 supabase start                  # ローカルDB起動
 supabase migration new <name>   # マイグレーション作成
@@ -58,11 +59,43 @@ feature/* →  Cloudflare Pages Preview URL
 
 ## 行動ルール
 
-**実装順序**: テストを書く → 失敗を確認 → 実装 → テスト通過確認 → コミット（自動）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する。
+**実装順序**: テストを書く → 失敗を確認 → 実装 → テスト通過確認 → コミット（自動）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する（例外は下記「並列開発（Orca）」の自動push・PR条件のみ）。push・PR作成前に `task check`（typecheck → lint → ユニットテスト → 統合テスト）がgreenであること。
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
 
-**PR サイズ**: 1つのPRは1つの責務に絞る。大きなユーザーストーリーは実装前に小さな単位に分割し、各PRが独立してレビュー・デプロイ可能な状態にする。目安は差分200行以内・変更ファイル5つ以内。分割できない場合はその理由をPR説明に明記する。
+**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/wknd-studio/brand-closed-ec/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/wknd-studio/brand-closed-ec/issues/<番号> --jq .id`）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。
+
+**並列開発（Orca）**: 複数issueの並列実装はADEのOrcaで、issueごとにワークツリーとセッションを立ち上げて行う（背景・スロット割り当ては `docs/dev-parallel-worktrees.md`）。Orcaのワークツリー内で作業するセッションは以下に従う。
+
+- **環境**: ワークツリーはOrcaが作る。自分で `EnterWorktree` や `git worktree add` をしない
+- **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
+- **依存の確認**: 着手前に `gh api repos/wknd-studio/brand-closed-ec/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
+- **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
+- **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
+- **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
+- **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、次の2つを満たせば、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop --body-file <本文ファイル>` まで進めてよい。PR本文は `.github/pull_request_template.md` の各項目を埋める（該当しない欄は「なし」と書く）。
+  - `task check` がgreen
+  - レビュー用サブエージェント `spec-reviewer`（`.claude/agents/spec-reviewer.md`）に、`git diff origin/develop...HEAD` の差分・担当issueの本文・関連する `specs/*/spec.md` だけを渡してレビューさせ、重大な指摘を解消済み（指摘と対応はPR本文に書く）
+
+  完了後、issue・実施したテスト・PRのURLを簡潔に報告する。それ以外の場合（`linkedIssue` が無い、担当issue以外の変更を含む等）は通常どおり承認を待つ
+
+**PR の粒度**: **1PR = 1目的 = 1issue**。PRタイトルに書くissue番号は1つだけにする。問題になるのは行数ではなく目的の数で、複数の目的をまとめたPRは、不具合時に無関係な変更まで一緒にrevertされる。大きなユーザーストーリーは実装前に1目的ずつのissueへ分割し、各PRが独立してレビュー・デプロイ・revertできる状態にする。
+
+- 一括置換・フォーマット・型の再生成など機械的な変更は、行数が大きくても目的が1つならそのままでよい。PR本文に機械的な変更であること（実行したコマンド等）を書く
+- ついでのリファクタや無関係な修正は同じPRに混ぜず、別issueにする
+- 差分200行・変更ファイル5つは「分割を検討する目安」とする。超えたら目的が複数混ざっていないかを見直し、1目的のまま超える場合はその旨をPR本文に書く
+
+**タスク分解**: PRの粒度は、PRを作る時点ではなく、issueを起票してタスクを分解した時点で決める。issueは `.github/ISSUE_TEMPLATE/` のテンプレート（タスク／親issue）から起票する。
+
+- issue と PR は常に1対1にする。1PRに収まらない作業は、起票時に親issue（タスクリスト）＋サブissue（1つ = 1PR）に分ける。1つのissueに複数PRは作らない（Orcaの「1issue = 1ワークツリー = 1ブランチ」と揃える）
+- 実装中にやることが増えたら、PRを大きくせず、新しいissueを起票して親issueのタスクリストに追記する。Orcaのセッションは担当issue以外を実装しない
+- タスクリストは最初から完璧にしなくてよい。大枠から書き、分かった時点で追記する
+
+**PRのレビュー**: スキーマ・RLS、Webhook、認証・認可、決済・注文・金額計算、CI・権限設定・lintなどのゲート、依存に触れるPRには `high-risk` ラベルが自動で付く（対象パスは `.github/labeler.yml`）。
+
+- `high-risk` ラベルのPRは、人間が差分を精読してからマージする
+- それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する
+- レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、同じバグを検出するlint・テストに変換する
 
 **テスト自動選択ルール**: 機能を実装するたびに、以下の基準で必要なテストを自動的に作成する。
 
@@ -90,6 +123,8 @@ feature/* →  Cloudflare Pages Preview URL
 `tests/e2e/`配下のSupabase admin clientは必ず`createClient<Database>(...)`のように型を付ける（型無しの`createClient(...)`は、存在しないカラムを指定してもtscがコンパイルエラーを出さず、実行時までカラム不整合に気づけない。過去に実際にこれで検出漏れが発生した）。
 
 **マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。
+
+CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
 
 **コミット形式**: `feat(scope): BRAND-XX 説明` (Conventional Commits)
 

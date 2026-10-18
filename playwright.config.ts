@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // シークレットは.env.localではなくDopplerで一元管理する。
 // ローカル実行時は`task test:e2e`（内部で`doppler run -- pnpm test:e2e`）を使うこと
 //
-// 並列worktree実行（scripts/worktree-setup.sh、WORKTREE_SLOTが設定される）では、
+// 並列worktree実行（scripts/with-worktree-db.sh、WORKTREE_SLOTが設定される）では、
 // worktreeごとに別ポート・別のローカルSupabaseを使うため、CIと同じ理由で
 // "pnpm dev"（内部でdoppler runをネストする）を避ける必要がある（下記command参照）
 const PORT = process.env.PORT ?? "3000";

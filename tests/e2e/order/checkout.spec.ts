@@ -1,14 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import {
-  cleanupTestUser,
-  signUpAndCompleteOnboarding,
-  slotEmail,
-} from "../helpers/clerk-test-invitation";
-
-const TEST_EMAIL = slotEmail("info+clerk_test_checkout@wknd-studio.com");
-const TEST_PASSWORD = "TestPassw0rd!12345";
+import { test, expect } from "../helpers/test-member";
 
 function supabaseAdmin() {
   return createClient<Database>(
@@ -47,27 +40,12 @@ async function fillNewAddress(
   await page.waitForTimeout(1000);
 }
 
-async function getTestUserId(): Promise<string> {
-  const { data } = await supabaseAdmin()
-    .from("users")
-    .select("id")
-    .eq("email", TEST_EMAIL)
-    .single();
-  return data!.id;
-}
-
-// 3つのテストが同じメールアドレス（TEST_EMAIL）を使い回すため、並列実行での競合を避けるために直列実行する
-test.describe.serial("実際のカタログ〜チェックアウト画面遷移フロー", () => {
-  test.afterEach(async ({ page }) => {
-    // Stripeの外部ドメインに遷移したままだと後続処理が失敗するため、自アプリのドメインに戻す
-    await page.goto("/");
-    await cleanupTestUser(TEST_EMAIL);
-  });
-
+// テスト会員はワーカーごとに用意され、注文等のデータは各テスト後に片付けられる
+// （helpers/test-member.ts）ため、テスト間で直列実行する必要はない
+test.describe("実際のカタログ〜チェックアウト画面遷移フロー", () => {
   test("登録済み住所がない会員が新規入力した住所で注文を確定すると、Stripe Checkout画面へ遷移する", async ({
     page,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
     await addFirstProductToCart(page);
 
     await page.goto("/order/checkout");
@@ -83,10 +61,9 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
 
   test("登録済み住所がある会員が既存住所を選択して注文を確定すると、Stripe Checkout画面へ遷移する", async ({
     page,
+    member,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
-
-    const userId = await getTestUserId();
+    const { userId } = member;
     await supabaseAdmin()
       .from("addresses")
       .insert([
@@ -131,9 +108,11 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
 
   test("月次仕入れ上限を超える注文は確定できず、Stripe Checkout画面へ遷移しない", async ({
     page,
+    member,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
-    const userId = await getTestUserId();
+    const { userId } = member;
+    // 並列実行される他ワーカーのテストと主キーが衝突しないよう、IDは毎回生成する
+    const limitOrderId = crypto.randomUUID();
 
     // カート追加時点ではまだ確定済み金額がないため、
     // カートへの追加自体（クライアント側の月次上限チェック）はブロックされない。
@@ -143,7 +122,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
 
     // STARTERランクの月次上限は300,000円。既に290,000円分を確定済みにしておく
     await supabaseAdmin().from("orders").insert({
-      id: "00000000-0000-0000-0000-000000000060",
+      id: limitOrderId,
       user_id: userId,
       status: "paid",
       rank_at_order: "starter",
@@ -152,7 +131,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
       billing_address_snapshot: {},
     });
     await supabaseAdmin().from("order_items").insert({
-      order_id: "00000000-0000-0000-0000-000000000060",
+      order_id: limitOrderId,
       sanity_product_id: "prod-limit-test",
       product_name_snapshot: "上限テスト用商品",
       unit_price_snapshot: 290_000,
@@ -178,16 +157,7 @@ test.describe.serial("実際のカタログ〜チェックアウト画面遷移�
       .from("orders")
       .select("id")
       .eq("user_id", userId)
-      .neq("id", "00000000-0000-0000-0000-000000000060");
+      .neq("id", limitOrderId);
     expect(orders).toHaveLength(0);
-
-    await supabaseAdmin()
-      .from("order_items")
-      .delete()
-      .eq("order_id", "00000000-0000-0000-0000-000000000060");
-    await supabaseAdmin()
-      .from("orders")
-      .delete()
-      .eq("id", "00000000-0000-0000-0000-000000000060");
   });
 });

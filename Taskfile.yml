@@ -4,6 +4,8 @@ tasks:
   dev:
     desc: 開発環境を一括起動（Supabase → ngrokを別ターミナルで起動 → Next.js + Stripe + Sanity Studio 並列）
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - task: supabase:start
       - task: dev:ngrok:spawn
       - task: dev:services
@@ -11,15 +13,26 @@ tasks:
   supabase:start:
     desc: Supabase ローカルDBを起動
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - supabase start
 
   dev:ngrok:spawn:
     desc: ngrok を別のTerminalウィンドウで起動する（同一プロセス内で他コマンドと出力を共有するとTUI表示が崩れるため）
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - osascript -e 'tell application "Terminal" to do script "cd \"'"$PWD"'\" && task dev:ngrok"'
 
   dev:services:
     desc: Next.js・Stripe・Sanity Studio を並列起動
+    cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
+      - task: dev:services:run
+
+  dev:services:run:
+    internal: true
     deps:
       - dev:next
       - dev:stripe
@@ -28,27 +41,44 @@ tasks:
   dev:next:
     desc: Next.js 開発サーバー
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - doppler run -- pnpm next dev --turbo
 
   dev:stripe:
     desc: Stripe Webhook を localhost:3000 へ転送
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
   test:e2e:
-    desc: E2Eテストをローカルで実行（Dopplerからシークレットを注入）
+    desc: E2Eテストをローカルで実行（ワークツリーではそのスロットのSupabaseを自動起動して使う）
     cmds:
-      - doppler run -- pnpm test:e2e
+      - bash scripts/with-worktree-db.sh pnpm test:e2e
 
   test:integration:
-    desc: 統合テストをローカルで実行（Dopplerからシークレットを注入、実DBに接続）
+    desc: 統合テストをローカルで実行（ワークツリーではそのスロットのSupabaseを自動起動して使う）
     cmds:
-      - doppler run -- pnpm test:integration
+      - bash scripts/with-worktree-db.sh pnpm test:integration
+
+  check:
+    desc: push・PR作成前の完了チェック（typecheck → lint → ユニットテスト → 統合テスト）。どれかが失敗すると中断する
+    cmds:
+      - pnpm typecheck
+      - pnpm lint
+      - pnpm test
+      - task: test:integration
 
   worktree:list:
-    desc: 既存worktree一覧を表示する（並列実装中のworktreeを確認する用途。/work-on-issueスキル参照）
+    desc: 既存worktree一覧を表示する（並列実装中のworktreeを確認する用途。docs/dev-parallel-worktrees.md参照）
     cmds:
       - git worktree list
+
+  deps:graph:
+    desc: オープンなissueの依存グラフをHTMLで開く（`-- --json` でAI・スクリプト向けのJSONを出力）。依存の正はGitHubのBlocked by
+    cmds:
+      - pnpm -s tsx scripts/issue-deps-graph.ts {{.CLI_ARGS}}
 
   preview:
     desc: Cloudflare Workers本番相当ビルドをローカルでプレビュー（wrangler dev）
@@ -61,11 +91,15 @@ tasks:
   dev:ngrok:
     desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost:3000）
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
 
   dev:clean:
     desc: task dev で起動した全プロセス（Next.js・Stripe・Sanity Studio・ngrok・Supabaseコンテナ）を停止する
     cmds:
+      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+        silent: true
       - pkill -f "pnpm next dev --turbo" || true
       - pkill -f "sanity dev" || true
       - pkill -f "stripe listen" || true

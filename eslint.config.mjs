@@ -24,9 +24,19 @@ const eslintConfig = defineConfig([
     // Playwright実行時の生成物:
     "playwright-report/**",
     "test-results/**",
+    // Vitestのカバレッジ出力:
+    "coverage/**",
+    // Storybook build output:
+    "storybook-static/**",
+    // Wranglerのローカル状態・ビルド成果物:
+    ".wrangler/**",
+    // Vercel CLIのローカル設定:
+    ".vercel/**",
     // npx skills add で導入したベンダー製スキル（自プロジェクトのコード規約対象外）:
     ".agents/**",
     ".claude/skills/**",
+    // Claude Codeが作るワークツリー（各ワークツリーのsrc/・.next/等を丸ごと含む）:
+    ".claude/worktrees/**",
   ]),
   ...storybook.configs["flat/recommended"],
 ]);

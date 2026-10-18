@@ -1,28 +1,21 @@
-import { test, expect } from "@playwright/test";
 import { createClient } from "next-sanity";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import {
-  cleanupTestUser,
-  signUpAndCompleteOnboarding,
-  slotEmail,
-  withSlotSuffix,
-} from "../helpers/clerk-test-invitation";
-
-const TEST_EMAIL = slotEmail("info+clerk_test_split_checkout@wknd-studio.com");
-const TEST_PASSWORD = "TestPassw0rd!12345";
+import { test, expect, withWorkerSuffix } from "../helpers/test-member";
 
 // 既存シードデータのpayment_timingは投入タイミングに依存するため、支払いタイミングが
 // 確実に混在するテスト専用のブランド・商品を固定の明示的なIDで作成する
 // （tests/e2e/order/invoice.spec.tsで確立したパターンを踏襲）
-const TEST_BRAND_ID = withSlotSuffix("test-split-checkout-brand-004");
+const TEST_BRAND_ID = withWorkerSuffix("test-split-checkout-brand-004");
 // ブランド名はURLパスのslugとしてもそのまま使われ、/shop/[brand]は名前で商品を
 // 引き当てる（IDでは絞り込まない）ため、IDだけでなく名前自体も一意化しないと
 // 他のCI実行が作った同名ブランドの商品と混ざって表示されてしまう
-const TEST_BRAND_NAME = withSlotSuffix("TestSplitCheckoutBrand");
-const AT_ORDER_PRODUCT_ID = withSlotSuffix("test-split-checkout-at-order-004");
+const TEST_BRAND_NAME = withWorkerSuffix("TestSplitCheckoutBrand");
+const AT_ORDER_PRODUCT_ID = withWorkerSuffix(
+  "test-split-checkout-at-order-004"
+);
 const AT_ORDER_PRODUCT_NAME = "テスト先払い商品";
-const AFTER_ORDER_PRODUCT_ID = withSlotSuffix(
+const AFTER_ORDER_PRODUCT_ID = withWorkerSuffix(
   "test-split-checkout-after-order-004"
 );
 const AFTER_ORDER_PRODUCT_NAME = "テスト後払い商品";
@@ -42,15 +35,6 @@ function supabaseAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-async function getTestUserId(): Promise<string> {
-  const { data } = await supabaseAdmin()
-    .from("users")
-    .select("id")
-    .eq("email", TEST_EMAIL)
-    .single();
-  return data!.id;
 }
 
 test.describe("支払いタイミングが混在するカートのチェックアウト", () => {
@@ -94,17 +78,10 @@ test.describe("支払いタイミングが混在するカートのチェック�
     await client.delete(TEST_BRAND_ID);
   });
 
-  test.afterEach(async ({ page }) => {
-    // Stripeの外部ドメインに遷移したままだと後続処理が失敗するため、自アプリのドメインに戻す
-    await page.goto("/");
-    await cleanupTestUser(TEST_EMAIL);
-  });
-
   test("先払い商品と後払い商品を両方カートに入れて注文確定すると、Stripe Checkoutへ遷移し、1件のOrderに先払い分のCheckout決済単位だけが作成される", async ({
     page,
+    member,
   }) => {
-    await signUpAndCompleteOnboarding(page, TEST_EMAIL, TEST_PASSWORD);
-
     await page.goto("/shop");
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.getByRole("link", { name: new RegExp(TEST_BRAND_NAME) }).click();
@@ -130,7 +107,7 @@ test.describe("支払いタイミングが混在するカートのチェック�
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "カートに追加" }).click();
 
-    const userId = await getTestUserId();
+    const { userId } = member;
     await supabaseAdmin()
       .from("addresses")
       .insert([

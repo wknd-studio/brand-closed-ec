@@ -1,45 +1,51 @@
 # 並列worktree実装の手引き
 
-複数のissueを、1台のPC上で完全に分離した環境（別git worktree・別ポート・別ローカルSupabase）で、最大4並列で実装するための仕組み。
+複数のissueを、1台のPC上で分離した環境（別git worktree・別ポート・別ローカルSupabase）で並列に実装するための仕組み。ワークツリーとセッションの管理はADEの **Orca** に任せる。ローカルSupabaseはワークツリーの作成時ではなく、**DBを使うコマンドを初めて実行したときに起動し、タスクの終わりに片付ける**（DBを使わないissueではコンテナを一切立ち上げない。Orcaのsetup/archiveフックにも依存しない）。
+
+セッションが従うルール（依存の確認・DBを使うコマンドの実行方法・片付け・自動push・PRの条件）は `CLAUDE.md` の「並列開発（Orca）」を参照。このドキュメントは背景・制約のリファレンス。
 
 ## 使い方
 
-1. 並列させたい数だけClaude Codeセッションを別ウィンドウで立ち上げる
-2. 各セッションで `/work-on-issue <issue番号>` を実行する
-3. あとはセッションに任せる。環境構築（worktree作成・空きスロット検出・ポート調整・Supabase起動）から実装・テスト・push・PR作成までスキルが自走する
-4. ユーザーがやることは「どのセッションにどのissueを割り振るか」の意思決定だけ
+1. Orcaでissueを紐づけてワークツリーとエージェントを起動する（Orcaの画面、または `orca worktree create --issue <番号> --agent claude --prompt "..."`）。Orcaのsetupは `pnpm install` のみでよい
+2. あとはセッションに任せる。依存issueが未完了なら止まって報告し、そうでなければ実装からpush・PR作成まで進む
+3. DBを使うコマンドは `bash scripts/with-worktree-db.sh <コマンド>` で実行する。初回はスロットの確保・`config.toml` の書き換え・Supabase起動（約25秒）まで自動で行い、2回目以降は起動済みのものを使う
+4. PRを作成したら、セッションが `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する
+5. PRがマージされたら、Orcaでワークツリーを削除する
 
-具体的な手順は `.claude/skills/work-on-issue/SKILL.md` を参照。このドキュメントは背景・制約のリファレンス。
+## スクリプト
+
+| スクリプト                       | 役割                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/with-worktree-db.sh`    | スロットの確保（初回）、Supabaseの起動（止まっていれば）、Dopplerの値をこのワークツリーのSupabase・ポートで上書きしてコマンドを実行 |
+| `scripts/worktree-db-stop.sh`    | Supabaseの停止とボリューム削除、`config.toml` の復元、スロットの解放                                                                |
+| `scripts/worktree-slot-lib.sh`   | スロット管理の共通処理                                                                                                              |
+| `scripts/patch-supabase-slot.py` | `config.toml` のポート・project_idをスロット用に書き換える                                                                          |
+
+`with-worktree-db.sh` が上書きする環境変数: `WORKTREE_SLOT`、`PORT`、`NEXT_PUBLIC_APP_URL`、`NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`。
 
 ## できること・できないこと
 
-| 分離対象                                                           | 状態                                                                                   |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| ファイルシステム（git worktree、Claude Code標準の`EnterWorktree`） | 完全分離                                                                               |
-| ローカルSupabase（Docker）                                         | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
-| Next.js/Playwrightの開発サーバーポート                             | 完全分離（`PORT`環境変数で可変）                                                       |
-| Clerk・Stripe・Sanity                                              | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
+| 分離対象                                  | 状態                                                                                   |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| ファイルシステム（git worktree、Orca）    | 完全分離                                                                               |
+| ローカルSupabase（Docker）                | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
+| Next.js/Playwrightの開発サーバーポート    | 完全分離（`with-worktree-db.sh` が `PORT` を設定）                                     |
+| Clerk・Stripe・Sanity                     | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
+| ngrok・Stripe CLI（`task dev`のフル構成） | **分離しない**。手動確認は同時に1ワークツリー（通常はメインのチェックアウト）で行う    |
 
-Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。Stripeの決済イベントは全worktreeの`stripe listen`に転送されるため、他worktree宛てのイベントによる無害な404ログが出ることがある（実害なし）。
+Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。
 
 ## スロット割り当て
 
-| スロット | アプリポート | Supabase project_id       |
-| -------- | ------------ | ------------------------- |
-| 1        | 3000         | `brand-closed-ec`（既定） |
-| 2        | 4000         | `brand-closed-ec-slot2`   |
-| 3        | 5000         | `brand-closed-ec-slot3`   |
-| 4        | 6000         | `brand-closed-ec-slot4`   |
+| スロット | 使う場所                             | アプリポート    | Supabase API     | project_id                |
+| -------- | ------------------------------------ | --------------- | ---------------- | ------------------------- |
+| 1        | メインのチェックアウト（`task dev`） | 3000            | 54321            | `brand-closed-ec`（既定） |
+| 2〜9     | Orcaのワークツリー                   | 3000+(N-1)×1000 | 54321+(N-1)×1000 | `brand-closed-ec-slotN`   |
 
-同じスロット番号を2つのworktreeで同時に使わないこと（ポート・Dockerコンテナ名が衝突する）。稼働中のスロットは `docker ps` のコンテナ名（`-slotN`サフィックス）か `task worktree:list` で確認できる。
-
-## 運用ルール
-
-- **着手前**: `gh issue view 165` の依存グラフで、担当するissueの依存issueが完了しているか確認する
-- **同時に走らせて安全な組み合わせ**: 依存グラフで枝分かれしているトラック（調達/返品/カタログ/会員機能の大半）は安全。`#200`（organizations削除）のような破壊的変更は単独で走らせる
-- **マージ順の衝突**: 同じファイルを触るissue（`#224`と`#261〜264`など）は、同時に別worktreeで走らせず順番に処理する
-- **push・PR**: `/work-on-issue`経由の実装に限り、テストがgreenになったらユーザー承認を待たずpush・PR作成まで進めてよい取り決め（通常の1対1のやり取りでは引き続き承認を待つ）
+- スロットの確保状況は、全ワークツリーで共有されるgitの共通ディレクトリ（`<git-common-dir>/worktree-slots/<N>/owner`）に記録する。`mkdir` で確保するため、同時に確保が走っても重複しない
+- `worktree-db-stop.sh` を実行せずにワークツリーを削除した場合でも、次に別のワークツリーがスロットを確保するときに、持ち主が消えたスロットの残りのコンテナを停止してから再利用する
+- 確保の記録が無くても、`-slotN` のSupabaseコンテナが残っているスロットは使用中として扱う（停止に失敗した場合も同様）
 
 ## Docker負荷の目安
 
-既定（最小構成: api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり2〜3コンテナ。4並列でも8〜12コンテナ程度に収まる。
+最小構成（api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり数コンテナ。DBを使うタスクの間だけ起動し、PR作成後に停止するため、同時に動くのは実際にテスト中のワークツリーの分だけになる。
