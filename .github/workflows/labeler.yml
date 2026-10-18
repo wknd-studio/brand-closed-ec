@@ -1,0 +1,21 @@
+name: Labeler
+
+# 高リスクなパスに触れるPRに high-risk ラベルを付ける（#312。対象は .github/labeler.yml）。
+# pull_request_target はベースブランチのワークフロー・設定で動くため、PR自身が
+# labeler.yml を書き換えてラベルを外すことはできない（PRのコードはcheckoutしない）
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  label:
+    name: Label high-risk PRs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          # push で対象パスの変更が無くなったら high-risk を外す
+          sync-labels: true
