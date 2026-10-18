@@ -65,14 +65,19 @@ async function ensureAdminUser(email: string) {
 // パスワード設定以降は、createInvitation経由のregistration.spec.ts等が検証している
 test.describe("Waitlist経由の参加希望と管理者承認", () => {
   test.afterEach(async () => {
-    // 承認で発行された招待を取り消してから、pendingのままのエントリを却下する
-    await cleanupTestUser(TEST_EMAIL);
-    await cleanupWaitlistEntry(TEST_EMAIL);
-    const adminId = await getClerkUserIdByEmail(ADMIN_EMAIL);
-    if (adminId) {
+    // 承認で発行された招待を取り消してから、pendingのままのエントリを却下する。
+    // cleanupTestUserの取り消しはqueryで絞らず既定の件数しか見ないため、
+    // 共有インスタンスに招待が溜まっていても漏れないようメールアドレスで絞って取り消す
+    const invitation = await findPendingInvitation(TEST_EMAIL);
+    if (invitation) {
       const clerkApi = await clerkClient();
-      await clerkApi.users.deleteUser(adminId).catch(() => {});
+      await clerkApi.invitations
+        .revokeInvitation(invitation.id)
+        .catch(() => {});
     }
+    await cleanupWaitlistEntry(TEST_EMAIL);
+    // 管理者のClerkユーザーに加え、Webhookで作られ得るusers行も削除する
+    await cleanupTestUser(ADMIN_EMAIL);
   });
 
   test("参加希望を送信し、管理者が管理画面で承認すると、招待URLからサインアップ画面に進める", async ({
