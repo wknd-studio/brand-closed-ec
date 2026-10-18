@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildGraph,
   issueNumberFromBranch,
+  STALE_PR_DAYS,
   renderHtml,
   toMermaid,
   type IssueInput,
@@ -20,8 +21,27 @@ function issue(
     milestone: null,
     labels: [],
     blockedBy: [],
+    subIssueCount: 0,
     ...overrides,
   };
+}
+
+const NOW = new Date("2026-10-18T00:00:00Z");
+
+function pr(number: number, overrides: Partial<OpenPrInput> = {}): OpenPrInput {
+  return {
+    number,
+    url: `https://github.com/o/r/pull/${number}`,
+    headRefName: "feature/x",
+    closingIssueNumbers: [],
+    createdAt: "2026-10-17T00:00:00Z",
+    isDraft: false,
+    ...overrides,
+  };
+}
+
+function blockedBy(...numbers: number[]): IssueInput["blockedBy"] {
+  return numbers.map((number) => ({ number, state: "OPEN" as const }));
 }
 
 describe("issueNumberFromBranch", () => {
@@ -70,38 +90,133 @@ describe("buildGraph", () => {
   });
 
   it("オープンなPRがあればブロック中よりもPRありを優先する", () => {
-    const prs: OpenPrInput[] = [
-      {
-        number: 50,
-        url: "https://github.com/o/r/pull/50",
-        headRefName: "feature/2-x",
-        closingIssueNumbers: [],
-      },
-    ];
     const g = buildGraph(
       [issue(2, { blockedBy: [{ number: 99, state: "OPEN" }] })],
-      prs
+      [pr(50, { headRefName: "feature/2-x" })],
+      NOW
     );
     expect(g.nodes[0].status).toBe("in-review");
-    expect(g.nodes[0].prs).toEqual([50]);
+    expect(g.nodes[0].prs.map((p) => p.number)).toEqual([50]);
   });
 
   it("PR本文のClosesでもPRを紐付ける（重複は除く）", () => {
-    const prs: OpenPrInput[] = [
-      {
-        number: 50,
-        url: "https://github.com/o/r/pull/50",
-        headRefName: "feature/2",
-        closingIssueNumbers: [2, 3],
-      },
-    ];
-    const g = buildGraph([issue(2), issue(3)], prs);
-    expect(g.nodes.map((n) => n.prs)).toEqual([[50], [50]]);
+    const g = buildGraph(
+      [issue(2), issue(3)],
+      [pr(50, { headRefName: "feature/2", closingIssueNumbers: [2, 3] })],
+      NOW
+    );
+    expect(g.nodes.map((n) => n.prs.map((p) => p.number))).toEqual([
+      [50],
+      [50],
+    ]);
   });
 
   it("外部待ちラベルがあれば、ブロッカーが無くても外部待ち", () => {
     const g = buildGraph([issue(1, { labels: ["waiting-client"] })], []);
     expect(g.nodes[0].status).toBe("waiting");
+  });
+
+  it("サブissueを持つ親issueは、ブロッカーが無くても着手可能にしない", () => {
+    const g = buildGraph([issue(1, { subIssueCount: 3 })], []);
+    expect(g.nodes[0].status).toBe("blocked");
+  });
+});
+
+describe("buildGraph: downstream", () => {
+  function downstreamOf(issues: IssueInput[]) {
+    const g = buildGraph(issues, []);
+    return Object.fromEntries(g.nodes.map((n) => [n.number, n.downstream]));
+  }
+
+  it("間接的な後続も数える", () => {
+    expect(
+      downstreamOf([
+        issue(1),
+        issue(2, { blockedBy: blockedBy(1) }),
+        issue(3, { blockedBy: blockedBy(2) }),
+      ])
+    ).toEqual({ 1: 2, 2: 1, 3: 0 });
+  });
+
+  it("合流する依存の後続は重複して数えない", () => {
+    // 1 → 2 → 4、1 → 3 → 4
+    expect(
+      downstreamOf([
+        issue(1),
+        issue(2, { blockedBy: blockedBy(1) }),
+        issue(3, { blockedBy: blockedBy(1) }),
+        issue(4, { blockedBy: blockedBy(2, 3) }),
+      ])
+    ).toEqual({ 1: 3, 2: 1, 3: 1, 4: 0 });
+  });
+
+  it("循環があっても止まらず、自分自身は数えない", () => {
+    // 1 → 2 → 3 → 1、3 → 4
+    expect(
+      downstreamOf([
+        issue(1, { blockedBy: blockedBy(3) }),
+        issue(2, { blockedBy: blockedBy(1) }),
+        issue(3, { blockedBy: blockedBy(2) }),
+        issue(4, { blockedBy: blockedBy(3) }),
+      ])
+    ).toEqual({ 1: 3, 2: 3, 3: 3, 4: 0 });
+  });
+
+  it("取得範囲外（クローズ済み等）のissueは数えない", () => {
+    expect(downstreamOf([issue(1, { blockedBy: blockedBy(99) })])).toEqual({
+      1: 0,
+    });
+  });
+});
+
+describe("buildGraph: kind", () => {
+  it.each<[Partial<IssueInput>, string]>([
+    [{}, "dev"],
+    [{ labels: ["non-dev"] }, "non-dev"],
+    [{ subIssueCount: 2 }, "parent"],
+    [{ labels: ["non-dev"], subIssueCount: 2 }, "parent"],
+  ])("%o → %s", (overrides, expected) => {
+    const g = buildGraph([issue(1, overrides)], []);
+    expect(g.nodes[0].kind).toBe(expected);
+  });
+});
+
+describe("buildGraph: PRの停止日数とstale", () => {
+  it("各PRの作成日時・停止日数・ドラフトかどうかを持つ", () => {
+    const g = buildGraph(
+      [issue(1)],
+      [
+        pr(50, {
+          headRefName: "feature/1-x",
+          createdAt: "2026-09-22T09:00:00Z",
+          isDraft: true,
+        }),
+      ],
+      NOW
+    );
+    expect(g.nodes[0].prs).toEqual([
+      {
+        number: 50,
+        url: "https://github.com/o/r/pull/50",
+        createdAt: "2026-09-22T09:00:00Z",
+        ageDays: 25,
+        isDraft: true,
+      },
+    ]);
+  });
+
+  it(`作成から${STALE_PR_DAYS}日以上経ったPRがあればstale`, () => {
+    const at = (days: number) =>
+      new Date(NOW.getTime() - days * 86_400_000).toISOString();
+    const g = buildGraph(
+      [issue(1), issue(2), issue(3)],
+      [
+        pr(51, { headRefName: "feature/1", createdAt: at(STALE_PR_DAYS) }),
+        pr(52, { headRefName: "feature/2", createdAt: at(STALE_PR_DAYS - 1) }),
+      ],
+      NOW
+    );
+    expect(g.nodes.map((n) => n.stale)).toEqual([true, false, false]);
   });
 });
 

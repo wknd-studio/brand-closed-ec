@@ -11,6 +11,7 @@ export type IssueInput = {
   milestone: string | null;
   labels: string[];
   blockedBy: { number: number; state: "OPEN" | "CLOSED" }[];
+  subIssueCount: number;
 };
 
 export type OpenPrInput = {
@@ -18,16 +19,35 @@ export type OpenPrInput = {
   url: string;
   headRefName: string;
   closingIssueNumbers: number[];
+  createdAt: string;
+  isDraft: boolean;
 };
 
 // in-review: オープンなPRがある / blocked: 未完了のブロッカーがある
 // waiting: クライアント回答など開発外の要因で止まっている / ready: すぐ着手できる
 export type IssueStatus = "in-review" | "blocked" | "waiting" | "ready";
 
+// dev: 実装 / non-dev: 法務・運用・外部サービスの設定など / parent: サブissueを持つ親issue
+export type IssueKind = "dev" | "non-dev" | "parent";
+
+export type LinkedPr = {
+  number: number;
+  url: string;
+  createdAt: string;
+  /** 作成からの経過日数（PRが止まっている日数の目安） */
+  ageDays: number;
+  isDraft: boolean;
+};
+
 export type GraphNode = IssueInput & {
   status: IssueStatus;
+  kind: IssueKind;
   openBlockers: number[];
-  prs: number[];
+  prs: LinkedPr[];
+  /** このissueが終わると着手できるようになるオープンなissueの数（間接的な後続を含む） */
+  downstream: number;
+  /** 作成からSTALE_PR_DAYS日以上経ったPRがある */
+  stale: boolean;
 };
 
 export type Graph = {
@@ -38,6 +58,14 @@ export type Graph = {
 /** このラベルが付いたissueは、ブロッカーが無くても「外部待ち」として表示する */
 export const WAITING_LABEL = "waiting-client";
 
+/** このラベルが付いたissueは、開発外の作業（kind: non-dev）として扱う */
+export const NON_DEV_LABEL = "non-dev";
+
+/** 作成からこの日数以上経ったPRを「止まっている」とみなす */
+export const STALE_PR_DAYS = 7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const NO_MILESTONE = "マイルストーンなし";
 const MAX_TITLE_LENGTH = 30;
 
@@ -47,18 +75,31 @@ export function issueNumberFromBranch(branch: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-export function buildGraph(issues: IssueInput[], prs: OpenPrInput[]): Graph {
-  const prsByIssue = new Map<number, Set<number>>();
+export function buildGraph(
+  issues: IssueInput[],
+  prs: OpenPrInput[],
+  now: Date = new Date()
+): Graph {
+  const prsByIssue = new Map<number, Map<number, LinkedPr>>();
   for (const pr of prs) {
     const fromBranch = issueNumberFromBranch(pr.headRefName);
     const targets = [
       ...pr.closingIssueNumbers,
       ...(fromBranch === null ? [] : [fromBranch]),
     ];
+    const linked: LinkedPr = {
+      number: pr.number,
+      url: pr.url,
+      createdAt: pr.createdAt,
+      ageDays: Math.floor(
+        (now.getTime() - new Date(pr.createdAt).getTime()) / DAY_MS
+      ),
+      isDraft: pr.isDraft,
+    };
     for (const target of targets) {
-      const set = prsByIssue.get(target) ?? new Set<number>();
-      set.add(pr.number);
-      prsByIssue.set(target, set);
+      const byNumber = prsByIssue.get(target) ?? new Map<number, LinkedPr>();
+      byNumber.set(pr.number, linked);
+      prsByIssue.set(target, byNumber);
     }
   }
 
@@ -67,12 +108,16 @@ export function buildGraph(issues: IssueInput[], prs: OpenPrInput[]): Graph {
     const openBlockers = i.blockedBy
       .filter((b) => b.state === "OPEN")
       .map((b) => b.number);
-    const linkedPrs = [...(prsByIssue.get(i.number) ?? [])];
+    const linkedPrs = [...(prsByIssue.get(i.number)?.values() ?? [])];
+    const kind = kindOf(i);
     return {
       ...i,
+      kind,
       openBlockers,
       prs: linkedPrs,
-      status: classify(i, openBlockers, linkedPrs),
+      downstream: 0,
+      stale: linkedPrs.some((p) => p.ageDays >= STALE_PR_DAYS),
+      status: classify(i, kind, openBlockers, linkedPrs),
     };
   });
 
@@ -82,16 +127,48 @@ export function buildGraph(issues: IssueInput[], prs: OpenPrInput[]): Graph {
       .map((b) => ({ from: b, to: n.number }))
   );
 
+  const successors = new Map<number, number[]>();
+  for (const e of edges) {
+    successors.set(e.from, [...(successors.get(e.from) ?? []), e.to]);
+  }
+  for (const node of nodes) {
+    node.downstream = countDownstream(node.number, successors);
+  }
+
   return { nodes, edges };
+}
+
+function kindOf(issue: IssueInput): IssueKind {
+  if (issue.subIssueCount > 0) return "parent";
+  if (issue.labels.includes(NON_DEV_LABEL)) return "non-dev";
+  return "dev";
+}
+
+/** 到達可能な後続を数える。訪問済みを記録するので循環があっても止まる */
+function countDownstream(
+  start: number,
+  successors: Map<number, number[]>
+): number {
+  const visited = new Set<number>([start]);
+  const stack = [...(successors.get(start) ?? [])];
+  while (stack.length > 0) {
+    const next = stack.pop()!;
+    if (visited.has(next)) continue;
+    visited.add(next);
+    stack.push(...(successors.get(next) ?? []));
+  }
+  return visited.size - 1;
 }
 
 function classify(
   issue: IssueInput,
+  kind: IssueKind,
   openBlockers: number[],
-  prs: number[]
+  prs: LinkedPr[]
 ): IssueStatus {
   if (prs.length > 0) return "in-review";
-  if (openBlockers.length > 0) return "blocked";
+  // 親issueはサブissueが終わるまで閉じられないので、着手可能にはしない
+  if (openBlockers.length > 0 || kind === "parent") return "blocked";
   if (issue.labels.includes(WAITING_LABEL)) return "waiting";
   return "ready";
 }

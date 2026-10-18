@@ -45,6 +45,7 @@ query($owner: String!, $name: String!, $cursor: String) {
         milestone { title }
         labels(first: 20) { nodes { name } }
         blockedBy(first: 50) { nodes { number state } }
+        subIssues { totalCount }
       }
     }
   }
@@ -62,6 +63,7 @@ type IssuesResponse = {
           milestone: { title: string } | null;
           labels: { nodes: { name: string }[] };
           blockedBy: { nodes: { number: number; state: "OPEN" | "CLOSED" }[] };
+          subIssues: { totalCount: number };
         }[];
       };
     };
@@ -74,7 +76,7 @@ query($owner: String!, $name: String!, $cursor: String) {
     pullRequests(states: OPEN, first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number url headRefName
+        number url headRefName createdAt isDraft
         closingIssuesReferences(first: 20) { nodes { number } }
       }
     }
@@ -90,6 +92,8 @@ type PrsResponse = {
           number: number;
           url: string;
           headRefName: string;
+          createdAt: string;
+          isDraft: boolean;
           closingIssuesReferences: { nodes: { number: number }[] };
         }[];
       };
@@ -115,6 +119,7 @@ function fetchIssues(): IssueInput[] {
         milestone: n.milestone?.title ?? null,
         labels: n.labels.nodes.map((l) => l.name),
         blockedBy: n.blockedBy.nodes,
+        subIssueCount: n.subIssues.totalCount,
       });
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
@@ -140,6 +145,8 @@ function fetchOpenPrs(): OpenPrInput[] {
         closingIssueNumbers: n.closingIssuesReferences.nodes.map(
           (i) => i.number
         ),
+        createdAt: n.createdAt,
+        isDraft: n.isDraft,
       });
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
