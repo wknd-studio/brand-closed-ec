@@ -56,7 +56,7 @@ describe("PaymentSuccessPage - session_idの検証", () => {
     vi.mocked(isOnboardingCompleted).mockResolvedValue(false);
   });
 
-  it("本人のセッションで決済が完了していれば処理中を表示する", async () => {
+  it("本人のセッションで決済が完了していれば、ショップ・プラン選択への導線を出さずに処理中を表示する", async () => {
     retrieveCheckoutSessionMock.mockResolvedValue({
       status: "complete",
       metadata: { clerk_user_id: "clerk-1" },
@@ -68,6 +68,8 @@ describe("PaymentSuccessPage - session_idの検証", () => {
 
     expect(retrieveCheckoutSessionMock).toHaveBeenCalledWith(SESSION_ID);
     expect(html).toContain("処理中");
+    // 確定前にショップ・プラン選択へ進むと、再決済による二重課金を招く（#407）
+    expect(html).not.toContain("<a");
   });
 
   it("入会済みならsession_idに関わらず/shopへ進む", async () => {
