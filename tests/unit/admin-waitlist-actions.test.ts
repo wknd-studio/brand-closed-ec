@@ -144,6 +144,19 @@ describe("admin/waitlist actions", () => {
       );
     });
 
+    it("Clerkのレート制限(429)はSentryに送る", async () => {
+      createInvitationMock.mockRejectedValue(
+        new ClerkAPIResponseError("too many requests", {
+          data: [],
+          status: 429,
+        })
+      );
+
+      await approveWaitlistEntry("a@example.com");
+
+      expect(captureExceptionMock).toHaveBeenCalled();
+    });
+
     it("却下時に同じメールアドレス宛のpendingの招待だけを取り消してから却下する", async () => {
       getInvitationListMock.mockResolvedValue({
         data: [
@@ -159,6 +172,7 @@ describe("admin/waitlist actions", () => {
       expect(getInvitationListMock).toHaveBeenCalledWith({
         query: "a@example.com",
         status: "pending",
+        limit: 500,
       });
       expect(revokeInvitationMock).toHaveBeenCalledTimes(1);
       expect(revokeInvitationMock).toHaveBeenCalledWith("inv_1");

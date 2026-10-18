@@ -16,14 +16,15 @@ async function requireAdmin(): Promise<{ error: string } | null> {
 }
 
 // Clerkの4xx(重複招待・存在しないエントリ等)は管理者の操作に起因する想定内の失敗のため、
-// Sentryには送らずメッセージだけ返す。それ以外(5xx・通信障害等)は送る。
+// Sentryには送らずメッセージだけ返す。それ以外(5xx・429・通信障害等)は送る。
 // メールアドレスは個人情報のためextraに含めない
 function reportUnexpected(
   err: unknown,
   action: string,
   extra?: Record<string, unknown>
 ) {
-  if (isClerkAPIResponseError(err) && err.status < 500) return;
+  if (isClerkAPIResponseError(err) && err.status < 500 && err.status !== 429)
+    return;
   Sentry.captureException(err, { tags: { action }, extra });
   console.error(`[${action}] 予期しないエラー:`, err);
 }
@@ -72,6 +73,8 @@ export async function rejectWaitlistEntry(
     const { data: invitations } = await clerk.invitations.getInvitationList({
       query: emailAddress,
       status: "pending",
+      // 既定の件数(10件)だと部分一致の他の招待に押し出されて取り消し漏れが起き得るため上限まで取る
+      limit: 500,
     });
     for (const inv of invitations) {
       if (inv.emailAddress !== emailAddress) continue;
