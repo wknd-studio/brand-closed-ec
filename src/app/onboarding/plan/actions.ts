@@ -11,6 +11,8 @@ import { RANK_ORDER } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
+import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
+import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
 
 // ENTERPRISEは個別契約のためセルフサービスの選択肢から除外する（FR-006）
 const VALID_PLANS: MemberRankValue[] = RANK_ORDER.filter(
@@ -83,6 +85,12 @@ export async function selectPlan(
       return {
         error: "適格請求書発行事業者登録番号の形式が正しくありません",
       };
+    }
+    if (error instanceof OnboardingAlreadyCompletedError) {
+      return { error: "既に入会手続きが完了しています" };
+    }
+    if (error instanceof MemberWithdrawnError) {
+      return { error: "退会済みのアカウントでは入会手続きができません" };
     }
     return { error: "ユーザーレコードの作成に失敗しました" };
   }

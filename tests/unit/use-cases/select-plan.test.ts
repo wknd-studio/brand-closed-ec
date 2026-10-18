@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { selectPlan } from "@/use-cases/select-plan";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
+import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
+import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
 import { makeUserRepo, makeAccountGateway, makeUser } from "./helpers";
 
 const baseInput = {
@@ -37,7 +39,10 @@ describe("selectPlan", () => {
   });
 
   it("既存userが存在する場合: rank・氏名・電話番号を上書きして保存する", async () => {
-    const existingUser = makeUser({ rank: "starter" });
+    const existingUser = makeUser({
+      rank: "starter",
+      onboardingCompleted: false,
+    });
     const userRepo = makeUserRepo(existingUser);
     const accountGateway = makeAccountGateway();
 
@@ -56,6 +61,7 @@ describe("selectPlan", () => {
 
   it("電話番号の形式が不正な場合はInvalidPhoneNumberErrorをthrowする", async () => {
     const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
     const accountGateway = makeAccountGateway();
 
     await expect(
@@ -105,6 +111,7 @@ describe("selectPlan", () => {
 
   it("不正な形式のインボイス番号はInvalidInvoiceRegistrationNumberErrorをthrowする", async () => {
     const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
     const accountGateway = makeAccountGateway();
 
     await expect(
@@ -118,5 +125,49 @@ describe("selectPlan", () => {
         { userRepo, accountGateway }
       )
     ).rejects.toThrow(InvalidInvoiceRegistrationNumberError);
+  });
+
+  it("入会済みの会員からの送信はOnboardingAlreadyCompletedErrorをthrowし、DBとClerkのmetadataを変更しない", async () => {
+    const userRepo = makeUserRepo(makeUser({ onboardingCompleted: true }));
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      selectPlan(
+        { ...baseInput, plan: "standard" },
+        { userRepo, accountGateway }
+      )
+    ).rejects.toThrow(OnboardingAlreadyCompletedError);
+    expect(userRepo.save).not.toHaveBeenCalled();
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
+  });
+
+  it("退会済みの会員（有効な行が無く退会済み行がある）からの送信はMemberWithdrawnErrorをthrowし、DBとClerkのmetadataを変更しない", async () => {
+    const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+    vi.mocked(userRepo.hasWithdrawnByClerkUserId).mockResolvedValue(true);
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      selectPlan(
+        { ...baseInput, plan: "standard" },
+        { userRepo, accountGateway }
+      )
+    ).rejects.toThrow(MemberWithdrawnError);
+    expect(userRepo.hasWithdrawnByClerkUserId).toHaveBeenCalledWith("clerk-1");
+    expect(userRepo.save).not.toHaveBeenCalled();
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
+  });
+
+  it("有効な行がある場合は退会済み行の有無を問わず有効な行で判定する", async () => {
+    const userRepo = makeUserRepo(makeUser({ onboardingCompleted: false }));
+    vi.mocked(userRepo.hasWithdrawnByClerkUserId).mockResolvedValue(true);
+    const accountGateway = makeAccountGateway();
+
+    await selectPlan(
+      { ...baseInput, plan: "standard" },
+      { userRepo, accountGateway }
+    );
+
+    expect(userRepo.save).toHaveBeenCalled();
   });
 });

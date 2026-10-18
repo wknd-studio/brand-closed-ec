@@ -134,6 +134,53 @@ describe("SupabaseUserRepository", () => {
     });
   });
 
+  describe("hasWithdrawnByClerkUserId()", () => {
+    const WITHDRAWN_ONLY_CLERK_ID = "clerk_test_infra_withdrawn_only";
+    const WITHDRAWN_ONLY_ID = "00000000-0000-0000-0000-000000000013";
+
+    beforeAll(async () => {
+      await supabase.from("users").delete().eq("id", WITHDRAWN_ONLY_ID);
+      const { error } = await supabase.from("users").insert({
+        id: WITHDRAWN_ONLY_ID,
+        clerk_user_id: WITHDRAWN_ONLY_CLERK_ID,
+        email: "withdrawn-only@example.com",
+        first_name: "退会",
+        last_name: "済み",
+        deleted_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    });
+
+    afterAll(async () => {
+      await supabase.from("users").delete().eq("id", WITHDRAWN_ONLY_ID);
+    });
+
+    it("退会済み行があれば true を返す", async () => {
+      await expect(
+        repo.hasWithdrawnByClerkUserId(WITHDRAWN_ONLY_CLERK_ID)
+      ).resolves.toBe(true);
+    });
+
+    it("有効な行しか無ければ false を返す", async () => {
+      await expect(repo.hasWithdrawnByClerkUserId(TEST_CLERK_ID)).resolves.toBe(
+        false
+      );
+    });
+
+    it("行が無ければ false を返す", async () => {
+      await expect(
+        repo.hasWithdrawnByClerkUserId("clerk_nonexistent")
+      ).resolves.toBe(false);
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(
+        broken.hasWithdrawnByClerkUserId(TEST_CLERK_ID)
+      ).rejects.toThrow();
+    });
+  });
+
   describe("findById()", () => {
     it("存在するユーザーを返す", async () => {
       const user = await repo.findById(TEST_USER_ID);

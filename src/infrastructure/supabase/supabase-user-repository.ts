@@ -93,6 +93,16 @@ export class SupabaseUserRepository implements UserRepository {
     return data ? toUser(data as UserRow) : null;
   }
 
+  async hasWithdrawnByClerkUserId(clerkUserId: string): Promise<boolean> {
+    const { count, error } = await this.db
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .eq("clerk_user_id", clerkUserId)
+      .not("deleted_at", "is", null);
+    if (error) throw error;
+    return (count ?? 0) > 0;
+  }
+
   async findById(id: string): Promise<User | null> {
     const { data, error } = await this.db
       .from("users")
