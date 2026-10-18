@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { createInvitationMock, getInvitationListMock, rejectMock, authMock } =
-  vi.hoisted(() => ({
-    createInvitationMock: vi.fn(),
-    getInvitationListMock: vi.fn(),
-    rejectMock: vi.fn(),
-    authMock: vi.fn(),
-  }));
+const {
+  createInvitationMock,
+  getInvitationListMock,
+  revokeInvitationMock,
+  rejectMock,
+  authMock,
+  captureExceptionMock,
+} = vi.hoisted(() => ({
+  createInvitationMock: vi.fn(),
+  getInvitationListMock: vi.fn(),
+  revokeInvitationMock: vi.fn(),
+  rejectMock: vi.fn(),
+  authMock: vi.fn(),
+  captureExceptionMock: vi.fn(),
+}));
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: authMock,
@@ -14,6 +22,7 @@ vi.mock("@clerk/nextjs/server", () => ({
     invitations: {
       createInvitation: createInvitationMock,
       getInvitationList: getInvitationListMock,
+      revokeInvitation: revokeInvitationMock,
     },
     waitlistEntries: {
       reject: rejectMock,
@@ -27,8 +36,10 @@ vi.mock("next/cache", () => ({
 
 vi.mock("@sentry/nextjs", () => ({
   setUser: vi.fn(),
+  captureException: captureExceptionMock,
 }));
 
+import { ClerkAPIResponseError } from "@clerk/nextjs/errors";
 import {
   approveWaitlistEntry,
   rejectWaitlistEntry,
@@ -56,7 +67,7 @@ describe("admin/waitlist actions", () => {
     it("admin以外はrejectできない", async () => {
       authMock.mockResolvedValue({ userId: null, sessionClaims: null });
 
-      const result = await rejectWaitlistEntry("wle_1");
+      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
 
       expect(result).toEqual({ error: "権限がありません" });
       expect(rejectMock).not.toHaveBeenCalled();
@@ -105,21 +116,99 @@ describe("admin/waitlist actions", () => {
       expect(result).toEqual({ error: "already invited" });
     });
 
-    it("却下時にwaitlistEntries.rejectを呼ぶ", async () => {
+    it("招待作成がClerkの4xxで失敗したらSentryに送らない", async () => {
+      createInvitationMock.mockRejectedValue(
+        new ClerkAPIResponseError("duplicate", { data: [], status: 422 })
+      );
+
+      const result = await approveWaitlistEntry("a@example.com");
+
+      expect(result).toEqual({ error: "duplicate" });
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+    });
+
+    it("招待作成が想定外のエラーで失敗したらSentryに送る", async () => {
+      const err = new ClerkAPIResponseError("server error", {
+        data: [],
+        status: 500,
+      });
+      createInvitationMock.mockRejectedValue(err);
+
+      await approveWaitlistEntry("a@example.com");
+
+      expect(captureExceptionMock).toHaveBeenCalledWith(
+        err,
+        expect.objectContaining({
+          tags: { action: "approveWaitlistEntry" },
+        })
+      );
+    });
+
+    it("却下時に同じメールアドレス宛のpendingの招待だけを取り消してから却下する", async () => {
+      getInvitationListMock.mockResolvedValue({
+        data: [
+          { id: "inv_1", emailAddress: "a@example.com", status: "pending" },
+          // queryは部分一致のため、別のアドレスも返り得る
+          { id: "inv_2", emailAddress: "aa@example.com", status: "pending" },
+        ],
+      });
       rejectMock.mockResolvedValue({ id: "wle_1", status: "rejected" });
 
-      const result = await rejectWaitlistEntry("wle_1");
+      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
 
+      expect(getInvitationListMock).toHaveBeenCalledWith({
+        query: "a@example.com",
+        status: "pending",
+      });
+      expect(revokeInvitationMock).toHaveBeenCalledTimes(1);
+      expect(revokeInvitationMock).toHaveBeenCalledWith("inv_1");
+      expect(rejectMock).toHaveBeenCalledWith("wle_1");
+      expect(revokeInvitationMock.mock.invocationCallOrder[0]).toBeLessThan(
+        rejectMock.mock.invocationCallOrder[0]
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("招待が無い場合も却下できる", async () => {
+      getInvitationListMock.mockResolvedValue({ data: [] });
+      rejectMock.mockResolvedValue({ id: "wle_1", status: "rejected" });
+
+      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+
+      expect(revokeInvitationMock).not.toHaveBeenCalled();
       expect(rejectMock).toHaveBeenCalledWith("wle_1");
       expect(result).toBeUndefined();
     });
 
-    it("却下が失敗したらエラーを返す", async () => {
-      rejectMock.mockRejectedValue(new Error("not found"));
+    it("招待の取り消しが失敗したら却下せずエラーを返しSentryに送る", async () => {
+      getInvitationListMock.mockResolvedValue({
+        data: [
+          { id: "inv_1", emailAddress: "a@example.com", status: "pending" },
+        ],
+      });
+      const err = new Error("network error");
+      revokeInvitationMock.mockRejectedValue(err);
 
-      const result = await rejectWaitlistEntry("wle_1");
+      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+
+      expect(rejectMock).not.toHaveBeenCalled();
+      expect(result).toEqual({ error: "network error" });
+      expect(captureExceptionMock).toHaveBeenCalledWith(
+        err,
+        expect.objectContaining({ tags: { action: "rejectWaitlistEntry" } })
+      );
+    });
+
+    it("却下がClerkの4xxで失敗したらエラーを返しSentryに送らない", async () => {
+      getInvitationListMock.mockResolvedValue({ data: [] });
+      rejectMock.mockRejectedValue(
+        new ClerkAPIResponseError("not found", { data: [], status: 404 })
+      );
+
+      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
 
       expect(result).toEqual({ error: "not found" });
+      expect(captureExceptionMock).not.toHaveBeenCalled();
     });
   });
 });
