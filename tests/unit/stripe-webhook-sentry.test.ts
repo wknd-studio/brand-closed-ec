@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const constructEventMock = vi.fn();
+const markFailedMock = vi.fn().mockResolvedValue(undefined);
 const retrieveSubscriptionMock = vi.fn().mockResolvedValue({
   status: "active",
   items: {
@@ -40,7 +41,7 @@ vi.mock(
         return {
           claim: vi.fn().mockResolvedValue(true),
           markProcessed: vi.fn().mockResolvedValue(undefined),
-          markFailed: vi.fn().mockResolvedValue(undefined),
+          markFailed: markFailedMock,
         };
       }),
   })
@@ -163,6 +164,40 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
       })
     );
   });
+
+  it.each([
+    {
+      eventType: "checkout.session.completed",
+      object: { id: "cs_6", object: "checkout.session", mode: "payment" },
+      useCase: markCheckoutOrderAsPaid,
+    },
+    {
+      eventType: "invoice.paid",
+      object: { id: "in_3" },
+      useCase: markInvoiceOrderAsPaid,
+    },
+  ])(
+    "$eventType: markFailed自体が失敗しても元の例外をSentry.captureExceptionに送る（issue #409）",
+    async ({ eventType, object, useCase }) => {
+      constructEventMock.mockReturnValue({
+        id: "evt_1",
+        type: eventType,
+        data: { object },
+      });
+      const error = new Error("注文が見つかりません");
+      vi.mocked(useCase).mockRejectedValue(error);
+      markFailedMock.mockRejectedValueOnce(new Error("DB接続エラー"));
+
+      await expect(POST(makeRequest())).rejects.toThrow("DB接続エラー");
+
+      expect(Sentry.captureException).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({
+          tags: expect.objectContaining({ webhook: "stripe", eventType }),
+        })
+      );
+    }
+  );
 
   it("署名検証失敗（400）ではSentry.captureExceptionを呼ばない", async () => {
     constructEventMock.mockImplementation(() => {

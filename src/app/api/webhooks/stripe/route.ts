@@ -75,12 +75,12 @@ export async function POST(req: Request) {
         );
         await webhookEventRepo.markProcessed(event.id);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await webhookEventRepo.markFailed(event.id, message);
         Sentry.captureException(err, {
           tags: { webhook: "stripe", eventType: event.type },
           extra: { stripeCheckoutSessionId: session.id, eventId: event.id },
         });
+        const message = err instanceof Error ? err.message : String(err);
+        await webhookEventRepo.markFailed(event.id, message);
         console.error("[Checkout Webhook] 処理失敗:", err);
         return NextResponse.json(
           { error: "処理に失敗しました" },
@@ -173,12 +173,12 @@ export async function POST(req: Request) {
       );
       await webhookEventRepo.markProcessed(event.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      await webhookEventRepo.markFailed(event.id, message);
       Sentry.captureException(err, {
         tags: { webhook: "stripe", eventType: event.type },
         extra: { stripeInvoiceId: invoice.id, eventId: event.id },
       });
+      const message = err instanceof Error ? err.message : String(err);
+      await webhookEventRepo.markFailed(event.id, message);
       console.error("[Invoice Webhook] 処理失敗:", err);
       return NextResponse.json(
         { error: "処理に失敗しました" },
