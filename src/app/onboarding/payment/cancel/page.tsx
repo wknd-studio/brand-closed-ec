@@ -11,7 +11,7 @@ export default async function PaymentCancelPage() {
       <div className="max-w-sm space-y-4 text-center">
         <h1 className="text-xl font-semibold">決済をキャンセルしました</h1>
         <p className="text-sm text-gray-500">
-          決済が完了しませんでした。プランを再選択するか、無料プランで始めることができます。
+          決済が完了しませんでした。今回のお手続きでは料金は発生していません。プランを選び直してお手続きください。
         </p>
         <Link
           href={backHref}

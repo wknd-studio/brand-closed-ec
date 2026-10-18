@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MemberType } from "@/domain/value-objects/member-type";
+import { User } from "@/domain/entities/user";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,47 +14,56 @@ const supabase = createClient<Database>(
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000010";
 const TEST_CLERK_ID = "clerk_test_infra_001";
-// 退会済み行と有効な行が併存するケース（clerk_user_idの一意制約は deleted_at IS NULL の部分インデックス）
-const COEXIST_CLERK_ID = "clerk_test_infra_coexist";
-const COEXIST_WITHDRAWN_ID = "00000000-0000-0000-0000-000000000011";
-const COEXIST_ACTIVE_ID = "00000000-0000-0000-0000-000000000012";
-const WITHDRAWN_ONLY_CLERK_ID = "clerk_test_infra_withdrawn_only";
-const WITHDRAWN_ONLY_ID = "00000000-0000-0000-0000-000000000013";
-const FIXTURE_IDS = [
-  TEST_USER_ID,
-  COEXIST_WITHDRAWN_ID,
-  COEXIST_ACTIVE_ID,
-  WITHDRAWN_ONLY_ID,
-];
 
-function userRow(id: string, clerkUserId: string, deletedAt: string | null) {
-  return {
-    id,
-    clerk_user_id: clerkUserId,
-    email: `${id}@example.com`,
-    first_name: "インフラ",
-    last_name: "テスト",
-    rank_code: "basic",
-    onboarding_completed: true,
-    billing_anchor_day: 10,
-    deleted_at: deletedAt,
-  };
+// 退会済み行と有効な行の併存（部分UNIQUEが許す）・save時の衝突・insertIfAbsent用
+const COEXIST_CLERK_ID = "clerk_test_infra_coexist";
+const COEXIST_DELETED_ID = "00000000-0000-0000-0000-000000000011";
+const COEXIST_ACTIVE_ID = "00000000-0000-0000-0000-000000000012";
+const CONFLICT_CLERK_ID = "clerk_test_infra_conflict";
+const INSERT_CLERK_ID = "clerk_test_infra_insert_if_absent";
+
+// 不正なキーのクライアント。PostgRESTが認証エラーを返すため、DBエラー時の挙動を確認できる
+const brokenClient = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  "invalid-key",
+  { auth: { persistSession: false } }
+);
+
+function newUser(
+  clerkUserId: string,
+  overrides?: Partial<Parameters<typeof User.of>[0]>
+) {
+  return User.of({
+    id: crypto.randomUUID(),
+    clerkUserId,
+    email: `${clerkUserId}@example.com`,
+    firstName: "",
+    lastName: "",
+    phoneNumber: "",
+    profileCompletedAt: null,
+    rank: MemberRank.of("starter"),
+    billingAnchorDay: null,
+    onboardingCompleted: false,
+    deletedAt: null,
+    stripeCustomerId: null,
+    ...overrides,
+  });
+}
+
+async function cleanupExtra() {
+  await supabase
+    .from("users")
+    .delete()
+    .in("clerk_user_id", [
+      COEXIST_CLERK_ID,
+      CONFLICT_CLERK_ID,
+      INSERT_CLERK_ID,
+    ]);
 }
 
 beforeAll(async () => {
-  await supabase.from("users").delete().in("id", FIXTURE_IDS);
-  const { error } = await supabase
-    .from("users")
-    .insert([
-      userRow(COEXIST_WITHDRAWN_ID, COEXIST_CLERK_ID, "2026-06-01T00:00:00Z"),
-      userRow(COEXIST_ACTIVE_ID, COEXIST_CLERK_ID, null),
-      userRow(
-        WITHDRAWN_ONLY_ID,
-        WITHDRAWN_ONLY_CLERK_ID,
-        "2026-06-01T00:00:00Z"
-      ),
-    ]);
-  if (error) throw error;
+  await supabase.from("users").delete().eq("id", TEST_USER_ID);
+  await cleanupExtra();
   await supabase.from("users").insert({
     id: TEST_USER_ID,
     clerk_user_id: TEST_CLERK_ID,
@@ -66,7 +77,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await supabase.from("users").delete().in("id", FIXTURE_IDS);
+  await supabase.from("users").delete().eq("id", TEST_USER_ID);
+  await cleanupExtra();
 });
 
 describe("SupabaseUserRepository", () => {
@@ -86,16 +98,86 @@ describe("SupabaseUserRepository", () => {
       expect(user).toBeNull();
     });
 
-    it("退会済み行と有効な行が併存する場合は有効な行を返す", async () => {
+    it("退会済み行と有効な行が併存するとき、有効な行を返す", async () => {
+      await supabase.from("users").insert([
+        {
+          id: COEXIST_DELETED_ID,
+          clerk_user_id: COEXIST_CLERK_ID,
+          email: "coexist-deleted@example.com",
+          first_name: "退会",
+          last_name: "済み",
+          deleted_at: new Date().toISOString(),
+        },
+        {
+          id: COEXIST_ACTIVE_ID,
+          clerk_user_id: COEXIST_CLERK_ID,
+          email: "coexist-active@example.com",
+          first_name: "有効",
+          last_name: "会員",
+        },
+      ]);
+
       const user = await repo.findByClerkUserId(COEXIST_CLERK_ID);
       expect(user?.id).toBe(COEXIST_ACTIVE_ID);
-      expect(user?.isWithdrawn()).toBe(false);
     });
 
-    it("退会済み行しか無い場合は退会済みのユーザーを返す", async () => {
-      const user = await repo.findByClerkUserId(WITHDRAWN_ONLY_CLERK_ID);
-      expect(user?.id).toBe(WITHDRAWN_ONLY_ID);
-      expect(user?.isWithdrawn()).toBe(true);
+    it("退会済み行しか無いときは null を返す", async () => {
+      await supabase.from("users").delete().eq("id", COEXIST_ACTIVE_ID);
+
+      const user = await repo.findByClerkUserId(COEXIST_CLERK_ID);
+      expect(user).toBeNull();
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(broken.findByClerkUserId(TEST_CLERK_ID)).rejects.toThrow();
+    });
+  });
+
+  describe("hasWithdrawnByClerkUserId()", () => {
+    const WITHDRAWN_ONLY_CLERK_ID = "clerk_test_infra_withdrawn_only";
+    const WITHDRAWN_ONLY_ID = "00000000-0000-0000-0000-000000000013";
+
+    beforeAll(async () => {
+      await supabase.from("users").delete().eq("id", WITHDRAWN_ONLY_ID);
+      const { error } = await supabase.from("users").insert({
+        id: WITHDRAWN_ONLY_ID,
+        clerk_user_id: WITHDRAWN_ONLY_CLERK_ID,
+        email: "withdrawn-only@example.com",
+        first_name: "退会",
+        last_name: "済み",
+        deleted_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    });
+
+    afterAll(async () => {
+      await supabase.from("users").delete().eq("id", WITHDRAWN_ONLY_ID);
+    });
+
+    it("退会済み行があれば true を返す", async () => {
+      await expect(
+        repo.hasWithdrawnByClerkUserId(WITHDRAWN_ONLY_CLERK_ID)
+      ).resolves.toBe(true);
+    });
+
+    it("有効な行しか無ければ false を返す", async () => {
+      await expect(repo.hasWithdrawnByClerkUserId(TEST_CLERK_ID)).resolves.toBe(
+        false
+      );
+    });
+
+    it("行が無ければ false を返す", async () => {
+      await expect(
+        repo.hasWithdrawnByClerkUserId("clerk_nonexistent")
+      ).resolves.toBe(false);
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(
+        broken.hasWithdrawnByClerkUserId(TEST_CLERK_ID)
+      ).rejects.toThrow();
     });
   });
 
@@ -110,6 +192,11 @@ describe("SupabaseUserRepository", () => {
       const user = await repo.findById("00000000-0000-0000-0000-000000000000");
       expect(user).toBeNull();
     });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(broken.findById(TEST_USER_ID)).rejects.toThrow();
+    });
   });
 
   describe("save()", () => {
@@ -119,6 +206,80 @@ describe("SupabaseUserRepository", () => {
 
       const reloaded = await repo.findById(TEST_USER_ID);
       expect(reloaded!.rank.value).toBe("standard");
+    });
+
+    it("同じclerk_user_idの有効な行が先にあれば、その行を入力内容で更新する", async () => {
+      // user.created Webhookが先に行を作っていたケース
+      await repo.insertIfAbsent(newUser(CONFLICT_CLERK_ID));
+      const existing = await repo.findByClerkUserId(CONFLICT_CLERK_ID);
+
+      // selectPlanが既存行を見つけられず、新しいidで行を作ろうとしたケース
+      await repo.save(
+        newUser(CONFLICT_CLERK_ID, {
+          firstName: "花子",
+          lastName: "法人",
+          phoneNumber: "09012345678",
+          rank: MemberRank.of("premium"),
+          memberType: MemberType.of("corporate"),
+          companyName: "株式会社テスト",
+          invoiceRegistrationNumber: "T1234567890123",
+        })
+      );
+
+      const { data: rows } = await supabase
+        .from("users")
+        .select(
+          "id, first_name, last_name, phone_number, rank_code, member_type, company_name, invoice_registration_number"
+        )
+        .eq("clerk_user_id", CONFLICT_CLERK_ID);
+      expect(rows).toHaveLength(1);
+      expect(rows![0]).toEqual({
+        id: existing!.id,
+        first_name: "花子",
+        last_name: "法人",
+        phone_number: "09012345678",
+        rank_code: "premium",
+        member_type: "corporate",
+        company_name: "株式会社テスト",
+        invoice_registration_number: "T1234567890123",
+      });
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const user = await repo.findById(TEST_USER_ID);
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(broken.save(user!)).rejects.toThrow();
+    });
+  });
+
+  describe("insertIfAbsent()", () => {
+    it("行が無ければ作成する", async () => {
+      await repo.insertIfAbsent(newUser(INSERT_CLERK_ID));
+
+      const user = await repo.findByClerkUserId(INSERT_CLERK_ID);
+      expect(user).not.toBeNull();
+    });
+
+    it("同じclerk_user_idの有効な行があれば何もせず成功する（既存行を上書きしない）", async () => {
+      const before = await repo.findByClerkUserId(INSERT_CLERK_ID);
+      await repo.save(before!.with({ firstName: "入力済み" }));
+
+      await expect(
+        repo.insertIfAbsent(newUser(INSERT_CLERK_ID))
+      ).resolves.toBeUndefined();
+
+      const { data: rows } = await supabase
+        .from("users")
+        .select("id, first_name")
+        .eq("clerk_user_id", INSERT_CLERK_ID);
+      expect(rows).toEqual([{ id: before!.id, first_name: "入力済み" }]);
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(
+        broken.insertIfAbsent(newUser("clerk_test_infra_broken"))
+      ).rejects.toThrow();
     });
   });
 });

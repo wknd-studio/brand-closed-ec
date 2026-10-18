@@ -1,19 +1,16 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
+import { isOnboardingCompleted } from "./actions";
+import OnboardingStatusPoller from "./onboarding-status-poller";
 
-export default function PaymentSuccessPage() {
+export default async function PaymentSuccessPage() {
+  // Webhookが先に届いていれば待たせずに進める
+  if (await isOnboardingCompleted()) redirect("/shop");
+
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
       <div className="max-w-sm space-y-6 text-center">
         <h1 className="text-xl font-semibold">ありがとうございます</h1>
-        <p className="text-sm text-gray-500">
-          決済が完了しました。アカウントの設定を行っています。しばらくお待ちください。
-        </p>
-        <Link
-          href="/shop"
-          className="inline-block text-sm underline underline-offset-4"
-        >
-          ショップへ進む
-        </Link>
+        <OnboardingStatusPoller />
       </div>
     </main>
   );

@@ -25,7 +25,7 @@ describe("selectPlan", () => {
       { userRepo, accountGateway }
     );
 
-    expect(result).toEqual({ redirectTo: "/onboarding/payment?plan=starter" });
+    expect(result).toEqual({ redirectTo: "/onboarding/payment" });
     const saved = vi.mocked(userRepo.save).mock.calls[0][0];
     expect(saved.rank.value).toBe("starter");
     expect(saved.onboardingCompleted).toBe(false);
@@ -141,11 +141,10 @@ describe("selectPlan", () => {
     expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
 
-  it("退会済みの会員からの送信はMemberWithdrawnErrorをthrowし、DBとClerkのmetadataを変更しない", async () => {
-    const withdrawnUser = makeUser({ onboardingCompleted: false }).with({
-      deletedAt: new Date(2026, 5, 1),
-    });
-    const userRepo = makeUserRepo(withdrawnUser);
+  it("退会済みの会員（有効な行が無く退会済み行がある）からの送信はMemberWithdrawnErrorをthrowし、DBとClerkのmetadataを変更しない", async () => {
+    const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+    vi.mocked(userRepo.hasWithdrawnByClerkUserId).mockResolvedValue(true);
     const accountGateway = makeAccountGateway();
 
     await expect(
@@ -154,22 +153,21 @@ describe("selectPlan", () => {
         { userRepo, accountGateway }
       )
     ).rejects.toThrow(MemberWithdrawnError);
+    expect(userRepo.hasWithdrawnByClerkUserId).toHaveBeenCalledWith("clerk-1");
     expect(userRepo.save).not.toHaveBeenCalled();
     expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
 
-  it("入会済みかつ退会済みの会員はMemberWithdrawnErrorを優先する", async () => {
-    const withdrawnUser = makeUser({ onboardingCompleted: true }).with({
-      deletedAt: new Date(2026, 5, 1),
-    });
-    const userRepo = makeUserRepo(withdrawnUser);
+  it("有効な行がある場合は退会済み行の有無を問わず有効な行で判定する", async () => {
+    const userRepo = makeUserRepo(makeUser({ onboardingCompleted: false }));
+    vi.mocked(userRepo.hasWithdrawnByClerkUserId).mockResolvedValue(true);
     const accountGateway = makeAccountGateway();
 
-    await expect(
-      selectPlan(
-        { ...baseInput, plan: "standard" },
-        { userRepo, accountGateway }
-      )
-    ).rejects.toThrow(MemberWithdrawnError);
+    await selectPlan(
+      { ...baseInput, plan: "standard" },
+      { userRepo, accountGateway }
+    );
+
+    expect(userRepo.save).toHaveBeenCalled();
   });
 });

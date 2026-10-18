@@ -147,10 +147,11 @@ sequenceDiagram
     Plan->>Action: selectPlan（firstName/lastName/phoneNumber含む）
     Action->>Action: PhoneNumber値オブジェクトで\n電話番号の形式を検証
     Action->>DB: users.rank・firstName・lastName・\nphoneNumberを保存（onboarding_completed=false）
-    Action-->>ユーザー: /onboarding/payment?plan=xxx へ
+    Action-->>ユーザー: /onboarding/payment へ
 
     ユーザー->>Payment: ページを開く
-    Payment->>Stripe: Checkout Session作成\nmetadata: { clerk_user_id, plan }
+    Payment->>DB: usersのrank_code・氏名・電話番号・会社名を読む\n（未入力・行が無ければ /onboarding/account-type へ戻す）
+    Payment->>Stripe: Checkout Session作成（価格はrank_codeから決める）\nmetadata: { clerk_user_id, plan }
     Payment-->>ユーザー: Stripe Checkout画面へリダイレクト
     ユーザー->>Stripe: 決済情報を入力
     Stripe-->>ユーザー: /onboarding/payment/success へ
@@ -159,6 +160,15 @@ sequenceDiagram
     Webhook->>Webhook: completeSubscriptionOnboarding
     Webhook->>DB: users.stripe_customer_id, stripe_subscription_id, onboarding_completed=true
     Webhook-->>Stripe: 200 OK
+
+    loop 2秒ごと（最大60秒）
+        ユーザー->>DB: onboarding_completedを確認（Server Action）
+    end
+    alt 確定した
+        ユーザー->>ユーザー: /shop へ自動で進む
+    else 60秒たっても確定しない
+        ユーザー->>ユーザー: 再ログイン・問い合わせを案内（再決済の導線は出さない）
+    end
 ```
 
 ---

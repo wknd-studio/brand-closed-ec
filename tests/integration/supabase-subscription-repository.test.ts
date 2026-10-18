@@ -12,6 +12,13 @@ const supabase = createClient<Database>(
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000060";
 const TEST_CLERK_ID = "clerk_test_subscription_repo";
 
+// 不正なキーのクライアント。PostgRESTが認証エラーを返すため、DBエラー時の挙動を確認できる
+const brokenClient = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  "invalid-key",
+  { auth: { persistSession: false } }
+);
+
 async function cleanup() {
   await supabase.from("subscriptions").delete().eq("user_id", TEST_USER_ID);
   await supabase.from("users").delete().eq("id", TEST_USER_ID);
@@ -85,5 +92,67 @@ describe("SupabaseSubscriptionRepository", () => {
     const result = await repo.findActiveByUserId(TEST_USER_ID);
     expect(result!.status).toBe("past_due");
     expect(result!.rank).toBe("standard");
+  });
+
+  describe("DBエラー", () => {
+    const broken = new SupabaseSubscriptionRepository(brokenClient);
+
+    it("findActiveByUserIdは例外になる", async () => {
+      await expect(broken.findActiveByUserId(TEST_USER_ID)).rejects.toThrow();
+    });
+
+    it("upsertは例外になる", async () => {
+      await expect(
+        broken.upsert({
+          userId: TEST_USER_ID,
+          stripeCustomerId: "cus_repo_test",
+          stripeSubscriptionId: "sub_repo_test",
+          stripeSubscriptionScheduleId: null,
+          status: "active",
+          rank: "basic",
+          pendingRank: null,
+          currentPeriodStart: new Date(2026, 0, 1),
+          currentPeriodEnd: new Date(2026, 1, 1),
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+        })
+      ).rejects.toThrow();
+    });
+
+    it("INSERTの失敗は例外になる（存在しないuser_idで外部キー違反）", async () => {
+      await expect(
+        repo.upsert({
+          userId: "00000000-0000-0000-0000-0000000000ff",
+          stripeCustomerId: "cus_repo_test_fk",
+          stripeSubscriptionId: "sub_repo_test_fk",
+          stripeSubscriptionScheduleId: null,
+          status: "active",
+          rank: "basic",
+          pendingRank: null,
+          currentPeriodStart: new Date(2026, 0, 1),
+          currentPeriodEnd: new Date(2026, 1, 1),
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+        })
+      ).rejects.toThrow();
+    });
+
+    it("UPDATEの失敗は例外になる（CHECK制約違反のstatus）", async () => {
+      await expect(
+        repo.upsert({
+          userId: TEST_USER_ID,
+          stripeCustomerId: "cus_repo_test",
+          stripeSubscriptionId: "sub_repo_test",
+          stripeSubscriptionScheduleId: null,
+          status: "bogus" as never,
+          rank: "standard",
+          pendingRank: null,
+          currentPeriodStart: new Date(2026, 0, 1),
+          currentPeriodEnd: new Date(2026, 1, 1),
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+        })
+      ).rejects.toThrow();
+    });
   });
 });

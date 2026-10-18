@@ -36,8 +36,15 @@ export async function selectPlan(
   // middlewareでも/onboarding/*から外しているが、Server Actionは直接呼べるためここでも拒否する。
   // 入会済みの会員が送信するとrank_code・member_typeが上書きされ、onboarding_completedが
   // falseに戻ってショップから締め出されるうえ、決済でサブスクリプションが二重にできる
+  // findByClerkUserIdは有効な行だけを返す。有効な行が無いときに退会済み行があれば、
+  // 新規会員として行を作り直さず拒否する
   const existing = await userRepo.findByClerkUserId(input.clerkUserId);
-  if (existing?.isWithdrawn()) throw new MemberWithdrawnError();
+  if (
+    !existing &&
+    (await userRepo.hasWithdrawnByClerkUserId(input.clerkUserId))
+  ) {
+    throw new MemberWithdrawnError();
+  }
   if (existing?.hasCompletedOnboarding()) {
     throw new OnboardingAlreadyCompletedError();
   }
@@ -83,6 +90,6 @@ export async function selectPlan(
   await accountGateway.updateOnboardingMetadata(input.clerkUserId, false);
 
   return {
-    redirectTo: `/onboarding/payment?plan=${input.plan}`,
+    redirectTo: "/onboarding/payment",
   };
 }

@@ -14,6 +14,9 @@ const isPublic = createRouteMatcher([
 ]);
 
 const isOnboarding = createRouteMatcher(["/onboarding(.*)"]);
+// 決済完了画面は入会の確定をServer Action（このパスへのPOST）で確認し、確定したら
+// 自分で /shop へ進めるため、入会済みでもリダイレクトしない
+const isPaymentSuccess = createRouteMatcher(["/onboarding/payment/success"]);
 const isAdmin = createRouteMatcher(["/admin(.*)"]);
 
 // Stripe/Clerk webhook はレート制限対象外
@@ -85,7 +88,7 @@ export default clerkMiddleware(async (auth, req) => {
   // 入会済みの会員がオンボーディングから送信・決済すると、プランや会員種別の上書き、
   // サブスクリプションの二重作成が起きるため、オンボーディングに入れない
   if (isOnboarding(req)) {
-    if (data?.onboarding_completed) {
+    if (data?.onboarding_completed && !isPaymentSuccess(req)) {
       return NextResponse.redirect(new URL("/shop", req.url));
     }
     return;
