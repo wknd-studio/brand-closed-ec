@@ -1,0 +1,217 @@
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
+import { SupabaseSubscriptionOnboardingRepository } from "@/infrastructure/supabase/supabase-subscription-onboarding-repository";
+import type { ConfirmSubscriptionOnboardingInput } from "@/repositories/subscription-onboarding-repository";
+import type { SubscriptionStatus } from "@/repositories/subscription-repository";
+
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
+
+const TEST_USER_ID = "00000000-0000-0000-0000-000000000363";
+const TEST_CLERK_ID = "clerk_test_subscription_onboarding_repo";
+
+const repo = new SupabaseSubscriptionOnboardingRepository(supabase);
+
+function makeInput(
+  overrides?: Partial<ConfirmSubscriptionOnboardingInput>
+): ConfirmSubscriptionOnboardingInput {
+  return {
+    userId: TEST_USER_ID,
+    rank: "standard",
+    stripeCustomerId: "cus_onboarding_repo_test",
+    stripeSubscriptionId: "sub_onboarding_repo_test",
+    status: "active",
+    currentPeriodStart: new Date("2026-10-18T00:00:00Z"),
+    currentPeriodEnd: new Date("2026-11-18T00:00:00Z"),
+    billingAnchorDay: 18,
+    ...overrides,
+  };
+}
+
+async function cleanup() {
+  await supabase.from("rank_changes").delete().eq("user_id", TEST_USER_ID);
+  await supabase.from("subscriptions").delete().eq("user_id", TEST_USER_ID);
+  await supabase.from("users").delete().eq("id", TEST_USER_ID);
+}
+
+async function insertUser(initialFeePaidRankCode: string | null = null) {
+  const { error } = await supabase.from("users").insert({
+    id: TEST_USER_ID,
+    clerk_user_id: TEST_CLERK_ID,
+    email: "subscription-onboarding-repo-test@example.com",
+    first_name: "テスト",
+    last_name: "太郎",
+    rank_code: "starter",
+    onboarding_completed: false,
+    initial_fee_paid_rank_code: initialFeePaidRankCode,
+  });
+  if (error) throw error;
+}
+
+async function fetchState() {
+  const { data: user } = await supabase
+    .from("users")
+    .select(
+      "rank_code, initial_fee_paid_rank_code, stripe_customer_id, billing_anchor_day, onboarding_completed"
+    )
+    .eq("id", TEST_USER_ID)
+    .single();
+  const { data: subscriptions } = await supabase
+    .from("subscriptions")
+    .select(
+      "stripe_customer_id, stripe_subscription_id, status, rank_code, current_period_start, current_period_end"
+    )
+    .eq("user_id", TEST_USER_ID);
+  const { data: rankChanges } = await supabase
+    .from("rank_changes")
+    .select(
+      "from_rank_code, to_rank_code, changed_by, initial_fee_charged, stripe_subscription_id"
+    )
+    .eq("user_id", TEST_USER_ID);
+  return { user, subscriptions, rankChanges };
+}
+
+beforeEach(async () => {
+  await cleanup();
+});
+
+afterAll(cleanup);
+
+describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC）", () => {
+  it("users・subscriptions・rank_changesを同時に更新する", async () => {
+    await insertUser();
+
+    await repo.confirm(makeInput());
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user).toEqual({
+      rank_code: "standard",
+      initial_fee_paid_rank_code: "standard",
+      stripe_customer_id: "cus_onboarding_repo_test",
+      billing_anchor_day: 18,
+      onboarding_completed: true,
+    });
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions?.[0]).toMatchObject({
+      stripe_customer_id: "cus_onboarding_repo_test",
+      stripe_subscription_id: "sub_onboarding_repo_test",
+      status: "active",
+      rank_code: "standard",
+    });
+    expect(new Date(subscriptions![0].current_period_start)).toEqual(
+      new Date("2026-10-18T00:00:00Z")
+    );
+    expect(new Date(subscriptions![0].current_period_end)).toEqual(
+      new Date("2026-11-18T00:00:00Z")
+    );
+    expect(rankChanges).toEqual([
+      {
+        from_rank_code: null,
+        to_rank_code: "standard",
+        changed_by: "member",
+        initial_fee_charged: true,
+        stripe_subscription_id: "sub_onboarding_repo_test",
+      },
+    ]);
+  });
+
+  it("同じstripe_subscription_idで再度呼んでも何も変えない（rank_changesが2行にならない）", async () => {
+    await insertUser();
+    await repo.confirm(makeInput());
+
+    await repo.confirm(makeInput({ billingAnchorDay: 25 }));
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user?.billing_anchor_day).toBe(18);
+    expect(subscriptions).toHaveLength(1);
+    expect(rankChanges).toHaveLength(1);
+  });
+
+  it("途中（subscriptionsの作成）で失敗したらusersの更新も含めて何も残らない", async () => {
+    await insertUser();
+
+    await expect(
+      repo.confirm(
+        makeInput({ status: "not_a_status" as unknown as SubscriptionStatus })
+      )
+    ).rejects.toThrow();
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user).toEqual({
+      rank_code: "starter",
+      initial_fee_paid_rank_code: null,
+      stripe_customer_id: null,
+      billing_anchor_day: null,
+      onboarding_completed: false,
+    });
+    expect(subscriptions).toHaveLength(0);
+    expect(rankChanges).toHaveLength(0);
+  });
+
+  it("途中（ランク変更の記録）で失敗したらusers・subscriptionsも含めて何も残らない", async () => {
+    await insertUser();
+
+    // member_ranksに無いランクはrank_code・rank_changesのFKで失敗する
+    await expect(
+      repo.confirm(
+        makeInput({
+          rank: "no_such_rank" as ConfirmSubscriptionOnboardingInput["rank"],
+        })
+      )
+    ).rejects.toThrow();
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user?.onboarding_completed).toBe(false);
+    expect(user?.stripe_customer_id).toBeNull();
+    expect(subscriptions).toHaveLength(0);
+    expect(rankChanges).toHaveLength(0);
+  });
+
+  it("途中で失敗したあとに再度呼ぶと、入会が最後まで確定する", async () => {
+    await insertUser();
+    await expect(
+      repo.confirm(
+        makeInput({ status: "not_a_status" as unknown as SubscriptionStatus })
+      )
+    ).rejects.toThrow();
+
+    await repo.confirm(makeInput());
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user?.onboarding_completed).toBe(true);
+    expect(user?.initial_fee_paid_rank_code).toBe("standard");
+    expect(subscriptions).toHaveLength(1);
+    expect(rankChanges).toHaveLength(1);
+  });
+
+  it("支払い済み最高ランクが選んだランクより高ければ、initial_fee_paid_rank_codeを下げない", async () => {
+    await insertUser("pro");
+
+    await repo.confirm(makeInput({ rank: "basic" }));
+
+    const { user } = await fetchState();
+    expect(user?.rank_code).toBe("basic");
+    expect(user?.initial_fee_paid_rank_code).toBe("pro");
+  });
+
+  it("支払い済み最高ランクより高いランクを選べば、initial_fee_paid_rank_codeを上げる", async () => {
+    await insertUser("basic");
+
+    await repo.confirm(makeInput({ rank: "pro" }));
+
+    const { user } = await fetchState();
+    expect(user?.initial_fee_paid_rank_code).toBe("pro");
+  });
+
+  it("有効な会員が見つからなければエラーにする", async () => {
+    await expect(repo.confirm(makeInput())).rejects.toThrow();
+
+    const { subscriptions, rankChanges } = await fetchState();
+    expect(subscriptions).toHaveLength(0);
+    expect(rankChanges).toHaveLength(0);
+  });
+});

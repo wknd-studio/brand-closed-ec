@@ -49,9 +49,10 @@ vi.mock(
 vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
   SupabaseUserRepository: vi.fn(),
 }));
-vi.mock("@/infrastructure/supabase/supabase-subscription-repository", () => ({
-  SupabaseSubscriptionRepository: vi.fn(),
-}));
+vi.mock(
+  "@/infrastructure/supabase/supabase-subscription-onboarding-repository",
+  () => ({ SupabaseSubscriptionOnboardingRepository: vi.fn() })
+);
 vi.mock("@/infrastructure/resend/resend-notification-service", () => ({
   ResendNotificationService: vi.fn(),
 }));

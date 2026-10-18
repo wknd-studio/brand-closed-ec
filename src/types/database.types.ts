@@ -698,9 +698,33 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      apply_rank_change: {
+        Args: {
+          p_changed_by: string;
+          p_from_rank_code: string;
+          p_initial_fee_charged: boolean;
+          p_stripe_subscription_id: string;
+          p_to_rank_code: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       claim_stripe_webhook_event: {
         Args: { p_event_id: string; p_payload: Json; p_type: string };
         Returns: boolean;
+      };
+      confirm_subscription_onboarding: {
+        Args: {
+          p_billing_anchor_day: number;
+          p_current_period_end: string;
+          p_current_period_start: string;
+          p_rank_code: string;
+          p_status: string;
+          p_stripe_customer_id: string;
+          p_stripe_subscription_id: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
       };
       get_current_admin_user_id: { Args: never; Returns: string };
       get_current_user_id: { Args: never; Returns: string };

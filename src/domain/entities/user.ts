@@ -20,6 +20,7 @@ interface UserProps {
   memberType?: MemberType;
   companyName?: string | null;
   invoiceRegistrationNumber?: string | null;
+  initialFeePaidRank?: MemberRank | null;
 }
 
 export class User {
@@ -38,6 +39,8 @@ export class User {
   readonly memberType: MemberType;
   readonly companyName: string | null;
   readonly invoiceRegistrationNumber: string | null;
+  // 支払い済み最高ランク。再入会・アップグレード時の初期費用の判定に使う
+  readonly initialFeePaidRank: MemberRank | null;
 
   private constructor(props: UserProps) {
     const memberType = props.memberType ?? MemberType.of("individual");
@@ -64,6 +67,7 @@ export class User {
     this.memberType = memberType;
     this.companyName = companyName;
     this.invoiceRegistrationNumber = invoiceRegistrationNumber;
+    this.initialFeePaidRank = props.initialFeePaidRank ?? null;
   }
 
   static of(props: UserProps): User {
@@ -91,6 +95,7 @@ export class User {
       memberType: this.memberType,
       companyName: this.companyName,
       invoiceRegistrationNumber: this.invoiceRegistrationNumber,
+      initialFeePaidRank: this.initialFeePaidRank,
     };
   }
 
