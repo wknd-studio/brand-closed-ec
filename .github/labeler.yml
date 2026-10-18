@@ -1,0 +1,41 @@
+# 人間が差分を精読してからマージすべきPRに high-risk ラベルを付ける（#312）。
+# 運用ルールは CLAUDE.md の「PRのレビュー」を参照。
+# バグがすり抜けたら、該当パスをここへ追加するか、lint・テストに変換する。
+high-risk:
+  - changed-files:
+      - any-glob-to-any-file:
+          # スキーマ・RLS
+          - "supabase/migrations/**"
+          # Stripe・ClerkのWebhook
+          - "src/app/api/webhooks/**"
+          - "src/lib/webhook/**"
+          # 認証・認可（ルート保護・ログインユーザー取得・RLSを迂回するservice roleクライアント）
+          - "src/middleware.ts"
+          - "src/lib/auth/**"
+          - "src/lib/supabase/server-admin.ts"
+          # 決済・注文・金額計算
+          - "src/lib/stripe.ts"
+          - "src/infrastructure/stripe/**"
+          - "src/use-cases/place-order.ts"
+          - "src/use-cases/cancel-order.ts"
+          - "src/use-cases/mark-checkout-order-as-paid.ts"
+          - "src/use-cases/mark-invoice-order-as-paid.ts"
+          - "src/use-cases/select-plan.ts"
+          - "src/use-cases/complete-subscription-onboarding.ts"
+          - "src/domain/entities/order*.ts"
+          - "src/domain/value-objects/money.ts"
+          - "src/domain/value-objects/order-status.ts"
+          - "src/domain/services/**"
+          - "src/app/(member)/order/checkout/actions.ts"
+          - "src/app/admin/orders/**/actions.ts"
+          - "src/app/onboarding/plan/actions.ts"
+          - "src/app/onboarding/payment/**"
+          # ゲート自体を弱める変更（CI・権限設定・lint・完了チェック）
+          - ".github/**"
+          - ".claude/settings.json"
+          - "eslint.config.mjs"
+          - "Taskfile.yml"
+          - "scripts/ci/**"
+          # 依存の追加・更新（スクリプトだけの変更も区別できないため対象にする）
+          - "package.json"
+          - "pnpm-lock.yaml"

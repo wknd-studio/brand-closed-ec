@@ -71,10 +71,17 @@ feature/* →  Cloudflare Pages Preview URL
 - **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
 - **依存の確認**: 着手前に `gh api repos/wknd-studio/brand-closed-ec/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
+- **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
 - **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、`task check` がgreenなら、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop` まで進めてよい。完了後、issue・実施したテスト・PRのURLを簡潔に報告する。それ以外の場合（`linkedIssue` が無い、担当issue以外の変更を含む等）は通常どおり承認を待つ
 
 **PR サイズ**: 1つのPRは1つの責務に絞る。大きなユーザーストーリーは実装前に小さな単位に分割し、各PRが独立してレビュー・デプロイ可能な状態にする。目安は差分200行以内・変更ファイル5つ以内。分割できない場合はその理由をPR説明に明記する。
+
+**PRのレビュー**: スキーマ・RLS、Webhook、認証・認可、決済・注文・金額計算、CI・権限設定・lintなどのゲート、依存に触れるPRには `high-risk` ラベルが自動で付く（対象パスは `.github/labeler.yml`）。
+
+- `high-risk` ラベルのPRは、人間が差分を精読してからマージする
+- それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する
+- レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、同じバグを検出するlint・テストに変換する
 
 **テスト自動選択ルール**: 機能を実装するたびに、以下の基準で必要なテストを自動的に作成する。
 

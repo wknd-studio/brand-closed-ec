@@ -4,3 +4,5 @@ pnpm-lock.yaml
 dist/
 .agents/
 .claude/skills/
+# .git/info/exclude で無視しているためPrettierが自動で除外しない
+.claude/worktrees/
