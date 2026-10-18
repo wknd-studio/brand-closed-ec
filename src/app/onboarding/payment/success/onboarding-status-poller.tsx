@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as Sentry from "@sentry/nextjs";
 import { isOnboardingCompleted } from "./actions";
 
 const POLL_INTERVAL_MS = 2000;
@@ -19,7 +20,12 @@ export default function OnboardingStatusPoller() {
 
     async function poll() {
       // 一時的な通信エラーでは諦めず、タイムアウトまで確認を続ける
-      const completed = await isOnboardingCompleted().catch(() => false);
+      const completed = await isOnboardingCompleted().catch((err) => {
+        Sentry.captureException(err, {
+          tags: { page: "onboarding-payment-success" },
+        });
+        return false;
+      });
       if (cancelled) return;
       if (completed) {
         router.replace("/shop");
