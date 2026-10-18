@@ -73,7 +73,11 @@ feature/* →  Cloudflare Pages Preview URL
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
 - **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
-- **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、`task check` がgreenなら、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop` まで進めてよい。完了後、issue・実施したテスト・PRのURLを簡潔に報告する。それ以外の場合（`linkedIssue` が無い、担当issue以外の変更を含む等）は通常どおり承認を待つ
+- **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、次の2つを満たせば、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop --body-file <本文ファイル>` まで進めてよい。PR本文は `.github/pull_request_template.md` の各項目を埋める（該当しない欄は「なし」と書く）。
+  - `task check` がgreen
+  - レビュー用サブエージェント `spec-reviewer`（`.claude/agents/spec-reviewer.md`）に、`git diff origin/develop...HEAD` の差分・担当issueの本文・関連する `specs/*/spec.md` だけを渡してレビューさせ、重大な指摘を解消済み（指摘と対応はPR本文に書く）
+
+  完了後、issue・実施したテスト・PRのURLを簡潔に報告する。それ以外の場合（`linkedIssue` が無い、担当issue以外の変更を含む等）は通常どおり承認を待つ
 
 **PR の粒度**: **1PR = 1目的 = 1issue**。PRタイトルに書くissue番号は1つだけにする。問題になるのは行数ではなく目的の数で、複数の目的をまとめたPRは、不具合時に無関係な変更まで一緒にrevertされる。大きなユーザーストーリーは実装前に1目的ずつのissueへ分割し、各PRが独立してレビュー・デプロイ・revertできる状態にする。
 
