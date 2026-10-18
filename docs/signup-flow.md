@@ -159,6 +159,15 @@ sequenceDiagram
     Webhook->>Webhook: completeSubscriptionOnboarding
     Webhook->>DB: users.stripe_customer_id, stripe_subscription_id, onboarding_completed=true
     Webhook-->>Stripe: 200 OK
+
+    loop 2秒ごと（最大60秒）
+        ユーザー->>DB: onboarding_completedを確認（Server Action）
+    end
+    alt 確定した
+        ユーザー->>ユーザー: /shop へ自動で進む
+    else 60秒たっても確定しない
+        ユーザー->>ユーザー: 再ログイン・問い合わせを案内（再決済の導線は出さない）
+    end
 ```
 
 ---
