@@ -282,7 +282,9 @@ describe("renderHtml", () => {
   });
 
   it("依存の無いissueはマイルストーンごとの一覧にリンク付きで並べる", () => {
-    const html = renderHtml(sampleGraph(), "now");
+    const html = renderHtml(sampleGraph(), "now").split(
+      "<h2>依存関係の無いissue</h2>"
+    )[1];
     expect(html).toContain("<h3>マイルストーンなし</h3>");
     expect(html).toContain(
       '<a href="https://github.com/o/r/issues/3" target="_blank">#3 issue 3</a>'

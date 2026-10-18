@@ -4,6 +4,9 @@
  * GitHubからの取得はscripts/issue-deps-graph.tsが担う。
  */
 
+import { escapeHtml } from "./html";
+import { renderNextActions } from "./next-actions";
+
 export type IssueInput = {
   number: number;
   title: string;
@@ -63,6 +66,9 @@ export const NON_DEV_LABEL = "non-dev";
 
 /** 作成からこの日数以上経ったPRを「止まっている」とみなす */
 export const STALE_PR_DAYS = 7;
+
+/** サブissueを登録していない親issue（#165など）は、タイトルのこの表記で親とみなす */
+const PARENT_TITLE_MARK = "（親issue）";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -139,7 +145,9 @@ export function buildGraph(
 }
 
 function kindOf(issue: IssueInput): IssueKind {
-  if (issue.subIssueCount > 0) return "parent";
+  if (issue.subIssueCount > 0 || issue.title.includes(PARENT_TITLE_MARK)) {
+    return "parent";
+  }
   if (issue.labels.includes(NON_DEV_LABEL)) return "non-dev";
   return "dev";
 }
@@ -251,13 +259,6 @@ export function toMermaid(graph: Graph): string {
   return lines.join("\n");
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
 function chipStyle(status: IssueStatus): string {
   const c = STATUS_COLORS[status];
   return `background: ${c.fill}; border-color: ${c.stroke}; color: ${c.color}`;
@@ -302,6 +303,17 @@ ${group
   h1 { font-size: 18px; margin: 0; }
   h2 { font-size: 16px; margin: 24px 0 8px; }
   h3 { font-size: 14px; margin: 16px 0 4px; }
+  h4 { font-size: 13px; margin: 12px 0 4px; color: #4b5563; }
+  .next-actions { margin-bottom: 24px; }
+  .next-actions h2 { margin-top: 0; }
+  .next-actions .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 0 24px; }
+  .next-actions li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; border-bottom: 1px solid #f3f4f6; overflow-wrap: anywhere; }
+  .next-actions li.stale { background: #fef2f2; border-left: 3px solid #dc2626; padding-left: 6px; }
+  .next-actions li.stale .age { background: #dc2626; border-color: #dc2626; color: #fff; }
+  .next-actions li.empty { color: #9ca3af; }
+  .next-actions .pr { display: inline-flex; gap: 4px; align-items: baseline; }
+  .tag { border: 1px solid #d1d5db; border-radius: 4px; padding: 0 6px; font-size: 12px; color: #4b5563; white-space: nowrap; }
+  .tag.draft { border-style: dashed; color: #6b7280; }
   .meta { color: #6b7280; font-size: 13px; }
   .chip { border: 1px solid; border-radius: 4px; padding: 2px 8px; font-size: 12px; margin-right: 6px; }
   .graph { height: 75vh; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; cursor: grab; }
@@ -319,6 +331,8 @@ ${group
   <div>${legend}</div>
   <span class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックするとissueを開く。ホイールで拡大縮小、ドラッグで移動、ダブルクリックで拡大。生成: ${escapeHtml(generatedAt)}</span>
 </header>
+${renderNextActions(graph)}
+<h2>依存グラフ</h2>
 <div class="graph"><pre class="mermaid">${escapeHtml(toMermaid(graph))}</pre></div>
 <h2>依存関係の無いissue</h2>
 ${independent}
