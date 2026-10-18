@@ -1,7 +1,7 @@
 <!--
 実装PR用の既定テンプレート。spec.md を追加・更新するPRは
 `?template=spec-change.md` を付けて PULL_REQUEST_TEMPLATE/spec-change.md を使う。
-レビューの無いPRは、CIの結果とこの本文の証拠欄でマージを判断する（CLAUDE.md「PRのレビュー」）。
+`high-risk` ラベル以外のPRは、CIの結果とこの本文の証拠欄でマージを判断する（CLAUDE.md「PRのレビュー」）。
 該当しない欄は削除せず「なし」と書く。
 -->
 
