@@ -1,0 +1,34 @@
+name: Test Guard
+
+# テストの削除・skip・アサーション減少・テスト対象の設定変更を含むPRを失敗させる（#309）。
+# AIエージェントが実装を直す代わりにテストを弱めてCIを通すのを、ブランチ保護の必須チェックで止める。
+# 意図的な変更なら、人間がPRに `test-change-approved` ラベルを付けると成功扱いになる
+on:
+  # 必須チェックに登録するため、テストを変更しないPRでも常に実行する
+  pull_request:
+    branches: [develop, main]
+    # ラベルの付け外しで結果を更新する
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  test-guard:
+    name: Test Guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Check for weakened tests
+        env:
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'test-change-approved') }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          if bash scripts/ci/check-test-tampering.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"; then
+            exit 0
+          fi
+          if [[ "$APPROVED" == "true" ]]; then
+            echo "::notice::test-change-approved ラベルが付いているため、上記の変更を承認済みとして成功扱いにします"
+            exit 0
+          fi
+          exit 1
