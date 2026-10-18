@@ -236,49 +236,65 @@ function sampleGraph(overrides: Partial<IssueInput> = {}) {
 }
 
 describe("toMermaid", () => {
-  it("依存のあるissueだけをマイルストーンごとのsubgraphで描き、依存の向きにエッジを張る", () => {
+  it("依存のあるissueだけを、マイルストーンの枠を使わずに描き、依存の向きにエッジを張る", () => {
     const m = toMermaid(sampleGraph());
-    expect(m).toContain('subgraph M0["調達管理"]');
+    expect(m).toContain('I1["#1 issue 1 ↓1"]');
     expect(m).toContain("I1 --> I2");
     expect(m).not.toContain("I3");
-    expect(m).not.toContain("マイルストーンなし");
+    expect(m).not.toContain("subgraph");
   });
 
-  it("各ノードにissueへのクリックリンクを付ける", () => {
-    expect(toMermaid(sampleGraph())).toContain(
-      'click I1 href "https://github.com/o/r/issues/1" "issue 1" _blank'
+  it("親issueは二重線の形で描く", () => {
+    expect(toMermaid(sampleGraph({ subIssueCount: 1 }))).toContain(
+      'I1[["#1 issue 1 ↓1"]]'
     );
   });
 
-  it("ラベル中のダブルクォート・山括弧をエスケープする", () => {
-    expect(toMermaid(sampleGraph({ title: 'a "b" <c>' }))).toContain(
-      'I1["#1 a #quot;b#quot; #lt;c#gt;"]'
-    );
-  });
-
-  it("長いタイトルは切り詰める", () => {
-    expect(toMermaid(sampleGraph({ title: "あ".repeat(60) }))).toContain(
-      `I1["#1 ${"あ".repeat(28)}…"]`
-    );
-  });
-
-  it("ステータスごとのクラスを付ける", () => {
+  it("ステータス・種別などのクラスを付ける", () => {
     const m = toMermaid(sampleGraph());
     expect(m).toContain("class I1 ready");
+    expect(m).toContain("class I1 dev");
     expect(m).toContain("class I2 blocked");
+    expect(m).toContain("classDef stale stroke:#dc2626");
+  });
+
+  it("絞り込みで外れたノードとそのエッジを描かない", () => {
+    const m = toMermaid(sampleGraph({ labels: ["v1"] }), {
+      v1Only: true,
+      hideNonDev: false,
+    });
+    expect(m).toContain("I1[");
+    expect(m).not.toContain("I2");
   });
 });
 
 describe("renderHtml", () => {
-  it("Mermaidのソースをエスケープして埋め込む", () => {
-    const html = renderHtml(
-      sampleGraph({ title: "A & <B>" }),
-      "2026-10-17 12:00"
-    );
-    expect(html).toContain("I1 --&gt; I2");
-    expect(html).toContain("#1 A &amp; #lt;B#gt;");
+  function embeddedData(html: string) {
+    const json =
+      /<script type="application\/json" id="graph-data">(.*?)<\/script>/.exec(
+        html
+      )![1];
+    return JSON.parse(json) as {
+      variants: Record<string, string>;
+      relatives: Record<string, { before: number[]; after: number[] }>;
+    };
+  }
+
+  it("絞り込みの組み合わせごとのMermaidのソースと、前後のissueを埋め込む", () => {
+    const html = renderHtml(sampleGraph(), "2026-10-17 12:00");
+    const data = embeddedData(html);
+    expect(Object.keys(data.variants).sort()).toEqual(["00", "01", "10", "11"]);
+    expect(data.variants["00"]).toContain("I1 --> I2");
+    expect(data.relatives["1"]).toEqual({ before: [], after: [2] });
     expect(html).toContain("2026-10-17 12:00");
-    expect(html).toContain('securityLevel: "loose"');
+    expect(html).toContain('id="v1-only"');
+    expect(html).toContain('id="hide-non-dev"');
+  });
+
+  it("埋め込むデータ中の「<」をエスケープし、scriptタグを閉じさせない", () => {
+    const html = renderHtml(sampleGraph({ title: "</script><b>" }), "now");
+    expect(html).not.toContain("</script><b>");
+    expect(embeddedData(html).variants["00"]).toContain("#lt;/script#gt;");
   });
 
   it("依存の無いissueはマイルストーンごとの一覧にリンク付きで並べる", () => {
@@ -299,6 +315,14 @@ describe("renderHtml", () => {
     );
     expect(html).toContain("#3 &lt;script&gt;");
     expect(html).not.toContain("#3 <script>");
+  });
+
+  it("依存の無い一覧に、絞り込み用の属性を付ける", () => {
+    const html = renderHtml(
+      buildGraph([issue(3, { labels: ["non-dev"] })], []),
+      "now"
+    );
+    expect(html).toContain("<li data-not-v1 data-non-dev>");
   });
 
   it("グラフを拡大縮小・移動できるようにする", () => {
