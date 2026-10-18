@@ -1,23 +1,54 @@
 name: Product Data Sync
 
 on:
-  # 実業者のスクレイパーが無く、Doppler のセットアップも未整備で毎日失敗するため一時停止中。
-  # 環境別（main=本番 / develop=stg）実行に揃えたうえで再開する（#314）
-  # schedule:
-  #   # 毎日 03:00 UTC（日本時間 正午12:00）に実行する
-  #   - cron: "0 3 * * *"
+  schedule:
+    # 毎日 03:00 UTC（日本時間 正午12:00）に実行する
+    - cron: "0 3 * * *"
   workflow_dispatch: {}
 
 jobs:
   scheduled-sync:
-    name: Run scheduled scraping sync
+    name: Run scheduled scraping sync (${{ matrix.env }})
     runs-on: ubuntu-latest
+    # アプリ本体と同じ「main = 本番 / develop = stg」の昇格フローに揃える。
+    # checkoutのrefを固定しないとデフォルトブランチ（develop）のコードで動き、
+    # 未リリースのスクレイパーが本番Sanityに書き込みうるため、環境ごとに明示する。
+    # DOPPLER_TOKENはGitHub Environmentごとに登録した、各Doppler config
+    # （production → prod / staging → stg）のService Token（#314）
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { env: production, ref: main }
+          - { env: staging, ref: develop }
+    environment: ${{ matrix.env }}
+    concurrency:
+      group: product-data-sync-${{ matrix.env }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+        with: { ref: "${{ matrix.ref }}" }
+      - name: Check sync script is released to this branch
+        # 同期機能がまだmainに昇格していない間、本番ジョブが毎日失敗し続けないよう、
+        # checkoutしたコードにスクリプトが無ければ以降をスキップする
+        id: released
+        run: |
+          if [ -f scripts/product-import/run-scheduled-sync.ts ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::${{ matrix.ref }} に同期スクリプトが未リリースのため、${{ matrix.env }} の同期をスキップします"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: pnpm/action-setup@v4
+        if: steps.released.outputs.ok == 'true'
       - uses: actions/setup-node@v4
+        if: steps.released.outputs.ok == 'true'
         with: { node-version: "22", cache: "pnpm" }
+      - uses: dopplerhq/cli-action@v3
+        if: steps.released.outputs.ok == 'true'
       - run: pnpm install --frozen-lockfile
+        if: steps.released.outputs.ok == 'true'
       - run: doppler run -- pnpm tsx scripts/product-import/run-scheduled-sync.ts
+        if: steps.released.outputs.ok == 'true'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
