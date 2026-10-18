@@ -8,4 +8,6 @@ export interface UserRepository {
   insertIfAbsent(user: User): Promise<void>;
   // findByClerkUserIdは有効な行だけを返すため、退会済みかどうかはこちらで確認する
   hasWithdrawnByClerkUserId(clerkUserId: string): Promise<boolean>;
+  // 有効な行のstripe_customer_idだけを更新する（他の列を古い値で上書きしない）
+  saveStripeCustomerId(userId: string, stripeCustomerId: string): Promise<void>;
 }

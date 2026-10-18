@@ -17,9 +17,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 const createCheckoutSessionMock = vi.fn();
+const listSubscriptionsMock = vi.fn();
 vi.mock("@/lib/stripe", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: createCheckoutSessionMock } },
+    subscriptions: { list: listSubscriptionsMock },
   }),
   STRIPE_PRICE_IDS: {
     starter: { monthly: "price_monthly", initialFee: "price_initial" },
@@ -39,6 +41,13 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { resolveOnboardingCheckout } from "@/use-cases/resolve-onboarding-checkout";
 import OnboardingPaymentPage from "@/app/onboarding/payment/page";
+import { makeUser } from "./use-cases/helpers";
+
+// Stripe Customerを保存済みの会員（usersの行のidは"user-1"）
+const user = makeUser({ rank: "starter", onboardingCompleted: false }).with({
+  id: "user-1",
+  stripeCustomerId: "cus_1",
+});
 
 describe("OnboardingPaymentPage - Sentry例外送信", () => {
   beforeEach(() => {
@@ -48,9 +57,10 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
       emailAddresses: [{ emailAddress: "test@example.com" }],
     } as never);
     vi.mocked(resolveOnboardingCheckout).mockResolvedValue({
-      userId: "user-1",
+      user,
       rank: "starter",
     });
+    listSubscriptionsMock.mockResolvedValue({ data: [] });
   });
 
   it("Checkout Session作成失敗時にSentry.captureExceptionを呼ぶ", async () => {
@@ -108,6 +118,7 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
 
     expect(createCheckoutSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        customer: "cus_1",
         line_items: [
           { price: "price_monthly", quantity: 1 },
           { price: "price_initial", quantity: 1 },
@@ -116,5 +127,17 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
       }),
       { idempotencyKey: "onboarding-checkout-session-user-1-starter" }
     );
+  });
+
+  it("有効なサブスクリプションが既にある場合、Checkout Sessionを作らずに決済完了画面へリダイレクトする", async () => {
+    listSubscriptionsMock.mockResolvedValue({
+      data: [{ id: "sub_1", status: "incomplete" }],
+    });
+
+    await expect(OnboardingPaymentPage()).rejects.toThrow(
+      "NEXT_REDIRECT:/onboarding/payment/success"
+    );
+
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 });

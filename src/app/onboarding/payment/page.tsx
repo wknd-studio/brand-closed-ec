@@ -2,24 +2,18 @@ import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth/current-user";
-import { getStripe, STRIPE_PRICE_IDS } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { resolveOnboardingCheckout } from "@/use-cases/resolve-onboarding-checkout";
+import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
+import {
+  startOnboardingCheckout,
+  type StartOnboardingCheckoutResult,
+} from "@/use-cases/start-onboarding-checkout";
 import Link from "next/link";
 
 export default async function OnboardingPaymentPage() {
   const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
-
-  // 請求するランクはURLではなくselectPlanで保存した登録内容から決める
-  // （resolve-onboarding-checkout.ts参照）
-  const checkout = await resolveOnboardingCheckout(userId, {
-    userRepo: new SupabaseUserRepository(createAdminClient()),
-  });
-  if ("redirectTo" in checkout) redirect(checkout.redirectTo);
-
-  const paidRank = checkout.rank;
 
   let user;
   try {
@@ -35,34 +29,22 @@ export default async function OnboardingPaymentPage() {
   }
   const email = user?.emailAddresses[0]?.emailAddress;
 
-  let session;
+  // 請求するランクはURLではなくselectPlanで保存した登録内容から決め
+  // （resolve-onboarding-checkout.ts参照）、会員ごとに1つのStripe Customerで
+  // 決済させる（start-onboarding-checkout.ts参照）
+  let checkout: StartOnboardingCheckoutResult;
   try {
-    session = await getStripe().checkout.sessions.create(
+    checkout = await startOnboardingCheckout(
+      { clerkUserId: userId, email },
       {
-        mode: "subscription",
-        line_items: [
-          { price: STRIPE_PRICE_IDS[paidRank].monthly, quantity: 1 },
-          { price: STRIPE_PRICE_IDS[paidRank].initialFee, quantity: 1 },
-        ],
-        customer_email: email,
-        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding/payment/cancel`,
-        metadata: {
-          clerk_user_id: userId,
-          plan: paidRank,
-        },
-        locale: "ja",
-      },
-      {
-        // 請求内容はusersの行に保存したランクから決めるため、冪等キーも
-        // 同じusersの行とランクで一意にする
-        idempotencyKey: `onboarding-checkout-session-${checkout.userId}-${paidRank}`,
+        userRepo: new SupabaseUserRepository(createAdminClient()),
+        checkoutGateway: new StripeOnboardingCheckoutGateway(),
       }
     );
   } catch (err) {
     Sentry.captureException(err, {
       tags: { page: "onboarding-payment" },
-      extra: { clerkUserId: userId, plan: paidRank },
+      extra: { clerkUserId: userId },
     });
     console.error("[Stripe] Checkout Session 作成失敗:", err);
     return (
@@ -77,7 +59,9 @@ export default async function OnboardingPaymentPage() {
     );
   }
 
-  if (!session.url) {
+  if ("redirectTo" in checkout) redirect(checkout.redirectTo);
+
+  if (!checkout.url) {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
         <div className="space-y-4 text-center">
@@ -90,5 +74,5 @@ export default async function OnboardingPaymentPage() {
     );
   }
 
-  redirect(session.url);
+  redirect(checkout.url);
 }

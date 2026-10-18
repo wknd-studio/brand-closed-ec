@@ -61,6 +61,10 @@ test.describe.serial("プラン選択後にURLのプランを書き換える", (
     await page.getByRole("radio", { name: /PREMIUM/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
     await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    const firstSessionId = page
+      .url()
+      .match(/cs_(?:test|live)_[A-Za-z0-9]+/)?.[0];
+    expect(firstSessionId).toBeDefined();
 
     await page.goto("/onboarding/payment?plan=starter");
     await expect(page).toHaveURL(/checkout\.stripe\.com/);
@@ -71,6 +75,13 @@ test.describe.serial("プラン選択後にURLのプランを書き換える", (
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId!);
     expect(session.metadata?.plan).toBe("premium");
+
+    // 決済画面を開き直しても、同じStripe Customerで決済させる（GitHub issue #410）
+    const firstSession = await stripe.checkout.sessions.retrieve(
+      firstSessionId!
+    );
+    expect(session.customer).toEqual(expect.stringMatching(/^cus_/));
+    expect(session.customer).toBe(firstSession.customer);
 
     const lineItems = await stripe.checkout.sessions.listLineItems(sessionId!);
     expect(lineItems.data.map((item) => item.price?.id).sort()).toEqual(
