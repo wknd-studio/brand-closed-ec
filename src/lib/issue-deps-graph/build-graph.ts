@@ -6,6 +6,14 @@
 
 import { escapeHtml } from "./html";
 import { renderNextActions } from "./next-actions";
+import {
+  filterGraph,
+  nodeClasses,
+  nodeLabel,
+  relatives,
+  V1_LABEL,
+  type GraphFilter,
+} from "./view";
 
 export type IssueInput = {
   number: number;
@@ -73,7 +81,6 @@ const PARENT_TITLE_MARK = "（親issue）";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const NO_MILESTONE = "マイルストーンなし";
-const MAX_TITLE_LENGTH = 30;
 
 /** CLAUDE.mdのブランチ命名（feature/<issue番号>-<内容>）からissue番号を取り出す */
 export function issueNumberFromBranch(branch: string): number | null {
@@ -138,7 +145,7 @@ export function buildGraph(
     successors.set(e.from, [...(successors.get(e.from) ?? []), e.to]);
   }
   for (const node of nodes) {
-    node.downstream = countDownstream(node.number, successors);
+    node.downstream = reachable(node.number, successors).length;
   }
 
   return { nodes, edges };
@@ -152,20 +159,21 @@ function kindOf(issue: IssueInput): IssueKind {
   return "dev";
 }
 
-/** 到達可能な後続を数える。訪問済みを記録するので循環があっても止まる */
-function countDownstream(
+/** startから辿れるノード（start自身は除く）。訪問済みを記録するので循環があっても止まる */
+export function reachable(
   start: number,
-  successors: Map<number, number[]>
-): number {
+  adjacency: Map<number, number[]>
+): number[] {
   const visited = new Set<number>([start]);
-  const stack = [...(successors.get(start) ?? [])];
+  const stack = [...(adjacency.get(start) ?? [])];
   while (stack.length > 0) {
     const next = stack.pop()!;
     if (visited.has(next)) continue;
     visited.add(next);
-    stack.push(...(successors.get(next) ?? []));
+    stack.push(...(adjacency.get(next) ?? []));
   }
-  return visited.size - 1;
+  visited.delete(start);
+  return [...visited];
 }
 
 function classify(
@@ -198,18 +206,20 @@ export const STATUS_LABELS: Record<IssueStatus, string> = {
   waiting: "外部待ち",
 };
 
-function escapeLabel(text: string): string {
-  return text
-    .replaceAll('"', "#quot;")
-    .replaceAll("<", "#lt;")
-    .replaceAll(">", "#gt;");
-}
+// ステータスの色の上に重ねる。後ろほど優先される（停止の赤枠を最優先）
+const EXTRA_CLASS_DEFS = [
+  "classDef non-dev stroke-dasharray:6 3",
+  "classDef hub stroke-width:3px,font-weight:bold",
+  "classDef stale stroke:#dc2626,stroke-width:3px",
+];
 
-function truncate(text: string): string {
-  return text.length > MAX_TITLE_LENGTH
-    ? `${text.slice(0, MAX_TITLE_LENGTH - 2)}…`
-    : text;
-}
+/** 絞り込みの組み合わせ。キーはページ側で切り替えの状態から組み立てる */
+const FILTERS: Record<string, GraphFilter> = {
+  "00": { v1Only: false, hideNonDev: false },
+  "10": { v1Only: true, hideNonDev: false },
+  "01": { v1Only: false, hideNonDev: true },
+  "11": { v1Only: true, hideNonDev: true },
+};
 
 /** マイルストーンごとにまとめる（マイルストーンなしは末尾） */
 function groupByMilestone(nodes: GraphNode[]): [string, GraphNode[]][] {
@@ -227,36 +237,73 @@ function connectedNumbers(graph: Graph): Set<number> {
   return new Set(graph.edges.flatMap((e) => [e.from, e.to]));
 }
 
-/** 依存関係のあるissueだけを描く（依存の無いissueはrenderHtmlの一覧に回す） */
-export function toMermaid(graph: Graph): string {
+/**
+ * 依存関係のあるissueだけを描く（依存の無いissueはrenderHtmlの一覧に回す）。
+ * マイルストーンの枠（subgraph）は枠をまたぐ矢印の交差を増やすため描かず、
+ * 依存の流れだけで並べる。マイルストーンはページの選択欄に出す。
+ */
+export function toMermaid(
+  graph: Graph,
+  filter: GraphFilter = FILTERS["00"]
+): string {
   const connected = connectedNumbers(graph);
-  const nodes = graph.nodes.filter((n) => connected.has(n.number));
+  const view = filterGraph(
+    {
+      nodes: graph.nodes.filter((n) => connected.has(n.number)),
+      edges: graph.edges,
+    },
+    filter
+  );
 
   const lines = ["graph LR"];
-  groupByMilestone(nodes).forEach(([name, group], index) => {
-    lines.push(`  subgraph M${index}["${escapeLabel(name)}"]`);
-    for (const node of group) {
-      lines.push(
-        `    I${node.number}["#${node.number} ${escapeLabel(truncate(node.title))}"]`
-      );
-    }
-    lines.push("  end");
-  });
-  for (const edge of graph.edges) {
+  for (const node of view.nodes) {
+    const label = `"${nodeLabel(node)}"`;
+    lines.push(
+      `  I${node.number}${node.kind === "parent" ? `[[${label}]]` : `[${label}]`}`
+    );
+  }
+  for (const edge of view.edges) {
     lines.push(`  I${edge.from} --> I${edge.to}`);
   }
-  for (const node of nodes) {
-    lines.push(
-      `  click I${node.number} href "${node.url}" "${escapeLabel(node.title)}" _blank`
-    );
-    lines.push(`  class I${node.number} ${node.status}`);
+  for (const node of view.nodes) {
+    for (const c of nodeClasses(node)) {
+      lines.push(`  class I${node.number} ${c}`);
+    }
   }
   for (const [status, c] of Object.entries(STATUS_COLORS)) {
     lines.push(
       `  classDef ${status} fill:${c.fill},stroke:${c.stroke},color:${c.color}`
     );
   }
+  lines.push(...EXTRA_CLASS_DEFS.map((d) => `  ${d}`));
   return lines.join("\n");
+}
+
+/** ページのスクリプトが使うデータ。<script>内に埋め込むので「<」をエスケープする */
+function pageData(graph: Graph): string {
+  const data = {
+    variants: Object.fromEntries(
+      Object.entries(FILTERS).map(([key, f]) => [key, toMermaid(graph, f)])
+    ),
+    nodes: Object.fromEntries(
+      graph.nodes.map((n) => [
+        n.number,
+        {
+          title: n.title,
+          url: n.url,
+          milestone: n.milestone,
+          status: STATUS_LABELS[n.status],
+          prs: n.prs.map((p) => ({
+            number: p.number,
+            url: p.url,
+            ageDays: p.ageDays,
+          })),
+        },
+      ])
+    ),
+    relatives: relatives(graph),
+  };
+  return JSON.stringify(data).replaceAll("<", "\\u003c");
 }
 
 function chipStyle(status: IssueStatus): string {
@@ -264,13 +311,24 @@ function chipStyle(status: IssueStatus): string {
   return `background: ${c.fill}; border-color: ${c.stroke}; color: ${c.color}`;
 }
 
+function filterAttrs(node: GraphNode): string {
+  return [
+    node.labels.includes(V1_LABEL) ? "" : " data-not-v1",
+    node.kind === "non-dev" ? " data-non-dev" : "",
+  ].join("");
+}
+
 export function renderHtml(graph: Graph, generatedAt: string): string {
-  const legend = (Object.keys(STATUS_LABELS) as IssueStatus[])
-    .map(
+  const legend = [
+    ...(Object.keys(STATUS_LABELS) as IssueStatus[]).map(
       (s) =>
         `<span class="chip" style="${chipStyle(s)}">${STATUS_LABELS[s]}</span>`
-    )
-    .join("");
+    ),
+    '<span class="chip key-hub">↓N 後続の数（太枠は3本以上）</span>',
+    '<span class="chip key-stale">⚠ PRが停止</span>',
+    '<span class="chip key-non-dev">破線: 開発外</span>',
+    '<span class="chip key-parent">二重線: 親issue</span>',
+  ].join("");
 
   const connected = connectedNumbers(graph);
   const independent = groupByMilestone(
@@ -283,7 +341,7 @@ export function renderHtml(graph: Graph, generatedAt: string): string {
 ${group
   .map(
     (n) =>
-      `<li><span class="chip" style="${chipStyle(n.status)}">${STATUS_LABELS[n.status]}</span><a href="${n.url}" target="_blank">#${n.number} ${escapeHtml(n.title)}</a></li>`
+      `<li${filterAttrs(n)}><span class="chip" style="${chipStyle(n.status)}">${STATUS_LABELS[n.status]}</span><a href="${n.url}" target="_blank">#${n.number} ${escapeHtml(n.title)}</a></li>`
   )
   .join("\n")}
 </ul>
@@ -298,52 +356,164 @@ ${group
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Issue依存グラフ</title>
 <style>
-  body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; background: #fff; color: #111; }
-  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
-  h1 { font-size: 18px; margin: 0; }
-  h2 { font-size: 16px; margin: 24px 0 8px; }
+  :root { color-scheme: light dark; --bg: #fff; --fg: #111827; --muted: #6b7280; --sub: #4b5563; --line: #e5e7eb; --soft: #f3f4f6; --link: #1d4ed8; --warn-bg: #fef2f2; --warn: #dc2626; --panel: #f9fafb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f172a; --fg: #e5e7eb; --muted: #9ca3af; --sub: #cbd5e1; --line: #334155; --soft: #1e293b; --link: #93c5fd; --warn-bg: #3f1d1d; --warn: #f87171; --panel: #1e293b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 1400px; padding: 16px; font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.5; background: var(--bg); color: var(--fg); }
+  header { margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; }
   h3 { font-size: 14px; margin: 16px 0 4px; }
-  h4 { font-size: 13px; margin: 12px 0 4px; color: #4b5563; }
+  h4 { font-size: 13px; margin: 12px 0 4px; color: var(--sub); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
   .next-actions { margin-bottom: 24px; }
   .next-actions h2 { margin-top: 0; }
   .next-actions .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 0 24px; }
-  .next-actions li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; border-bottom: 1px solid #f3f4f6; overflow-wrap: anywhere; }
-  .next-actions li.stale { background: #fef2f2; border-left: 3px solid #dc2626; padding-left: 6px; }
-  .next-actions li.stale .age { background: #dc2626; border-color: #dc2626; color: #fff; }
-  .next-actions li.empty { color: #9ca3af; }
+  .next-actions li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; border-bottom: 1px solid var(--soft); overflow-wrap: anywhere; }
+  .next-actions li.stale { background: var(--warn-bg); border-left: 3px solid var(--warn); padding-left: 6px; }
+  .next-actions li.stale .age { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .next-actions li.empty { color: var(--muted); }
   .next-actions .pr { display: inline-flex; gap: 4px; align-items: baseline; }
-  .tag { border: 1px solid #d1d5db; border-radius: 4px; padding: 0 6px; font-size: 12px; color: #4b5563; white-space: nowrap; }
-  .tag.draft { border-style: dashed; color: #6b7280; }
-  .meta { color: #6b7280; font-size: 13px; }
-  .chip { border: 1px solid; border-radius: 4px; padding: 2px 8px; font-size: 12px; margin-right: 6px; }
-  .graph { height: 75vh; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; cursor: grab; }
-  .graph pre { margin: 0; height: 100%; }
+  .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; color: var(--sub); white-space: nowrap; }
+  .tag.draft { border-style: dashed; color: var(--muted); }
+  .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  .chip { display: inline-block; border: 1px solid; border-radius: 4px; padding: 1px 8px; font-size: 12px; margin-right: 6px; white-space: nowrap; }
+  .legend .chip { margin-right: 0; }
+  .key-hub, .key-non-dev, .key-parent { border-color: var(--muted); color: var(--sub); }
+  .key-hub { border-width: 3px; font-weight: bold; }
+  .key-stale { border: 3px solid var(--warn); color: var(--warn); }
+  .key-non-dev { border-style: dashed; }
+  .key-parent { border-style: double; border-width: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
+  .controls label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .controls input { width: 18px; height: 18px; margin: 0; }
+  #selection { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; overflow-wrap: anywhere; }
+  #selection .hint { color: var(--muted); }
+  #selection p { margin: 4px 0; }
+  #selection button { font: inherit; font-size: 12px; padding: 2px 10px; cursor: pointer; }
+  .graph { height: 70vh; min-height: 360px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: grab; touch-action: none; }
   .graph svg { width: 100%; height: 100%; max-width: none; }
+  .graph .node { cursor: pointer; }
+  .graph .node, .graph .flowchart-link { transition: opacity 0.15s; }
+  .graph.focus .node:not(.related), .graph.focus .flowchart-link:not(.related) { opacity: 0.15; }
+  .graph.focus .flowchart-link.related { stroke-width: 3px; }
+  body.v1-only .independent li[data-not-v1], body.hide-non-dev .independent li[data-non-dev] { display: none; }
   ul { list-style: none; padding: 0; margin: 0; }
-  li { padding: 3px 0; font-size: 14px; }
-  a { color: #1d4ed8; text-decoration: none; }
+  li { padding: 3px 0; }
+  a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 <header>
   <h1>Issue依存グラフ</h1>
-  <div>${legend}</div>
-  <span class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックするとissueを開く。ホイールで拡大縮小、ドラッグで移動、ダブルクリックで拡大。生成: ${escapeHtml(generatedAt)}</span>
+  <p class="meta">生成: ${escapeHtml(generatedAt)}</p>
 </header>
 ${renderNextActions(graph)}
 <h2>依存グラフ</h2>
-<div class="graph"><pre class="mermaid">${escapeHtml(toMermaid(graph))}</pre></div>
+<p class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックすると、待っているものと解放されるものを強調する（もう一度クリックで解除）。ホイール・ボタンで拡大縮小、ドラッグで移動。</p>
+<div class="legend">${legend}</div>
+<div class="controls">
+  <label><input type="checkbox" id="v1-only">v1だけ</label>
+  <label><input type="checkbox" id="hide-non-dev">開発外を隠す</label>
+</div>
+<div id="selection"><span class="hint">ノードを選ぶと、ここにissueへのリンクと前後のissueを出す</span></div>
+<div class="graph"></div>
 <h2>依存関係の無いissue</h2>
+<div class="independent">
 ${independent}
+</div>
+<script type="application/json" id="graph-data">${pageData(graph)}</script>
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
-  mermaid.initialize({ startOnLoad: false, securityLevel: "loose", flowchart: { useMaxWidth: false } });
-  await mermaid.run({ querySelector: ".graph .mermaid" });
-  const svg = document.querySelector(".graph svg");
-  svg.removeAttribute("style");
-  svgPanZoom(svg, { controlIconsEnabled: true, fit: true, center: true, minZoom: 0.1, maxZoom: 20, zoomScaleSensitivity: 0.3 });
+  const data = JSON.parse(document.getElementById("graph-data").textContent);
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default", flowchart: { useMaxWidth: false } });
+
+  const container = document.querySelector(".graph");
+  const panel = document.getElementById("selection");
+  const v1Only = document.getElementById("v1-only");
+  const hideNonDev = document.getElementById("hide-non-dev");
+  let panZoom = null;
+  let selected = null;
+  let renderCount = 0;
+
+  const numberOfNode = (el) => { const m = /^flowchart-I(\\d+)-/.exec(el.id); return m ? Number(m[1]) : null; };
+  const endsOfEdge = (el) => { const m = /^L_I(\\d+)_I(\\d+)_/.exec(el.id); return m ? [Number(m[1]), Number(m[2])] : null; };
+
+  function el(tag, props = {}, children = []) {
+    const e = Object.assign(document.createElement(tag), props);
+    e.append(...children);
+    return e;
+  }
+  const issueLink = (n) => el("a", { href: data.nodes[n].url, target: "_blank", textContent: "#" + n + " " + data.nodes[n].title });
+  function issueList(label, numbers) {
+    const items = numbers.length === 0 ? ["なし"] : numbers.flatMap((n, i) => (i === 0 ? [issueLink(n)] : ["、", issueLink(n)]));
+    return el("p", {}, [el("strong", { textContent: label + "（" + numbers.length + "）: " }), ...items]);
+  }
+
+  function renderPanel() {
+    if (selected === null) {
+      panel.replaceChildren(el("span", { className: "hint", textContent: "ノードを選ぶと、ここにissueへのリンクと前後のissueを出す" }));
+      return;
+    }
+    const node = data.nodes[selected];
+    const rel = data.relatives[selected];
+    const prs = node.prs.flatMap((p) => [" ", el("a", { href: p.url, target: "_blank", textContent: "PR #" + p.number }), "（" + p.ageDays + "日）"]);
+    const clear = el("button", { type: "button", textContent: "選択を解除" });
+    clear.addEventListener("click", () => select(null));
+    panel.replaceChildren(
+      el("p", {}, [el("strong", {}, [issueLink(selected)]), " ", node.status + " / " + (node.milestone ?? "マイルストーンなし"), ...prs, " ", clear]),
+      issueList("待っているもの", rel.before),
+      issueList("解放されるもの", rel.after),
+    );
+  }
+
+  function select(number) {
+    selected = number;
+    const rel = selected === null ? null : data.relatives[selected];
+    const related = rel ? new Set([selected, ...rel.before, ...rel.after]) : null;
+    container.classList.toggle("focus", related !== null);
+    for (const node of container.querySelectorAll(".node")) {
+      node.classList.toggle("related", related?.has(numberOfNode(node)) ?? false);
+    }
+    for (const edge of container.querySelectorAll(".flowchart-link")) {
+      const ends = endsOfEdge(edge);
+      edge.classList.toggle("related", !!ends && !!related && related.has(ends[0]) && related.has(ends[1]));
+    }
+    renderPanel();
+  }
+
+  async function draw() {
+    document.body.classList.toggle("v1-only", v1Only.checked);
+    document.body.classList.toggle("hide-non-dev", hideNonDev.checked);
+    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0");
+    const { svg } = await mermaid.render("deps-graph-" + renderCount++, data.variants[key]);
+    panZoom?.destroy();
+    container.innerHTML = svg;
+    const svgEl = container.querySelector("svg");
+    svgEl.removeAttribute("style");
+    panZoom = svgPanZoom(svgEl, { controlIconsEnabled: true, fit: true, center: true, minZoom: 0.1, maxZoom: 20, zoomScaleSensitivity: 0.3, dblClickZoomEnabled: false });
+    const stillShown = [...container.querySelectorAll(".node")].some((n) => numberOfNode(n) === selected);
+    select(stillShown ? selected : null);
+  }
+
+  // ドラッグで移動したあとのクリックは選択として扱わない
+  let pointerStart = null;
+  container.addEventListener("pointerdown", (e) => { pointerStart = [e.clientX, e.clientY]; });
+  container.addEventListener("click", (e) => {
+    if (pointerStart && Math.hypot(e.clientX - pointerStart[0], e.clientY - pointerStart[1]) > 5) return;
+    if (e.target.closest("#svg-pan-zoom-controls")) return;
+    const node = e.target.closest(".node");
+    const number = node ? numberOfNode(node) : null;
+    select(number === null || number === selected ? null : number);
+  });
+  v1Only.addEventListener("change", draw);
+  hideNonDev.addEventListener("change", draw);
+  await draw();
 </script>
 </body>
 </html>
