@@ -67,17 +67,28 @@ export default clerkMiddleware(async (auth, req) => {
     }
     return;
   }
-  if (isOnboarding(req)) return;
-
-  // deleted_at は JWT に反映されないため常に DB で確認する
+  // deleted_at は JWT に反映されないため常に DB で確認する。
+  // clerk_user_id の一意制約は deleted_at IS NULL の部分インデックスのため、退会済み行と
+  // 有効な行が併存しうる。有効な行を優先し、無ければ退会済み行を取る
   const { data } = await supabaseAdmin()
     .from("users")
     .select("onboarding_completed, deleted_at")
     .eq("clerk_user_id", userId!)
-    .single();
+    .order("deleted_at", { ascending: false, nullsFirst: true })
+    .limit(1)
+    .maybeSingle();
 
   if (data?.deleted_at) {
     return NextResponse.redirect(new URL("/withdrawn", req.url));
+  }
+
+  // 入会済みの会員がオンボーディングから送信・決済すると、プランや会員種別の上書き、
+  // サブスクリプションの二重作成が起きるため、オンボーディングに入れない
+  if (isOnboarding(req)) {
+    if (data?.onboarding_completed) {
+      return NextResponse.redirect(new URL("/shop", req.url));
+    }
+    return;
   }
 
   if (!data?.onboarding_completed) {

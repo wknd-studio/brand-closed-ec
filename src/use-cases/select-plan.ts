@@ -4,6 +4,8 @@ import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
+import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
+import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
 
@@ -31,13 +33,21 @@ export async function selectPlan(
 ): Promise<{ redirectTo: string }> {
   const { userRepo, accountGateway } = deps;
 
+  // middlewareでも/onboarding/*から外しているが、Server Actionは直接呼べるためここでも拒否する。
+  // 入会済みの会員が送信するとrank_code・member_typeが上書きされ、onboarding_completedが
+  // falseに戻ってショップから締め出されるうえ、決済でサブスクリプションが二重にできる
+  const existing = await userRepo.findByClerkUserId(input.clerkUserId);
+  if (existing?.isWithdrawn()) throw new MemberWithdrawnError();
+  if (existing?.hasCompletedOnboarding()) {
+    throw new OnboardingAlreadyCompletedError();
+  }
+
   const phoneNumber = PhoneNumber.of(input.phoneNumber);
   const isCorporate = input.companyName !== undefined;
   const memberType = MemberType.of(isCorporate ? "corporate" : "individual");
   const invoiceRegistrationNumber = input.invoiceRegistrationNumber
     ? InvoiceRegistrationNumber.of(input.invoiceRegistrationNumber).value
     : null;
-  const existing = await userRepo.findByClerkUserId(input.clerkUserId);
 
   const user = existing
     ? existing.with({
