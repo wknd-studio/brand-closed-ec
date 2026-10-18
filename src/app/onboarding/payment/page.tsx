@@ -54,8 +54,8 @@ export default async function OnboardingPaymentPage() {
         locale: "ja",
       },
       {
-        // 退会後に同じClerkユーザーで再登録しても前回のセッションを返さないよう、
-        // Clerkのユーザーではなくusersの行とランクで一意にする
+        // 請求内容はusersの行に保存したランクから決めるため、冪等キーも
+        // 同じusersの行とランクで一意にする
         idempotencyKey: `onboarding-checkout-session-${checkout.userId}-${paidRank}`,
       }
     );
