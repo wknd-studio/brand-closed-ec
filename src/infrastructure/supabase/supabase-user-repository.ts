@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { UserRepository } from "@/repositories/user-repository";
 import { User } from "@/domain/entities/user";
@@ -48,44 +48,82 @@ function toUser(row: UserRow): User {
 const SELECT_FIELDS =
   "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id, member_type, company_name, invoice_registration_number";
 
+// 部分UNIQUE（WHERE deleted_at IS NULL）。supabase-jsのonConflictは部分インデックスの
+// 述語を書けないため、一意制約違反（23505）をこのインデックス名で判別する
+const ACTIVE_CLERK_USER_ID_INDEX = "users_clerk_user_id_active_idx";
+
+function isActiveClerkUserIdConflict(error: PostgrestError): boolean {
+  return (
+    error.code === "23505" && error.message.includes(ACTIVE_CLERK_USER_ID_INDEX)
+  );
+}
+
+// id以外の列。既存の有効な行を更新するときはidを変えない
+function toFields(user: User) {
+  return {
+    clerk_user_id: user.clerkUserId,
+    email: user.email,
+    first_name: user.firstName,
+    last_name: user.lastName,
+    phone_number: user.phoneNumber,
+    profile_completed_at: user.profileCompletedAt?.toISOString() ?? null,
+    rank_code: user.rank.value,
+    billing_anchor_day: user.billingAnchorDay,
+    onboarding_completed: user.onboardingCompleted,
+    deleted_at: user.deletedAt?.toISOString() ?? null,
+    stripe_customer_id: user.stripeCustomerId,
+    member_type: user.memberType.value,
+    company_name: user.companyName,
+    invoice_registration_number: user.invoiceRegistrationNumber,
+  };
+}
+
 export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findByClerkUserId(clerkUserId: string): Promise<User | null> {
-    const { data } = await this.db
+    // 部分UNIQUEのため、同じclerk_user_idの退会済み行と有効な行が併存しうる
+    const { data, error } = await this.db
       .from("users")
       .select(SELECT_FIELDS)
       .eq("clerk_user_id", clerkUserId)
-      .single();
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (error) throw error;
     return data ? toUser(data as UserRow) : null;
   }
 
   async findById(id: string): Promise<User | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("users")
       .select(SELECT_FIELDS)
       .eq("id", id)
-      .single();
+      .maybeSingle();
+    if (error) throw error;
     return data ? toUser(data as UserRow) : null;
   }
 
   async save(user: User): Promise<void> {
-    await this.db.from("users").upsert({
-      id: user.id,
-      clerk_user_id: user.clerkUserId,
-      email: user.email,
-      first_name: user.firstName,
-      last_name: user.lastName,
-      phone_number: user.phoneNumber,
-      profile_completed_at: user.profileCompletedAt?.toISOString() ?? null,
-      rank_code: user.rank.value,
-      billing_anchor_day: user.billingAnchorDay,
-      onboarding_completed: user.onboardingCompleted,
-      deleted_at: user.deletedAt?.toISOString() ?? null,
-      stripe_customer_id: user.stripeCustomerId,
-      member_type: user.memberType.value,
-      company_name: user.companyName,
-      invoice_registration_number: user.invoiceRegistrationNumber,
-    });
+    const fields = toFields(user);
+    const { error } = await this.db
+      .from("users")
+      .upsert({ id: user.id, ...fields });
+    if (!error) return;
+    if (!isActiveClerkUserIdConflict(error)) throw error;
+
+    // user.created Webhookが先に別のidで行を作っていた場合は、その有効な行を更新する
+    const { error: updateError } = await this.db
+      .from("users")
+      .update(fields)
+      .eq("clerk_user_id", user.clerkUserId)
+      .is("deleted_at", null);
+    if (updateError) throw updateError;
+  }
+
+  async insertIfAbsent(user: User): Promise<void> {
+    const { error } = await this.db
+      .from("users")
+      .insert({ id: user.id, ...toFields(user) });
+    if (error && !isActiveClerkUserIdConflict(error)) throw error;
   }
 }
