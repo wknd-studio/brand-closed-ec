@@ -1,0 +1,91 @@
+name: Mechanical Change Check
+
+# 機械的な変更のコミット（trailer `Mechanical-Change: <コマンド>`）を、親コミットの状態でコマンドを
+# 再実行し、結果がそのコミットと一致するかを検査する（#474）。一致したコミットは、人間がコマンドだけを読めばよい。
+# 規約は CLAUDE.md の「PRの粒度」、許可リストは scripts/ci/verify-mechanical-changes.ts を参照。
+#
+# コミットメッセージのコマンドを実行するため:
+#   - 実行するジョブ（verify）の権限は contents: read だけにし、トークンをチェックアウトに残さない
+#   - PRへのコメントは、PRのコードを一切実行しない別ジョブ（comment）で行う
+#   - 外部からのPR（fork）は対象外
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: mechanical-change-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Mechanical Change Check
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Replay mechanical commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pnpm -s tsx scripts/ci/verify-mechanical-changes.ts "$BASE_SHA" "$HEAD_SHA" \
+            --report "$RUNNER_TEMP/mechanical-change-report.md"
+      - name: Write job summary
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/mechanical-change-report.md" ]]; then
+            cat "$RUNNER_TEMP/mechanical-change-report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mechanical-change-report
+          path: ${{ runner.temp }}/mechanical-change-report.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+  comment:
+    name: Comment result
+    needs: verify
+    runs-on: ubuntu-latest
+    if: always() && needs.verify.result != 'skipped' && needs.verify.result != 'cancelled'
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: mechanical-change-report
+          path: report
+      - name: Create or update the PR comment
+        # push のたびに同じコメントを更新する（コメントを増やさない）。
+        # 機械的なコミットが無く、まだコメントも無ければ何もしない
+        run: |
+          report=report/mechanical-change-report.md
+          if [[ ! -f "$report" ]]; then
+            echo "::warning::検査結果のレポートがありません（verifyジョブのログを確認してください）"
+            exit 0
+          fi
+          marker='<!-- mechanical-change-check -->'
+          comment_id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
+          if [[ -n "$comment_id" ]]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$comment_id" -F body=@"$report" > /dev/null
+          elif ! grep -q 'mechanical-change-check:none' "$report"; then
+            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -F body=@"$report" > /dev/null
+          fi

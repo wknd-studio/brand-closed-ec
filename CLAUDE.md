@@ -82,6 +82,10 @@ feature/* →  Cloudflare Pages Preview URL
 **PR の粒度**: **1PR = 1目的 = 1issue**。PRタイトルに書くissue番号は1つだけにする。問題になるのは行数ではなく目的の数で、複数の目的をまとめたPRは、不具合時に無関係な変更まで一緒にrevertされる。大きなユーザーストーリーは実装前に1目的ずつのissueへ分割し、各PRが独立してレビュー・デプロイ・revertできる状態にする。
 
 - 一括置換・フォーマット・型の再生成など機械的な変更は、行数が大きくても目的が1つならそのままでよい。PR本文に機械的な変更であること（実行したコマンド等）を書く
+- 機械的な変更は、手作業の変更と混ぜずに専用のコミットにまとめ、実行したコマンドをコミットメッセージの最後の段落に `Mechanical-Change: <コマンド>` のtrailerで書く（複数なら1行ずつ・上から順に実行される。`Co-Authored-By:` と同じ段落でよい）。CIの `Mechanical Change Check`（`.github/workflows/mechanical-change-check.yml`）が、親コミットの状態でコマンドを再実行して結果がコミットと一致するかを検査し、一致したコミットはPRのコメントに「CIで再現を確認済み。読まなくてよい」と出す。一致しなければ失敗し、ずれたファイルを出す
+  - 書けるコマンドは許可リストだけ: `sed`（GNU sed の構文。`--sandbox` 付きで実行）・`prettier` / `pnpm exec prettier`（`--plugin` 不可）・`pnpm format`・`pnpm exec jscodeshift -t scripts/codemods/...`・`scripts/codemods/` 配下のスクリプト（直接・`bash`・`node`・`pnpm tsx`）。シェルを通さないため `;`・`&&`・`|`・`>`・`$()`・変数展開は使えない。クォートしないグロブ（`src/**/*.ts`）はその時点のgit管理下のファイルに展開される
+  - 新しいcodemodを `scripts/codemods/` に足すときは、codemod自体を別のコミット（trailer無し）にする。codemodの中身は人間が読む
+  - ローカルでの確認: `pnpm -s tsx scripts/ci/verify-mechanical-changes.ts origin/develop HEAD`（macOSのBSD sedは `--sandbox` が無いため、`sed` のコミットはCIでだけ検査できる）
 - ついでのリファクタや無関係な修正は同じPRに混ぜず、別issueにする
 - 差分200行・変更ファイル5つは「分割を検討する目安」とする。超えたら目的が複数混ざっていないかを見直し、1目的のまま超える場合はその旨をPR本文に書く
 
