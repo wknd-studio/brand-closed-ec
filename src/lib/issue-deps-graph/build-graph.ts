@@ -4,9 +4,17 @@
  * GitHubからの取得はscripts/issue-deps-graph.tsが担う。
  */
 
-import { escapeHtml } from "./html";
+import { renderCiStatus, type CiStatus } from "./ci-status";
+import { escapeAttr, escapeHtml } from "./html";
+import {
+  milestoneNames,
+  milestoneOf,
+  overviewMermaid,
+  sliceMilestone,
+} from "./milestones";
 import { renderNextActions } from "./next-actions";
 import {
+  escapeLabel,
   filterGraph,
   nodeClasses,
   nodeLabel,
@@ -23,7 +31,12 @@ export type IssueInput = {
   labels: string[];
   blockedBy: { number: number; state: "OPEN" | "CLOSED" }[];
   subIssueCount: number;
+  /** 本文の「## クライアントへの確認事項」の箇条書き（next-actions.tsのclientQuestionsOf） */
+  clientQuestions: string[];
 };
+
+// CIの結果（PRの最新コミットのstatusCheckRollup）。none: チェックが1つも無い
+export type CheckState = "success" | "failure" | "pending" | "none";
 
 export type OpenPrInput = {
   number: number;
@@ -32,11 +45,21 @@ export type OpenPrInput = {
   closingIssueNumbers: number[];
   createdAt: string;
   isDraft: boolean;
+  labels: string[];
+  additions: number;
+  deletions: number;
+  checks: CheckState;
 };
 
 // in-review: オープンなPRがある / blocked: 未完了のブロッカーがある
-// waiting: クライアント回答など開発外の要因で止まっている / ready: すぐ着手できる
-export type IssueStatus = "in-review" | "blocked" | "waiting" | "ready";
+// decision: 人間の判断を待っている / waiting: クライアント回答など開発外の要因で止まっている
+// ready: すぐ着手できる
+export type IssueStatus =
+  | "in-review"
+  | "blocked"
+  | "decision"
+  | "waiting"
+  | "ready";
 
 // dev: 実装 / non-dev: 法務・運用・外部サービスの設定など / parent: サブissueを持つ親issue
 export type IssueKind = "dev" | "non-dev" | "parent";
@@ -48,6 +71,11 @@ export type LinkedPr = {
   /** 作成からの経過日数（PRが止まっている日数の目安） */
   ageDays: number;
   isDraft: boolean;
+  /** 精読してからマージするPR（CLAUDE.md「PRのレビュー」） */
+  highRisk: boolean;
+  /** 追加と削除の行数の合計 */
+  changedLines: number;
+  checks: CheckState;
 };
 
 export type GraphNode = IssueInput & {
@@ -57,6 +85,8 @@ export type GraphNode = IssueInput & {
   prs: LinkedPr[];
   /** このissueが終わると着手できるようになるオープンなissueの数（間接的な後続を含む） */
   downstream: number;
+  /** このissueが終わると未完了のブロッカーが無くなる、直接の後続の数 */
+  unblocks: number;
   /** 作成からSTALE_PR_DAYS日以上経ったPRがある */
   stale: boolean;
 };
@@ -72,6 +102,12 @@ export const WAITING_LABEL = "waiting-client";
 /** このラベルが付いたissueは、開発外の作業（kind: non-dev）として扱う */
 export const NON_DEV_LABEL = "non-dev";
 
+/** このラベルが付いたissueは、人間の判断を待っているもの（status: decision）として扱う */
+export const NEEDS_DECISION_LABEL = "needs-decision";
+
+/** このラベルが付いたPRは、人間が差分を精読してからマージする */
+export const HIGH_RISK_LABEL = "high-risk";
+
 /** 作成からこの日数以上経ったPRを「止まっている」とみなす */
 export const STALE_PR_DAYS = 7;
 
@@ -80,12 +116,25 @@ const PARENT_TITLE_MARK = "（親issue）";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const NO_MILESTONE = "マイルストーンなし";
-
 /** CLAUDE.mdのブランチ命名（feature/<issue番号>-<内容>）からissue番号を取り出す */
 export function issueNumberFromBranch(branch: string): number | null {
   const match = /^(?:feature|hotfix)\/(\d+)(?:-|$)/.exec(branch);
   return match ? Number(match[1]) : null;
+}
+
+/** GitHubのstatusCheckRollupのstateをCheckStateにする */
+export function checkStateOf(rollup: string | null): CheckState {
+  switch (rollup) {
+    case "SUCCESS":
+      return "success";
+    case "FAILURE":
+    case "ERROR":
+      return "failure";
+    case null:
+      return "none";
+    default:
+      return "pending";
+  }
 }
 
 export function buildGraph(
@@ -108,6 +157,9 @@ export function buildGraph(
         (now.getTime() - new Date(pr.createdAt).getTime()) / DAY_MS
       ),
       isDraft: pr.isDraft,
+      highRisk: pr.labels.includes(HIGH_RISK_LABEL),
+      changedLines: pr.additions + pr.deletions,
+      checks: pr.checks,
     };
     for (const target of targets) {
       const byNumber = prsByIssue.get(target) ?? new Map<number, LinkedPr>();
@@ -129,6 +181,7 @@ export function buildGraph(
       openBlockers,
       prs: linkedPrs,
       downstream: 0,
+      unblocks: 0,
       stale: linkedPrs.some((p) => p.ageDays >= STALE_PR_DAYS),
       status: classify(i, kind, openBlockers, linkedPrs),
     };
@@ -146,6 +199,9 @@ export function buildGraph(
   }
   for (const node of nodes) {
     node.downstream = reachable(node.number, successors).length;
+    node.unblocks = nodes.filter(
+      (n) => n.openBlockers.length === 1 && n.openBlockers[0] === node.number
+    ).length;
   }
 
   return { nodes, edges };
@@ -185,6 +241,7 @@ function classify(
   if (prs.length > 0) return "in-review";
   // 親issueはサブissueが終わるまで閉じられないので、着手可能にはしない
   if (openBlockers.length > 0 || kind === "parent") return "blocked";
+  if (issue.labels.includes(NEEDS_DECISION_LABEL)) return "decision";
   if (issue.labels.includes(WAITING_LABEL)) return "waiting";
   return "ready";
 }
@@ -196,6 +253,7 @@ const STATUS_COLORS: Record<
   ready: { fill: "#dcfce7", stroke: "#16a34a", color: "#14532d" },
   "in-review": { fill: "#dbeafe", stroke: "#2563eb", color: "#1e3a8a" },
   blocked: { fill: "#f3f4f6", stroke: "#9ca3af", color: "#374151" },
+  decision: { fill: "#f3e8ff", stroke: "#9333ea", color: "#581c87" },
   waiting: { fill: "#fef3c7", stroke: "#d97706", color: "#78350f" },
 };
 
@@ -203,14 +261,16 @@ export const STATUS_LABELS: Record<IssueStatus, string> = {
   ready: "着手可能",
   "in-review": "PRあり",
   blocked: "ブロック中",
+  decision: "判断待ち",
   waiting: "外部待ち",
 };
 
-// ステータスの色の上に重ねる。後ろほど優先される（停止の赤枠を最優先）
+// ステータスの色の上に重ねる。後ろほど優先される（停止の赤枠を優先し、外部ノードは常に点線で薄く）
 const EXTRA_CLASS_DEFS = [
   "classDef non-dev stroke-dasharray:6 3",
   "classDef hub stroke-width:3px,font-weight:bold",
   "classDef stale stroke:#dc2626,stroke-width:3px",
+  "classDef external opacity:0.5,stroke-dasharray:2 2",
 ];
 
 /** 絞り込みの組み合わせ。キーはページ側で切り替えの状態から組み立てる */
@@ -221,16 +281,17 @@ const FILTERS: Record<string, GraphFilter> = {
   "11": { v1Only: true, hideNonDev: true },
 };
 
-/** マイルストーンごとにまとめる（マイルストーンなしは末尾） */
-function groupByMilestone(nodes: GraphNode[]): [string, GraphNode[]][] {
-  const groups = new Map<string, GraphNode[]>();
-  for (const node of nodes) {
-    const key = node.milestone ?? NO_MILESTONE;
-    groups.set(key, [...(groups.get(key) ?? []), node]);
-  }
-  return [...groups.entries()].sort(([a], [b]) =>
-    a === NO_MILESTONE ? 1 : b === NO_MILESTONE ? -1 : 0
-  );
+/** マイルストーンごとにまとめる（milestoneNamesの順。マイルストーンなしは末尾） */
+function groupByMilestone(
+  graph: Graph,
+  nodes: GraphNode[]
+): [string, GraphNode[]][] {
+  return milestoneNames(graph)
+    .map((name): [string, GraphNode[]] => [
+      name,
+      nodes.filter((n) => milestoneOf(n) === name),
+    ])
+    .filter(([, group]) => group.length > 0);
 }
 
 function connectedNumbers(graph: Graph): Set<number> {
@@ -240,24 +301,34 @@ function connectedNumbers(graph: Graph): Set<number> {
 /**
  * 依存関係のあるissueだけを描く（依存の無いissueはrenderHtmlの一覧に回す）。
  * マイルストーンの枠（subgraph）は枠をまたぐ矢印の交差を増やすため描かず、
- * 依存の流れだけで並べる。マイルストーンはページの選択欄に出す。
+ * 依存の流れだけで並べる。マイルストーンはページの選択欄で切り替え、
+ * milestoneを指定すると、そのマイルストーンのissueと直接依存し合う他のマイルストーンの
+ * issueを外部ノード（ラベルに所属マイルストーン名を付けて薄く描く）として加える。
  */
 export function toMermaid(
   graph: Graph,
-  filter: GraphFilter = FILTERS["00"]
+  filter: GraphFilter = FILTERS["00"],
+  milestone?: string
 ): string {
   const connected = connectedNumbers(graph);
-  const view = filterGraph(
+  const filtered = filterGraph(
     {
       nodes: graph.nodes.filter((n) => connected.has(n.number)),
       edges: graph.edges,
     },
     filter
   );
+  const view =
+    milestone === undefined
+      ? { ...filtered, external: new Set<number>() }
+      : sliceMilestone(filtered, milestone);
 
   const lines = ["graph LR"];
   for (const node of view.nodes) {
-    const label = `"${nodeLabel(node)}"`;
+    const suffix = view.external.has(node.number)
+      ? `（${escapeLabel(milestoneOf(node))}）`
+      : "";
+    const label = `"${nodeLabel(node)}${suffix}"`;
     lines.push(
       `  I${node.number}${node.kind === "parent" ? `[[${label}]]` : `[${label}]`}`
     );
@@ -266,7 +337,9 @@ export function toMermaid(
     lines.push(`  I${edge.from} --> I${edge.to}`);
   }
   for (const node of view.nodes) {
-    for (const c of nodeClasses(node)) {
+    const classes = nodeClasses(node);
+    if (view.external.has(node.number)) classes.push("external");
+    for (const c of classes) {
       lines.push(`  class I${node.number} ${c}`);
     }
   }
@@ -281,9 +354,27 @@ export function toMermaid(
 
 /** ページのスクリプトが使うデータ。<script>内に埋め込むので「<」をエスケープする */
 function pageData(graph: Graph): string {
+  const milestones = milestoneNames(graph);
+  // 描くたびにノードを分け合うので、マイルストーンごとの図をすべて埋め込んでも「すべて」の図の2倍程度に収まる
+  const variantsOf = (milestone?: string) =>
+    Object.fromEntries(
+      Object.entries(FILTERS).map(([key, f]) => [
+        key,
+        toMermaid(graph, f, milestone),
+      ])
+    );
   const data = {
-    variants: Object.fromEntries(
-      Object.entries(FILTERS).map(([key, f]) => [key, toMermaid(graph, f)])
+    milestones,
+    // キー "" は「すべて」
+    variants: Object.fromEntries([
+      ["", variantsOf()],
+      ...milestones.map((m) => [m, variantsOf(m)]),
+    ]),
+    overview: Object.fromEntries(
+      Object.entries(FILTERS).map(([key, f]) => [
+        key,
+        overviewMermaid(graph, f),
+      ])
     ),
     nodes: Object.fromEntries(
       graph.nodes.map((n) => [
@@ -291,7 +382,7 @@ function pageData(graph: Graph): string {
         {
           title: n.title,
           url: n.url,
-          milestone: n.milestone,
+          milestone: milestoneOf(n),
           status: STATUS_LABELS[n.status],
           prs: n.prs.map((p) => ({
             number: p.number,
@@ -318,7 +409,11 @@ function filterAttrs(node: GraphNode): string {
   ].join("");
 }
 
-export function renderHtml(graph: Graph, generatedAt: string): string {
+export function renderHtml(
+  graph: Graph,
+  generatedAt: string,
+  ci: CiStatus | null = null
+): string {
   const legend = [
     ...(Object.keys(STATUS_LABELS) as IssueStatus[]).map(
       (s) =>
@@ -328,14 +423,22 @@ export function renderHtml(graph: Graph, generatedAt: string): string {
     '<span class="chip key-stale">⚠ PRが停止</span>',
     '<span class="chip key-non-dev">破線: 開発外</span>',
     '<span class="chip key-parent">二重線: 親issue</span>',
+    '<span class="chip key-external">点線・薄色: 他のマイルストーン（クリックで切り替え）</span>',
+  ].join("");
+  const milestoneOptions = [
+    '<option value="">すべて</option>',
+    ...milestoneNames(graph).map(
+      (m) => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`
+    ),
   ].join("");
 
   const connected = connectedNumbers(graph);
   const independent = groupByMilestone(
+    graph,
     graph.nodes.filter((n) => !connected.has(n.number))
   )
     .map(
-      ([name, group]) => `<section>
+      ([name, group]) => `<section data-milestone="${escapeAttr(name)}">
 <h3>${escapeHtml(name)}</h3>
 <ul>
 ${group
@@ -368,6 +471,12 @@ ${group
   h3 { font-size: 14px; margin: 16px 0 4px; }
   h4 { font-size: 13px; margin: 12px 0 4px; color: var(--sub); }
   .legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .ci-status { border-radius: 6px; padding: 8px 12px; margin-bottom: 16px; overflow-wrap: anywhere; }
+  .ci-status p { margin: 4px 0; }
+  .ci-status.passing, .ci-status.unknown { color: var(--muted); padding: 0; }
+  .ci-status.failing { background: var(--warn-bg); border: 2px solid var(--warn); }
+  .ci-status.failing h2 { margin: 0 0 4px; color: var(--warn); }
+  .ci-status.failing ul ul { list-style: disc; padding-left: 20px; }
   .next-actions { margin-bottom: 24px; }
   .next-actions h2 { margin-top: 0; }
   .next-actions .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 0 24px; }
@@ -375,20 +484,35 @@ ${group
   .next-actions li.stale { background: var(--warn-bg); border-left: 3px solid var(--warn); padding-left: 6px; }
   .next-actions li.stale .age { background: var(--warn); border-color: var(--warn); color: #fff; }
   .next-actions li.empty { color: var(--muted); }
-  .next-actions .pr { display: inline-flex; gap: 4px; align-items: baseline; }
+  .next-actions li[hidden] { display: none; }
+  .next-actions .pr { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+  .next-actions .client li { display: block; }
+  .next-actions .client li ul { list-style: disc; padding-left: 20px; }
+  .next-actions .client li li { border-bottom: none; display: list-item; }
+  .next-actions textarea { display: block; width: 100%; font: inherit; margin: 4px 0; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; color: var(--sub); white-space: nowrap; }
   .tag.draft { border-style: dashed; color: var(--muted); }
+  .tag.milestone { background: var(--soft); }
+  .tag.unblocks { border-color: #16a34a; color: #16a34a; font-weight: bold; }
+  .tag.ci-success { border-color: #16a34a; color: #16a34a; }
+  .tag.ci-failure, .tag.high-risk, .tag.warn { border-color: var(--warn); color: var(--warn); }
   .meta { color: var(--muted); font-size: 13px; margin: 0; }
   .chip { display: inline-block; border: 1px solid; border-radius: 4px; padding: 1px 8px; font-size: 12px; margin-right: 6px; white-space: nowrap; }
   .legend .chip { margin-right: 0; }
-  .key-hub, .key-non-dev, .key-parent { border-color: var(--muted); color: var(--sub); }
+  .key-hub, .key-non-dev, .key-parent, .key-external { border-color: var(--muted); color: var(--sub); }
   .key-hub { border-width: 3px; font-weight: bold; }
   .key-stale { border: 3px solid var(--warn); color: var(--warn); }
   .key-non-dev { border-style: dashed; }
   .key-parent { border-style: double; border-width: 3px; }
+  .key-external { border-style: dotted; opacity: 0.6; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
   .controls label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
   .controls input { width: 18px; height: 18px; margin: 0; }
+  .controls select { font: inherit; padding: 2px 4px; max-width: 100%; }
+  .overview { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 8px 0; overflow-x: auto; }
+  .overview .node { cursor: pointer; }
+  .overview .node.current rect { stroke: var(--link) !important; stroke-width: 3px !important; }
+  .graph .empty { padding: 16px; color: var(--muted); }
   #selection { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; overflow-wrap: anywhere; }
   #selection .hint { color: var(--muted); }
   #selection p { margin: 4px 0; }
@@ -411,11 +535,16 @@ ${group
   <h1>Issue依存グラフ</h1>
   <p class="meta">生成: ${escapeHtml(generatedAt)}</p>
 </header>
+${renderCiStatus(ci)}
 ${renderNextActions(graph)}
 <h2>依存グラフ</h2>
 <p class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックすると、待っているものと解放されるものを強調する（もう一度クリックで解除）。ホイール・ボタンで拡大縮小、ドラッグで移動。</p>
+<h3>マイルストーン同士の依存</h3>
+<p class="meta">矢印の数字は、マイルストーンをまたぐ依存の本数。マイルストーンをクリックすると、その図に切り替える。</p>
+<div class="overview"></div>
 <div class="legend">${legend}</div>
 <div class="controls">
+  <label>マイルストーン<select id="milestone">${milestoneOptions}</select></label>
   <label><input type="checkbox" id="v1-only">v1だけ</label>
   <label><input type="checkbox" id="hide-non-dev">開発外を隠す</label>
 </div>
@@ -437,11 +566,16 @@ ${independent}
   const panel = document.getElementById("selection");
   const v1Only = document.getElementById("v1-only");
   const hideNonDev = document.getElementById("hide-non-dev");
+  const milestoneSelect = document.getElementById("milestone");
+  const overview = document.querySelector(".overview");
   let panZoom = null;
   let selected = null;
   let renderCount = 0;
+  // 選んでいるマイルストーン（"" は「すべて」）。URLの#に入れる
+  let current = "";
 
   const numberOfNode = (el) => { const m = /^flowchart-I(\\d+)-/.exec(el.id); return m ? Number(m[1]) : null; };
+  const milestoneOfOverviewNode = (el) => { const m = /^flowchart-M(\\d+)-/.exec(el.id); return m ? data.milestones[Number(m[1])] : null; };
   const endsOfEdge = (el) => { const m = /^L_I(\\d+)_I(\\d+)_/.exec(el.id); return m ? [Number(m[1]), Number(m[2])] : null; };
 
   function el(tag, props = {}, children = []) {
@@ -487,13 +621,66 @@ ${independent}
     renderPanel();
   }
 
+  function milestoneFromHash() {
+    let name = "";
+    try { name = decodeURIComponent(location.hash.slice(1)); } catch { name = ""; }
+    return data.milestones.includes(name) ? name : "";
+  }
+
+  async function setMilestone(name, push) {
+    current = name;
+    milestoneSelect.value = name;
+    if (push) history.pushState(null, "", name ? "#" + encodeURIComponent(name) : location.pathname + location.search);
+    await draw();
+  }
+
+  // 「次にやること」の行を選んだマイルストーンで絞り込み、行が無くなった一覧には「なし」と出す
+  function filterNextActions() {
+    for (const ul of document.querySelectorAll(".next-actions .columns ul")) {
+      const rows = [...ul.querySelectorAll(":scope > li[data-milestone]")];
+      if (rows.length === 0) continue;
+      for (const row of rows) row.hidden = current !== "" && row.dataset.milestone !== current;
+      let empty = ul.querySelector(":scope > li.filtered-empty");
+      if (!empty) {
+        empty = el("li", { className: "empty filtered-empty", textContent: "なし（このマイルストーンでは）" });
+        ul.append(empty);
+      }
+      empty.hidden = rows.some((row) => !row.hidden);
+    }
+  }
+
+  // 描画は非同期なので、続けて切り替えたときは最後に始めた描画だけを画面に反映する
+  let latestDraw = 0;
+
   async function draw() {
+    const drawId = ++latestDraw;
+    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0");
+    const definition = data.variants[current][key];
+    const hasNodes = /^  I\\d+\\[/m.test(definition);
+    const [overviewSvg, graphSvg] = await Promise.all([
+      mermaid.render("deps-overview-" + renderCount++, data.overview[key]).then((r) => r.svg),
+      hasNodes ? mermaid.render("deps-graph-" + renderCount++, definition).then((r) => r.svg) : null,
+    ]);
+    if (drawId !== latestDraw) return;
+
     document.body.classList.toggle("v1-only", v1Only.checked);
     document.body.classList.toggle("hide-non-dev", hideNonDev.checked);
-    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0");
-    const { svg } = await mermaid.render("deps-graph-" + renderCount++, data.variants[key]);
+    for (const section of document.querySelectorAll(".independent section")) {
+      section.hidden = current !== "" && section.dataset.milestone !== current;
+    }
+    filterNextActions();
+    overview.innerHTML = overviewSvg;
+    for (const node of overview.querySelectorAll(".node")) {
+      node.classList.toggle("current", milestoneOfOverviewNode(node) === current);
+    }
     panZoom?.destroy();
-    container.innerHTML = svg;
+    panZoom = null;
+    if (graphSvg === null) {
+      container.replaceChildren(el("p", { className: "empty", textContent: "この条件で依存関係のあるissueは無い" }));
+      select(null);
+      return;
+    }
+    container.innerHTML = graphSvg;
     const svgEl = container.querySelector("svg");
     svgEl.removeAttribute("style");
     panZoom = svgPanZoom(svgEl, { controlIconsEnabled: true, fit: true, center: true, minZoom: 0.1, maxZoom: 20, zoomScaleSensitivity: 0.3, dblClickZoomEnabled: false });
@@ -509,11 +696,28 @@ ${independent}
     if (e.target.closest("#svg-pan-zoom-controls")) return;
     const node = e.target.closest(".node");
     const number = node ? numberOfNode(node) : null;
+    // 外部ノード（他のマイルストーンのissue）は、そのマイルストーンの図に切り替えて選ぶ
+    if (number !== null && current !== "" && data.nodes[number].milestone !== current) {
+      selected = number;
+      setMilestone(data.nodes[number].milestone, true);
+      return;
+    }
     select(number === null || number === selected ? null : number);
   });
+  overview.addEventListener("click", (e) => {
+    const node = e.target.closest(".node");
+    const name = node ? milestoneOfOverviewNode(node) : null;
+    if (name !== null) setMilestone(name, true);
+  });
+  document.getElementById("copy-client-message")?.addEventListener("click", async (e) => {
+    await navigator.clipboard.writeText(document.getElementById("client-message").value);
+    e.target.textContent = "コピーした";
+  });
+  milestoneSelect.addEventListener("change", () => setMilestone(milestoneSelect.value, true));
+  addEventListener("popstate", () => setMilestone(milestoneFromHash(), false));
   v1Only.addEventListener("change", draw);
   hideNonDev.addEventListener("change", draw);
-  await draw();
+  await setMilestone(milestoneFromHash(), false);
 </script>
 </body>
 </html>

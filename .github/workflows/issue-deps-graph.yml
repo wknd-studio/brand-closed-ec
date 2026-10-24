@@ -21,6 +21,11 @@ on:
         labeled,
         unlabeled,
       ]
+  # developへのマージ後のCI（stgへのデプロイとstgのE2E）が終わったら、その結果をページの一番上に出す
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+    branches: [develop]
   # 依存（Blocked by）の追加・削除と、PRの作成・マージ（「PRあり」の表示）はActionsのトリガーにならないため、定期実行で拾う
   schedule:
     - cron: "*/15 * * * *"
@@ -37,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # developのCIの結果と、失敗したジョブのログを読む
+      actions: read
       issues: read
       pull-requests: read
       pages: write

@@ -5,10 +5,19 @@ import * as path from "node:path";
 
 import {
   buildGraph,
+  checkStateOf,
   renderHtml,
   type IssueInput,
   type OpenPrInput,
 } from "@/lib/issue-deps-graph/build-graph";
+import {
+  failedTestsFromLog,
+  summarizeCi,
+  type CiRunInput,
+  type CiStatus,
+} from "@/lib/issue-deps-graph/ci-status";
+import { jsonOutput } from "@/lib/issue-deps-graph/milestones";
+import { clientQuestionsOf } from "@/lib/issue-deps-graph/next-actions";
 
 /**
  * オープンなissueの依存グラフ（GitHub標準のBlocked by / Blocking）を生成する。
@@ -16,7 +25,8 @@ import {
  *
  * 使い方:
  *   task deps:graph           HTMLを生成してブラウザで開く（ノードをクリックするとissueへ飛ぶ）
- *   task deps:graph -- --json ノード・エッジ・ステータスをJSONで標準出力に出す（AI・スクリプト向け）
+ *   task deps:graph -- --json ノード・エッジ・ステータスと、マイルストーンごとの所属issue・
+ *                             マイルストーンをまたぐ依存、developのCIの結果をJSONで標準出力に出す（AI・スクリプト向け）
  *   pnpm tsx scripts/issue-deps-graph.ts --out=<path>  指定したパスにHTMLを書き出す（ブラウザは開かない。GitHub Pagesへのデプロイ用）
  *
  * 前提: gh CLIでログイン済み（CIではGH_TOKENを設定）であること
@@ -41,7 +51,7 @@ query($owner: String!, $name: String!, $cursor: String) {
     issues(states: OPEN, first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title url
+        number title url body
         milestone { title }
         labels(first: 20) { nodes { name } }
         blockedBy(first: 50) { nodes { number state } }
@@ -60,6 +70,7 @@ type IssuesResponse = {
           number: number;
           title: string;
           url: string;
+          body: string;
           milestone: { title: string } | null;
           labels: { nodes: { name: string }[] };
           blockedBy: { nodes: { number: number; state: "OPEN" | "CLOSED" }[] };
@@ -76,7 +87,9 @@ query($owner: String!, $name: String!, $cursor: String) {
     pullRequests(states: OPEN, first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number url headRefName createdAt isDraft
+        number url headRefName createdAt isDraft additions deletions
+        labels(first: 20) { nodes { name } }
+        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
         closingIssuesReferences(first: 20) { nodes { number } }
       }
     }
@@ -94,6 +107,14 @@ type PrsResponse = {
           headRefName: string;
           createdAt: string;
           isDraft: boolean;
+          additions: number;
+          deletions: number;
+          labels: { nodes: { name: string }[] };
+          commits: {
+            nodes: {
+              commit: { statusCheckRollup: { state: string } | null };
+            }[];
+          };
           closingIssuesReferences: { nodes: { number: number }[] };
         }[];
       };
@@ -120,6 +141,7 @@ function fetchIssues(): IssueInput[] {
         labels: n.labels.nodes.map((l) => l.name),
         blockedBy: n.blockedBy.nodes,
         subIssueCount: n.subIssues.totalCount,
+        clientQuestions: clientQuestionsOf(n.body),
       });
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
@@ -147,6 +169,12 @@ function fetchOpenPrs(): OpenPrInput[] {
         ),
         createdAt: n.createdAt,
         isDraft: n.isDraft,
+        labels: n.labels.nodes.map((l) => l.name),
+        additions: n.additions,
+        deletions: n.deletions,
+        checks: checkStateOf(
+          n.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null
+        ),
       });
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
@@ -154,11 +182,84 @@ function fetchOpenPrs(): OpenPrInput[] {
   return prs;
 }
 
+function ghApi<T>(endpoint: string): T {
+  return JSON.parse(
+    execFileSync("gh", ["api", endpoint], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    })
+  ) as T;
+}
+
+/** developへのマージ後に動くワークフロー（stgへのデプロイとstgのE2E） */
+const DEVELOP_CI_WORKFLOW = "deploy.yml";
+
+/**
+ * developへのマージ後のCIの結果。取得できなくても（権限不足など）ページ全体は生成したいので、
+ * 失敗したらnullを返す
+ */
+function fetchDevelopCi(): CiStatus | null {
+  try {
+    const repo = `repos/${REPO_OWNER}/${REPO_NAME}`;
+    const { workflow_runs } = ghApi<{
+      workflow_runs: {
+        id: number;
+        html_url: string;
+        display_title: string;
+        created_at: string;
+        status: string;
+        conclusion: string | null;
+      }[];
+    }>(
+      `${repo}/actions/workflows/${DEVELOP_CI_WORKFLOW}/runs?branch=develop&event=push&per_page=50`
+    );
+    const runs: CiRunInput[] = workflow_runs.map((r) => ({
+      id: r.id,
+      url: r.html_url,
+      title: r.display_title,
+      createdAt: r.created_at,
+      status: r.status,
+      conclusion: r.conclusion,
+    }));
+    const summary = summarizeCi(runs);
+    if (!summary.failing || summary.latest === null) {
+      return { summary, failedJobs: [] };
+    }
+    const { jobs } = ghApi<{
+      jobs: {
+        id: number;
+        name: string;
+        html_url: string;
+        conclusion: string | null;
+      }[];
+    }>(`${repo}/actions/runs/${summary.latest.id}/jobs`);
+    const failedJobs = jobs
+      .filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out")
+      .map((j) => ({
+        name: j.name,
+        url: j.html_url,
+        tests: failedTestsFromLog(
+          execFileSync("gh", ["api", `${repo}/actions/jobs/${j.id}/logs`], {
+            encoding: "utf8",
+            maxBuffer: 64 * 1024 * 1024,
+          })
+        ),
+      }));
+    return { summary, failedJobs };
+  } catch (error) {
+    console.error("developのCIの結果を取得できなかった:", error);
+    return null;
+  }
+}
+
 function main() {
   const graph = buildGraph(fetchIssues(), fetchOpenPrs());
+  const developCi = fetchDevelopCi();
 
   if (process.argv.includes("--json")) {
-    process.stdout.write(`${JSON.stringify(graph, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ ...jsonOutput(graph), developCi }, null, 2)}\n`
+    );
     return;
   }
 
@@ -171,7 +272,7 @@ function main() {
   const outPath =
     outArg ?? path.join(os.tmpdir(), "brand-closed-ec-issue-deps.html");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, renderHtml(graph, generatedAt));
+  fs.writeFileSync(outPath, renderHtml(graph, generatedAt, developCi));
   console.log(outPath);
   if (!outArg && process.platform === "darwin") {
     execFileSync("open", [outPath]);
