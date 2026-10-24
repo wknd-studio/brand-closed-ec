@@ -1,0 +1,15 @@
+# ワークツリー（scripts/with-worktree-db.sh）とCI（.github/workflows/deploy.yml）で、
+# `supabase start` のときに起動しないコンテナの名前（1行に1つ）。scripts/supabase-start-minimal.sh が読む。
+# 名前は Supabase CLI の `supabase start --help` の --exclude に並ぶもの（CLIのバージョンで変わる）で、
+# 一覧に無い名前は CLI がエラーにせず無視するため、supabase-start-minimal.sh が起動前に照合する。
+# アプリが使う db・gotrue（Auth）・postgrest（REST）・kong（APIゲートウェイ）は除外しない。
+storage-api
+imgproxy
+realtime
+edge-runtime
+logflare
+vector
+mailpit
+studio
+postgres-meta
+supavisor
