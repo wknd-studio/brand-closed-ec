@@ -121,6 +121,27 @@ base.describe.serial("退会済みの会員", () => {
       await expect(page).toHaveURL(/\/withdrawn$/);
     });
   }
+
+  // GitHub issue #493: SignOutButtonのエラーで画面ごと表示できず、退会した会員がログアウトできなかった。
+  // ログアウトするので、このグループの最後に置く
+  base(
+    "/withdrawn に退会完了の案内が表示され、トップへ戻るとログアウトして / へ移動する",
+    async () => {
+      const pageErrors: string[] = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+
+      await page.goto("/withdrawn");
+      await expect(
+        page.getByRole("heading", { name: "退会が完了しました" })
+      ).toBeVisible();
+      await page.getByRole("button", { name: "トップへ戻る" }).click();
+      await expect(page).toHaveURL(/\/$/);
+      // ログアウトしたので、保護されたページを開くとサインインへ戻される
+      await page.goto("/shop");
+      await expect(page).toHaveURL(/\/sign-in/);
+      expect(pageErrors).toEqual([]);
+    }
+  );
 });
 
 // clerk_user_idの一意制約は deleted_at IS NULL の部分インデックスのため、同じClerkユーザーの
