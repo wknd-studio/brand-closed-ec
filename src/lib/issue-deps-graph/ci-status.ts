@@ -18,7 +18,19 @@ export type CiRunInput = {
 
 export type FailedTests = { failed: string[]; flaky: string[] };
 
-export type FailedJob = { name: string; url: string; tests: FailedTests };
+export type FailedJob = {
+  name: string;
+  url: string;
+  /** ジョブのログを取れなかったときはnull */
+  tests: FailedTests | null;
+};
+
+export type JobInput = {
+  id: number;
+  name: string;
+  html_url: string;
+  conclusion: string | null;
+};
 
 export type CiSummary = {
   /** 取り消された実行を除いた、最新の完了した実行 */
@@ -101,6 +113,31 @@ export function failedTestsFromLog(log: string): FailedTests {
   return { failed: [...failed], flaky: [...flaky] };
 }
 
+/**
+ * 失敗・タイムアウトしたジョブと、そのログから取り出したテスト名。
+ * ログを取れないジョブがあっても、ほかの結果は出したいので、そのジョブのテスト名だけをnullにする
+ */
+export async function failedJobsOf(
+  jobs: JobInput[],
+  readLog: (jobId: number) => Promise<string>
+): Promise<FailedJob[]> {
+  const failed = jobs.filter(
+    (j) => j.conclusion === "failure" || j.conclusion === "timed_out"
+  );
+  return Promise.all(
+    failed.map(async (j) => {
+      let tests: FailedTests | null;
+      try {
+        tests = failedTestsFromLog(await readLog(j.id));
+      } catch (error) {
+        console.error(`ジョブ ${j.name} のログを取得できなかった:`, error);
+        tests = null;
+      }
+      return { name: j.name, url: j.html_url, tests };
+    })
+  );
+}
+
 function formatJst(iso: string): string {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("ja-JP", {
@@ -142,7 +179,11 @@ export function renderCiStatus(status: CiStatus | null): string {
   const jobs = failedJobs
     .map(
       (j) =>
-        `<li>${link(j.url, j.name)}${testList("失敗:", j.tests.failed)}${testList("不安定（再試行で成功）:", j.tests.flaky)}</li>`
+        `<li>${link(j.url, j.name)}${
+          j.tests === null
+            ? "<p>テスト名を取得できなかった（ジョブのログを見る）</p>"
+            : `${testList("失敗:", j.tests.failed)}${testList("不安定（再試行で成功）:", j.tests.flaky)}`
+        }</li>`
     )
     .join("");
   return `<section class="ci-status failing">

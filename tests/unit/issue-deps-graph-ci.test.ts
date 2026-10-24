@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import { buildGraph, renderHtml } from "@/lib/issue-deps-graph/build-graph";
 import {
+  failedJobsOf,
   failedTestsFromLog,
   renderCiStatus,
   summarizeCi,
@@ -159,5 +160,49 @@ describe("renderHtml: developのCIの結果", () => {
     expect(renderHtml(buildGraph([], []), "now")).toContain(
       "developのCIの結果を取得できなかった"
     );
+  });
+});
+
+describe("failedJobsOf", () => {
+  const jobs = [
+    { id: 1, name: "Deploy (staging)", html_url: "u1", conclusion: "success" },
+    { id: 2, name: "E2E Tests (stg)", html_url: "u2", conclusion: "failure" },
+    { id: 3, name: "Smoke", html_url: "u3", conclusion: "timed_out" },
+  ];
+
+  it("失敗・タイムアウトしたジョブだけを、ログから取り出したテスト名付きで返す", async () => {
+    const result = await failedJobsOf(jobs, async (id) =>
+      id === 2 ? "  1 failed\n    [chromium] › a.spec.ts:1:1 › a " : ""
+    );
+    expect(result).toEqual([
+      {
+        name: "E2E Tests (stg)",
+        url: "u2",
+        tests: { failed: ["a.spec.ts:1 › a"], flaky: [] },
+      },
+      { name: "Smoke", url: "u3", tests: { failed: [], flaky: [] } },
+    ]);
+  });
+
+  it("ログを取れなかったジョブも返し、テスト名だけをnullにする", async () => {
+    const result = await failedJobsOf(jobs, async (id) => {
+      if (id === 2) throw new Error("terminal escape sequences");
+      return "";
+    });
+    expect(result.map((j) => [j.name, j.tests])).toEqual([
+      ["E2E Tests (stg)", null],
+      ["Smoke", { failed: [], flaky: [] }],
+    ]);
+  });
+});
+
+describe("renderCiStatus: テスト名を取得できなかったジョブ", () => {
+  it("ジョブへのリンクは出し、テスト名を取得できなかった旨を出す", () => {
+    const html = renderCiStatus({
+      summary: summarizeCi([run(1, { conclusion: "failure" })]),
+      failedJobs: [{ name: "E2E Tests (stg)", url: "u2", tests: null }],
+    });
+    expect(html).toContain('<a href="u2" target="_blank">E2E Tests (stg)</a>');
+    expect(html).toContain("テスト名を取得できなかった");
   });
 });
