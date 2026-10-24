@@ -141,6 +141,25 @@ jobs:
             pnpm test:integration
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Collect local Supabase logs (失敗時のみ)
+        # 統合テストがときどきKongの502（upstream server）で落ちる原因を追うため、
+        # Kong・PostgREST・Postgres等のコンテナのログを残す（#497）。アーティファクトは
+        # Actionsのログと違いシークレットが伏せられないので、Dopplerの値を伏せてから書き出す
+        id: supabase-logs
+        if: failure()
+        # shell: bash でpipefailにし、dopplerが失敗したら書き出さずに止める
+        shell: bash
+        run: doppler secrets download --no-file --format json | pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Upload local Supabase logs (失敗時のみ)
+        # 伏せる処理が失敗したときはアップロードしない
+        if: failure() && steps.supabase-logs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-logs-integration
+          path: supabase-logs/
+          retention-days: 3
 
   build:
     name: Build (Cloudflare)
@@ -241,6 +260,21 @@ jobs:
             pnpm test:e2e
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
+      - name: Collect local Supabase logs (失敗時のみ)
+        # Integration Testsの同名のステップと同じ（#497）
+        id: supabase-logs
+        if: failure()
+        shell: bash
+        run: doppler secrets download --no-file --format json | pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
+      - name: Upload local Supabase logs (失敗時のみ)
+        if: failure() && steps.supabase-logs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-logs-e2e-pr
+          path: supabase-logs/
+          retention-days: 3
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
         # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけアップロードする
