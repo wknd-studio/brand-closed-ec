@@ -59,7 +59,7 @@ feature/* →  Cloudflare Pages Preview URL
 
 ## 行動ルール
 
-**実装順序**: テストを書く → 失敗を確認 → 実装 → テスト通過確認 → コミット（自動）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する（例外は下記「並列開発（Orca）」の自動push・PR条件のみ）。push・PR作成前に `task check`（typecheck → lint → ユニットテスト → 統合テスト）がgreenであること。
+**実装順序**: テストを書く → 失敗を確認 → テストをコミット → 実装 → テスト通過確認 → 実装・生成物・ドキュメントをそれぞれコミット（自動。分け方は下記「コミット形式」）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する（例外は下記「並列開発（Orca）」の自動push・PR条件のみ）。push・PR作成前に `task check`（typecheck → lint → ユニットテスト → 統合テスト）がgreenであること。
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
 
@@ -143,7 +143,16 @@ feature/* →  Cloudflare Pages Preview URL
 
 CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
 
-**コミット形式**: `feat(scope): BRAND-XX 説明` (Conventional Commits)
+**コミット形式**: `feat(scope): BRAND-XX 説明` (Conventional Commits)。1つのPRのコミットは、次の順に種類ごとに分ける。レビューする人間がテストのコミットだけで「このPRが何を保証するか」を掴み、そのうえで実装を読めるようにするため（TDDの順番そのまま）。
+
+1. テスト（`test(scope): ...`）: 失敗することを確認した状態のテストだけをコミットする。このコミットの時点ではテストが赤でよい（CIのテストはPRの先頭のコミットでだけ動き、コミット単位では動かない。pre-commitのlint-staged（eslint・prettier）は通す）。どう失敗したかはPR本文の「実行したチェック」に書く
+2. 実装（`feat`・`fix`・`refactor`）: テストを通す本番コード
+3. 生成物・機械的な変更（型の再生成・フォーマット・一括置換など）: 上記「PR の粒度」の `Mechanical-Change:` trailer の規約に従い、手作業の変更と混ぜない
+4. ドキュメント（`docs`）: spec.md・CLAUDE.md・`docs/` 等
+
+- 該当しないコミットは作らなくてよい（ドキュメントだけのPRなら `docs` だけ、等）。各種類が複数のコミットに分かれてもよい
+- レビュー指摘への対応は、この順に並べ直さず、追加のコミットでよい
+- コミットの分け方はCIで検査しない（守られないことが続いたら検査を足す）
 
 **言語**: 常に日本語で回答する。
 
