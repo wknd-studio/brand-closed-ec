@@ -5,7 +5,8 @@ import type { Database } from "@/types/database.types";
  * 個人・STARTERプランのusers行を、画面を経由せずDBに直接用意する。
  * `onboardingCompleted`がtrueならオンボーディング（決済完了）を終えた状態、falseなら決済直前の状態にする。
  * middlewareはusers.onboarding_completedだけを見て業務画面へのアクセスを許可するため、
- * Clerk側のメタデータは更新不要。前回の実行が中断されて行が残っていれば、指定した状態に戻す。
+ * Clerk側のメタデータは更新不要。前回の実行が中断されて行が残っていれば、下記`profile`の列だけを
+ * 指定した状態に上書きする（それ以外の列は前回の値のまま残る）。
  *
  * Playwrightに依存させず、統合テスト（tests/integration/e2e-helpers/）から呼べるように分けている。
  * `beforeInsert`は、探してから作るまでの間にuser.created Webhookの行が作られる状況を
