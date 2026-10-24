@@ -2,6 +2,9 @@ import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
 import { getStripe } from "@/lib/stripe";
+import { createAdminClient } from "@/lib/supabase/server-admin";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
 import { isOnboardingCompleted } from "./actions";
 import OnboardingStatusPoller from "./onboarding-status-poller";
 
@@ -15,16 +18,45 @@ const CHECKOUT_SESSION_ID_PATTERN = /^cs_(test|live)_[A-Za-z0-9]+$/;
 type CheckoutVerification = "paid" | "not_paid" | "unavailable";
 
 /**
+ * 本人のStripe Customerに有効なサブスクリプションがあるかを確かめる（GitHub issue #461）。
+ * 決済画面は、有効なサブスクリプションがあるとsession_idを付けずにこの画面へ送るため
+ * （start-onboarding-checkout.ts）、session_idが無くても決済済みの会員を種別選択へ
+ * 戻さないようにする。判定は決済画面と同じhasActiveSubscriptionで行う
+ */
+async function verifyActiveSubscription(
+  userId: string
+): Promise<CheckoutVerification> {
+  try {
+    const user = await new SupabaseUserRepository(
+      createAdminClient()
+    ).findByClerkUserId(userId);
+    if (!user?.stripeCustomerId) return "not_paid";
+
+    const hasActive =
+      await new StripeOnboardingCheckoutGateway().hasActiveSubscription(
+        user.stripeCustomerId
+      );
+    return hasActive ? "paid" : "not_paid";
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { page: "onboarding-payment-success" },
+      extra: { clerkUserId: userId },
+    });
+    console.error("[Stripe] サブスクリプションの確認に失敗:", err);
+    return "unavailable";
+  }
+}
+
+/**
  * URLのsession_idが、この会員の決済完了済みのCheckout Sessionかを確かめる
  * （GitHub issue #425）。決済していない会員が履歴・ブックマーク等からこの画面を
  * 開いたときに、「決済は完了しています」という事実と違う案内を出さないため。
  * 会員の照合は、決済画面がmetadataに入れているclerk_user_idで行う
  */
 async function verifyCheckoutSession(
+  userId: string,
   sessionId: string | string[] | undefined
 ): Promise<CheckoutVerification> {
-  const { userId } = await requireAuth();
-  if (!userId) return "not_paid";
   if (typeof sessionId !== "string") return "not_paid";
   if (!CHECKOUT_SESSION_ID_PATTERN.test(sessionId)) return "not_paid";
 
@@ -56,8 +88,14 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
   // Webhookが先に届いていれば待たせずに進める
   if (await isOnboardingCompleted()) redirect("/shop");
 
+  const { userId } = await requireAuth();
+  if (!userId) redirect("/onboarding/account-type");
+
   const { session_id: sessionId } = await searchParams;
-  const verification = await verifyCheckoutSession(sessionId);
+  let verification = await verifyCheckoutSession(userId, sessionId);
+  if (verification === "not_paid") {
+    verification = await verifyActiveSubscription(userId);
+  }
   if (verification === "not_paid") redirect("/onboarding/account-type");
 
   if (verification === "unavailable") {
