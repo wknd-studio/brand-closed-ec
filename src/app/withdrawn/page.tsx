@@ -1,4 +1,4 @@
-import { SignOutButton } from "@clerk/nextjs";
+import { SignOutToTopButton } from "./sign-out-to-top-button";
 
 export default function WithdrawnPage() {
   return (
@@ -8,11 +8,7 @@ export default function WithdrawnPage() {
         <p className="text-sm text-gray-500">
           ご利用いただきありがとうございました。
         </p>
-        <SignOutButton redirectUrl="/">
-          <button className="text-sm underline underline-offset-4">
-            トップへ戻る
-          </button>
-        </SignOutButton>
+        <SignOutToTopButton />
       </div>
     </main>
   );
