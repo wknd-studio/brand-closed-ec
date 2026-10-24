@@ -94,6 +94,25 @@ describe("judge_pr_review_summary", () => {
     ).toBe(0);
   });
 
+  it("全角コロン・太字の内側のコロンでも判定できる", () => {
+    const full = summary({}).replace(
+      "**変わる振る舞い**:",
+      "**変わる振る舞い**："
+    );
+    expect(judge(full).status).toBe(0);
+    expect(judge(full.replace(/(変わる振る舞い\*\*：).*$/m, "$1")).status).toBe(
+      1
+    );
+    const inner = summary({}).replace(
+      "**変わる振る舞い**:",
+      "**変わる振る舞い：**"
+    );
+    expect(judge(inner).status).toBe(0);
+    expect(
+      judge(inner.replace(/(変わる振る舞い：\*\*).*$/m, "$1")).status
+    ).toBe(1);
+  });
+
   it("空白だけの項目は空欄として扱う", () => {
     expect(judge(summary({ behavior: "   " })).status).toBe(1);
   });

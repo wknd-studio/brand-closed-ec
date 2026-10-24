@@ -36,13 +36,13 @@ judge_pr_review_summary() {
     !in_section { next }
     {
       line = $0
-      # 「- **項目名**:」（全角コロン・コロンが太字の内側にある書き方も許す）
+      # 「- **項目名**:」（全角コロン・コロンが太字の内側にある書き方も許す。全角は複数バイトのため [] でなく | で書く）
       if (match(line, /^[ \t]*[-*][ \t]+\*\*[^*]+\*\*/)) {
         label = substr(line, RSTART, RLENGTH)
         sub(/^[ \t]*[-*][ \t]+\*\*/, "", label); sub(/\*\*$/, "", label)
-        sub(/[:：]$/, "", label)
+        sub(/(:|：)$/, "", label)
         rest = substr(line, RSTART + RLENGTH)
-        sub(/^[:：]/, "", rest)
+        sub(/^(:|：)/, "", rest)
         current = 0
         for (i = 1; i <= n; i++) {
           if (labels[i] == trim(label)) { current = i; seen[i] = 1 }
