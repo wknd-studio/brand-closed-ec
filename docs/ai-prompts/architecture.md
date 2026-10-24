@@ -20,24 +20,29 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 | `src/components/`     | UI部品。props で受け取った DTO を表示する                                                                                                                  | データの取得・書き込み。業務判断                                                           |
 | `src/lib/`            | 業務を知らない共通部品（「src/lib に置くもの・置かないもの」を参照）                                                                                       | DBアクセス・業務ルール・組み立て・Server Action                                            |
 | `src/emails/`         | メールテンプレート（React Email）。props を表示するだけ                                                                                                    | 送信処理（→ `src/infrastructure/resend/`）。データの取得                                   |
+| `src/types/`          | 生成物（`database.types.ts`。`supabase gen types` で作る DB の型）                                                                                         | 手で書く型（各層の中に置く）                                                               |
 
 ## 依存してよい方向
 
 依存は**許可リスト**で考える。下の表に無い依存は禁止。新しいディレクトリを作っても、ここに足すまでは、どの層からも使ってはいけない（lint も許可リストの形で書く。#439）。
 
-| 層                    | import してよいもの                                                                      |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `src/domain/`         | 何にも依存しない（domain の中だけ。外部SDK・Next.js・React も不可）                      |
-| `src/repositories/`   | domain                                                                                   |
-| `src/queries/`        | domain                                                                                   |
-| `src/use-cases/`      | domain・repositories（どちらも外部SDKは不可）                                            |
-| `src/infrastructure/` | domain・repositories・queries・lib・emails・外部SDK                                      |
-| `src/composition/`    | domain・repositories・queries・use-cases・infrastructure                                 |
-| `src/app/`            | composition・domain（エラーの判別・値オブジェクト）・queries（DTOの型）・lib・components |
-| `src/components/`     | domain（値オブジェクト・型）・queries（DTOの型）・lib・components                        |
-| `src/lib/`            | lib と外部ライブラリ（Next.js・Clerk 等）だけ。業務の層（domain 以下）は使わない         |
-| `src/emails/`         | lib・emails                                                                              |
+| 層                        | import してよいもの                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `src/domain/`             | 何にも依存しない（domain の中だけ。外部SDK・Next.js・React も不可）                      |
+| `src/repositories/`       | domain                                                                                   |
+| `src/queries/`            | domain                                                                                   |
+| `src/use-cases/`          | domain・repositories（どちらも外部SDKは不可）                                            |
+| `src/infrastructure/`     | domain・repositories・queries・lib・emails・types・外部SDK                               |
+| `src/composition/`        | domain・repositories・queries・use-cases・infrastructure                                 |
+| `src/app/`                | composition・domain（エラーの判別・値オブジェクト）・queries（DTOの型）・lib・components |
+| `src/components/`         | domain（値オブジェクト・型）・queries（DTOの型）・lib・components                        |
+| `src/lib/`                | lib と外部ライブラリ（Next.js・Clerk 等）だけ。業務の層（domain 以下）は使わない         |
+| `src/emails/`             | lib・emails                                                                              |
+| `src/types/`              | 何にも依存しない（生成物）                                                               |
+| `src/middleware.ts`       | app と同じ（composition・domain・queries・lib）                                          |
+| `src/instrumentation*.ts` | 外部SDK（Sentry 等の初期化）だけ                                                         |
 
+- `src/types/`（DB の型）を使ってよいのは infrastructure だけ。DB の行の形を infrastructure の外に漏らさず、domain・DTO に変換して渡す
 - use-case から Query Service は使わない。書き込みの判断に要るデータは repository から集約として取る（読み取りと書き込みのモデルを混ぜないため）
 - app・components・lib から repositories・infrastructure は使わない（#441）
 - domain の内部の定数（ルールの正になっている `RANK_ORDER` 等）は domain の外で使わない。外からは value object・entity のメソッドを使う（#442）
@@ -52,8 +57,8 @@ repository を通さない直接クエリは、domain や repository にある�
 
 ## Query Service
 
-- **interface**: `src/queries/` に置く（例: `src/queries/member-order-query-service.ts`）。domain 以外に依存しない
-- **実装**: `src/infrastructure/` に置く（例: `src/infrastructure/supabase/supabase-member-order-query-service.ts`）
+- **interface**: `src/queries/` に置く（例（#450 で作る予定）: `src/queries/member-order-query-service.ts`）。domain 以外に依存しない
+- **実装**: `src/infrastructure/` に置く（例（#450 で作る予定）: `src/infrastructure/supabase/supabase-member-order-query-service.ts`）
 - **戻り値**: 画面用のDTO。DTOの型は interface と同じファイル（`src/queries/`）に置く。集約の repository に画面用の型を足さない
 - **業務ルール**: ランクによる表示制限・ランク別価格の選択などは、Query Service の実装の中で domain（`MemberRank` 等）を呼んで適用する。クエリの条件や実装の中に、同じ判定を書き直さない
 - 1画面（または1つの用途）に1メソッドを基本にする。複数の画面で同じ形が要るときだけ共通にする
@@ -67,7 +72,7 @@ repository を通さない直接クエリは、domain や repository にある�
 
 ## 外部サービスのクライアント
 
-Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastructure/` に置く（例: `src/infrastructure/supabase/client.ts`）。クライアントを使ってよいのは `src/infrastructure/` の中だけ（#440）。
+Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastructure/` に置く（例（#448 で移す予定）: `src/infrastructure/supabase/client.ts`。現在は `src/lib/supabase/`・`src/lib/sanity/client.ts`・`src/lib/stripe.ts`・`src/lib/email/index.ts` にある）。クライアントを使ってよいのは `src/infrastructure/` の中だけ（#440）。
 
 - 例外: `src/sanity/`（Sanity Studio）は Studio の中で Sanity のクライアントを使ってよい（「層構成の対象外」を参照）
 - Clerk の認証済みユーザーの取得（`auth()` を包んだ共通ヘルパー）は Next.js のリクエストに結びついた処理なので、`src/lib/auth/` に置く。Clerk の管理API（ユーザーの削除等）を呼ぶ処理は gateway として `src/infrastructure/clerk/` に置く
@@ -81,7 +86,7 @@ Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastr
 - UIヘルパー（`cn` 等）
 - Next.js 固有のヘルパー（フォント・テーマのスタイル生成等）
 - 認証済みユーザーの取得（`src/lib/auth/`）
-- 計測など、どの層からも使う横断的な道具で、業務を知らないもの（`src/lib/observability/`）
+- 計測など、app・infrastructure から使う横断的な道具で、業務を知らないもの（`src/lib/observability/`）。domain・use-cases から計測したいときは、ポート経由にする（「外側の関心事はポート経由」）
 
 置かないもの:
 
