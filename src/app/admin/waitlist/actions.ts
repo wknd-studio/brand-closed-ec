@@ -30,13 +30,23 @@ function reportUnexpected(
 }
 
 export async function approveWaitlistEntry(
-  emailAddress: string
+  waitlistEntryId: string
 ): Promise<ActionResult> {
   const authError = await requireAdmin();
   if (authError) return authError;
 
   const clerk = await clerkClient();
   try {
+    // 招待先のメールアドレスはクライアントから受け取らず、Waitlistのエントリから得る
+    // (Waitlistに登録されていない任意のアドレスを招待できないようにするため)。
+    // エントリを1件取得するAPIは無いため一覧をIDで絞り、queryは部分一致のため完全一致で絞る
+    const { data: entries } = await clerk.waitlistEntries.list({
+      query: waitlistEntryId,
+      status: "pending",
+    });
+    const entry = entries.find((e) => e.id === waitlistEntryId);
+    if (!entry) return { error: "参加希望が見つかりません" };
+
     // waitlistEntries.invite()はAccount Portal(*.accounts.dev、英語固定)にしか
     // リンクできない仕様のため使わない。redirectUrlを指定できる汎用の招待APIを使い、
     // 自前の/sign-upページ(ブランドデザイン・日本語)に招待リンクを向ける。
@@ -45,12 +55,12 @@ export async function approveWaitlistEntry(
     // (NEXT_PUBLIC_APP_URLの末尾スラッシュ有無どちらでも二重スラッシュにならないようにする)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!.replace(/\/$/, "");
     await clerk.invitations.createInvitation({
-      emailAddress,
+      emailAddress: entry.emailAddress,
       redirectUrl: `${appUrl}/sign-up`,
       templateSlug: "waitlist_invitation",
     });
   } catch (err: unknown) {
-    reportUnexpected(err, "approveWaitlistEntry");
+    reportUnexpected(err, "approveWaitlistEntry", { waitlistEntryId });
     const message = err instanceof Error ? err.message : "承認に失敗しました";
     return { error: message };
   }

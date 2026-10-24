@@ -19,9 +19,9 @@ export function WaitlistTable({ entries }: { entries: WaitlistEntryRow[] }) {
     setTimeout(() => setToast(""), 3000);
   }
 
-  function handleApprove(emailAddress: string) {
+  function handleApprove(id: string, emailAddress: string) {
     startTransition(async () => {
-      const result = await approveWaitlistEntry(emailAddress);
+      const result = await approveWaitlistEntry(id);
       if (result?.error) {
         showToast(`エラー: ${result.error}`);
       } else {
@@ -76,7 +76,7 @@ export function WaitlistTable({ entries }: { entries: WaitlistEntryRow[] }) {
               <td className="py-2 space-x-3">
                 <button
                   disabled={isPending || entry.alreadyInvited}
-                  onClick={() => handleApprove(entry.emailAddress)}
+                  onClick={() => handleApprove(entry.id, entry.emailAddress)}
                   className="text-blue-600 hover:underline text-xs disabled:opacity-40 disabled:no-underline"
                 >
                   承認

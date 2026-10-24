@@ -1,12 +1,19 @@
 import { clerkClient } from "@clerk/nextjs/server";
-import { setupClerkTestingToken } from "@clerk/testing/playwright";
+import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { test, expect } from "@playwright/test";
+import {
+  cleanupTestUser,
+  getClerkUserIdByEmail,
+  setupClerkTestingTokenForInvitation,
+  slotEmail,
+} from "../helpers/clerk-test-invitation";
 
 // Clerkはメールアドレスごとに1つのwaitlist entryしか保持できず、一度
 // invited/rejectedになったentryは再送信しても同じentryが返ってきてpendingに
 // 戻らない（pending以外は削除もできない）。テスト実行のたびに一意なメール
 // アドレスを使うことで、この制約による再実行時の失敗を避ける
 const TEST_EMAIL = `info+clerk_test_waitlist_${Date.now()}@wknd-studio.com`;
+const ADMIN_EMAIL = slotEmail("info+clerk_test_admin_waitlist@wknd-studio.com");
 
 async function findPendingWaitlistEntry(email: string) {
   const clerk = await clerkClient();
@@ -17,6 +24,15 @@ async function findPendingWaitlistEntry(email: string) {
   return data.find((entry) => entry.emailAddress === email);
 }
 
+async function findPendingInvitation(email: string) {
+  const clerk = await clerkClient();
+  const { data } = await clerk.invitations.getInvitationList({
+    query: email,
+    status: "pending",
+  });
+  return data.find((inv) => inv.emailAddress === email);
+}
+
 async function cleanupWaitlistEntry(email: string) {
   const entry = await findPendingWaitlistEntry(email);
   if (!entry) return;
@@ -24,25 +40,52 @@ async function cleanupWaitlistEntry(email: string) {
   await clerk.waitlistEntries.reject(entry.id).catch(() => {});
 }
 
-// waitlist-migration-plan.md: 公開ページからの参加希望送信→管理者承認
-// （/api/admin/waitlistが呼ぶwaitlistEntries.inviteと同じBackend API）で
-// 招待URLが発行されるところまでを検証する。
-//
-// 招待URL以降（Clerkのホスト型ページでのパスワード設定・規約同意〜自社アプリの
-// /onboarding/account-typeへの復帰）は、createInvitation経由の既存E2E
-// （registration.spec.ts等）が検証済みのコードパスと完全に同一のためここでは
-// 扱わない。また、waitlistEntries.inviteはcreateInvitationと異なりredirectUrlを
-// 指定できず必ずClerkホスト型ページを経由するため、setupClerkTestingTokenの
-// FAPIリクエスト差し込みと相性が悪く自動操作が安定しないことも確認済み。
+/**
+ * 管理者のClerkユーザーを用意する。middleware・Server Actionはセッショントークンの
+ * metadata.role（publicMetadata）で管理者を判定する。前回の実行が中断され
+ * 削除されずに残っていれば再利用する
+ */
+async function ensureAdminUser(email: string) {
+  const existingId = await getClerkUserIdByEmail(email);
+  if (existingId) return;
+  const clerkApi = await clerkClient();
+  await clerkApi.users.createUser({
+    emailAddress: [email],
+    // ログインはclerk.signInのサインイントークンで行い、パスワードは使わないので乱数でよい
+    password: `E2e-${crypto.randomUUID()}`,
+    skipLegalChecks: true,
+    publicMetadata: { role: "admin" },
+  });
+}
+
+// 公開ページからの参加希望送信→管理画面の承認ボタン（approveWaitlistEntry →
+// invitations.createInvitation）で招待が発行され、その招待URLから自前の
+// /sign-upに進めるところまでを、本番と同じ承認経路で検証する。
+// 招待テンプレート（waitlist_invitation）やNEXT_PUBLIC_APP_URLの設定ミスもここで検出する。
+// パスワード設定以降は、createInvitation経由のregistration.spec.ts等が検証している
 test.describe("Waitlist経由の参加希望と管理者承認", () => {
-  test.afterEach(async ({ page }) => {
-    await page.goto("/");
+  test.afterEach(async () => {
+    // 承認で発行された招待を取り消してから、pendingのままのエントリを却下する。
+    // cleanupTestUserの取り消しはqueryで絞らず既定の件数しか見ないため、
+    // 共有インスタンスに招待が溜まっていても漏れないようメールアドレスで絞って取り消す
+    const invitation = await findPendingInvitation(TEST_EMAIL);
+    if (invitation) {
+      const clerkApi = await clerkClient();
+      await clerkApi.invitations
+        .revokeInvitation(invitation.id)
+        .catch(() => {});
+    }
     await cleanupWaitlistEntry(TEST_EMAIL);
+    // 管理者のClerkユーザーに加え、Webhookで作られ得るusers行も削除する
+    await cleanupTestUser(ADMIN_EMAIL);
   });
 
-  test("参加希望を送信すると承認待ちで登録され、管理者が承認すると招待URLが発行される", async ({
+  test("参加希望を送信し、管理者が管理画面で承認すると、招待URLからサインアップ画面に進める", async ({
+    browser,
     page,
   }) => {
+    // 参加希望者と管理者の2人分の画面操作を含むため、既定のタイムアウトでは不足しうる
+    test.slow();
     await setupClerkTestingToken({ page });
     await page.goto("/waitlist");
     // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
@@ -52,17 +95,36 @@ test.describe("Waitlist経由の参加希望と管理者承認", () => {
       .locator('[data-localization-key="waitlist.start.formButton"]')
       .click();
 
-    let entry: Awaited<ReturnType<typeof findPendingWaitlistEntry>>;
     await expect(async () => {
-      entry = await findPendingWaitlistEntry(TEST_EMAIL);
-      expect(entry).toBeDefined();
+      expect(await findPendingWaitlistEntry(TEST_EMAIL)).toBeDefined();
     }).toPass();
-    expect(entry!.status).toBe("pending");
 
-    const clerk = await clerkClient();
-    const invited = await clerk.waitlistEntries.invite(entry!.id);
+    // 管理者は別のブラウザコンテキストでログインする
+    await ensureAdminUser(ADMIN_EMAIL);
+    const adminContext = await browser.newContext({
+      baseURL: test.info().project.use.baseURL,
+    });
+    const adminPage = await adminContext.newPage();
+    // clerk.signInはClerkを読み込む非保護ページで呼ぶ必要がある
+    await adminPage.goto("/");
+    await clerk.signIn({ page: adminPage, emailAddress: ADMIN_EMAIL });
+    await adminPage.goto("/admin/waitlist");
 
-    expect(invited.status).toBe("invited");
-    expect(invited.invitation?.url).toBeTruthy();
+    const row = adminPage.getByRole("row").filter({ hasText: TEST_EMAIL });
+    await row.getByRole("button", { name: "承認" }).click();
+    await expect(adminPage.getByRole("status")).toHaveText(
+      `${TEST_EMAIL} を承認し招待メールを送信しました`
+    );
+    await expect(row).toContainText("招待済み（返信待ち）");
+    await adminContext.close();
+
+    const invitation = await findPendingInvitation(TEST_EMAIL);
+    expect(invitation?.url).toBeTruthy();
+
+    await setupClerkTestingTokenForInvitation(page);
+    await page.goto(invitation!.url!);
+
+    await expect(page).toHaveURL(/\/sign-up/);
+    await expect(page.locator("#password-field")).toBeVisible();
   });
 });
