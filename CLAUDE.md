@@ -139,6 +139,8 @@ feature/* →  Cloudflare Pages Preview URL
 | `src/app/api/**`（Webhookハンドラー・APIルート）         | 統合テスト（実DB + 実際のHTTPリクエスト）                                                 | ルーティング・署名検証を含めた一連の処理                                                                                              |
 | 会員登録〜決済のような複数画面をまたぐクリティカルフロー | E2E（Playwright）。**新規追加は最小限**、既存フローに影響する変更は該当specを実行して確認 | 実際にブラウザで動くか。テストDBのテーブル定義変更時は`tests/e2e/`内の`.insert()`/`.update()`/`.select()`も対象に含める（下記の理由） |
 
+この表のうちE2E以外は **CIで検査済み**（#455）。`pnpm test`・`task test:integration` はカバレッジ付きで動き、層に合った種類のテストで実行された行が層ごとの閾値を下回るファイルがあると失敗する（外部サービスのアダプタ `src/infrastructure/{stripe,clerk,resend,sanity}/**` も、SDKだけをモックしたユニットテストで検査する）。テストが import していても、モックに差し替えて実装を一度も実行していなければ失敗する。失敗したらこの表の種類のテストを足す。対象・閾値・例外（issue番号付き）は `scripts/ci/layer-coverage.config.ts` にあり、変更は `high-risk` として人間がレビューする。テストファイルやテスト名で絞って実行したときは検査しない。
+
 `tests/e2e/`配下のSupabase admin clientは必ず`createClient<Database>(...)`のように型を付ける（型無しの`createClient(...)`は、存在しないカラムを指定してもtscがコンパイルエラーを出さず、実行時までカラム不整合に気づけない。過去に実際にこれで検出漏れが発生した）。
 
 **マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。`database.types.ts` は `.gitattributes` で `linguist-generated=true` を指定しており、GitHubのPR差分表示では既定で折りたたまれる。正しさは `Schema Types Drift` が検査するので、レビューで中身を読む必要は無い。他の生成物（`pnpm-lock.yaml` 等）も `.gitattributes` に並べてあり、それぞれの正しさの確かめ方は同ファイルのコメントに書いてある。
