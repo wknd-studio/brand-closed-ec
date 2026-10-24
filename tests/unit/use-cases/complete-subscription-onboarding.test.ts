@@ -9,6 +9,8 @@ const subscriptionInput = {
   status: "active" as const,
   currentPeriodStart: new Date(2026, 0, 1),
   currentPeriodEnd: new Date(2026, 1, 1),
+  // JST 2026-01-01 10:00
+  subscriptionStartedAt: new Date("2026-01-01T01:00:00Z"),
 };
 
 function makeOnboardingRepo(): SubscriptionOnboardingRepository {
@@ -53,10 +55,36 @@ describe("completeSubscriptionOnboarding", () => {
       status: "active",
       currentPeriodStart: subscriptionInput.currentPeriodStart,
       currentPeriodEnd: subscriptionInput.currentPeriodEnd,
-      billingAnchorDay: expect.any(Number),
+      billingAnchorDay: 1,
     });
-    expect(input.billingAnchorDay).toBeGreaterThanOrEqual(1);
-    expect(input.billingAnchorDay).toBeLessThanOrEqual(28);
+  });
+
+  it("課金基準日は処理した時刻ではなく、サブスクリプションの開始日時のJSTの日付から決める（Webhookの再送）", async () => {
+    // 開始はJST 3/1 05:00（UTCでは2/28）。Webhookの再送で処理が3/3になった
+    vi.useFakeTimers({ now: new Date("2026-03-03T06:00:00Z") });
+    try {
+      const onboardingRepo = makeOnboardingRepo();
+
+      await completeSubscriptionOnboarding(
+        {
+          clerkUserId: "clerk-1",
+          plan: "basic",
+          ...subscriptionInput,
+          subscriptionStartedAt: new Date("2026-02-28T20:00:00Z"),
+        },
+        {
+          userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
+          onboardingRepo,
+          accountGateway: makeAccountGateway(),
+        }
+      );
+
+      expect(
+        vi.mocked(onboardingRepo.confirm).mock.calls[0][0].billingAnchorDay
+      ).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("入会の確定後にaccountGateway.updateOnboardingMetadataをtrueで呼ぶ", async () => {

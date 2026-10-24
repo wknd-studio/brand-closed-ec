@@ -72,4 +72,56 @@ describe("MonthlyPeriod", () => {
       expect(period.contains(new Date(2026, 4, 31))).toBe(false);
     });
   });
+  describe("toBillingAnchorDay() — 契約開始日時をJSTの日付にして起算日を決める", () => {
+    it("JSTの0時〜9時（UTCでは前日）は、JSTの日付を使う", () => {
+      // JST 3/1 05:00 = UTC 2/28 20:00
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-02-28T20:00:00Z"))
+      ).toBe(1);
+      // JST 3/15 00:00 = UTC 3/14 15:00
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-03-14T15:00:00Z"))
+      ).toBe(15);
+      // JST 3/15 08:59 = UTC 3/14 23:59
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-03-14T23:59:59Z"))
+      ).toBe(15);
+    });
+
+    it("JSTの9時以降（UTCでも同じ日）は、その日付を使う", () => {
+      // JST 3/15 09:00 = UTC 3/15 00:00
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-03-15T00:00:00Z"))
+      ).toBe(15);
+      // JST 3/15 23:59 = UTC 3/15 14:59
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-03-15T14:59:59Z"))
+      ).toBe(15);
+    });
+
+    it("JSTで29〜31日なら28に丸める", () => {
+      // JST 1/29 00:00 = UTC 1/28 15:00（UTCでは28日だがJSTでは29日）
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-01-28T15:00:00Z"))
+      ).toBe(28);
+      // JST 1/31 12:00
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-01-31T03:00:00Z"))
+      ).toBe(28);
+    });
+
+    it("UTCでは月末だがJSTでは翌月1日なら1にする", () => {
+      // JST 2/1 03:00 = UTC 1/31 18:00
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-01-31T18:00:00Z"))
+      ).toBe(1);
+    });
+
+    it("JSTで28日はそのまま28", () => {
+      // JST 2/28 08:00 = UTC 2/27 23:00
+      expect(
+        MonthlyPeriod.toBillingAnchorDay(new Date("2026-02-27T23:00:00Z"))
+      ).toBe(28);
+    });
+  });
 });
