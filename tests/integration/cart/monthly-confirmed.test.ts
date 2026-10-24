@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { getMonthlyUsageInfo } from "@/lib/cart/monthly-confirmed";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +15,15 @@ const TEST_USER_ID = "00000000-0000-0000-0000-000000000040";
 const TEST_CLERK_ID = "clerk_test_monthly_confirmed_infra";
 const TEST_ORDER_CONFIRMED_ID = "00000000-0000-0000-0000-000000000041";
 const TEST_ORDER_CANCELLED_ID = "00000000-0000-0000-0000-000000000042";
+// 注文自体は有効だが、明細の一部が紐づく決済単位だけがキャンセルされた注文
+const TEST_ORDER_PARTIAL_ID = "00000000-0000-0000-0000-000000000043";
+const TEST_SETTLEMENT_PAID_ID = "00000000-0000-0000-0000-000000000044";
+const TEST_SETTLEMENT_CANCELLED_ID = "00000000-0000-0000-0000-000000000045";
+const TEST_ORDER_IDS = [
+  TEST_ORDER_CONFIRMED_ID,
+  TEST_ORDER_CANCELLED_ID,
+  TEST_ORDER_PARTIAL_ID,
+];
 
 const addressSnapshot = {
   recipientLastName: "テスト",
@@ -26,14 +37,12 @@ const addressSnapshot = {
 };
 
 async function cleanup() {
+  await supabase.from("order_items").delete().in("order_id", TEST_ORDER_IDS);
   await supabase
-    .from("order_items")
+    .from("order_settlements")
     .delete()
-    .in("order_id", [TEST_ORDER_CONFIRMED_ID, TEST_ORDER_CANCELLED_ID]);
-  await supabase
-    .from("orders")
-    .delete()
-    .in("id", [TEST_ORDER_CONFIRMED_ID, TEST_ORDER_CANCELLED_ID]);
+    .in("order_id", TEST_ORDER_IDS);
+  await supabase.from("orders").delete().in("id", TEST_ORDER_IDS);
   await supabase.from("users").delete().eq("id", TEST_USER_ID);
 }
 
@@ -89,6 +98,54 @@ beforeAll(async () => {
     is_negotiable: false,
     payment_timing: "at_order",
   });
+
+  await supabase.from("orders").insert({
+    id: TEST_ORDER_PARTIAL_ID,
+    user_id: TEST_USER_ID,
+    status: "paid",
+    rank_at_order: "advanced",
+    monthly_limit_at_order: 50_000_000,
+    shipping_address_snapshot: addressSnapshot,
+    billing_address_snapshot: addressSnapshot,
+  });
+  await supabase.from("order_settlements").insert([
+    {
+      id: TEST_SETTLEMENT_PAID_ID,
+      order_id: TEST_ORDER_PARTIAL_ID,
+      flow: "checkout",
+      status: "paid",
+      amount_snapshot: 200_000,
+    },
+    {
+      id: TEST_SETTLEMENT_CANCELLED_ID,
+      order_id: TEST_ORDER_PARTIAL_ID,
+      flow: "invoice",
+      status: "cancelled",
+      amount_snapshot: 7_000_000,
+    },
+  ]);
+  await supabase.from("order_items").insert([
+    {
+      order_id: TEST_ORDER_PARTIAL_ID,
+      settlement_id: TEST_SETTLEMENT_PAID_ID,
+      sanity_product_id: "prod-settlement-paid",
+      product_name_snapshot: "支払い済みの決済単位の商品",
+      unit_price_snapshot: 200_000,
+      quantity: 1,
+      is_negotiable: false,
+      payment_timing: "at_order",
+    },
+    {
+      order_id: TEST_ORDER_PARTIAL_ID,
+      settlement_id: TEST_SETTLEMENT_CANCELLED_ID,
+      sanity_product_id: "prod-settlement-cancelled",
+      product_name_snapshot: "キャンセル済みの決済単位の商品",
+      unit_price_snapshot: 7_000_000,
+      quantity: 1,
+      is_negotiable: false,
+      payment_timing: "at_order",
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -101,8 +158,19 @@ describe("getMonthlyUsageInfo（実DB・7ランク）", () => {
     expect(info.monthlyLimit).toBe(50_000_000);
   });
 
-  it("キャンセル済み注文を除いた確定済み金額を正しく計算する", async () => {
+  it("キャンセル済み注文と、キャンセル済みの決済単位の明細を除いた確定済み金額を正しく計算する", async () => {
     const info = await getMonthlyUsageInfo(TEST_CLERK_ID);
-    expect(info.confirmedAmount).toBe(3_000_000);
+    expect(info.confirmedAmount).toBe(3_200_000);
+  });
+
+  it("表示用の確定額が、上限チェックで使う確定額（sumConfirmedAmountByUserId）と一致する", async () => {
+    const info = await getMonthlyUsageInfo(TEST_CLERK_ID);
+    const confirmedForLimitCheck = await new SupabaseOrderRepository(
+      supabase
+    ).sumConfirmedAmountByUserId(
+      TEST_USER_ID,
+      MonthlyPeriod.fromBillingAnchorDay(1)
+    );
+    expect(info.confirmedAmount).toBe(confirmedForLimitCheck);
   });
 });
