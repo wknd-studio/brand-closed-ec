@@ -275,7 +275,7 @@ describe("renderHtml", () => {
         html
       )![1];
     return JSON.parse(json) as {
-      variants: Record<string, string>;
+      variants: Record<string, Record<string, string>>;
       relatives: Record<string, { before: number[]; after: number[] }>;
     };
   }
@@ -283,8 +283,13 @@ describe("renderHtml", () => {
   it("絞り込みの組み合わせごとのMermaidのソースと、前後のissueを埋め込む", () => {
     const html = renderHtml(sampleGraph(), "2026-10-17 12:00");
     const data = embeddedData(html);
-    expect(Object.keys(data.variants).sort()).toEqual(["00", "01", "10", "11"]);
-    expect(data.variants["00"]).toContain("I1 --> I2");
+    expect(Object.keys(data.variants[""]).sort()).toEqual([
+      "00",
+      "01",
+      "10",
+      "11",
+    ]);
+    expect(data.variants[""]["00"]).toContain("I1 --> I2");
     expect(data.relatives["1"]).toEqual({ before: [], after: [2] });
     expect(html).toContain("2026-10-17 12:00");
     expect(html).toContain('id="v1-only"');
@@ -294,7 +299,7 @@ describe("renderHtml", () => {
   it("埋め込むデータ中の「<」をエスケープし、scriptタグを閉じさせない", () => {
     const html = renderHtml(sampleGraph({ title: "</script><b>" }), "now");
     expect(html).not.toContain("</script><b>");
-    expect(embeddedData(html).variants["00"]).toContain("#lt;/script#gt;");
+    expect(embeddedData(html).variants[""]["00"]).toContain("#lt;/script#gt;");
   });
 
   it("依存の無いissueはマイルストーンごとの一覧にリンク付きで並べる", () => {

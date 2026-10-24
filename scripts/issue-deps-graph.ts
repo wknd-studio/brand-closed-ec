@@ -9,6 +9,7 @@ import {
   type IssueInput,
   type OpenPrInput,
 } from "@/lib/issue-deps-graph/build-graph";
+import { jsonOutput } from "@/lib/issue-deps-graph/milestones";
 
 /**
  * オープンなissueの依存グラフ（GitHub標準のBlocked by / Blocking）を生成する。
@@ -16,7 +17,8 @@ import {
  *
  * 使い方:
  *   task deps:graph           HTMLを生成してブラウザで開く（ノードをクリックするとissueへ飛ぶ）
- *   task deps:graph -- --json ノード・エッジ・ステータスをJSONで標準出力に出す（AI・スクリプト向け）
+ *   task deps:graph -- --json ノード・エッジ・ステータスと、マイルストーンごとの所属issue・
+ *                             マイルストーンをまたぐ依存をJSONで標準出力に出す（AI・スクリプト向け）
  *   pnpm tsx scripts/issue-deps-graph.ts --out=<path>  指定したパスにHTMLを書き出す（ブラウザは開かない。GitHub Pagesへのデプロイ用）
  *
  * 前提: gh CLIでログイン済み（CIではGH_TOKENを設定）であること
@@ -158,7 +160,7 @@ function main() {
   const graph = buildGraph(fetchIssues(), fetchOpenPrs());
 
   if (process.argv.includes("--json")) {
-    process.stdout.write(`${JSON.stringify(graph, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(jsonOutput(graph), null, 2)}\n`);
     return;
   }
 
