@@ -1,0 +1,13 @@
+# 生成物は GitHub の PR 差分表示で既定で折りたたむ（linguist-generated）。
+# 折りたたんでも「Load diff」で開ける。各生成物の正しさをどう確かめるかは行ごとに書く。
+
+# supabase gen types typescript --local の出力。正しさは CI の Schema Types Drift が検査する
+src/types/database.types.ts linguist-generated=true
+
+# pnpm install の出力。package.json との整合は CI の pnpm install --frozen-lockfile が検査する
+pnpm-lock.yaml linguist-generated=true
+
+# npx skills add の出力（スキル本体と、取得元・ハッシュを記録したロックファイル）。
+# CI の検査は無い。手で書き換えず、更新は npx skills add で取り直す
+skills-lock.json linguist-generated=true
+.agents/skills/** linguist-generated=true
