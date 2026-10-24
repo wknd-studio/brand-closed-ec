@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -10,7 +10,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const ROOT = path.resolve(__dirname, "../..");
 const LIB = path.join(ROOT, "scripts/worktree-slot-lib.sh");
 const PATCH = path.join(ROOT, "scripts/patch-supabase-slot.py");
-const CONFIG = path.join(ROOT, "supabase/config.toml");
+// Orcaのワークツリーでは with-worktree-db.sh が作業ツリーの config.toml をそのスロットのポートに
+// 書き換えている（skip-worktreeで変更は見えない）。書き換えはスロット1の元のconfigを前提にするため、
+// 作業ツリーのファイルではなくgitに記録されている元のconfigを使う
+function originalConfig(): string {
+  return execFileSync("git", ["show", "HEAD:supabase/config.toml"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+}
 
 const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
@@ -47,9 +55,10 @@ const supabasePortsBySlot = new Map<number, number[]>();
 
 beforeAll(() => {
   tmp = mkdtempSync(path.join(tmpdir(), "worktree-slot-port-"));
+  const original = originalConfig();
   for (const slot of SLOTS) {
     const config = path.join(tmp, `config-slot${slot}.toml`);
-    copyFileSync(CONFIG, config);
+    writeFileSync(config, original);
     execFileSync("python3", [PATCH, config, String(slot)], { stdio: "ignore" });
     const ports = [
       ...readFileSync(config, "utf8").matchAll(/^\s*\w*port\s*=\s*(\d+)\s*$/gm),
