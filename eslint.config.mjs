@@ -39,6 +39,28 @@ const eslintConfig = defineConfig([
     ".claude/worktrees/**",
   ]),
   ...storybook.configs["flat/recommended"],
+  // E2Eでnetworkidleを待たない（#519）。Next.jsのprefetch・Clerkのトークン更新等で
+  // 通信が途切れず、上限なしで待ち続けてテストのタイムアウトになることがある。
+  // 次に操作する要素の表示（toBeVisible）や遷移（toHaveURL）を待つ
+  {
+    files: ["tests/e2e/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.property.name='waitForLoadState'][arguments.0.value='networkidle']",
+          message:
+            "networkidleは待たない。次に操作する要素をexpect(...).toBeVisible()で、遷移をtoHaveURLで待つ（#519）",
+        },
+        {
+          selector: "Property[key.name='waitUntil'][value.value='networkidle']",
+          message:
+            "networkidleは待たない。次に操作する要素をexpect(...).toBeVisible()で、遷移をtoHaveURLで待つ（#519）",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;
