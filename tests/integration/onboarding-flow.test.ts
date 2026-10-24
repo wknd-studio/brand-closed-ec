@@ -72,6 +72,7 @@ const PROCESSING_TEXT = "アカウントの設定を処理中です";
 type FakeCheckoutSession = {
   id: string;
   url: string;
+  mode: string;
   status: "open" | "complete";
   customer: string;
   subscription: string | null;
@@ -132,6 +133,7 @@ class FakeStripe {
 
   createCheckoutSession(
     params: {
+      mode: string;
       customer: string;
       success_url: string;
       metadata: Record<string, string>;
@@ -144,6 +146,7 @@ class FakeStripe {
       const session: FakeCheckoutSession = {
         id,
         url: `https://checkout.stripe.com/c/pay/${id}`,
+        mode: params.mode,
         status: "open",
         customer: params.customer,
         subscription: null,
@@ -220,7 +223,7 @@ class FakeStripe {
         object: {
           id: session.id,
           object: "checkout.session",
-          mode: "subscription",
+          mode: session.mode,
           status: session.status,
           payment_status: "paid",
           customer: session.customer,
