@@ -63,13 +63,13 @@ feature/* →  Cloudflare Pages Preview URL
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
 
-**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/wknd-studio/brand-closed-ec/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/wknd-studio/brand-closed-ec/issues/<番号> --jq .id`）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。
+**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/{owner}/{repo}/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/{owner}/{repo}/issues/<番号> --jq .id`）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。
 
 **並列開発（Orca）**: 複数issueの並列実装はADEのOrcaで、issueごとにワークツリーとセッションを立ち上げて行う（背景・スロット割り当ては `docs/dev-parallel-worktrees.md`）。Orcaのワークツリー内で作業するセッションは以下に従う。
 
 - **環境**: ワークツリーはOrcaが作る。自分で `EnterWorktree` や `git worktree add` をしない
 - **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
-- **依存の確認**: 着手前に `gh api repos/wknd-studio/brand-closed-ec/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
+- **依存の確認**: 着手前に `gh api repos/{owner}/{repo}/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
 - **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
