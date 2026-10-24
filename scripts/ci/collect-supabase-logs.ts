@@ -1,71 +1,59 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
- * CIのジョブ内で起動したローカルSupabaseのコンテナ（Kong・PostgREST・Postgres等）のログを、
- * テストが失敗したときにアーティファクトとして残すために書き出す（#497）。
- * 統合テストがときどきKongの502（"An invalid response was received from the upstream server"）で
- * 落ちる原因を、コンテナのログから追えるようにする。
+ * CIのジョブ内で起動したローカルSupabaseのコンテナ（Kong・PostgREST・Postgres等）のログを集め、
+ * ageの公開鍵で暗号化したファイルだけを書き出す（#497）。統合テストがときどきKongの502
+ * （"An invalid response was received from the upstream server"）で落ちる原因を、
+ * コンテナのログから追えるようにする。
  *
- * Doppler由来の値は、GitHubのsecretsに登録した値と違い、Actionsのログでもアーティファクトでも
- * 自動では伏せられない。そのため標準入力でDopplerのシークレット
- * （`doppler secrets download --no-file --format json`）を受け取り、値をすべて伏せてからファイルに書く
- * （伏せる前の内容はディスクにもActionsのログにも出さない）。
- * 伏せた件数はキー名だけを出力する。0件なら、コンテナのログにDoppler由来の値が出ていなかったことになる。
+ * このリポジトリはpublicで、アーティファクトは誰でもダウンロードできる。ログに何が含まれていても
+ * 漏れないよう、値を探して伏せるのではなく暗号化する。秘密鍵はCIに置かず、復号は手元でだけ行う
+ * （手順は docs/cicd.md「失敗時のSupabaseのログ」）。
+ *   - 公開鍵のファイルが無い・空・不正、ageが無い、暗号化に失敗した、のどれでも何も書き出さずに失敗する
+ *   - 暗号化前のログは出力先とは別の一時ディレクトリにだけ置き、終了時に消す
+ *   - 標準出力にはファイル名・件数・サイズだけを出し、ログの中身は出さない
  *
- * 使い方: doppler secrets download --no-file --format json | pnpm -s tsx scripts/ci/collect-supabase-logs.ts <出力先>
- *   出力: <出力先>/docker-ps.txt（docker ps -a）と <出力先>/<コンテナ名>.log（docker logs --timestamps）
+ * 使い方: pnpm -s tsx scripts/ci/collect-supabase-logs.ts <出力先.age> [--recipients <公開鍵のファイル>]
+ *   公開鍵のファイルの既定は scripts/ci/log-recipients.txt（1行に1つ、`#` 以降はコメント）
  */
 
-/** これより短い値（"true"・ポート番号等）は伏せない。シークレットではなく、伏せると本文が読めなくなるため */
-export const MIN_SECRET_LENGTH = 8;
+const DEFAULT_RECIPIENTS_FILE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "log-recipients.txt"
+);
 
-/**
- * Dopplerが自動で付けるメタ情報。シークレットではなく、DOPPLER_PROJECT（brand-closed-ec）は
- * コンテナ名（supabase_db_brand-closed-ec）にも含まれ、伏せるとどのコンテナか読めなくなるため除く
- */
-const DOPPLER_METADATA_KEYS = new Set([
-  "DOPPLER_PROJECT",
-  "DOPPLER_CONFIG",
-  "DOPPLER_ENVIRONMENT",
-]);
+// ageのX25519の公開鍵（age1 + bech32の58文字）
+const RECIPIENT_PATTERN = /^age1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58}$/;
 
-export function redactSecrets(
-  text: string,
-  secrets: Record<string, unknown>
-): { text: string; counts: Record<string, number> } {
-  // Kong・GoTrue等はJSON形式でログを出し、URLのクエリにも値が載りうるため、
-  // そのままの形に加えてJSONでエスケープした形・URLエンコードした形も伏せる
-  const targets = Object.entries(secrets)
-    .filter(
-      (entry): entry is [string, string] =>
-        !DOPPLER_METADATA_KEYS.has(entry[0]) &&
-        typeof entry[1] === "string" &&
-        entry[1].length >= MIN_SECRET_LENGTH
-    )
-    .flatMap(([key, value]) =>
-      [
-        ...new Set([
-          value,
-          JSON.stringify(value).slice(1, -1),
-          encodeURIComponent(value),
-        ]),
-      ].map((form) => ({ key, form }))
-    )
-    // ある値が別の値を含むとき、短い方を先に伏せると長い方が一部だけ残るため、長い順に伏せる
-    .sort((a, b) => b.form.length - a.form.length);
-
-  const counts: Record<string, number> = {};
-  let result = text;
-  for (const { key, form } of targets) {
-    const parts = result.split(form);
-    if (parts.length === 1) continue;
-    counts[key] = (counts[key] ?? 0) + parts.length - 1;
-    result = parts.join(`[REDACTED:${key}]`);
+export function parseRecipients(text: string): string[] {
+  const recipients: string[] = [];
+  text.split("\n").forEach((line, index) => {
+    const value = line.replace(/#.*/, "").trim();
+    if (value === "") return;
+    if (!RECIPIENT_PATTERN.test(value)) {
+      // 秘密鍵を誤って置いた場合に備え、行の中身はメッセージに出さない
+      throw new Error(
+        `公開鍵のファイルの${index + 1}行目が、ageの公開鍵（age1...）の形ではありません`
+      );
+    }
+    recipients.push(value);
+  });
+  if (recipients.length === 0) {
+    throw new Error("公開鍵のファイルに、ageの公開鍵が1つもありません");
   }
-  return { text: result, counts };
+  return recipients;
 }
 
 export function selectSupabaseContainers(names: string): string[] {
@@ -83,8 +71,8 @@ function docker(args: string[]): string {
       maxBuffer: 256 * 1024 * 1024,
     });
   } catch (error) {
-    // 例外をそのまま投げると、Nodeが例外に入った伏せる前の出力を表示してしまう。
-    // 終了コードだけを残し、ほかのコンテナのログは書き出しを続ける
+    // 例外をそのまま投げると、Nodeが例外に入ったログの中身を表示してしまう。
+    // 終了コードだけを残し、ほかのコンテナのログは集め続ける
     const status = (error as { status?: number | null }).status ?? "不明";
     const message = `docker ${args.join(" ")} が失敗しました（終了コード: ${status}）`;
     console.error(message);
@@ -92,48 +80,82 @@ function docker(args: string[]): string {
   }
 }
 
-function main() {
-  const outDir = process.argv[2];
-  if (!outDir) {
-    console.error(
-      "使い方: doppler secrets download --no-file --format json | pnpm -s tsx scripts/ci/collect-supabase-logs.ts <出力先>"
-    );
-    process.exit(2);
-  }
-
-  // 伏せられない状態でログを書き出さないよう、シークレットを読めてから集め始める
-  const secrets = JSON.parse(readFileSync(0, "utf8")) as Record<
-    string,
-    unknown
-  >;
-
-  const files: Record<string, string> = {
-    "docker-ps.txt": docker(["ps", "-a"]),
-  };
-  const names = selectSupabaseContainers(
-    docker(["ps", "-a", "--format", "{{.Names}}"])
+function parseArgs(argv: string[]): { out: string; recipientsFile: string } {
+  const index = argv.indexOf("--recipients");
+  const recipientsFile =
+    index === -1 ? DEFAULT_RECIPIENTS_FILE : argv[index + 1];
+  const [out] = argv.filter(
+    (_, i) => index === -1 || (i !== index && i !== index + 1)
   );
-  for (const name of names) {
-    files[`${name}.log`] = docker(["logs", "--timestamps", name]);
+  if (!out || !recipientsFile) {
+    throw new Error(
+      "使い方: pnpm -s tsx scripts/ci/collect-supabase-logs.ts <出力先.age> [--recipients <公開鍵のファイル>]"
+    );
+  }
+  if (!out.endsWith(".age")) {
+    throw new Error(
+      `出力先のファイル名は .age で終わる必要があります（暗号化前のファイルと取り違えないため）: ${out}`
+    );
+  }
+  return { out, recipientsFile };
+}
+
+function main() {
+  const { out, recipientsFile } = parseArgs(process.argv.slice(2));
+
+  // ログを集める前に、暗号化できることを確かめる
+  let recipientsText: string;
+  try {
+    recipientsText = readFileSync(recipientsFile, "utf8");
+  } catch {
+    throw new Error(`公開鍵のファイルを読めません: ${recipientsFile}`);
+  }
+  const recipients = parseRecipients(recipientsText);
+  try {
+    execFileSync("age", ["--version"], { stdio: "ignore" });
+  } catch {
+    throw new Error("age コマンドが見つかりません");
   }
 
-  mkdirSync(outDir, { recursive: true });
-  const total: Record<string, number> = {};
-  for (const [file, content] of Object.entries(files)) {
-    const { text, counts } = redactSecrets(content, secrets);
-    writeFileSync(path.join(outDir, file), text);
-    for (const [key, n] of Object.entries(counts)) {
-      total[key] = (total[key] ?? 0) + n;
+  const work = mkdtempSync(path.join(tmpdir(), "supabase-logs-"));
+  try {
+    const logsDir = path.join(work, "supabase-logs");
+    mkdirSync(logsDir);
+    const files: Record<string, string> = {
+      "docker-ps.txt": docker(["ps", "-a"]),
+    };
+    for (const name of selectSupabaseContainers(
+      docker(["ps", "-a", "--format", "{{.Names}}"])
+    )) {
+      files[`${name}.log`] = docker(["logs", "--timestamps", name]);
     }
-  }
+    for (const [file, content] of Object.entries(files)) {
+      writeFileSync(path.join(logsDir, file), content);
+    }
 
-  console.log(`${names.length}個のコンテナのログを ${outDir} に書き出しました`);
-  const redacted = Object.entries(total);
-  if (redacted.length === 0) {
-    console.log("Dopplerのシークレットの値はログに含まれていませんでした");
-  } else {
-    console.log("Dopplerのシークレットの値を伏せました（キー: 件数）:");
-    for (const [key, n] of redacted) console.log(`  ${key}: ${n}`);
+    const archive = path.join(work, "supabase-logs.tar.gz");
+    execFileSync("tar", ["-czf", archive, "-C", work, "supabase-logs"]);
+    // 途中で失敗しても出力先に書きかけのファイルが残らないよう、一時ディレクトリで暗号化してから移す
+    const encrypted = path.join(work, "encrypted.age");
+    execFileSync(
+      "age",
+      ["-e", ...recipients.flatMap((r) => ["-r", r]), "-o", encrypted, archive],
+      { stdio: ["ignore", "ignore", "inherit"] }
+    );
+    mkdirSync(path.dirname(out), { recursive: true });
+    copyFileSync(encrypted, out);
+
+    console.log(
+      `${Object.keys(files).length}個のファイルを、${recipients.length}個の公開鍵で暗号化しました:`
+    );
+    for (const file of Object.keys(files)) {
+      console.log(
+        `  ${file}（${statSync(path.join(logsDir, file)).size} bytes）`
+      );
+    }
+    console.log(`出力: ${path.basename(out)}（${statSync(out).size} bytes）`);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
   }
 }
 
@@ -141,5 +163,11 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 ) {
-  main();
+  try {
+    main();
+  } catch (error) {
+    // 想定内の失敗はメッセージだけを出す（例外のプロパティにログの中身が入っていることがあるため）
+    console.error(error instanceof Error ? error.message : "失敗しました");
+    process.exit(1);
+  }
 }
