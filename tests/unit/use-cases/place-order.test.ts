@@ -7,6 +7,7 @@ vi.mock("@sentry/nextjs", () => ({
 import * as Sentry from "@sentry/nextjs";
 import { placeOrder, type PlaceOrderInput } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
+import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { Money } from "@/domain/value-objects/money";
 import {
   makeUser,
@@ -249,7 +250,13 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
     };
 
-    await expect(placeOrder(baseInput, deps)).rejects.toThrow();
+    const error = await placeOrder(baseInput, deps).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ProductNotAccessibleError);
+    expect(error).toMatchObject({
+      productId: "prod-1",
+      userRank: "starter",
+      requiredRank: "premium",
+    });
     expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
   });
 
