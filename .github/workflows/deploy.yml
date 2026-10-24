@@ -141,6 +141,30 @@ jobs:
             pnpm test:integration
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Collect local Supabase logs (暗号化・失敗時のみ)
+        # 統合テストがときどきKongの502（upstream server）で落ちる原因を追うため、
+        # Kong・PostgREST・Postgres等のコンテナのログを残す（#497）。このリポジトリはpublicで
+        # アーティファクトは誰でもダウンロードできるため、ログはscripts/ci/log-recipients.txtの
+        # ageの公開鍵で暗号化し、暗号化したファイルだけを置く。秘密鍵はCIに置かない（復号の手順は
+        # docs/cicd.md）。ログを集めるだけなのでDopplerのシークレットは渡さない。
+        # 公開鍵のファイルが無い・不正、または暗号化に失敗したときは、何も書き出さずに失敗する
+        id: supabase-logs
+        if: failure()
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age > /dev/null
+          pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs/supabase-logs.tar.gz.age
+      - name: Upload local Supabase logs (暗号化済み・失敗時のみ)
+        # 暗号化に成功したときだけ、暗号化したファイルだけをアップロードする。
+        # 再実行で名前が重ならないよう試行回数を付ける
+        if: failure() && steps.supabase-logs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-logs-integration-${{ github.run_attempt }}
+          path: supabase-logs/supabase-logs.tar.gz.age
+          if-no-files-found: error
+          retention-days: 3
 
   build:
     name: Build (Cloudflare)
@@ -241,6 +265,23 @@ jobs:
             pnpm test:e2e
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
+      - name: Collect local Supabase logs (暗号化・失敗時のみ)
+        # Integration Testsの同名のステップと同じ（#497）
+        id: supabase-logs
+        if: failure()
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age > /dev/null
+          pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs/supabase-logs.tar.gz.age
+      - name: Upload local Supabase logs (暗号化済み・失敗時のみ)
+        if: failure() && steps.supabase-logs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-logs-e2e-pr-${{ github.run_attempt }}
+          path: supabase-logs/supabase-logs.tar.gz.age
+          if-no-files-found: error
+          retention-days: 3
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
         # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
         # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけアップロードする

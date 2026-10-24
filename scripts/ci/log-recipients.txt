@@ -1,0 +1,3 @@
+# 失敗時のSupabaseのログを暗号化するageの公開鍵（1行に1つ）。手順は docs/cicd.md「失敗時のSupabaseのログ（暗号化）」
+# 秘密鍵は絶対に置かない（置くとユニットテストと収集スクリプトが失敗する）
+age1qjw0sr38s5u9vytzcfre6eq4zkkd4jg3sx9mvhkvsnvkt2l8d5fs07u3mf
