@@ -29,7 +29,11 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別のPRが後から
+    # マージされた組み合わせで壊れることがある（#498）。数分で終わるこのチェックだけは
+    # developへのpushのたびにも動かす。続けてマージしても各コミットで動くよう、
+    # concurrencyは付けない（stgのデプロイのグループに入れると、待っている分が取り消される）
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -41,7 +45,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # developへのpushでも動かす理由はtypecheckのコメント参照
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -91,7 +96,8 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # developへのpushでも動かす理由はtypecheckのコメント参照
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -250,6 +256,10 @@ jobs:
   deploy-stg:
     name: Deploy (staging)
     runs-on: ubuntu-latest
+    # マージごとのチェック（TypeScript・Lint・Unit Tests）が通ったコミットだけをstgに出す。
+    # 待つ分デプロイは数分遅れるが、壊れたものをstgに出してE2E (stg)を無駄に落とさずに済む。
+    # チェックはconcurrencyの外で動くので、ここで待っても取り消されない
+    needs: [typecheck, lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     environment: staging
     # developへの複数マージがほぼ同時に発生すると、stgデプロイとE2E検証が

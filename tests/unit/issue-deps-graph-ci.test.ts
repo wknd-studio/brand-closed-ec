@@ -206,3 +206,38 @@ describe("renderCiStatus: テスト名を取得できなかったジョブ", () 
     expect(html).toContain("テスト名を取得できなかった");
   });
 });
+
+describe("developへのマージごとのチェック（#498）の失敗", () => {
+  it("TypeScript・Unit Testsが落ちてDeploy (staging)が飛ばされた実行も、失敗として帯に出す", async () => {
+    const failedJobs = await failedJobsOf(
+      [
+        { id: 1, name: "TypeScript", html_url: "u1", conclusion: "failure" },
+        { id: 2, name: "Lint", html_url: "u2", conclusion: "success" },
+        { id: 3, name: "Unit Tests", html_url: "u3", conclusion: "failure" },
+        {
+          id: 4,
+          name: "Deploy (staging)",
+          html_url: "u4",
+          conclusion: "skipped",
+        },
+        {
+          id: 5,
+          name: "E2E Tests (stg)",
+          html_url: "u5",
+          conclusion: "skipped",
+        },
+      ],
+      async (id) =>
+        id === 3 ? " FAIL  tests/unit/money.test.ts > Money > 足し算 " : ""
+    );
+    const html = renderCiStatus({
+      summary: summarizeCi([run(2, { conclusion: "failure" }), run(1)]),
+      failedJobs,
+    });
+    expect(html).toContain('class="ci-status failing"');
+    expect(html).toContain('<a href="u1" target="_blank">TypeScript</a>');
+    expect(html).toContain('<a href="u3" target="_blank">Unit Tests</a>');
+    expect(html).toContain("tests/unit/money.test.ts &gt; Money &gt; 足し算");
+    expect(html).not.toContain("Deploy (staging)");
+  });
+});

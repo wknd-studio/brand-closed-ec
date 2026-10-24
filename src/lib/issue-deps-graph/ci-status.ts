@@ -1,10 +1,16 @@
 /**
- * developへのマージ後のCI（Deployワークフロー: stgへのデプロイとstgのE2E）の結果を、
- * 依存グラフのページの一番上に出す。マージ後に動くジョブはPRの画面に出ないため、
+ * developへのマージ後のCI（Deployワークフロー: TypeScript・Lint・Unit Tests、stgへのデプロイと
+ * stgのE2E）の結果を、依存グラフのページの一番上に出す。マージ後に動くジョブはPRの画面に出ないため、
  * 失敗が続いても気づけなかった（#486）。GitHubからの取得はscripts/issue-deps-graph.tsが担う。
  */
 
 import { escapeHtml } from "./html";
+
+/**
+ * developへのマージ後に動くワークフロー。PRの組み合わせによる壊れ（#498）に気づくための
+ * マージごとのチェックも、帯に出るようにこのワークフローに入れる
+ */
+export const DEVELOP_CI_WORKFLOW = "deploy.yml";
 
 export type CiRunInput = {
   id: number;

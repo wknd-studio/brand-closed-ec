@@ -13,6 +13,7 @@ import {
 import {
   failedJobsOf,
   summarizeCi,
+  DEVELOP_CI_WORKFLOW,
   type CiRunInput,
   type CiStatus,
   type JobInput,
@@ -191,9 +192,6 @@ function ghApi<T>(endpoint: string): T {
     })
   ) as T;
 }
-
-/** developへのマージ後に動くワークフロー（stgへのデプロイとstgのE2E） */
-const DEVELOP_CI_WORKFLOW = "deploy.yml";
 
 /** gh CLIと同じ認証でGitHub APIを呼ぶためのトークン（CIではGH_TOKEN） */
 function githubToken(): string {
