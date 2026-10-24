@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -219,6 +220,10 @@ describe("planCommand（許可リスト）", () => {
     [
       "2つ目の変換が外",
       "pnpm exec jscodeshift -t scripts/codemods/a.ts -t tmp/b.ts src",
+    ],
+    [
+      "-t と変換をつなげた形",
+      "pnpm exec jscodeshift -t scripts/codemods/a.ts -ttmp/b.ts src",
     ],
   ])("jscodeshift: %s は拒否する", (_label, command) => {
     expect(plan(command).ok).toBe(false);
@@ -472,6 +477,26 @@ describe("verifyMechanicalChanges（一時リポジトリ）", () => {
     });
 
     expect(result.status).toBe("error");
+  });
+
+  it("scripts/codemods/ の外を指すsymlinkのcodemodは実行せず error にする", () => {
+    symlinkSync("/bin/echo", path.join(repo, "scripts/codemods/run"));
+    commit("test: symlinkを追加");
+    writeFileSync(path.join(repo, "src/one.txt"), "b1\n");
+    commit(
+      "chore: 置換\n\nMechanical-Change: scripts/codemods/run src/one.txt"
+    );
+
+    const [result] = verifyMechanicalChanges({
+      repoDir: repo,
+      base: "base",
+      head: "HEAD",
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.status === "error" && result.message).toContain(
+      "scripts/codemods/"
+    );
   });
 
   it("コマンドが失敗したら error にする", () => {

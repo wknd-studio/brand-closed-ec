@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -251,6 +251,8 @@ export function planCommand(tokens: Token[]): Result<CommandPlan> {
         ? tokens.slice(3)
         : null;
   if (prettierArgs) {
+    // 安全の境界ではない（リポジトリのprettier設定でもpluginは読み込める）。
+    // 境界は fork除外・contents: read・trailer無しのコミットを人間が読むこと
     if (prettierArgs.some((t) => /^--plugin(=|$)/.test(t.value))) {
       return reject("prettier の --plugin は使えません");
     }
@@ -279,6 +281,9 @@ export function planCommand(tokens: Token[]): Result<CommandPlan> {
       if (inline) transforms.push({ value: inline[1], glob: t.glob });
       else if (t.value === "-t" || t.value === "--transform") {
         transforms.push(args[i + 1]);
+      } else if (/^-t./.test(t.value)) {
+        // -tpath の形は判定から漏れないよう、変換の指定として扱う
+        transforms.push({ value: t.value.slice(2), glob: t.glob });
       }
     });
     if (transforms.length === 0) {
@@ -427,6 +432,27 @@ function expandGlob(cwd: string, pattern: string): string[] {
     .filter(Boolean);
 }
 
+/** パスの文字列だけでは、scripts/codemods/ の外を指すsymlinkを通してしまうため、実体の場所を確かめる */
+function assertCodemodsInside(dir: string, plan: CommandPlan) {
+  for (const arg of plan.argv) {
+    if (typeof arg !== "string") continue;
+    const candidate = arg.replace(/^(?:-t|--transform)=?/, "");
+    if (!isCodemodPath(candidate)) continue;
+    let real: string;
+    try {
+      real = realpathSync(path.join(dir, candidate));
+    } catch {
+      continue; // 存在しないファイルはコマンド自体が失敗する
+    }
+    const codemodsRoot = realpathSync(path.join(dir, CODEMODS_DIR));
+    if (!real.startsWith(codemodsRoot + path.sep)) {
+      throw new Error(
+        `${candidate} の実体が ${CODEMODS_DIR} の外にあります（${real}）`
+      );
+    }
+  }
+}
+
 type Replay = {
   dir: string;
   installedLockfile: string | null;
@@ -453,6 +479,7 @@ function replayCommit(
   }
 
   for (const plan of plans) {
+    assertCodemodsInside(dir, plan);
     const argv: string[] = [];
     for (const arg of plan.argv) {
       if (typeof arg === "string") {

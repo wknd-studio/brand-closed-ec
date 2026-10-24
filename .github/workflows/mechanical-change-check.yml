@@ -21,6 +21,8 @@ jobs:
   verify:
     name: Mechanical Change Check
     runs-on: ubuntu-latest
+    # develop→mainのPRではマージ済みの機械的なコミットもすべて再実行するため、上限を決めておく
+    timeout-minutes: 30
     if: github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
