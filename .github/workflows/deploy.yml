@@ -65,8 +65,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Start local Supabase
         # このジョブはDBのスキーマとsrc/types/database.types.tsの整合性しか
-        # 見ないため、E2E同様に未使用コンテナの起動をスキップして時間を短縮する
-        run: bash scripts/supabase-start-minimal.sh
+        # 見ないため、E2E同様に未使用コンテナの起動をスキップして時間を短縮する。
+        # ただし `supabase gen types --local` はpostgres-metaのイメージを一時的に起動して
+        # 使うため、postgres-metaだけは起動する（除外するとgen typesがイメージを別に
+        # pullし、レジストリのレート制限で失敗することがあった）
+        run: bash scripts/supabase-start-minimal.sh --keep postgres-meta
       - name: Apply local migrations
         run: supabase db reset
       - name: Generate types from local DB and diff against committed file

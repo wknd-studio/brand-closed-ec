@@ -121,9 +121,51 @@ describe("scripts/supabase-start-minimal.sh", () => {
     expect(result.stderr).toContain("--exclude");
     expect(existsSync(argsFile)).toBe(false);
   });
+
+  it("--keep で指定したコンテナは除外せずに起動し、残りの引数はそのまま渡す", () => {
+    const result = run(
+      CLI_EXCLUDABLE,
+      "--keep",
+      "postgres-meta",
+      "--workdir",
+      "/tmp/wt"
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(argsFile, "utf8").trim().split("\n")).toEqual([
+      "start",
+      "-x",
+      excludedNames()
+        .filter((name) => name !== "postgres-meta")
+        .join(","),
+      "--workdir",
+      "/tmp/wt",
+    ]);
+  });
+
+  it("--keep に除外一覧に無い名前を渡したら、起動せずに失敗する", () => {
+    const result = run(CLI_EXCLUDABLE, "--keep", "postgres_meta");
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("postgres_meta");
+    expect(existsSync(argsFile)).toBe(false);
+  });
 });
 
 describe("除外指定の定義が1か所にまとまっている", () => {
+  it("Schema Types Drift ジョブは postgres-meta を除外しない（gen types が postgres-meta のイメージを使うため）", () => {
+    const workflow = readFileSync(
+      path.join(ROOT, ".github/workflows/deploy.yml"),
+      "utf8"
+    );
+    const job = workflow
+      .split(/\n {2}(?=[\w-]+:\n)/)
+      .find((j) => j.includes("supabase gen types typescript --local"));
+    expect(job).toContain(
+      "bash scripts/supabase-start-minimal.sh --keep postgres-meta"
+    );
+  });
+
   it("with-worktree-db.sh は supabase-start-minimal.sh で起動する", () => {
     const script = readFileSync(
       path.join(ROOT, "scripts/with-worktree-db.sh"),
