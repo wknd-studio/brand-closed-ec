@@ -354,17 +354,19 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
   const ONBOARDING_CUSTOMER_ID = "cus_test_stripe_checkout_webhook_364";
   const OTHER_SUBSCRIPTION_ID = "sub_test_stripe_checkout_webhook_413_other";
   const EVENT_PREFIX = "evt_test_stripe_checkout_webhook_onboarding";
+  // 入会を確定できない会員（issue #477）
+  const WITHDRAWN_USER_ID = "00000000-0000-0000-0000-000000000477";
+  const WITHDRAWN_CLERK_ID = "clerk_test_stripe_checkout_webhook_477_withdrawn";
+  const MISSING_CLERK_ID = "clerk_test_stripe_checkout_webhook_477_missing";
+  const SECOND_USER_ID = "00000000-0000-0000-0000-000000000478";
+  const SECOND_CLERK_ID = "clerk_test_stripe_checkout_webhook_477_second";
+  const UNRECORDED_SUBSCRIPTION_ID = "sub_test_stripe_checkout_webhook_477";
+  const ALL_USER_IDS = [ONBOARDING_USER_ID, WITHDRAWN_USER_ID, SECOND_USER_ID];
 
   async function cleanupOnboarding() {
-    await supabase
-      .from("rank_changes")
-      .delete()
-      .eq("user_id", ONBOARDING_USER_ID);
-    await supabase
-      .from("subscriptions")
-      .delete()
-      .eq("user_id", ONBOARDING_USER_ID);
-    await supabase.from("users").delete().eq("id", ONBOARDING_USER_ID);
+    await supabase.from("rank_changes").delete().in("user_id", ALL_USER_IDS);
+    await supabase.from("subscriptions").delete().in("user_id", ALL_USER_IDS);
+    await supabase.from("users").delete().in("id", ALL_USER_IDS);
     await supabase
       .from("stripe_webhook_events")
       .delete()
@@ -441,6 +443,28 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
       onboarding_completed: false,
     });
     if (error) throw error;
+    const { error: otherUsersError } = await supabase.from("users").insert([
+      {
+        id: WITHDRAWN_USER_ID,
+        clerk_user_id: WITHDRAWN_CLERK_ID,
+        email: "stripe-checkout-webhook-withdrawn-test@example.com",
+        first_name: "テスト",
+        last_name: "退会",
+        rank_code: "starter",
+        onboarding_completed: false,
+        deleted_at: new Date("2026-10-20T00:00:00Z").toISOString(),
+      },
+      {
+        id: SECOND_USER_ID,
+        clerk_user_id: SECOND_CLERK_ID,
+        email: "stripe-checkout-webhook-second-test@example.com",
+        first_name: "テスト",
+        last_name: "次郎",
+        rank_code: "starter",
+        onboarding_completed: false,
+      },
+    ]);
+    if (otherUsersError) throw otherUsersError;
 
     // Stripe APIへの問い合わせ（Subscriptionの取得）だけを差し替える
     retrieveSubscriptionMock = vi
@@ -679,6 +703,122 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
       .eq("id", ONBOARDING_USER_ID)
       .single();
     expect(user?.rank_code).toBe("standard");
+    expect(updateUserMetadataMock).not.toHaveBeenCalled();
+  });
+
+  async function findUserState(userId: string) {
+    const { data: user } = await supabase
+      .from("users")
+      .select(
+        "rank_code, initial_fee_paid_rank_code, stripe_customer_id, billing_anchor_day, onboarding_completed"
+      )
+      .eq("id", userId)
+      .single();
+    const { count: subscriptionCount } = await supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+    const { count: rankChangeCount } = await supabase
+      .from("rank_changes")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+    return { user, subscriptionCount, rankChangeCount };
+  }
+
+  const UNCONFIRMED_USER_STATE = {
+    user: {
+      rank_code: "starter",
+      initial_fee_paid_rank_code: null,
+      stripe_customer_id: null,
+      billing_anchor_day: null,
+      onboarding_completed: false,
+    },
+    subscriptionCount: 0,
+    rankChangeCount: 0,
+  };
+
+  it("退会済みの会員の入会は、確定させずにSentryへerrorを送り、200を返してイベントを処理済みにする", async () => {
+    const eventId = `${EVENT_PREFIX}_withdrawn`;
+    const response = await postSubscriptionCompleted(eventId, {
+      id: "cs_test_stripe_checkout_webhook_477_withdrawn",
+      subscription: UNRECORDED_SUBSCRIPTION_ID,
+      metadata: { clerk_user_id: WITHDRAWN_CLERK_ID, plan: "standard" },
+    });
+    expect(response.status).toBe(200);
+    expect(await findEventStatus(eventId)).toBe("processed");
+
+    expect(captureMessageMock).toHaveBeenCalledTimes(1);
+    expect(captureMessageMock.mock.calls[0][1]).toMatchObject({
+      level: "error",
+      extra: {
+        stripeCheckoutSessionId:
+          "cs_test_stripe_checkout_webhook_477_withdrawn",
+        clerkUserId: WITHDRAWN_CLERK_ID,
+        stripeCustomerId: ONBOARDING_CUSTOMER_ID,
+        stripeSubscriptionId: UNRECORDED_SUBSCRIPTION_ID,
+      },
+    });
+    expect(await findUserState(WITHDRAWN_USER_ID)).toEqual(
+      UNCONFIRMED_USER_STATE
+    );
+    expect(updateUserMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("users行が無い会員の入会は、確定させずにSentryへerrorを送り、200を返してイベントを処理済みにする", async () => {
+    const eventId = `${EVENT_PREFIX}_missing_user`;
+    const response = await postSubscriptionCompleted(eventId, {
+      id: "cs_test_stripe_checkout_webhook_477_missing",
+      subscription: UNRECORDED_SUBSCRIPTION_ID,
+      metadata: { clerk_user_id: MISSING_CLERK_ID, plan: "standard" },
+    });
+    expect(response.status).toBe(200);
+    expect(await findEventStatus(eventId)).toBe("processed");
+
+    expect(captureMessageMock).toHaveBeenCalledTimes(1);
+    expect(captureMessageMock.mock.calls[0][1]).toMatchObject({
+      level: "error",
+      extra: {
+        stripeCheckoutSessionId: "cs_test_stripe_checkout_webhook_477_missing",
+        clerkUserId: MISSING_CLERK_ID,
+        stripeCustomerId: ONBOARDING_CUSTOMER_ID,
+        stripeSubscriptionId: UNRECORDED_SUBSCRIPTION_ID,
+      },
+    });
+    const { count } = await supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("stripe_subscription_id", UNRECORDED_SUBSCRIPTION_ID);
+    expect(count).toBe(0);
+    expect(updateUserMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("別の会員で記録済みのサブスクリプションIDの入会が届いたら、記録を変えずにSentryへerrorを送り、200を返してイベントを処理済みにする", async () => {
+    const eventId = `${EVENT_PREFIX}_subscription_of_other_member`;
+    const response = await postSubscriptionCompleted(eventId, {
+      id: "cs_test_stripe_checkout_webhook_477_second",
+      subscription: ONBOARDING_SUBSCRIPTION_ID,
+      metadata: { clerk_user_id: SECOND_CLERK_ID, plan: "standard" },
+    });
+    expect(response.status).toBe(200);
+    expect(await findEventStatus(eventId)).toBe("processed");
+
+    expect(captureMessageMock).toHaveBeenCalledTimes(1);
+    expect(captureMessageMock.mock.calls[0][1]).toMatchObject({
+      level: "error",
+      extra: {
+        stripeCheckoutSessionId: "cs_test_stripe_checkout_webhook_477_second",
+        clerkUserId: SECOND_CLERK_ID,
+        stripeCustomerId: ONBOARDING_CUSTOMER_ID,
+        stripeSubscriptionId: ONBOARDING_SUBSCRIPTION_ID,
+      },
+    });
+    expect(await findUserState(SECOND_USER_ID)).toEqual(UNCONFIRMED_USER_STATE);
+    // 先に記録された会員の側も変わらない
+    const { data: subscriptions } = await supabase
+      .from("subscriptions")
+      .select("user_id")
+      .eq("stripe_subscription_id", ONBOARDING_SUBSCRIPTION_ID);
+    expect(subscriptions).toEqual([{ user_id: ONBOARDING_USER_ID }]);
     expect(updateUserMetadataMock).not.toHaveBeenCalled();
   });
 });
