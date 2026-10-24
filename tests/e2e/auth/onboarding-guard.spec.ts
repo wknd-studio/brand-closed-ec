@@ -4,7 +4,7 @@ import { clerk } from "@clerk/testing/playwright";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect } from "../helpers/test-member";
-import { slotEmail } from "../helpers/clerk-test-invitation";
+import { cleanupTestUser, slotEmail } from "../helpers/clerk-test-invitation";
 
 type UserInsert = Database["public"]["Tables"]["users"]["Insert"];
 
@@ -27,15 +27,23 @@ test.describe("入会済みの会員のオンボーディング画面へのア�
   }
 });
 
-/** Clerkのuser.created Webhookが届く環境で、Webhookが作る行を待つ時間の上限 */
+/** Clerkのuser.created Webhookが作る行を待つ時間の上限 */
 const WEBHOOK_ROW_TIMEOUT_MS = 15_000;
 
 /**
- * Clerk上のテスト会員を用意する。既にあれば使い回す。
- * Clerkユーザーを作るとuser.created Webhookが飛び、届く環境（stg、ngrokで公開中のローカル）では
- * 有効なusers行が非同期に作られる。毎回作り直すと、その行がいつ届くかで前提が崩れるため、
- * 作り直さない。初めて作ったときだけ、Webhookの行が届くのを上限付きで待つ
- * （届かない環境では待ち切って先に進む）
+ * user.created Webhookがこのテストの接続先のDBに行を作るか。
+ * Webhookの宛先はstgのアプリなので、stgのDBに繋いでいるとき（E2E Tests (stg)）だけ待つ。
+ * PRのCIはローカルのDBを使い、Webhookは届かない
+ */
+function webhookWritesToThisDb(): boolean {
+  const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname;
+  return host !== "127.0.0.1" && host !== "localhost";
+}
+
+/**
+ * Clerk上のテスト会員を用意する（前回の実行が中断されて残っていれば使い回す）。
+ * 新しく作るとuser.created Webhookが飛び、届く環境ではそのClerkユーザーの有効なusers行が
+ * 非同期に作られる。テストの行を入れた後に届くと前提が崩れるため、届くのを上限付きで待つ
  */
 async function ensureClerkUser(email: string): Promise<string> {
   const clerkApi = await clerkClient();
@@ -49,14 +57,16 @@ async function ensureClerkUser(email: string): Promise<string> {
     password: `E2e-${crypto.randomUUID()}`,
     skipLegalChecks: true,
   });
-  const deadline = Date.now() + WEBHOOK_ROW_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const { data: rows } = await supabaseAdmin()
-      .from("users")
-      .select("id")
-      .eq("clerk_user_id", created.id);
-    if ((rows ?? []).length > 0) break;
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  if (webhookWritesToThisDb()) {
+    const deadline = Date.now() + WEBHOOK_ROW_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const { data: rows } = await supabaseAdmin()
+        .from("users")
+        .select("id")
+        .eq("clerk_user_id", created.id);
+      if ((rows ?? []).length > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
   }
   return created.id;
 }
@@ -83,7 +93,7 @@ async function signInWithUserRows(
   baseURL: string | undefined,
   email: string,
   rows: (clerkUserId: string) => UserInsert[]
-): Promise<{ page: Page; clerkUserId: string }> {
+): Promise<Page> {
   const clerkUserId = await ensureClerkUser(email);
   // 前回の実行で残った行や、user.created Webhookが作った行を消してから、このテストの行だけを入れる
   await deleteUserRows(clerkUserId);
@@ -99,7 +109,7 @@ async function signInWithUserRows(
   // clerk.signInはClerkを読み込む非保護ページで呼ぶ必要がある
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: email });
-  return { page, clerkUserId };
+  return page;
 }
 
 function memberRow(
@@ -124,13 +134,12 @@ function memberRow(
 base.describe.serial("退会済みの会員", () => {
   let email: string;
   let page: Page;
-  let clerkUserId: string;
 
   base.beforeAll(async ({ browser }, workerInfo) => {
     email = slotEmail(
       `info+clerk_test_guard_withdrawn_w${workerInfo.parallelIndex}@wknd-studio.com`
     );
-    ({ page, clerkUserId } = await signInWithUserRows(
+    page = await signInWithUserRows(
       browser,
       workerInfo.project.use.baseURL,
       email,
@@ -139,13 +148,12 @@ base.describe.serial("退会済みの会員", () => {
           deleted_at: new Date().toISOString(),
         }),
       ]
-    ));
+    );
   });
 
-  // Clerkユーザーは次の実行で使い回すため残し、users行だけを消す
   base.afterAll(async () => {
     await page?.context().close();
-    if (clerkUserId) await deleteUserRows(clerkUserId);
+    await cleanupTestUser(email);
   });
 
   for (const path of [
@@ -166,13 +174,12 @@ base.describe.serial("退会済みの会員", () => {
 base.describe.serial("退会済み行と入会済みの有効な行が併存する会員", () => {
   let email: string;
   let page: Page;
-  let clerkUserId: string;
 
   base.beforeAll(async ({ browser }, workerInfo) => {
     email = slotEmail(
       `info+clerk_test_guard_coexist_w${workerInfo.parallelIndex}@wknd-studio.com`
     );
-    ({ page, clerkUserId } = await signInWithUserRows(
+    page = await signInWithUserRows(
       browser,
       workerInfo.project.use.baseURL,
       email,
@@ -182,13 +189,12 @@ base.describe.serial("退会済み行と入会済みの有効な行が併存す�
         }),
         memberRow(id, email, {}),
       ]
-    ));
+    );
   });
 
-  // Clerkユーザーは次の実行で使い回すため残し、users行だけを消す
   base.afterAll(async () => {
     await page?.context().close();
-    if (clerkUserId) await deleteUserRows(clerkUserId);
+    await cleanupTestUser(email);
   });
 
   base(
