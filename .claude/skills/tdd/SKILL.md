@@ -29,7 +29,7 @@ git add <テストのファイル>
 git commit -m "test(scope): BRAND-XX $ARGUMENTS の完了条件を確かめる"
 ```
 
-- このコミットではテストが赤のままでよい（CIのテストはPRの先頭のコミットでだけ動く）。pre-commitのlint-staged（eslint・prettier）は通す
+- このコミットではテストが赤のままでよい（CIのテストはPRの先端（head）のコミットでだけ動く）。pre-commitのlint-staged（eslint・prettier）は通す
 - Step 4 でテスト自体を直したら、テストの変更は実装と同じコミットに混ぜず、`test` のコミットとして分ける
 
 **Step 3: テストが通る最小限のコードを実装する**
@@ -57,12 +57,15 @@ Step 2.5 のテストのコミットに続けて、種類ごとに分けてコ�
 git add <本番コードのファイル>
 git commit -m "feat(scope): BRAND-XX $ARGUMENTS"
 
-# 2. 生成物・機械的な変更: 手作業の変更と混ぜず、実行したコマンドを最後の段落に trailer で書く
+# 2. 生成物・機械的な変更: 手作業の変更と混ぜず、専用のコミットにする（CLAUDE.md「PR の粒度」）
+#   許可リストのコマンド（pnpm format・sed・codemod 等）は、最後の段落に Mechanical-Change: trailer で書く
+pnpm format
+git add -u
+git commit -m "style(scope): BRAND-XX フォーマットを揃える" -m "Mechanical-Change: pnpm format"
+#   型の再生成のようにリダイレクト（>）を含み許可リストに無いものは、trailer を付けない
 supabase gen types typescript --local > src/types/database.types.ts
 git add src/types/database.types.ts
-git commit -m "chore(types): BRAND-XX 型を再生成する" -m "Mechanical-Change: <コマンド>"
-#   trailer に書けるのは CLAUDE.md「PR の粒度」の許可リストのコマンドだけ。
-#   リダイレクト（>）を含む型の再生成のように書けないものは、trailer を付けずに専用のコミットにする
+git commit -m "chore(types): BRAND-XX 型を再生成する"
 
 # 3. ドキュメント（spec.md・CLAUDE.md・docs/ 等）
 git add <ドキュメントのファイル>
@@ -71,12 +74,10 @@ git commit -m "docs(scope): BRAND-XX $ARGUMENTS の仕様を反映する"
 
 - レビュー指摘への対応は、この順に並べ直さず追加のコミットでよい
 
-**Step 7: プッシュ・PR**
-
-- 通常はユーザーの承認後にプッシュする。Orcaのワークツリーで担当issueを実装した場合は、CLAUDE.md「自動push・PR」の条件を満たせば承認を待たずにプッシュ・PR作成まで進めてよい
+**Step 7: プッシュ → Cloudflare Pages が自動デプロイ**
 
 ```bash
-git push -u origin feature/BRAND-XX-xxx
+git push origin feature/BRAND-XX-xxx
 ```
 
 ## 守るテストの観点

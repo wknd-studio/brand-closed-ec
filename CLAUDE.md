@@ -145,7 +145,7 @@ CIの`Migration Order`が失敗したら、developの最新より新しいタイ
 
 **コミット形式**: `feat(scope): BRAND-XX 説明` (Conventional Commits)。1つのPRのコミットは、次の順に種類ごとに分ける。レビューする人間がテストのコミットだけで「このPRが何を保証するか」を掴み、そのうえで実装を読めるようにするため（TDDの順番そのまま）。
 
-1. テスト（`test(scope): ...`）: 失敗することを確認した状態のテストだけをコミットする。このコミットの時点ではテストが赤でよい（CIのテストはPRの先頭のコミットでだけ動き、コミット単位では動かない。pre-commitのlint-staged（eslint・prettier）は通す）。どう失敗したかはPR本文の「実行したチェック」に書く
+1. テスト（`test(scope): ...`）: 失敗することを確認した状態のテストだけをコミットする。このコミットの時点ではテストが赤でよい（CIのテストはPRの先端（head）のコミットでだけ動き、コミット単位では動かない。pre-commitのlint-staged（eslint・prettier）は通す）。どう失敗したかはPR本文の「実行したチェック」に書く
 2. 実装（`feat`・`fix`・`refactor`）: テストを通す本番コード
 3. 生成物・機械的な変更（型の再生成・フォーマット・一括置換など）: 上記「PR の粒度」の `Mechanical-Change:` trailer の規約に従い、手作業の変更と混ぜない
 4. ドキュメント（`docs`）: spec.md・CLAUDE.md・`docs/` 等
