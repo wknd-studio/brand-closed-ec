@@ -1,11 +1,9 @@
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import type { User } from "@/domain/entities/user";
 import type { UserRepository } from "@/repositories/user-repository";
-
-// enterpriseは個別契約のためセルフサービスの決済対象にしない（FR-006）
-type SelfServiceRank = Exclude<MemberRankValue, "enterprise">;
+import type { SelfServiceRank } from "@/repositories/onboarding-checkout-gateway";
 
 export type ResolveOnboardingCheckoutResult =
-  | { userId: string; rank: SelfServiceRank }
+  | { user: User; rank: SelfServiceRank }
   | { redirectTo: string };
 
 export type ResolveOnboardingCheckoutDeps = {
@@ -33,5 +31,5 @@ export async function resolveOnboardingCheckout(
   const rank = user.rank.value;
   if (rank === "enterprise") return RESTART_ONBOARDING;
 
-  return { userId: user.id, rank };
+  return { user, rank };
 }

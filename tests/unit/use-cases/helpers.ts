@@ -181,6 +181,7 @@ export function makeUserRepo(user = makeUser()): UserRepository {
     save: vi.fn().mockResolvedValue(undefined),
     insertIfAbsent: vi.fn().mockResolvedValue(undefined),
     hasWithdrawnByClerkUserId: vi.fn().mockResolvedValue(false),
+    saveStripeCustomerId: vi.fn().mockResolvedValue(undefined),
   };
 }
 

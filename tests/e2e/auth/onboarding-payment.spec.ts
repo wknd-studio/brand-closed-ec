@@ -72,6 +72,11 @@ test.describe.serial("プラン選択後にURLのプランを書き換える", (
     const session = await stripe.checkout.sessions.retrieve(sessionId!);
     expect(session.metadata?.plan).toBe("premium");
 
+    // customer_emailではなく、事前に用意したStripe Customerで決済させる（GitHub issue #410）。
+    // 開き直したときの再利用はユースケースのユニットテストで確認する（同じランクでは
+    // 冪等キーが同じため、Stripeは1回目と同じSessionを返し、E2Eでは比べられない）
+    expect(session.customer).toEqual(expect.stringMatching(/^cus_/));
+
     const lineItems = await stripe.checkout.sessions.listLineItems(sessionId!);
     expect(lineItems.data.map((item) => item.price?.id).sort()).toEqual(
       [

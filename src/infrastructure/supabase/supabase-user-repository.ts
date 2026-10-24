@@ -143,6 +143,24 @@ export class SupabaseUserRepository implements UserRepository {
     }
   }
 
+  async saveStripeCustomerId(
+    userId: string,
+    stripeCustomerId: string
+  ): Promise<void> {
+    const { data, error } = await this.db
+      .from("users")
+      .update({ stripe_customer_id: stripeCustomerId })
+      .eq("id", userId)
+      .is("deleted_at", null)
+      .select("id");
+    if (error) throw error;
+    if (data.length === 0) {
+      throw new Error(
+        `stripe_customer_id の保存に失敗しました（id=${userId} の有効な行が見つかりません）`
+      );
+    }
+  }
+
   async insertIfAbsent(user: User): Promise<void> {
     const { error } = await this.db
       .from("users")

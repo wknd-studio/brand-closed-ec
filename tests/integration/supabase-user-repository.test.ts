@@ -296,4 +296,93 @@ describe("SupabaseUserRepository", () => {
       ).rejects.toThrow();
     });
   });
+
+  describe("saveStripeCustomerId()", () => {
+    const STRIPE_CLERK_ID = "clerk_test_infra_stripe_customer";
+    const STRIPE_ACTIVE_ID = "00000000-0000-0000-0000-000000000014";
+    const STRIPE_DELETED_ID = "00000000-0000-0000-0000-000000000015";
+
+    beforeAll(async () => {
+      await supabase
+        .from("users")
+        .delete()
+        .in("id", [STRIPE_ACTIVE_ID, STRIPE_DELETED_ID]);
+      const { error } = await supabase.from("users").insert([
+        {
+          id: STRIPE_ACTIVE_ID,
+          clerk_user_id: STRIPE_CLERK_ID,
+          email: "stripe-active@example.com",
+          first_name: "決済",
+          last_name: "前",
+          rank_code: "premium",
+          onboarding_completed: false,
+          deleted_at: null,
+        },
+        {
+          id: STRIPE_DELETED_ID,
+          clerk_user_id: STRIPE_CLERK_ID,
+          email: "stripe-deleted@example.com",
+          first_name: "退会",
+          last_name: "済み",
+          // 複数行のinsertは列をそろえないと、省いた列がDEFAULTではなくNULLになる
+          rank_code: "premium",
+          onboarding_completed: false,
+          deleted_at: new Date().toISOString(),
+        },
+      ]);
+      if (error) throw error;
+    });
+
+    afterAll(async () => {
+      await supabase
+        .from("users")
+        .delete()
+        .in("id", [STRIPE_ACTIVE_ID, STRIPE_DELETED_ID]);
+    });
+
+    it("有効な行のstripe_customer_idだけを更新する", async () => {
+      await repo.saveStripeCustomerId(STRIPE_ACTIVE_ID, "cus_infra_saved");
+
+      const { data } = await supabase
+        .from("users")
+        .select("stripe_customer_id, rank_code, onboarding_completed, email")
+        .eq("id", STRIPE_ACTIVE_ID)
+        .single();
+      expect(data).toEqual({
+        stripe_customer_id: "cus_infra_saved",
+        rank_code: "premium",
+        onboarding_completed: false,
+        email: "stripe-active@example.com",
+      });
+    });
+
+    it("退会済みの行には保存せず例外にする", async () => {
+      await expect(
+        repo.saveStripeCustomerId(STRIPE_DELETED_ID, "cus_infra_deleted")
+      ).rejects.toThrow();
+
+      const { data } = await supabase
+        .from("users")
+        .select("stripe_customer_id")
+        .eq("id", STRIPE_DELETED_ID)
+        .single();
+      expect(data?.stripe_customer_id).toBeNull();
+    });
+
+    it("行が無ければ例外にする", async () => {
+      await expect(
+        repo.saveStripeCustomerId(
+          "00000000-0000-0000-0000-000000000000",
+          "cus_infra_none"
+        )
+      ).rejects.toThrow();
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(
+        broken.saveStripeCustomerId(STRIPE_ACTIVE_ID, "cus_infra_broken")
+      ).rejects.toThrow();
+    });
+  });
 });

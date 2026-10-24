@@ -15,7 +15,9 @@ describe("resolveOnboardingCheckout", () => {
     const result = await resolveOnboardingCheckout("clerk-1", { userRepo });
 
     expect(result).toEqual({
-      userId: "00000000-0000-0000-0000-000000000001",
+      user: expect.objectContaining({
+        id: "00000000-0000-0000-0000-000000000001",
+      }),
       rank: "premium",
     });
   });
