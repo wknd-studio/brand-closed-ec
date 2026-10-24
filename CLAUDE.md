@@ -122,7 +122,7 @@ feature/* →  Cloudflare Pages Preview URL
 
 `tests/e2e/`配下のSupabase admin clientは必ず`createClient<Database>(...)`のように型を付ける（型無しの`createClient(...)`は、存在しないカラムを指定してもtscがコンパイルエラーを出さず、実行時までカラム不整合に気づけない。過去に実際にこれで検出漏れが発生した）。
 
-**マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。`database.types.ts` は `.gitattributes` で `linguist-generated=true` を指定しており、GitHubのPR差分表示では既定で折りたたまれる。正しさは `Schema Types Drift` が検査するので、レビューで中身を読む必要は無い（`pnpm-lock.yaml` など他の生成物も同じく `.gitattributes` に並べてある）。
+**マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。`database.types.ts` は `.gitattributes` で `linguist-generated=true` を指定しており、GitHubのPR差分表示では既定で折りたたまれる。正しさは `Schema Types Drift` が検査するので、レビューで中身を読む必要は無い。他の生成物（`pnpm-lock.yaml` 等）も `.gitattributes` に並べてあり、それぞれの正しさの確かめ方は同ファイルのコメントに書いてある。
 
 CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
 
