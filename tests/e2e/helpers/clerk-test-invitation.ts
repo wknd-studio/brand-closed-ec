@@ -12,6 +12,15 @@ function supabaseAdmin() {
 }
 
 /**
+ * 「このプランで始める」等を押してからStripe Checkoutの画面が開くまでを待つ時間。
+ * selectPlanのServer Action → /onboarding/paymentでのCheckout Session作成（Stripe API）
+ * → Stripeへの遷移が続くため、stgでは4.4〜4.7秒かかり、toHaveURLの既定の5秒では
+ * 遷移が起きているのに断続的に失敗していた（#518）。`checkout.spec.ts`の注文確定後の
+ * 遷移待ちと同じ15秒にする
+ */
+export const STRIPE_CHECKOUT_REDIRECT_TIMEOUT = 15000;
+
+/**
  * E2Eテストが使う固定のメールアドレス・Sanity ID等を、同時に走る複数の実行間で
  * 衝突しないよう一意化するためのサフィックスを付与する。
  *
@@ -182,8 +191,11 @@ export async function signUpAndCompleteOnboarding(
 
   // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
   // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
-  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
-  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
+  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい。
+  // 中継点のURLを経ずにStripeへ着くこともあるため、待ち時間はStripeまでの分を取る
+  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/, {
+    timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+  });
 
   const { error } = await supabaseAdmin()
     .from("users")

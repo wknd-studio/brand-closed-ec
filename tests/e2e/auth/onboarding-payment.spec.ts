@@ -5,6 +5,7 @@ import {
   signUpAsIndividual,
   cleanupTestUser,
   slotEmail,
+  STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_PASSWORD = "TestPassw0rd!12345";
@@ -60,10 +61,14 @@ test.describe.serial("プラン選択後にURLのプランを書き換える", (
   test("Checkoutは保存したプラン（PREMIUM）で作られる", async () => {
     await page.getByRole("radio", { name: /PREMIUM/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
-    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    await expect(page).toHaveURL(/checkout\.stripe\.com/, {
+      timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+    });
 
     await page.goto("/onboarding/payment?plan=starter");
-    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    await expect(page).toHaveURL(/checkout\.stripe\.com/, {
+      timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+    });
 
     const sessionId = page.url().match(/cs_(?:test|live)_[A-Za-z0-9]+/)?.[0];
     expect(sessionId).toBeDefined();
