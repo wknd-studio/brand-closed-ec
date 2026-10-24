@@ -19,9 +19,22 @@ vi.mock("next/navigation", () => ({
 }));
 
 const retrieveCheckoutSessionMock = vi.fn();
+const listSubscriptionsMock = vi.fn();
 vi.mock("@/lib/stripe", () => ({
   getStripe: () => ({
     checkout: { sessions: { retrieve: retrieveCheckoutSessionMock } },
+    subscriptions: { list: listSubscriptionsMock },
+  }),
+}));
+
+vi.mock("@/lib/supabase/server-admin", () => ({
+  createAdminClient: vi.fn(() => ({})),
+}));
+
+const userRepo = makeUserRepo();
+vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
+  SupabaseUserRepository: vi.fn(function () {
+    return userRepo;
   }),
 }));
 
@@ -33,11 +46,22 @@ import * as Sentry from "@sentry/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { isOnboardingCompleted } from "@/app/onboarding/payment/success/actions";
 import PaymentSuccessPage from "@/app/onboarding/payment/success/page";
+import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
+import { startOnboardingCheckout } from "@/use-cases/start-onboarding-checkout";
+import { makeUser, makeUserRepo } from "./use-cases/helpers";
 
 const SESSION_ID = "cs_test_a1B2c3";
 
 function renderPage(searchParams: Record<string, string | string[]>) {
   return PaymentSuccessPage({ searchParams: Promise.resolve(searchParams) });
+}
+
+function setUser(stripeCustomerId: string | null) {
+  vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(
+    makeUser({ rank: "premium", onboardingCompleted: false }).with({
+      stripeCustomerId,
+    })
+  );
 }
 
 function stripeError(type: string, statusCode?: number) {
@@ -54,6 +78,8 @@ describe("PaymentSuccessPage - session_idの検証", () => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue({ userId: "clerk-1" } as never);
     vi.mocked(isOnboardingCompleted).mockResolvedValue(false);
+    setUser(null);
+    listSubscriptionsMock.mockResolvedValue({ data: [] });
   });
 
   it("本人のセッションで決済が完了していれば、ショップ・プラン選択への導線を出さずに処理中を表示する", async () => {
@@ -185,4 +211,148 @@ describe("PaymentSuccessPage - session_idの検証", () => {
       expect(html).not.toContain("処理中");
     }
   );
+});
+
+/**
+ * 有効なサブスクリプションがある会員（GitHub issue #461）。決済画面は、Customerに
+ * 有効なサブスクリプションがあるとsession_idを付けずにこの画面へ送るため、
+ * session_idが無くてもWebhookによる確定を待つ表示にする
+ */
+describe("PaymentSuccessPage - 有効なサブスクリプションの確認", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue({ userId: "clerk-1" } as never);
+    vi.mocked(isOnboardingCompleted).mockResolvedValue(false);
+    setUser("cus_1");
+    listSubscriptionsMock.mockResolvedValue({ data: [] });
+  });
+
+  it("session_idが無くても、本人のCustomerに有効なサブスクリプションがあれば処理中を表示する", async () => {
+    listSubscriptionsMock.mockResolvedValue({ data: [{ status: "active" }] });
+
+    const html = renderToStaticMarkup((await renderPage({})) as ReactElement);
+
+    expect(listSubscriptionsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ customer: "cus_1" })
+    );
+    expect(html).toContain("処理中");
+    expect(html).not.toContain("<a");
+  });
+
+  it("session_idが決済完了でなくても、有効なサブスクリプションがあれば処理中を表示する", async () => {
+    retrieveCheckoutSessionMock.mockResolvedValue({
+      status: "expired",
+      metadata: { clerk_user_id: "clerk-1" },
+    });
+    listSubscriptionsMock.mockResolvedValue({ data: [{ status: "active" }] });
+
+    const html = renderToStaticMarkup(
+      (await renderPage({ session_id: SESSION_ID })) as ReactElement
+    );
+
+    expect(html).toContain("処理中");
+  });
+
+  it.each(["canceled", "incomplete_expired"])(
+    "終了したサブスクリプション（status=%s）しか無ければ種別選択へ戻す",
+    async (status) => {
+      listSubscriptionsMock.mockResolvedValue({ data: [{ status }] });
+
+      await expect(renderPage({})).rejects.toThrow(
+        "NEXT_REDIRECT:/onboarding/account-type"
+      );
+    }
+  );
+
+  it("サブスクリプションが無ければ種別選択へ戻す", async () => {
+    await expect(renderPage({})).rejects.toThrow(
+      "NEXT_REDIRECT:/onboarding/account-type"
+    );
+  });
+
+  it("Stripe Customerが未作成なら、Stripeに問い合わせず種別選択へ戻す", async () => {
+    setUser(null);
+
+    await expect(renderPage({})).rejects.toThrow(
+      "NEXT_REDIRECT:/onboarding/account-type"
+    );
+    expect(listSubscriptionsMock).not.toHaveBeenCalled();
+  });
+
+  it("会員の行が無ければ、Stripeに問い合わせず種別選択へ戻す", async () => {
+    vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+
+    await expect(renderPage({})).rejects.toThrow(
+      "NEXT_REDIRECT:/onboarding/account-type"
+    );
+    expect(listSubscriptionsMock).not.toHaveBeenCalled();
+  });
+
+  it("本人のセッションで決済が完了していれば、サブスクリプションを確認しない", async () => {
+    retrieveCheckoutSessionMock.mockResolvedValue({
+      status: "complete",
+      metadata: { clerk_user_id: "clerk-1" },
+    });
+
+    await renderPage({ session_id: SESSION_ID });
+
+    expect(listSubscriptionsMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["5xx", stripeError("StripeAPIError", 500)],
+    ["ネットワーク", stripeError("StripeConnectionError")],
+  ])(
+    "サブスクリプションの確認でStripe APIが失敗（%s）したら、Sentryに送り、確定待ちも種別選択も出さず再読み込みを促す",
+    async (_label, error) => {
+      listSubscriptionsMock.mockRejectedValue(error);
+
+      const html = renderToStaticMarkup((await renderPage({})) as ReactElement);
+
+      expect(Sentry.captureException).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            page: "onboarding-payment-success",
+          }),
+        })
+      );
+      expect(html).toContain("再読み込み");
+      expect(html).not.toContain("処理中");
+    }
+  );
+
+  it("会員の取得に失敗したら、Sentryに送り再読み込みを促す", async () => {
+    const error = new Error("db down");
+    vi.mocked(userRepo.findByClerkUserId).mockRejectedValue(error);
+
+    const html = renderToStaticMarkup((await renderPage({})) as ReactElement);
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      error,
+      expect.anything()
+    );
+    expect(html).toContain("再読み込み");
+  });
+
+  it("決済画面で有効なサブスクリプションがあると判定された会員を、決済完了画面が種別選択へ戻さない", async () => {
+    // 決済直後にタブを閉じ、Webhookが届く前に開き直した会員
+    listSubscriptionsMock.mockResolvedValue({ data: [{ status: "active" }] });
+
+    const checkout = await startOnboardingCheckout(
+      { clerkUserId: "clerk-1", email: undefined },
+      { userRepo, checkoutGateway: new StripeOnboardingCheckoutGateway() }
+    );
+    if (!("redirectTo" in checkout)) throw new Error("Checkoutが作られた");
+
+    const redirectUrl = new URL(checkout.redirectTo, "https://example.com");
+    expect(redirectUrl.pathname).toBe("/onboarding/payment/success");
+
+    const html = renderToStaticMarkup(
+      (await renderPage(
+        Object.fromEntries(redirectUrl.searchParams)
+      )) as ReactElement
+    );
+    expect(html).toContain("処理中");
+  });
 });
