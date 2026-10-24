@@ -4,6 +4,7 @@ import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-er
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import { MissingRequiredProfileFieldsError } from "@/domain/errors/missing-required-profile-fields-error";
 import { makeUserRepo, makeAccountGateway, makeUser } from "./helpers";
 
 const baseInput = {
@@ -169,5 +170,110 @@ describe("selectPlan", () => {
     );
 
     expect(userRepo.save).toHaveBeenCalled();
+  });
+
+  describe("必須項目のサーバー側検証", () => {
+    it.each([
+      ["空", ""],
+      ["空白だけ", " \u3000 "],
+    ])(
+      "姓・名が%sの場合はMissingRequiredProfileFieldsErrorをthrowし、保存しない",
+      async (_, blank) => {
+        const userRepo = makeUserRepo();
+        vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+        const accountGateway = makeAccountGateway();
+
+        const promise = selectPlan(
+          { ...baseInput, plan: "starter", lastName: blank, firstName: blank },
+          { userRepo, accountGateway }
+        );
+
+        await expect(promise).rejects.toThrow(
+          MissingRequiredProfileFieldsError
+        );
+        await expect(promise).rejects.toMatchObject({
+          fields: ["lastName", "firstName"],
+        });
+        expect(userRepo.save).not.toHaveBeenCalled();
+        expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
+      }
+    );
+
+    it("電話番号が空白だけの場合はphoneNumberを不足項目にする", async () => {
+      const userRepo = makeUserRepo();
+      vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+      const accountGateway = makeAccountGateway();
+
+      await expect(
+        selectPlan(
+          { ...baseInput, plan: "starter", phoneNumber: " " },
+          { userRepo, accountGateway }
+        )
+      ).rejects.toMatchObject({ fields: ["phoneNumber"] });
+      expect(userRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("名だけが空白の場合はfirstNameだけを不足項目にする", async () => {
+      const userRepo = makeUserRepo();
+      vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+      const accountGateway = makeAccountGateway();
+
+      await expect(
+        selectPlan(
+          { ...baseInput, plan: "starter", firstName: "  " },
+          { userRepo, accountGateway }
+        )
+      ).rejects.toMatchObject({ fields: ["firstName"] });
+    });
+
+    it.each([
+      ["空", ""],
+      ["空白だけ", "\u3000"],
+    ])(
+      "法人の会社名・インボイス番号が%sの場合はMissingRequiredProfileFieldsErrorをthrowし、保存しない",
+      async (_, blank) => {
+        const userRepo = makeUserRepo();
+        vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+        const accountGateway = makeAccountGateway();
+
+        await expect(
+          selectPlan(
+            {
+              ...baseInput,
+              plan: "advanced",
+              companyName: blank,
+              invoiceRegistrationNumber: blank,
+            },
+            { userRepo, accountGateway }
+          )
+        ).rejects.toMatchObject({
+          fields: ["companyName", "invoiceRegistrationNumber"],
+        });
+        expect(userRepo.save).not.toHaveBeenCalled();
+      }
+    );
+
+    it("氏名・会社名は前後の空白を除いて保存する", async () => {
+      const userRepo = makeUserRepo();
+      vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+      const accountGateway = makeAccountGateway();
+
+      await selectPlan(
+        {
+          ...baseInput,
+          plan: "advanced",
+          lastName: " 山田 ",
+          firstName: "\u3000太郎",
+          companyName: " テスト株式会社 ",
+          invoiceRegistrationNumber: "T1234567890123",
+        },
+        { userRepo, accountGateway }
+      );
+
+      const saved = vi.mocked(userRepo.save).mock.calls[0][0];
+      expect(saved.lastName).toBe("山田");
+      expect(saved.firstName).toBe("太郎");
+      expect(saved.companyName).toBe("テスト株式会社");
+    });
   });
 });

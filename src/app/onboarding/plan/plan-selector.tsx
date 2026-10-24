@@ -56,10 +56,14 @@ export default function PlanSelector({
     FormData
   >(selectPlan, null);
 
+  const failed = state && "values" in state ? state : null;
+  const values = failed?.values;
+  const fieldErrors = failed?.fieldErrors;
+
   useEffect(() => {
     if (state && "redirectTo" in state) {
-      // DB が正なので即遷移。session.reload() はバックグラウンドで JWT を更新し
-      // 以降のリクエストで DB クエリをスキップする高速パスを有効化する。
+      // DB が正なので即遷移。session.reload() はClerkのセッション（JWT）を
+      // 最新の状態に揃えるためにバックグラウンドで行う
       router.push(state.redirectTo);
       session?.reload();
     }
@@ -81,8 +85,18 @@ export default function PlanSelector({
               id="lastName"
               name="lastName"
               required
+              defaultValue={values?.lastName}
+              aria-invalid={!!fieldErrors?.lastName}
+              aria-describedby={
+                fieldErrors?.lastName ? "lastName-error" : undefined
+              }
               className="mt-1 w-full rounded border p-2"
             />
+            {fieldErrors?.lastName && (
+              <p id="lastName-error" className="mt-1 text-sm text-red-600">
+                {fieldErrors.lastName}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="firstName" className="block text-sm font-medium">
@@ -92,8 +106,18 @@ export default function PlanSelector({
               id="firstName"
               name="firstName"
               required
+              defaultValue={values?.firstName}
+              aria-invalid={!!fieldErrors?.firstName}
+              aria-describedby={
+                fieldErrors?.firstName ? "firstName-error" : undefined
+              }
               className="mt-1 w-full rounded border p-2"
             />
+            {fieldErrors?.firstName && (
+              <p id="firstName-error" className="mt-1 text-sm text-red-600">
+                {fieldErrors.firstName}
+              </p>
+            )}
           </div>
         </div>
         <div>
@@ -105,8 +129,18 @@ export default function PlanSelector({
             name="phoneNumber"
             required
             placeholder="09012345678"
+            defaultValue={values?.phoneNumber}
+            aria-invalid={!!fieldErrors?.phoneNumber}
+            aria-describedby={
+              fieldErrors?.phoneNumber ? "phoneNumber-error" : undefined
+            }
             className="mt-1 w-full rounded border p-2"
           />
+          {fieldErrors?.phoneNumber && (
+            <p id="phoneNumber-error" className="mt-1 text-sm text-red-600">
+              {fieldErrors.phoneNumber}
+            </p>
+          )}
         </div>
       </div>
       {isCorporate && (
@@ -120,8 +154,18 @@ export default function PlanSelector({
               id="companyName"
               name="companyName"
               required
+              defaultValue={values?.companyName}
+              aria-invalid={!!fieldErrors?.companyName}
+              aria-describedby={
+                fieldErrors?.companyName ? "companyName-error" : undefined
+              }
               className="mt-1 w-full rounded border p-2"
             />
+            {fieldErrors?.companyName && (
+              <p id="companyName-error" className="mt-1 text-sm text-red-600">
+                {fieldErrors.companyName}
+              </p>
+            )}
           </div>
           <div>
             <label
@@ -135,8 +179,23 @@ export default function PlanSelector({
               name="invoiceRegistrationNumber"
               required
               placeholder="T1234567890123"
+              defaultValue={values?.invoiceRegistrationNumber}
+              aria-invalid={!!fieldErrors?.invoiceRegistrationNumber}
+              aria-describedby={
+                fieldErrors?.invoiceRegistrationNumber
+                  ? "invoiceRegistrationNumber-error"
+                  : undefined
+              }
               className="mt-1 w-full rounded border p-2"
             />
+            {fieldErrors?.invoiceRegistrationNumber && (
+              <p
+                id="invoiceRegistrationNumber-error"
+                className="mt-1 text-sm text-red-600"
+              >
+                {fieldErrors.invoiceRegistrationNumber}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -151,6 +210,7 @@ export default function PlanSelector({
               name="plan"
               value={plan.id}
               required
+              defaultChecked={values?.plan === plan.id}
               className="h-4 w-4"
             />
             <div>
@@ -167,9 +227,7 @@ export default function PlanSelector({
       >
         {isPending ? "処理中..." : "このプランで始める"}
       </button>
-      {state && "error" in state && (
-        <p className="text-sm text-red-600">{state.error}</p>
-      )}
+      {failed?.error && <p className="text-sm text-red-600">{failed.error}</p>}
     </form>
   );
 }
