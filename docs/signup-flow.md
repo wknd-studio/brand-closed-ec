@@ -232,7 +232,7 @@ sequenceDiagram
 3. タブAで支払う
 4. 開いたままのタブBで支払う → 同じCustomerにサブスクリプションが2本できる
 
-2本目の`checkout.session.completed`は入会済みの会員に届くためDBに記録されず（設計決定事項8）、Stripeでは課金が続く。Stripeの「[顧客のサブスクリプションを1つに制限](https://docs.stripe.com/payments/checkout/limit-subscriptions)」を有効にすると、4の時点でCheckoutが「すでにサブスクリプションをご登録いただいているようです」と表示して決済を止める（2026-10-24、テストモードでPlaywrightにより確認）。3の後に新しくCheckoutを開いた場合も、支払いの入力欄が出ない。
+2本目の`checkout.session.completed`は入会済みの会員に届くためDBに記録されず（設計決定事項8）、Stripeでは課金が続く。Stripeの「[顧客のサブスクリプションを1つに制限](https://docs.stripe.com/payments/checkout/limit-subscriptions)」を有効にすると、4の時点でCheckoutが「すでにサブスクリプションをご登録いただいているようです」と表示して決済を止める（2026-10-24、テストモードでPlaywrightにより確認）。なお3の後に`/onboarding/payment`を開いた場合は、Stripeの設定より先にコード（`hasActiveSubscription`）が止めて`/onboarding/payment/success`へ回す。Stripeの設定だけでも、3の後に作られたCheckoutは開いた時点で「すでにサブスクリプションが存在します」と表示し、支払いの入力欄を出さない。
 
 - 判定にはCheckoutに指定したCustomerを使う。入会のCheckoutで`customer`を必ず指定しているのが前提（issue #410）
 - 「有効」とみなされる状態は`active`・`past_due`・`unpaid`・`paused`
