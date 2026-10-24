@@ -3,6 +3,8 @@ import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
+import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { makeOrder } from "./use-cases/helpers";
 
 function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
   return User.of({
@@ -45,6 +47,30 @@ describe("User", () => {
     it("ランクに対応した月次上限 Money を返す", () => {
       const user = makeUser({ rank: MemberRank.of("standard") });
       expect(user.getMonthlyLimit().amount).toBe(5_000_000);
+    });
+  });
+
+  describe("withdraw()", () => {
+    it("未解決の注文が0件なら、deletedAt に退会日時を立てた User を返す", () => {
+      const now = new Date(2026, 9, 24, 12, 0, 0);
+      const user = makeUser({ deletedAt: null });
+
+      const withdrawn = user.withdraw([], now);
+
+      expect(withdrawn.deletedAt).toEqual(now);
+      expect(withdrawn.isWithdrawn()).toBe(true);
+      expect(user.deletedAt).toBeNull();
+    });
+
+    it("未解決の注文が1件以上なら ActiveOrdersExistError をthrowする", () => {
+      const user = makeUser({ deletedAt: null });
+
+      expect(() => user.withdraw([makeOrder()], new Date())).toThrow(
+        ActiveOrdersExistError
+      );
+      expect(() =>
+        user.withdraw([makeOrder(), makeOrder()], new Date())
+      ).toThrow(ActiveOrdersExistError);
     });
   });
 
