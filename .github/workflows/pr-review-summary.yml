@@ -1,0 +1,30 @@
+name: PR Review Summary
+
+# PR本文の「レビューの要点」（変わる振る舞い・一番危ない箇所・人間に判断してほしいこと）が
+# 空欄のPRを失敗させる（#471）。根拠を示す節は <details> に折りたたむため、
+# 人間が最初に読むこの節だけは必ず書かせる。ブランチ保護の必須チェックに登録して使う
+on:
+  # 必須チェックに登録するため、develop宛てのすべてのPRで実行する。本文の編集で結果を更新する。
+  # main宛て（develop→mainのリリース・hotfix）は対象外。mainの保護ルールには登録しない（登録すると永久にPendingになる）
+  pull_request:
+    branches: [develop]
+    types: [opened, edited, synchronize, reopened]
+
+# 本文を続けて編集したとき、古い本文での結果が後から表示されないようにする
+concurrency:
+  group: pr-review-summary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-review-summary:
+    name: PR Review Summary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check review summary in PR body
+        env:
+          # 本文はシェルに埋め込まず環境変数で渡す（スクリプトインジェクション対策）
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/ci/check-pr-review-summary.sh
