@@ -17,6 +17,8 @@ import { pathToFileURL } from "node:url";
  */
 
 const REPORT_MARKER = "<!-- pr-diff-summary -->";
+// GitHubのコメントは65,536文字まで。一括置換等で数百ファイル変えても超えないよう、ファイルごとの表は上限で切る
+export const MAX_LISTED_FILES = 200;
 
 /** CLAUDE.md「PRの粒度」の、分割を検討する目安。値を変えるときは CLAUDE.md とテンプレートも直す */
 export const GUIDELINE = {
@@ -55,12 +57,13 @@ const RULES: { category: Category; test: (file: string) => boolean }[] = [
     category: "test",
     test: (f) =>
       f.startsWith("tests/") ||
+      f.startsWith("supabase/tests/") ||
       /(^|\/)__tests__\//.test(f) ||
       /\.(test|spec)\.[cm]?[jt]sx?$/.test(f),
   },
   {
     category: "sql",
-    test: (f) => f.startsWith("supabase/") && f.endsWith(".sql"),
+    test: (f) => f.startsWith("supabase/migrations/") && f.endsWith(".sql"),
   },
   {
     // 開発・CI用のツール。src/lib/issue-deps-graph は依存グラフのページを作るツールでアプリからは使わない
@@ -211,10 +214,17 @@ export function renderDiffSummarySection(summary: DiffSummary): string {
     "| 区分 | ファイル | 追加 | 削除 |",
     "| --- | --- | ---: | ---: |"
   );
-  for (const c of CATEGORIES) {
-    for (const e of entries.filter((e) => e.category === c.key)) {
-      out.push(`| ${c.label} | \`${e.path}\` | +${e.added} | −${e.deleted} |`);
-    }
+  const listed = CATEGORIES.flatMap((c) =>
+    entries.filter((e) => e.category === c.key).map((e) => ({ c, e }))
+  );
+  for (const { c, e } of listed.slice(0, MAX_LISTED_FILES)) {
+    out.push(`| ${c.label} | \`${e.path}\` | +${e.added} | −${e.deleted} |`);
+  }
+  if (listed.length > MAX_LISTED_FILES) {
+    out.push(
+      "",
+      `ほか${listed.length - MAX_LISTED_FILES}ファイル（コメントの文字数の上限のため省略）`
+    );
   }
   out.push("", "</details>");
   return out.join("\n");

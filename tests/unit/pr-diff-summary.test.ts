@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   GUIDELINE,
+  MAX_LISTED_FILES,
   classifyPath,
   linguistGenerated,
   parseNumstat,
@@ -27,6 +28,8 @@ describe("classifyPath", () => {
     ["src/components/header.tsx", "components"],
     ["src/components/ui/button.tsx", "components"],
     ["supabase/migrations/20261024000000_add_orders.sql", "sql"],
+    ["supabase/tests/orders_rls.test.sql", "test"],
+    ["supabase/seed.sql", "config"],
     ["tests/unit/money.test.ts", "test"],
     ["tests/integration/order-repository.test.ts", "test"],
     ["tests/e2e/checkout.spec.ts", "test"],
@@ -201,6 +204,35 @@ describe("renderDiffSummarySection", () => {
   it("本番コードが目安以内なら超過の警告を出さない", () => {
     const section = renderDiffSummarySection(summarizeDiff(entries));
     expect(section).not.toContain("目安を超えています");
+  });
+
+  it("本番コードがちょうど目安の行数・ファイル数なら警告を出さない", () => {
+    const files = Array.from({ length: GUIDELINE.productionFiles }, (_, i) => ({
+      path: `src/domain/f${i}.ts`,
+      added:
+        i === 0 ? GUIDELINE.productionLines - GUIDELINE.productionFiles + 1 : 1,
+      deleted: 0,
+      category: "domain" as const,
+    }));
+    const summary = summarizeDiff(files);
+    expect(summary.production.added).toBe(GUIDELINE.productionLines);
+    expect(summary.production.files).toBe(GUIDELINE.productionFiles);
+    expect(renderDiffSummarySection(summary)).not.toContain(
+      "目安を超えています"
+    );
+  });
+
+  it("ファイルが多いときは、ファイルごとの表を上限で切って残りの数を出す（コメントの文字数の上限対策）", () => {
+    const many = Array.from({ length: MAX_LISTED_FILES + 3 }, (_, i) => ({
+      path: `src/app/f${i}.ts`,
+      added: 1,
+      deleted: 0,
+      category: "app" as const,
+    }));
+    const section = renderDiffSummarySection(summarizeDiff(many));
+    expect(section).toContain(`src/app/f${MAX_LISTED_FILES - 1}.ts`);
+    expect(section).not.toContain(`src/app/f${MAX_LISTED_FILES}.ts`);
+    expect(section).toContain("ほか3ファイル");
   });
 
   it("本番コードの行数が目安を超えたら警告を出す", () => {
