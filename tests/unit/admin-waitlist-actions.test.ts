@@ -305,6 +305,24 @@ describe("admin/waitlist actions", () => {
       expect(rejectMock).not.toHaveBeenCalled();
     });
 
+    it("却下時にエントリの取得が想定外のエラーで失敗したら招待を取り消さず却下もせずSentryに送る", async () => {
+      const err = new Error("network error");
+      listWaitlistEntriesMock.mockRejectedValue(err);
+
+      const result = await rejectWaitlistEntry("wle_1");
+
+      expect(result).toEqual({ error: "network error" });
+      expect(revokeInvitationMock).not.toHaveBeenCalled();
+      expect(rejectMock).not.toHaveBeenCalled();
+      expect(captureExceptionMock).toHaveBeenCalledWith(
+        err,
+        expect.objectContaining({
+          tags: { action: "rejectWaitlistEntry" },
+          extra: { waitlistEntryId: "wle_1" },
+        })
+      );
+    });
+
     it("招待が無い場合も却下できる", async () => {
       getInvitationListMock.mockResolvedValue({ data: [] });
       rejectMock.mockResolvedValue({ id: "wle_1", status: "rejected" });
