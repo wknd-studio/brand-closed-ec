@@ -560,32 +560,37 @@ ${independent}
     await draw();
   }
 
-  async function drawOverview(key) {
-    const { svg } = await mermaid.render("deps-overview-" + renderCount++, data.overview[key]);
-    overview.innerHTML = svg;
-    for (const node of overview.querySelectorAll(".node")) {
-      node.classList.toggle("current", milestoneOfOverviewNode(node) === current);
-    }
-  }
+  // 描画は非同期なので、続けて切り替えたときは最後に始めた描画だけを画面に反映する
+  let latestDraw = 0;
 
   async function draw() {
+    const drawId = ++latestDraw;
+    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0");
+    const definition = data.variants[current][key];
+    const hasNodes = /^  I\\d+\\[/m.test(definition);
+    const [overviewSvg, graphSvg] = await Promise.all([
+      mermaid.render("deps-overview-" + renderCount++, data.overview[key]).then((r) => r.svg),
+      hasNodes ? mermaid.render("deps-graph-" + renderCount++, definition).then((r) => r.svg) : null,
+    ]);
+    if (drawId !== latestDraw) return;
+
     document.body.classList.toggle("v1-only", v1Only.checked);
     document.body.classList.toggle("hide-non-dev", hideNonDev.checked);
     for (const section of document.querySelectorAll(".independent section")) {
       section.hidden = current !== "" && section.dataset.milestone !== current;
     }
-    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0");
-    await drawOverview(key);
-    const definition = data.variants[current][key];
+    overview.innerHTML = overviewSvg;
+    for (const node of overview.querySelectorAll(".node")) {
+      node.classList.toggle("current", milestoneOfOverviewNode(node) === current);
+    }
     panZoom?.destroy();
     panZoom = null;
-    if (!/^  I\\d+\\[/m.test(definition)) {
+    if (graphSvg === null) {
       container.replaceChildren(el("p", { className: "empty", textContent: "この条件で依存関係のあるissueは無い" }));
       select(null);
       return;
     }
-    const { svg } = await mermaid.render("deps-graph-" + renderCount++, definition);
-    container.innerHTML = svg;
+    container.innerHTML = graphSvg;
     const svgEl = container.querySelector("svg");
     svgEl.removeAttribute("style");
     panZoom = svgPanZoom(svgEl, { controlIconsEnabled: true, fit: true, center: true, minZoom: 0.1, maxZoom: 20, zoomScaleSensitivity: 0.3, dblClickZoomEnabled: false });
