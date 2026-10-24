@@ -29,6 +29,18 @@ function reportUnexpected(
   console.error(`[${action}] 予期しないエラー:`, err);
 }
 
+// エントリを1件取得するAPIは無いため一覧をIDで絞り、queryは部分一致のため完全一致で絞る
+async function findPendingEntry(
+  clerk: Awaited<ReturnType<typeof clerkClient>>,
+  waitlistEntryId: string
+) {
+  const { data: entries } = await clerk.waitlistEntries.list({
+    query: waitlistEntryId,
+    status: "pending",
+  });
+  return entries.find((e) => e.id === waitlistEntryId);
+}
+
 export async function approveWaitlistEntry(
   waitlistEntryId: string
 ): Promise<ActionResult> {
@@ -38,13 +50,8 @@ export async function approveWaitlistEntry(
   const clerk = await clerkClient();
   try {
     // 招待先のメールアドレスはクライアントから受け取らず、Waitlistのエントリから得る
-    // (Waitlistに登録されていない任意のアドレスを招待できないようにするため)。
-    // エントリを1件取得するAPIは無いため一覧をIDで絞り、queryは部分一致のため完全一致で絞る
-    const { data: entries } = await clerk.waitlistEntries.list({
-      query: waitlistEntryId,
-      status: "pending",
-    });
-    const entry = entries.find((e) => e.id === waitlistEntryId);
+    // (Waitlistに登録されていない任意のアドレスを招待できないようにするため)
+    const entry = await findPendingEntry(clerk, waitlistEntryId);
     if (!entry) return { error: "参加希望が見つかりません" };
 
     // waitlistEntries.invite()はAccount Portal(*.accounts.dev、英語固定)にしか
@@ -69,14 +76,19 @@ export async function approveWaitlistEntry(
 }
 
 export async function rejectWaitlistEntry(
-  waitlistEntryId: string,
-  emailAddress: string
+  waitlistEntryId: string
 ): Promise<ActionResult> {
   const authError = await requireAdmin();
   if (authError) return authError;
 
   const clerk = await clerkClient();
   try {
+    // 取り消す招待のメールアドレスはクライアントから受け取らず、Waitlistのエントリから得る
+    // (IDとずれて却下したエントリの招待が残ったり、無関係なアドレスの招待を取り消せたりしないようにするため)
+    const entry = await findPendingEntry(clerk, waitlistEntryId);
+    if (!entry) return { error: "参加希望が見つかりません" };
+    const { emailAddress } = entry;
+
     // 承認時に発行した未使用の招待が残っていると、却下後も招待リンクから登録できてしまう。
     // 取り消しを先に行い、失敗したら却下しない(却下済みのエントリは一覧から消え、
     // 取り消しをやり直す手段が無くなるため)。queryは部分一致のため完全一致で絞る
