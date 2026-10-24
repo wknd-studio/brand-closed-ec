@@ -357,7 +357,11 @@ describe("SupabaseUserRepository", () => {
       // 読み取った後に、別のタブの決済画面がStripe Customerを作って保存したケース
       await supabase
         .from("users")
-        .update({ stripe_customer_id: "cus_test_keep", billing_anchor_day: 15 })
+        .update({
+          stripe_customer_id: "cus_test_keep",
+          billing_anchor_day: 15,
+          profile_completed_at: "2026-10-24T00:00:00+00:00",
+        })
         .eq("id", existing!.id);
 
       await expect(
@@ -379,7 +383,7 @@ describe("SupabaseUserRepository", () => {
       const { data: row } = await supabase
         .from("users")
         .select(
-          "email, first_name, last_name, phone_number, rank_code, member_type, company_name, invoice_registration_number, stripe_customer_id, billing_anchor_day, onboarding_completed"
+          "email, first_name, last_name, phone_number, rank_code, member_type, company_name, invoice_registration_number, stripe_customer_id, billing_anchor_day, profile_completed_at, onboarding_completed"
         )
         .eq("id", existing!.id)
         .single();
@@ -394,6 +398,7 @@ describe("SupabaseUserRepository", () => {
         invoice_registration_number: "T1234567890123",
         stripe_customer_id: "cus_test_keep",
         billing_anchor_day: 15,
+        profile_completed_at: "2026-10-24T00:00:00+00:00",
         onboarding_completed: false,
       });
     });
