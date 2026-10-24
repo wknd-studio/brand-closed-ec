@@ -27,7 +27,7 @@ describe("selectPlan", () => {
     );
 
     expect(result).toEqual({ redirectTo: "/onboarding/payment" });
-    const saved = vi.mocked(userRepo.save).mock.calls[0][0];
+    const saved = vi.mocked(userRepo.saveIfNotOnboarded).mock.calls[0][0];
     expect(saved.rank.value).toBe("starter");
     expect(saved.onboardingCompleted).toBe(false);
     expect(saved.firstName).toBe("太郎");
@@ -52,7 +52,7 @@ describe("selectPlan", () => {
       { userRepo, accountGateway }
     );
 
-    const saved = vi.mocked(userRepo.save).mock.calls[0][0];
+    const saved = vi.mocked(userRepo.saveIfNotOnboarded).mock.calls[0][0];
     expect(saved.id).toBe(existingUser.id);
     expect(saved.rank.value).toBe("standard");
     expect(saved.firstName).toBe("太郎");
@@ -88,7 +88,7 @@ describe("selectPlan", () => {
       { userRepo, accountGateway }
     );
 
-    const saved = vi.mocked(userRepo.save).mock.calls[0][0];
+    const saved = vi.mocked(userRepo.saveIfNotOnboarded).mock.calls[0][0];
     expect(saved.memberType.value).toBe("corporate");
     expect(saved.companyName).toBe("テスト株式会社");
     expect(saved.invoiceRegistrationNumber).toBe("T1234567890123");
@@ -104,7 +104,7 @@ describe("selectPlan", () => {
       { userRepo, accountGateway }
     );
 
-    const saved = vi.mocked(userRepo.save).mock.calls[0][0];
+    const saved = vi.mocked(userRepo.saveIfNotOnboarded).mock.calls[0][0];
     expect(saved.memberType.value).toBe("individual");
     expect(saved.companyName).toBeNull();
     expect(saved.invoiceRegistrationNumber).toBeNull();
@@ -138,6 +138,21 @@ describe("selectPlan", () => {
         { userRepo, accountGateway }
       )
     ).rejects.toThrow(OnboardingAlreadyCompletedError);
+    expect(userRepo.saveIfNotOnboarded).not.toHaveBeenCalled();
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
+  });
+
+  it("確認の後に入会済みに変わり保存されなかった場合はOnboardingAlreadyCompletedErrorをthrowし、Clerkのmetadataを変更しない", async () => {
+    const userRepo = makeUserRepo(makeUser({ onboardingCompleted: false }));
+    vi.mocked(userRepo.saveIfNotOnboarded).mockResolvedValue(false);
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      selectPlan(
+        { ...baseInput, plan: "standard" },
+        { userRepo, accountGateway }
+      )
+    ).rejects.toThrow(OnboardingAlreadyCompletedError);
     expect(userRepo.save).not.toHaveBeenCalled();
     expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
@@ -155,7 +170,7 @@ describe("selectPlan", () => {
       )
     ).rejects.toThrow(MemberWithdrawnError);
     expect(userRepo.hasWithdrawnByClerkUserId).toHaveBeenCalledWith("clerk-1");
-    expect(userRepo.save).not.toHaveBeenCalled();
+    expect(userRepo.saveIfNotOnboarded).not.toHaveBeenCalled();
     expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
 
@@ -169,7 +184,7 @@ describe("selectPlan", () => {
       { userRepo, accountGateway }
     );
 
-    expect(userRepo.save).toHaveBeenCalled();
+    expect(userRepo.saveIfNotOnboarded).toHaveBeenCalled();
   });
 
   describe("必須項目のサーバー側検証", () => {
@@ -194,7 +209,7 @@ describe("selectPlan", () => {
         await expect(promise).rejects.toMatchObject({
           fields: ["lastName", "firstName"],
         });
-        expect(userRepo.save).not.toHaveBeenCalled();
+        expect(userRepo.saveIfNotOnboarded).not.toHaveBeenCalled();
         expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
       }
     );
@@ -210,7 +225,7 @@ describe("selectPlan", () => {
           { userRepo, accountGateway }
         )
       ).rejects.toMatchObject({ fields: ["phoneNumber"] });
-      expect(userRepo.save).not.toHaveBeenCalled();
+      expect(userRepo.saveIfNotOnboarded).not.toHaveBeenCalled();
     });
 
     it("名だけが空白の場合はfirstNameだけを不足項目にする", async () => {
@@ -249,7 +264,7 @@ describe("selectPlan", () => {
         ).rejects.toMatchObject({
           fields: ["companyName", "invoiceRegistrationNumber"],
         });
-        expect(userRepo.save).not.toHaveBeenCalled();
+        expect(userRepo.saveIfNotOnboarded).not.toHaveBeenCalled();
       }
     );
 
@@ -270,7 +285,7 @@ describe("selectPlan", () => {
         { userRepo, accountGateway }
       );
 
-      const saved = vi.mocked(userRepo.save).mock.calls[0][0];
+      const saved = vi.mocked(userRepo.saveIfNotOnboarded).mock.calls[0][0];
       expect(saved.lastName).toBe("山田");
       expect(saved.firstName).toBe("太郎");
       expect(saved.companyName).toBe("テスト株式会社");

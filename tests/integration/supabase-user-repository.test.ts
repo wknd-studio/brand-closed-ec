@@ -21,6 +21,7 @@ const COEXIST_DELETED_ID = "00000000-0000-0000-0000-000000000011";
 const COEXIST_ACTIVE_ID = "00000000-0000-0000-0000-000000000012";
 const CONFLICT_CLERK_ID = "clerk_test_infra_conflict";
 const INSERT_CLERK_ID = "clerk_test_infra_insert_if_absent";
+const BEFORE_ONBOARDING_CLERK_ID = "clerk_test_infra_save_before_onboarding";
 
 // 不正なキーのクライアント。PostgRESTが認証エラーを返すため、DBエラー時の挙動を確認できる
 const brokenClient = createClient<Database>(
@@ -58,6 +59,7 @@ async function cleanupExtra() {
       COEXIST_CLERK_ID,
       CONFLICT_CLERK_ID,
       INSERT_CLERK_ID,
+      BEFORE_ONBOARDING_CLERK_ID,
     ]);
 }
 
@@ -263,6 +265,93 @@ describe("SupabaseUserRepository", () => {
       const user = await repo.findById(TEST_USER_ID);
       const broken = new SupabaseUserRepository(brokenClient);
       await expect(broken.save(user!)).rejects.toThrow();
+    });
+  });
+
+  describe("saveIfNotOnboarded()", () => {
+    it("有効な行が無ければ作成して true を返す", async () => {
+      const user = newUser(BEFORE_ONBOARDING_CLERK_ID, {
+        rank: MemberRank.of("basic"),
+      });
+
+      await expect(repo.saveIfNotOnboarded(user)).resolves.toBe(true);
+
+      const saved = await repo.findByClerkUserId(BEFORE_ONBOARDING_CLERK_ID);
+      expect(saved!.id).toBe(user.id);
+      expect(saved!.rank.value).toBe("basic");
+    });
+
+    it("未入会の有効な行があれば、別のidで渡されてもその行を入力内容で更新して true を返す", async () => {
+      // user.created Webhookが先に行を作り、selectPlanがそれを見つけられなかったケース
+      const existing = await repo.findByClerkUserId(BEFORE_ONBOARDING_CLERK_ID);
+
+      await expect(
+        repo.saveIfNotOnboarded(
+          newUser(BEFORE_ONBOARDING_CLERK_ID, {
+            firstName: "花子",
+            rank: MemberRank.of("premium"),
+          })
+        )
+      ).resolves.toBe(true);
+
+      const { data: rows } = await supabase
+        .from("users")
+        .select("id, first_name, rank_code")
+        .eq("clerk_user_id", BEFORE_ONBOARDING_CLERK_ID);
+      expect(rows).toEqual([
+        { id: existing!.id, first_name: "花子", rank_code: "premium" },
+      ]);
+    });
+
+    it("入会済みの有効な行には保存せず false を返す（入会確定を未入会に戻さない）", async () => {
+      const existing = await repo.findByClerkUserId(BEFORE_ONBOARDING_CLERK_ID);
+      // 読み取った後に入会確定のWebhookが入会済みにしたケース
+      await supabase
+        .from("users")
+        .update({ onboarding_completed: true })
+        .eq("id", existing!.id);
+
+      await expect(
+        repo.saveIfNotOnboarded(
+          existing!.with({
+            firstName: "上書き",
+            rank: MemberRank.of("starter"),
+            onboardingCompleted: false,
+          })
+        )
+      ).resolves.toBe(false);
+
+      const { data: rows } = await supabase
+        .from("users")
+        .select("id, first_name, rank_code, onboarding_completed")
+        .eq("clerk_user_id", BEFORE_ONBOARDING_CLERK_ID);
+      expect(rows).toEqual([
+        {
+          id: existing!.id,
+          first_name: "花子",
+          rank_code: "premium",
+          onboarding_completed: true,
+        },
+      ]);
+    });
+
+    it("入会済みの有効な行があるとき、別のidで渡されても行を作らず false を返す", async () => {
+      await expect(
+        repo.saveIfNotOnboarded(newUser(BEFORE_ONBOARDING_CLERK_ID))
+      ).resolves.toBe(false);
+
+      const { data: rows } = await supabase
+        .from("users")
+        .select("onboarding_completed")
+        .eq("clerk_user_id", BEFORE_ONBOARDING_CLERK_ID);
+      expect(rows).toEqual([{ onboarding_completed: true }]);
+    });
+
+    it("DBエラーは例外になる", async () => {
+      const broken = new SupabaseUserRepository(brokenClient);
+      await expect(
+        broken.saveIfNotOnboarded(newUser("clerk_test_infra_broken"))
+      ).rejects.toThrow();
     });
   });
 

@@ -143,6 +143,42 @@ export class SupabaseUserRepository implements UserRepository {
     }
   }
 
+  async saveIfNotOnboarded(user: User): Promise<boolean> {
+    const fields = toFields(user);
+    if (await this.updateIfNotOnboarded(user.clerkUserId, fields)) return true;
+
+    // 同じidの行が既にあれば挿入しない（読み取った行がその間に入会済み・退会済みになったケース）
+    const { data, error } = await this.db
+      .from("users")
+      .upsert(
+        { id: user.id, ...fields },
+        { onConflict: "id", ignoreDuplicates: true }
+      )
+      .select("id");
+    if (error) {
+      if (!isActiveClerkUserIdConflict(error)) throw error;
+      // 別のidの有効な行がある。入会済みならfalse、user.created Webhookがその間に作った未入会の行なら更新する
+      return this.updateIfNotOnboarded(user.clerkUserId, fields);
+    }
+    return data.length > 0;
+  }
+
+  // 条件付きUPDATE。確認と書き込みを1文で行うため、入会確定と競合しても入会済みの行を書き換えない
+  private async updateIfNotOnboarded(
+    clerkUserId: string,
+    fields: ReturnType<typeof toFields>
+  ): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("users")
+      .update(fields)
+      .eq("clerk_user_id", clerkUserId)
+      .is("deleted_at", null)
+      .eq("onboarding_completed", false)
+      .select("id");
+    if (error) throw error;
+    return data.length > 0;
+  }
+
   async saveStripeCustomerId(
     userId: string,
     stripeCustomerId: string

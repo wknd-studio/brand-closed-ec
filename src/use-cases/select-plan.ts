@@ -108,7 +108,10 @@ export async function selectPlan(
         invoiceRegistrationNumber,
       });
 
-  await userRepo.save(user);
+  // 上の確認の後に入会のWebhookが入会済みにしていた場合は書かない（決済済みの会員を締め出さない）
+  if (!(await userRepo.saveIfNotOnboarded(user))) {
+    throw new OnboardingAlreadyCompletedError();
+  }
   await accountGateway.updateOnboardingMetadata(input.clerkUserId, false);
 
   return {
