@@ -724,7 +724,7 @@ export type Database = {
           p_stripe_subscription_id: string;
           p_user_id: string;
         };
-        Returns: undefined;
+        Returns: string;
       };
       get_current_admin_user_id: { Args: never; Returns: string };
       get_current_user_id: { Args: never; Returns: string };

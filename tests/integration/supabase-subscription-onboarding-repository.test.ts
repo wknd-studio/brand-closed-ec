@@ -82,10 +82,10 @@ beforeEach(async () => {
 afterAll(cleanup);
 
 describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC）", () => {
-  it("users・subscriptions・rank_changesを同時に更新する", async () => {
+  it("users・subscriptions・rank_changesを同時に更新し、confirmedを返す", async () => {
     await insertUser();
 
-    await repo.confirm(makeInput());
+    await expect(repo.confirm(makeInput())).resolves.toBe("confirmed");
 
     const { user, subscriptions, rankChanges } = await fetchState();
     expect(user).toEqual({
@@ -119,11 +119,13 @@ describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC�
     ]);
   });
 
-  it("同じstripe_subscription_idで再度呼んでも何も変えない（rank_changesが2行にならない）", async () => {
+  it("同じstripe_subscription_idで再度呼んでも何も変えず、already_confirmedを返す（rank_changesが2行にならない）", async () => {
     await insertUser();
     await repo.confirm(makeInput());
 
-    await repo.confirm(makeInput({ billingAnchorDay: 25 }));
+    await expect(
+      repo.confirm(makeInput({ billingAnchorDay: 25 }))
+    ).resolves.toBe("already_confirmed");
 
     const { user, subscriptions, rankChanges } = await fetchState();
     expect(user?.billing_anchor_day).toBe(18);
@@ -207,6 +209,47 @@ describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC�
 
     const { user } = await fetchState();
     expect(user?.initial_fee_paid_rank_code).toBe("pro");
+  });
+
+  it("入会済みの会員に別のstripe_subscription_idで呼ぶと、何も変えずにconflicting_subscriptionを返す", async () => {
+    await insertUser();
+    await repo.confirm(makeInput());
+
+    await expect(
+      repo.confirm(
+        makeInput({
+          stripeSubscriptionId: "sub_onboarding_repo_other",
+          rank: "pro",
+        })
+      )
+    ).resolves.toBe("conflicting_subscription");
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user?.rank_code).toBe("standard");
+    expect(subscriptions?.map((s) => s.stripe_subscription_id)).toEqual([
+      "sub_onboarding_repo_test",
+    ]);
+    expect(rankChanges).toHaveLength(1);
+  });
+
+  it("解約済みのサブスクリプションしか無い会員でも、別のstripe_subscription_idならconflicting_subscriptionを返す", async () => {
+    await insertUser();
+    await repo.confirm(makeInput());
+    const { error } = await supabase
+      .from("subscriptions")
+      .update({ status: "canceled" })
+      .eq("user_id", TEST_USER_ID);
+    if (error) throw error;
+
+    await expect(
+      repo.confirm(
+        makeInput({ stripeSubscriptionId: "sub_onboarding_repo_other" })
+      )
+    ).resolves.toBe("conflicting_subscription");
+
+    const { subscriptions, rankChanges } = await fetchState();
+    expect(subscriptions).toHaveLength(1);
+    expect(rankChanges).toHaveLength(1);
   });
 
   it("有効な会員が見つからなければエラーにする", async () => {

@@ -51,6 +51,10 @@ export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGatewa
       {
         mode: "subscription",
         customer: input.stripeCustomerId,
+        // 入会はcheckout.session.completed（payment_status=paid）で確定する。遅延型の
+        // 決済手段（銀行振込等）では支払い前にcompletedが届くため、即時に決済が確定する
+        // カードに限定する（issue #413）
+        payment_method_types: ["card"],
         line_items: [
           { price: STRIPE_PRICE_IDS[input.rank].monthly, quantity: 1 },
           { price: STRIPE_PRICE_IDS[input.rank].initialFee, quantity: 1 },

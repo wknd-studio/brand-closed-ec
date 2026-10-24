@@ -129,5 +129,22 @@ describe("StripeOnboardingCheckoutGateway", () => {
         idempotencyKey: `onboarding-checkout-session-${USER_ID}-premium`,
       });
     });
+
+    it("決済手段をカードに限定し、決済完了時点（checkout.session.completed）で支払い済みにする", async () => {
+      createCheckoutSessionMock.mockResolvedValue({
+        id: "cs_1",
+        url: "https://checkout.stripe.com/c/pay/cs_1",
+      });
+
+      await gateway.createCheckoutSession({
+        userId: USER_ID,
+        clerkUserId: "clerk-1",
+        stripeCustomerId: "cus_1",
+        rank: "premium",
+      });
+
+      const [params] = createCheckoutSessionMock.mock.calls[0];
+      expect(params.payment_method_types).toEqual(["card"]);
+    });
   });
 });
