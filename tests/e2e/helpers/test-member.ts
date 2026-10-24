@@ -8,6 +8,7 @@ import {
   slotEmail,
   withSlotSuffix,
 } from "./clerk-test-invitation";
+import { ensureOnboardedMember } from "./onboarded-member-row";
 
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
@@ -50,61 +51,6 @@ async function ensureClerkUser(email: string): Promise<string> {
     // Backend APIからの作成ではその同意手続きを省略する
     skipLegalChecks: true,
   });
-  return created.id;
-}
-
-/**
- * オンボーディング（個人・STARTERプラン・決済完了）を終えた状態のusers行を
- * 画面を経由せずDBに直接用意する。middlewareはusers.onboarding_completedだけを見て
- * 業務画面へのアクセスを許可するため、Clerk側のメタデータは更新不要
- */
-async function ensureOnboardedMember(
-  clerkUserId: string,
-  email: string
-): Promise<string> {
-  const supabase = supabaseAdmin();
-  const profile = {
-    email,
-    last_name: "テスト",
-    first_name: "太郎",
-    phone_number: "09012345678",
-    rank_code: "starter",
-    member_type: "individual",
-    onboarding_completed: true,
-    billing_anchor_day: Math.min(new Date().getDate(), 28),
-  };
-
-  // clerk_user_idの一意制約は`WHERE deleted_at IS NULL`の部分UNIQUEインデックスのため、
-  // upsert(onConflict)ではなく検索してから更新・作成する
-  const { data: existing, error: selectError } = await supabase
-    .from("users")
-    .select("id")
-    .eq("clerk_user_id", clerkUserId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (selectError) {
-    throw new Error(`テスト会員行の取得に失敗しました: ${selectError.message}`);
-  }
-
-  if (existing) {
-    const { error } = await supabase
-      .from("users")
-      .update(profile)
-      .eq("id", existing.id);
-    if (error) {
-      throw new Error(`テスト会員行の更新に失敗しました: ${error.message}`);
-    }
-    return existing.id;
-  }
-
-  const { data: created, error } = await supabase
-    .from("users")
-    .insert({ ...profile, clerk_user_id: clerkUserId })
-    .select("id")
-    .single();
-  if (error) {
-    throw new Error(`テスト会員行の作成に失敗しました: ${error.message}`);
-  }
   return created.id;
 }
 
@@ -165,7 +111,11 @@ export const test = base.extend<
         `info+clerk_test_order_w${workerInfo.parallelIndex}@wknd-studio.com`
       );
       const clerkUserId = await ensureClerkUser(email);
-      const userId = await ensureOnboardedMember(clerkUserId, email);
+      const userId = await ensureOnboardedMember(
+        supabaseAdmin(),
+        clerkUserId,
+        email
+      );
 
       const context = await browser.newContext({
         baseURL: workerInfo.project.use.baseURL,
