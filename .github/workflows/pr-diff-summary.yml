@@ -3,6 +3,7 @@ name: PR Diff Summary
 # PRの差分を区分（domain・use-cases・…・テスト・生成物・ドキュメント等）ごとに集計し、
 # 本番コードの行数・ファイル数をPRのコメントに出す（#472）。CLAUDE.md「PRの粒度」の目安は本番コードで数える。
 # 区分の判定は scripts/ci/pr-diff-summary.ts を参照。
+# high-risk の区分（risk:*）に当たれば、区分ごとの確認観点も同じコメントに出す（#476。scripts/ci/review-checklists.ts）。
 #
 # 情報を出すだけで失敗はしない（必須チェックにはしない）。
 #   - 集計するジョブ（summarize）はPRのコードを実行するため、権限は contents: read だけにする

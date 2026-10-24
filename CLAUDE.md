@@ -107,7 +107,9 @@ feature/* →  Cloudflare Pages Preview URL
 
 - `high-risk` ラベルのPRは、人間が差分を精読してからマージする
 - それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する
-- レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、同じバグを検出するlint・テストに変換する
+- 区分ごとに見るべき観点が違うため、`high-risk` と一緒に区分のラベル（`risk:db`・`risk:webhook`・`risk:auth`・`risk:payment`・`risk:gate`・`risk:deps`）も付く。区分ごとの確認観点は `docs/review-checklists/<区分>.md`（`risk:db` → `db.md`）にあり、CIの `PR Diff Summary` のコメントに、PRが当たった区分ごとの該当ファイルとチェックリストが出る。精読はこのチェックリストに沿って行う
+- 対象パスを足すときは、`.github/labeler.yml` の区分と `high-risk` の両方に足す（ずれると `tests/unit/review-checklists.test.ts` が失敗する）
+- レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、見落とした観点を `docs/review-checklists/` に足すか、同じバグを検出するlint・テストに変換する
 
 **developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
 
