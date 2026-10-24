@@ -279,7 +279,7 @@ describe("LayerCoverageReporter", () => {
 
   function fakeVitest(specCount: number, testNamePattern?: RegExp) {
     return {
-      config: { root: ROOT, testNamePattern },
+      config: { root: ROOT, testNamePattern, coverage: { enabled: true } },
       globTestSpecifications: async () => new Array(specCount).fill({}),
     };
   }
@@ -362,6 +362,16 @@ describe("LayerCoverageReporter", () => {
     });
     expect(process.exitCode).toBeUndefined();
     expect(output).toContain("省略");
+  });
+
+  it("カバレッジ付きで実行したのに結果が渡らなければ、黙って通さず省略したと出す", async () => {
+    const output: string[] = [];
+    const reporter = new LayerCoverageReporter("unit", config, (message) =>
+      output.push(message)
+    );
+    reporter.onInit(fakeVitest(2) as never);
+    await reporter.onTestRunEnd(new Array(2).fill({}), [], "passed");
+    expect(output.join("\n")).toContain("省略");
   });
 
   it("テストが失敗したときは、検査しない（テストの失敗を先に直す）", async () => {
