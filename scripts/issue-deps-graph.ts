@@ -13,11 +13,13 @@ import {
 import {
   failedJobsOf,
   summarizeCi,
+  DEVELOP_CI_WORKFLOW,
   type CiRunInput,
   type CiStatus,
   type JobInput,
 } from "@/lib/issue-deps-graph/ci-status";
 import { jsonOutput } from "@/lib/issue-deps-graph/milestones";
+import { repositoryFrom } from "@/lib/issue-deps-graph/repository";
 import { clientQuestionsOf } from "@/lib/issue-deps-graph/next-actions";
 
 /**
@@ -33,8 +35,15 @@ import { clientQuestionsOf } from "@/lib/issue-deps-graph/next-actions";
  * 前提: gh CLIでログイン済み（CIではGH_TOKENを設定）であること
  */
 
-const REPO_OWNER = "wknd-studio";
-const REPO_NAME = "brand-closed-ec";
+const { owner: REPO_OWNER, name: REPO_NAME } = repositoryFrom(
+  process.env.GITHUB_REPOSITORY,
+  () =>
+    execFileSync(
+      "gh",
+      ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+      { encoding: "utf8" }
+    )
+);
 
 function graphql<T>(query: string, variables: Record<string, string>): T {
   const args = ["api", "graphql", "-f", `query=${query}`];
@@ -191,9 +200,6 @@ function ghApi<T>(endpoint: string): T {
     })
   ) as T;
 }
-
-/** developへのマージ後に動くワークフロー（stgへのデプロイとstgのE2E） */
-const DEVELOP_CI_WORKFLOW = "deploy.yml";
 
 /** gh CLIと同じ認証でGitHub APIを呼ぶためのトークン（CIではGH_TOKEN） */
 function githubToken(): string {

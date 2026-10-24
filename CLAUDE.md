@@ -63,13 +63,13 @@ feature/* →  Cloudflare Pages Preview URL
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
 
-**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/wknd-studio/brand-closed-ec/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/wknd-studio/brand-closed-ec/issues/<番号> --jq .id`）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。
+**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/{owner}/{repo}/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/{owner}/{repo}/issues/<番号> --jq .id`。`{owner}/{repo}` は gh が今いるリポジトリに置き換えるので、そのまま書く）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。
 
 **並列開発（Orca）**: 複数issueの並列実装はADEのOrcaで、issueごとにワークツリーとセッションを立ち上げて行う（背景・スロット割り当ては `docs/dev-parallel-worktrees.md`）。Orcaのワークツリー内で作業するセッションは以下に従う。
 
 - **環境**: ワークツリーはOrcaが作る。自分で `EnterWorktree` や `git worktree add` をしない
 - **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
-- **依存の確認**: 着手前に `gh api repos/wknd-studio/brand-closed-ec/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
+- **依存の確認**: 着手前に `gh api repos/{owner}/{repo}/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
 - **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
@@ -93,7 +93,9 @@ feature/* →  Cloudflare Pages Preview URL
   - 新しいcodemodを `scripts/codemods/` に足すときは、codemod自体を別のコミット（trailer無し）にする。codemodの中身は人間が読む
   - ローカルでの確認: `pnpm -s tsx scripts/ci/verify-mechanical-changes.ts origin/develop HEAD`（macOSのBSD sedは `--sandbox` が無いため、`sed` のコミットはCIでだけ検査できる）
 - ついでのリファクタや無関係な修正は同じPRに混ぜず、別issueにする
-- 差分200行・変更ファイル5つは「分割を検討する目安」とする。超えたら目的が複数混ざっていないかを見直し、1目的のまま超える場合はその旨をPR本文に書く
+- **本番コード**の差分200行（追加＋削除）・本番コードのファイル5つは「分割を検討する目安」とする。超えたら目的が複数混ざっていないかを見直し、1目的のまま超える場合はその旨をPR本文に書く
+  - 本番コード = `src/` 配下（domain・use-cases・repositories / queries・infrastructure・app・components 等）とマイグレーションのSQL。テスト・生成物・ドキュメント・CI / 設定（`.github/`・`scripts/` 等）は数えない。TDDでテストを丁寧に書くほど目安を超える、ということが無いようにするため
+  - CIの `PR Diff Summary`（`.github/workflows/pr-diff-summary.yml`）が、差分を区分ごとに集計したコメントをPRに付け、push のたびに更新する。区分の判定は `scripts/ci/pr-diff-summary.ts`。ローカルでの確認: `pnpm -s tsx scripts/ci/pr-diff-summary.ts origin/develop HEAD`
 
 **タスク分解**: PRの粒度は、PRを作る時点ではなく、issueを起票してタスクを分解した時点で決める。issueは `.github/ISSUE_TEMPLATE/` のテンプレート（タスク／親issue）から起票する。
 
@@ -106,6 +108,11 @@ feature/* →  Cloudflare Pages Preview URL
 - `high-risk` ラベルのPRは、人間が差分を精読してからマージする
 - それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する
 - レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、同じバグを検出するlint・テストに変換する
+
+**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
+
+- developのCIが赤なら、新しいPRのマージより、直す・revertすることを優先する。原因のPRがすぐ直せなければ、まずそのマージコミットをrevertする（`git revert -m 1 <マージコミット>` をfeatureブランチで行い、develop向けのPRにする）
+- 赤のdevelopに別のPRを重ねてマージしない（どのマージで壊れたかが分からなくなり、stgにも出なくなる）
 
 **テスト自動選択ルール**: 機能を実装するたびに、以下の基準で必要なテストを自動的に作成する。
 

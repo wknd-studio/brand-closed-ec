@@ -1,0 +1,78 @@
+name: PR Diff Summary
+
+# PRの差分を区分（domain・use-cases・…・テスト・生成物・ドキュメント等）ごとに集計し、
+# 本番コードの行数・ファイル数をPRのコメントに出す（#472）。CLAUDE.md「PRの粒度」の目安は本番コードで数える。
+# 区分の判定は scripts/ci/pr-diff-summary.ts を参照。
+#
+# 情報を出すだけで失敗はしない（必須チェックにはしない）。
+#   - 集計するジョブ（summarize）はPRのコードを実行するため、権限は contents: read だけにする
+#   - PRへのコメントは、PRのコードを一切実行しない別ジョブ（comment）で行う
+#   - 外部からのPR（fork）は対象外（トークンに書き込み権限が無いため）
+on:
+  # develop→main のリリースPRは差分が大きく目安と比べる意味が無いため、develop宛てだけにする
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-diff-summary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  summarize:
+    name: Summarize diff
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Summarize diff by category
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pnpm -s tsx scripts/ci/pr-diff-summary.ts "$BASE_SHA" "$HEAD_SHA" \
+            --report "$RUNNER_TEMP/pr-diff-summary.md"
+          cat "$RUNNER_TEMP/pr-diff-summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-diff-summary
+          path: ${{ runner.temp }}/pr-diff-summary.md
+          retention-days: 7
+
+  comment:
+    name: Comment summary
+    needs: summarize
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-diff-summary
+          path: report
+      - name: Create or update the PR comment
+        # push のたびに同じコメントを更新する（コメントを増やさない）。
+        # コメントはマーカー（scripts/ci/pr-diff-summary.ts の REPORT_MARKER）で見つける
+        run: |
+          marker='<!-- pr-diff-summary -->'
+          comment_id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
+          if [[ -n "$comment_id" ]]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$comment_id" -F body=@report/pr-diff-summary.md > /dev/null
+          else
+            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -F body=@report/pr-diff-summary.md > /dev/null
+          fi
