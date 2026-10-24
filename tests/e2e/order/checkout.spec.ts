@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect } from "../helpers/test-member";
+import { clickAddToCart } from "../helpers/cart";
 
 function supabaseAdmin() {
   return createClient<Database>(
@@ -12,12 +13,17 @@ function supabaseAdmin() {
 
 async function addFirstProductToCart(page: Page): Promise<void> {
   await page.goto("/shop");
-  await page.waitForLoadState("networkidle").catch(() => {});
-  await page.getByRole("link", { name: /GUCCI/ }).first().click();
-  await page.waitForLoadState("networkidle");
-  await page.locator('a[href^="/shop/GUCCI/"]').first().click();
-  await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "カートに追加" }).click();
+  const brandLink = page.getByRole("link", { name: /GUCCI/ }).first();
+  await expect(brandLink).toBeVisible();
+  await brandLink.click();
+  await expect(page).toHaveURL(/\/shop\/GUCCI$/);
+
+  const productLink = page.locator('a[href^="/shop/GUCCI/"]').first();
+  await expect(productLink).toBeVisible();
+  await productLink.click();
+  await expect(page).toHaveURL(/\/shop\/GUCCI\/[^/]+$/);
+
+  await clickAddToCart(page);
 }
 
 async function fillNewAddress(

@@ -2,6 +2,7 @@ import { createClient } from "next-sanity";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect, withWorkerSuffix } from "../helpers/test-member";
+import { clickAddToCart } from "../helpers/cart";
 
 // 既存シードデータのpayment_timingは投入タイミングに依存するため、支払いタイミングが
 // 確実に混在するテスト専用のブランド・商品を固定の明示的なIDで作成する
@@ -83,9 +84,12 @@ test.describe("支払いタイミングが混在するカートのチェック�
     member,
   }) => {
     await page.goto("/shop");
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await page.getByRole("link", { name: new RegExp(TEST_BRAND_NAME) }).click();
-    await page.waitForLoadState("networkidle");
+    const brandLink = page.getByRole("link", {
+      name: new RegExp(TEST_BRAND_NAME),
+    });
+    await expect(brandLink).toBeVisible();
+    await brandLink.click();
+    await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}$`));
 
     // 先払い商品をカートに追加
     await page
@@ -93,19 +97,19 @@ test.describe("支払いタイミングが混在するカートのチェック�
         hasText: AT_ORDER_PRODUCT_NAME,
       })
       .click();
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "カートに追加" }).click();
+    await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}/[^/]+$`));
+    await clickAddToCart(page);
 
     // 後払い商品をカートに追加
     await page.goto(`/shop/${encodeURIComponent(TEST_BRAND_NAME)}`);
-    await page.waitForLoadState("networkidle");
-    await page
-      .locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`, {
-        hasText: AFTER_ORDER_PRODUCT_NAME,
-      })
-      .click();
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "カートに追加" }).click();
+    const afterOrderProductLink = page.locator(
+      `a[href^="/shop/${TEST_BRAND_NAME}/"]`,
+      { hasText: AFTER_ORDER_PRODUCT_NAME }
+    );
+    await expect(afterOrderProductLink).toBeVisible();
+    await afterOrderProductLink.click();
+    await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}/[^/]+$`));
+    await clickAddToCart(page);
 
     const { userId } = member;
     await supabaseAdmin()
