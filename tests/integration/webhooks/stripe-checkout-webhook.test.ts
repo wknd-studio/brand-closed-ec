@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterAll,
+  vi,
+} from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { placeOrder } from "@/use-cases/place-order";
@@ -20,6 +28,16 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: async () => ({
     users: { updateUserMetadata: updateUserMetadataMock },
   }),
+}));
+
+// 運営者への通知（Sentryへの送信）を確認するため差し替える
+const { captureMessageMock } = vi.hoisted(() => ({
+  captureMessageMock: vi.fn(),
+}));
+vi.mock("@sentry/nextjs", () => ({
+  captureMessage: captureMessageMock,
+  captureException: vi.fn(),
+  startSpan: vi.fn((_options: unknown, callback: () => unknown) => callback()),
 }));
 
 const supabase = createClient<Database>(
@@ -334,6 +352,8 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
   const ONBOARDING_CLERK_ID = "clerk_test_stripe_checkout_webhook_onboarding";
   const ONBOARDING_SUBSCRIPTION_ID = "sub_test_stripe_checkout_webhook_364";
   const ONBOARDING_CUSTOMER_ID = "cus_test_stripe_checkout_webhook_364";
+  const OTHER_SUBSCRIPTION_ID = "sub_test_stripe_checkout_webhook_413_other";
+  const EVENT_PREFIX = "evt_test_stripe_checkout_webhook_onboarding";
 
   async function cleanupOnboarding() {
     await supabase
@@ -345,9 +365,16 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
       .delete()
       .eq("user_id", ONBOARDING_USER_ID);
     await supabase.from("users").delete().eq("id", ONBOARDING_USER_ID);
+    await supabase
+      .from("stripe_webhook_events")
+      .delete()
+      .like("event_id", `${EVENT_PREFIX}%`);
   }
 
-  function postSubscriptionCompleted(eventId: string) {
+  function postSubscriptionCompleted(
+    eventId: string,
+    session: Record<string, unknown> = {}
+  ) {
     const payload = JSON.stringify({
       id: eventId,
       object: "event",
@@ -357,9 +384,11 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
           id: "cs_test_stripe_checkout_webhook_364",
           object: "checkout.session",
           mode: "subscription",
+          payment_status: "paid",
           customer: ONBOARDING_CUSTOMER_ID,
           subscription: ONBOARDING_SUBSCRIPTION_ID,
           metadata: { clerk_user_id: ONBOARDING_CLERK_ID, plan: "standard" },
+          ...session,
         },
       },
     });
@@ -376,6 +405,30 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
     );
   }
 
+  async function findOnboardingState() {
+    const { data: user } = await supabase
+      .from("users")
+      .select("rank_code, onboarding_completed")
+      .eq("id", ONBOARDING_USER_ID)
+      .single();
+    const { count: subscriptionCount } = await supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", ONBOARDING_USER_ID);
+    return { user, subscriptionCount };
+  }
+
+  async function findEventStatus(eventId: string) {
+    const { data } = await supabase
+      .from("stripe_webhook_events")
+      .select("status")
+      .eq("event_id", eventId)
+      .maybeSingle();
+    return data?.status ?? null;
+  }
+
+  let retrieveSubscriptionMock: ReturnType<typeof vi.spyOn>;
+
   beforeAll(async () => {
     await cleanupOnboarding();
     const { error } = await supabase.from("users").insert({
@@ -390,22 +443,32 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
     if (error) throw error;
 
     // Stripe APIへの問い合わせ（Subscriptionの取得）だけを差し替える
-    vi.spyOn(getStripe().subscriptions, "retrieve").mockResolvedValue({
-      id: ONBOARDING_SUBSCRIPTION_ID,
-      status: "active",
-      items: {
-        data: [
-          {
-            current_period_start: Math.floor(
-              new Date("2026-10-18T00:00:00Z").getTime() / 1000
-            ),
-            current_period_end: Math.floor(
-              new Date("2026-11-18T00:00:00Z").getTime() / 1000
-            ),
-          },
-        ],
-      },
-    } as never);
+    retrieveSubscriptionMock = vi
+      .spyOn(getStripe().subscriptions, "retrieve")
+      .mockImplementation(
+        async (id: string) =>
+          ({
+            id,
+            status: "active",
+            items: {
+              data: [
+                {
+                  current_period_start: Math.floor(
+                    new Date("2026-10-18T00:00:00Z").getTime() / 1000
+                  ),
+                  current_period_end: Math.floor(
+                    new Date("2026-11-18T00:00:00Z").getTime() / 1000
+                  ),
+                },
+              ],
+            },
+          }) as never
+      );
+  });
+
+  beforeEach(() => {
+    captureMessageMock.mockClear();
+    updateUserMetadataMock.mockClear();
   });
 
   afterAll(async () => {
@@ -413,11 +476,81 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
     await cleanupOnboarding();
   });
 
-  it("受信すると、initial_fee_paid_rank_codeと入会時のrank_changesを記録し、subscriptionsを作成する", async () => {
-    const response = await postSubscriptionCompleted(
-      "evt_test_stripe_checkout_webhook_onboarding"
+  it.each([
+    ["metadataが無い", { metadata: {} }],
+    ["clerk_user_idが無い", { metadata: { plan: "standard" } }],
+    [
+      "planが有効な値でない",
+      { metadata: { clerk_user_id: ONBOARDING_CLERK_ID, plan: "gold" } },
+    ],
+    [
+      "planがセルフサービスで申し込めないenterprise",
+      { metadata: { clerk_user_id: ONBOARDING_CLERK_ID, plan: "enterprise" } },
+    ],
+  ])(
+    "%sセッションは、Sentryにwarningを送って200を返し、入会を確定させない",
+    async (_label, session) => {
+      const response = await postSubscriptionCompleted(
+        `${EVENT_PREFIX}_invalid_metadata`,
+        session
+      );
+      expect(response.status).toBe(200);
+
+      expect(captureMessageMock).toHaveBeenCalledTimes(1);
+      expect(captureMessageMock.mock.calls[0][1]).toMatchObject({
+        level: "warning",
+        extra: {
+          stripeCheckoutSessionId: "cs_test_stripe_checkout_webhook_364",
+        },
+      });
+      expect(await findOnboardingState()).toEqual({
+        user: { rank_code: "starter", onboarding_completed: false },
+        subscriptionCount: 0,
+      });
+    }
+  );
+
+  it.each(["unpaid", "no_payment_required"])(
+    "payment_statusが%sのセッションは、Sentryにwarningを送って200を返し、入会を確定させない",
+    async (paymentStatus) => {
+      const response = await postSubscriptionCompleted(
+        `${EVENT_PREFIX}_unpaid`,
+        { payment_status: paymentStatus }
+      );
+      expect(response.status).toBe(200);
+
+      expect(captureMessageMock).toHaveBeenCalledTimes(1);
+      expect(captureMessageMock.mock.calls[0][1]).toMatchObject({
+        level: "warning",
+        extra: { paymentStatus },
+      });
+      expect(await findOnboardingState()).toEqual({
+        user: { rank_code: "starter", onboarding_completed: false },
+        subscriptionCount: 0,
+      });
+      expect(updateUserMetadataMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it("処理に失敗したら500を返してイベントをfailedにし、入会は確定しない", async () => {
+    retrieveSubscriptionMock.mockRejectedValueOnce(
+      new Error("Stripe API error")
     );
+
+    const response = await postSubscriptionCompleted(EVENT_PREFIX);
+    expect(response.status).toBe(500);
+
+    expect(await findEventStatus(EVENT_PREFIX)).toBe("failed");
+    expect(await findOnboardingState()).toEqual({
+      user: { rank_code: "starter", onboarding_completed: false },
+      subscriptionCount: 0,
+    });
+  });
+
+  it("失敗したイベントの再送は再処理され、initial_fee_paid_rank_codeと入会時のrank_changesを記録し、subscriptionsを作成する", async () => {
+    const response = await postSubscriptionCompleted(EVENT_PREFIX);
     expect(response.status).toBe(200);
+    expect(await findEventStatus(EVENT_PREFIX)).toBe("processed");
 
     const { data: user } = await supabase
       .from("users")
@@ -467,10 +600,31 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
     });
   });
 
-  it("再配信しても、rank_changes・subscriptionsが2行にならない", async () => {
-    const response = await postSubscriptionCompleted(
-      "evt_test_stripe_checkout_webhook_onboarding_retry"
-    );
+  it("処理済みのイベントの再送はスキップする", async () => {
+    const response = await postSubscriptionCompleted(EVENT_PREFIX);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, skipped: true });
+    expect(updateUserMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("処理中のイベントの再送は409を返し、Stripeに後で再送させる", async () => {
+    const eventId = `${EVENT_PREFIX}_processing`;
+    const { error } = await supabase.from("stripe_webhook_events").insert({
+      event_id: eventId,
+      type: "checkout.session.completed",
+      payload: {},
+      status: "processing",
+    });
+    if (error) throw error;
+
+    const response = await postSubscriptionCompleted(eventId);
+    expect(response.status).toBe(409);
+    expect(await findEventStatus(eventId)).toBe("processing");
+    expect(updateUserMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it("同じサブスクリプションの別イベントが届いても、rank_changes・subscriptionsが2行にならない", async () => {
+    const response = await postSubscriptionCompleted(`${EVENT_PREFIX}_retry`);
     expect(response.status).toBe(200);
 
     const { count: rankChangeCount } = await supabase
@@ -484,5 +638,42 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
       .select("id", { count: "exact", head: true })
       .eq("user_id", ONBOARDING_USER_ID);
     expect(subscriptionCount).toBe(1);
+    expect(captureMessageMock).not.toHaveBeenCalled();
+  });
+
+  it("入会済みの会員に別のサブスクリプションが届いたら、記録を変えずにSentryへerrorを送り、200を返す", async () => {
+    const eventId = `${EVENT_PREFIX}_other_subscription`;
+    const response = await postSubscriptionCompleted(eventId, {
+      id: "cs_test_stripe_checkout_webhook_413_other",
+      subscription: OTHER_SUBSCRIPTION_ID,
+      metadata: { clerk_user_id: ONBOARDING_CLERK_ID, plan: "premium" },
+    });
+    expect(response.status).toBe(200);
+    expect(await findEventStatus(eventId)).toBe("processed");
+
+    expect(captureMessageMock).toHaveBeenCalledTimes(1);
+    expect(captureMessageMock.mock.calls[0][1]).toMatchObject({
+      level: "error",
+      extra: {
+        clerkUserId: ONBOARDING_CLERK_ID,
+        stripeCustomerId: ONBOARDING_CUSTOMER_ID,
+        stripeSubscriptionId: OTHER_SUBSCRIPTION_ID,
+      },
+    });
+
+    const { data: subscriptions } = await supabase
+      .from("subscriptions")
+      .select("stripe_subscription_id")
+      .eq("user_id", ONBOARDING_USER_ID);
+    expect(subscriptions).toEqual([
+      { stripe_subscription_id: ONBOARDING_SUBSCRIPTION_ID },
+    ]);
+    const { data: user } = await supabase
+      .from("users")
+      .select("rank_code")
+      .eq("id", ONBOARDING_USER_ID)
+      .single();
+    expect(user?.rank_code).toBe("standard");
+    expect(updateUserMetadataMock).not.toHaveBeenCalled();
   });
 });

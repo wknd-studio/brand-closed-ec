@@ -3,7 +3,10 @@ import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
 import type { SubscriptionStatus } from "@/repositories/subscription-repository";
-import type { SubscriptionOnboardingRepository } from "@/repositories/subscription-onboarding-repository";
+import type {
+  ConfirmSubscriptionOnboardingResult,
+  SubscriptionOnboardingRepository,
+} from "@/repositories/subscription-onboarding-repository";
 
 export type CompleteSubscriptionOnboardingInput = {
   clerkUserId: string;
@@ -24,7 +27,7 @@ export type CompleteSubscriptionOnboardingDeps = {
 export async function completeSubscriptionOnboarding(
   input: CompleteSubscriptionOnboardingInput,
   deps: CompleteSubscriptionOnboardingDeps
-): Promise<void> {
+): Promise<ConfirmSubscriptionOnboardingResult> {
   const { userRepo, onboardingRepo, accountGateway } = deps;
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
@@ -34,7 +37,7 @@ export async function completeSubscriptionOnboarding(
   // （同じSubscriptionで確定済みなら何もしない）はconfirmが1トランザクションの中で
   // 判定する。onboarding_completedで早期returnすると、前回Clerkの更新だけが
   // 失敗した場合に再送で回復できないため、ここでは判定しない
-  await onboardingRepo.confirm({
+  const result = await onboardingRepo.confirm({
     userId: user.id,
     rank: input.plan,
     stripeCustomerId: input.stripeCustomerId,
@@ -44,5 +47,9 @@ export async function completeSubscriptionOnboarding(
     currentPeriodEnd: input.currentPeriodEnd,
     billingAnchorDay: MonthlyPeriod.toBillingAnchorDay(new Date()),
   });
+  // 入会済みの会員への別のサブスクリプションは何も記録していないため、Clerkも触らない
+  if (result === "conflicting_subscription") return result;
+
   await accountGateway.updateOnboardingMetadata(input.clerkUserId, true);
+  return result;
 }

@@ -12,7 +12,7 @@ const subscriptionInput = {
 };
 
 function makeOnboardingRepo(): SubscriptionOnboardingRepository {
-  return { confirm: vi.fn().mockResolvedValue(undefined) };
+  return { confirm: vi.fn().mockResolvedValue("confirmed") };
 }
 
 describe("completeSubscriptionOnboarding", () => {
@@ -126,5 +126,43 @@ describe("completeSubscriptionOnboarding", () => {
       "clerk-1",
       true
     );
+  });
+
+  it("確定した・確定済みだった結果をそのまま返す", async () => {
+    for (const result of ["confirmed", "already_confirmed"] as const) {
+      const onboardingRepo = makeOnboardingRepo();
+      vi.mocked(onboardingRepo.confirm).mockResolvedValue(result);
+
+      await expect(
+        completeSubscriptionOnboarding(
+          { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+          {
+            userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
+            onboardingRepo,
+            accountGateway: makeAccountGateway(),
+          }
+        )
+      ).resolves.toBe(result);
+    }
+  });
+
+  it("入会済みの会員に別のサブスクリプションが届いた場合は、Clerkのmetadataを更新せずにその結果を返す", async () => {
+    const onboardingRepo = makeOnboardingRepo();
+    vi.mocked(onboardingRepo.confirm).mockResolvedValue(
+      "conflicting_subscription"
+    );
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      completeSubscriptionOnboarding(
+        { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+        {
+          userRepo: makeUserRepo(makeUser({ onboardingCompleted: true })),
+          onboardingRepo,
+          accountGateway,
+        }
+      )
+    ).resolves.toBe("conflicting_subscription");
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
 });

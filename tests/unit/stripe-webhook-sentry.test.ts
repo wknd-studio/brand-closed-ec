@@ -17,6 +17,7 @@ const retrieveSubscriptionMock = vi.fn().mockResolvedValue({
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
+  captureMessage: vi.fn(),
   startSpan: vi.fn((_options: unknown, callback: () => unknown) => callback()),
 }));
 
@@ -25,6 +26,9 @@ vi.mock("@/lib/stripe", () => ({
     webhooks: { constructEvent: constructEventMock },
     subscriptions: { retrieve: retrieveSubscriptionMock },
   }),
+  STRIPE_PRICE_IDS: {
+    starter: { monthly: "price_starter", initialFee: "price_starter_fee" },
+  },
 }));
 
 vi.mock("@/lib/supabase/server-admin", () => ({
@@ -102,6 +106,19 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
       object: { id: "in_4" },
       useCase: markInvoiceOrderAsPaid,
     },
+    {
+      eventType: "checkout.session.completed",
+      object: {
+        id: "cs_9",
+        object: "checkout.session",
+        mode: "subscription",
+        payment_status: "paid",
+        customer: "cus_1",
+        subscription: "sub_1",
+        metadata: { clerk_user_id: "clerk_1", plan: "starter" },
+      },
+      useCase: completeSubscriptionOnboarding,
+    },
   ])(
     "$eventType: 処理中（processing）の再送は409を返し、Sentry.captureExceptionを呼ばない（issue #424）",
     async ({ eventType, object, useCase }) => {
@@ -130,6 +147,19 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
       eventType: "invoice.paid",
       object: { id: "in_5" },
       useCase: markInvoiceOrderAsPaid,
+    },
+    {
+      eventType: "checkout.session.completed",
+      object: {
+        id: "cs_9",
+        object: "checkout.session",
+        mode: "subscription",
+        payment_status: "paid",
+        customer: "cus_1",
+        subscription: "sub_1",
+        metadata: { clerk_user_id: "clerk_1", plan: "starter" },
+      },
+      useCase: completeSubscriptionOnboarding,
     },
   ])(
     "$eventType: 処理済み（processed）の再送は200でスキップし、Sentry.captureExceptionを呼ばない（issue #424）",
@@ -182,6 +212,7 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
           id: "cs_2",
           object: "checkout.session",
           mode: "subscription",
+          payment_status: "paid",
           customer: "cus_1",
           subscription: "sub_1",
           metadata: { clerk_user_id: "clerk_1", plan: "starter" },
@@ -237,6 +268,19 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
       eventType: "invoice.paid",
       object: { id: "in_3" },
       useCase: markInvoiceOrderAsPaid,
+    },
+    {
+      eventType: "checkout.session.completed",
+      object: {
+        id: "cs_9",
+        object: "checkout.session",
+        mode: "subscription",
+        payment_status: "paid",
+        customer: "cus_1",
+        subscription: "sub_1",
+        metadata: { clerk_user_id: "clerk_1", plan: "starter" },
+      },
+      useCase: completeSubscriptionOnboarding,
     },
   ])(
     "$eventType: markFailed自体が失敗しても元の例外をSentry.captureExceptionに送る（issue #409）",
@@ -312,13 +356,14 @@ describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
           id: "cs_5",
           object: "checkout.session",
           mode: "subscription",
+          payment_status: "paid",
           customer: "cus_1",
           subscription: "sub_1",
           metadata: { clerk_user_id: "clerk_1", plan: "starter" },
         },
       },
     });
-    vi.mocked(completeSubscriptionOnboarding).mockResolvedValue(undefined);
+    vi.mocked(completeSubscriptionOnboarding).mockResolvedValue("confirmed");
 
     await POST(makeRequest());
 
