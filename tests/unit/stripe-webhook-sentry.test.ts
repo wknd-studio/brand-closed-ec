@@ -5,6 +5,7 @@ const markFailedMock = vi.fn().mockResolvedValue(undefined);
 const claimMock = vi.fn();
 const retrieveSubscriptionMock = vi.fn().mockResolvedValue({
   status: "active",
+  start_date: Math.floor(new Date(2026, 0, 1).getTime() / 1000),
   items: {
     data: [
       {

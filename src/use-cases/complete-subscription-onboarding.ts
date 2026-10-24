@@ -16,6 +16,8 @@ export type CompleteSubscriptionOnboardingInput = {
   status: SubscriptionStatus;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
+  // サブスクリプションの開始日時（Stripeのstart_date）。課金基準日の計算に使う
+  subscriptionStartedAt: Date;
 };
 
 export type CompleteSubscriptionOnboardingDeps = {
@@ -45,7 +47,10 @@ export async function completeSubscriptionOnboarding(
     status: input.status,
     currentPeriodStart: input.currentPeriodStart,
     currentPeriodEnd: input.currentPeriodEnd,
-    billingAnchorDay: MonthlyPeriod.toBillingAnchorDay(new Date()),
+    // Webhookの処理時刻を使うと、再送（最大約3日）された日が起算日になってしまう
+    billingAnchorDay: MonthlyPeriod.toBillingAnchorDay(
+      input.subscriptionStartedAt
+    ),
   });
   // 入会済みの会員への別のサブスクリプションは何も記録していないため、Clerkも触らない
   if (result === "conflicting_subscription") return result;

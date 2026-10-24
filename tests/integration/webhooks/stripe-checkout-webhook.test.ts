@@ -450,6 +450,10 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
           ({
             id,
             status: "active",
+            // JST 2026-10-18 05:00（UTCでは10/17）
+            start_date: Math.floor(
+              new Date("2026-10-17T20:00:00Z").getTime() / 1000
+            ),
             items: {
               data: [
                 {
@@ -565,7 +569,8 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
       stripe_customer_id: ONBOARDING_CUSTOMER_ID,
       onboarding_completed: true,
     });
-    expect(user?.billing_anchor_day).not.toBeNull();
+    // サブスクリプションの開始日時（start_date）のJSTの日付
+    expect(user?.billing_anchor_day).toBe(18);
 
     const { data: subscriptions } = await supabase
       .from("subscriptions")

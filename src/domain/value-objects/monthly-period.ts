@@ -1,3 +1,5 @@
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 export class MonthlyPeriod {
   private constructor(
     readonly start: Date,
@@ -49,8 +51,11 @@ export class MonthlyPeriod {
   }
 
   // docs/domain/subscription-billing.md: billing_anchor_dayはCHECK制約で
-  // 1〜28に制限されるため、29〜31日は28に丸める
+  // 1〜28に制限されるため、29〜31日は28に丸める。
+  // 日付は実行環境のタイムゾーン（WorkersはUTC）ではなくJSTで決める。
+  // JSTは夏時間が無いため、+9時間ずらしたUTCの日付がJSTの日付になる
   static toBillingAnchorDay(date: Date): number {
-    return Math.min(date.getDate(), 28);
+    const jstDay = new Date(date.getTime() + JST_OFFSET_MS).getUTCDate();
+    return Math.min(jstDay, 28);
   }
 }

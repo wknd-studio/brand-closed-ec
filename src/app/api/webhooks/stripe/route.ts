@@ -184,6 +184,7 @@ export async function POST(req: Request) {
                 status,
                 currentPeriodStart,
                 currentPeriodEnd,
+                subscriptionStartedAt: new Date(subscription.start_date * 1000),
               },
               {
                 userRepo: new SupabaseUserRepository(createAdminClient()),
