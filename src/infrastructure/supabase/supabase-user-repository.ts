@@ -21,6 +21,7 @@ type UserRow = {
   member_type: string;
   company_name: string | null;
   invoice_registration_number: string | null;
+  initial_fee_paid_rank_code: string | null;
 };
 
 function toUser(row: UserRow): User {
@@ -42,11 +43,14 @@ function toUser(row: UserRow): User {
     memberType: MemberType.of(row.member_type),
     companyName: row.company_name,
     invoiceRegistrationNumber: row.invoice_registration_number,
+    initialFeePaidRank: row.initial_fee_paid_rank_code
+      ? MemberRank.of(row.initial_fee_paid_rank_code)
+      : null,
   });
 }
 
 const SELECT_FIELDS =
-  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id, member_type, company_name, invoice_registration_number";
+  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id, member_type, company_name, invoice_registration_number, initial_fee_paid_rank_code";
 
 // 部分UNIQUE（WHERE deleted_at IS NULL）。supabase-jsのonConflictは部分インデックスの
 // 述語を書けないため、一意制約違反（23505）をこのインデックス名で判別する
@@ -58,7 +62,9 @@ function isActiveClerkUserIdConflict(error: PostgrestError): boolean {
   );
 }
 
-// id以外の列。既存の有効な行を更新するときはidを変えない
+// id以外の列。既存の有効な行を更新するときはidを変えない。
+// initial_fee_paid_rank_codeはrank_changesとセットで更新する必要があるため含めない
+// （apply_rank_change関数を使うRPCだけが更新する）
 function toFields(user: User) {
   return {
     clerk_user_id: user.clerkUserId,

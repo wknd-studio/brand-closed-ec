@@ -9,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseStripeWebhookEventRepository } from "@/infrastructure/supabase/supabase-stripe-webhook-event-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
+import { SupabaseSubscriptionOnboardingRepository } from "@/infrastructure/supabase/supabase-subscription-onboarding-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import {
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
               },
               {
                 userRepo: new SupabaseUserRepository(createAdminClient()),
-                subscriptionRepo: new SupabaseSubscriptionRepository(
+                onboardingRepo: new SupabaseSubscriptionOnboardingRepository(
                   createAdminClient()
                 ),
                 accountGateway: new ClerkAccountGateway(),

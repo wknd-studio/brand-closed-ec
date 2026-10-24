@@ -73,6 +73,7 @@ beforeAll(async () => {
     rank_code: "basic",
     onboarding_completed: true,
     billing_anchor_day: 10,
+    initial_fee_paid_rank_code: "standard",
   });
 });
 
@@ -91,6 +92,7 @@ describe("SupabaseUserRepository", () => {
       expect(user!.id).toBe(TEST_USER_ID);
       expect(user!.email).toBe("infra-test@example.com");
       expect(user!.rank.value).toBe("basic");
+      expect(user!.initialFeePaidRank?.value).toBe("standard");
     });
 
     it("存在しないユーザーは null を返す", async () => {
@@ -200,6 +202,18 @@ describe("SupabaseUserRepository", () => {
   });
 
   describe("save()", () => {
+    it("initial_fee_paid_rank_codeは書き換えない（入会確定等のRPCだけが更新する）", async () => {
+      const user = await repo.findById(TEST_USER_ID);
+      await repo.save(user!.with({ initialFeePaidRank: null }));
+
+      const { data } = await supabase
+        .from("users")
+        .select("initial_fee_paid_rank_code")
+        .eq("id", TEST_USER_ID)
+        .single();
+      expect(data?.initial_fee_paid_rank_code).toBe("standard");
+    });
+
     it("ランクを更新できる", async () => {
       const user = await repo.findById(TEST_USER_ID);
       await repo.save(user!.with({ rank: MemberRank.of("standard") }));

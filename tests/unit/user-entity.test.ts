@@ -133,3 +133,17 @@ describe("User", () => {
     });
   });
 });
+
+describe("User.initialFeePaidRank", () => {
+  it("指定が無ければnull（初期費用を一度も支払っていない）", () => {
+    expect(makeUser().initialFeePaidRank).toBeNull();
+  });
+
+  it("指定した支払い済み最高ランクを保持し、with()でも引き継ぐ", () => {
+    const user = makeUser({ initialFeePaidRank: MemberRank.of("pro") });
+    expect(user.initialFeePaidRank?.value).toBe("pro");
+    expect(user.with({ firstName: "次郎" }).initialFeePaidRank?.value).toBe(
+      "pro"
+    );
+  });
+});

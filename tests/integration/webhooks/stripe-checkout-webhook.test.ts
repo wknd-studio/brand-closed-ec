@@ -12,6 +12,16 @@ import { Money } from "@/domain/value-objects/money";
 import { getStripe } from "@/lib/stripe";
 import { POST } from "@/app/api/webhooks/stripe/route";
 
+// mode=subscriptionの入会確定で呼ばれるClerkのmetadata更新（外部API）だけを差し替える
+const { updateUserMetadataMock } = vi.hoisted(() => ({
+  updateUserMetadataMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@clerk/nextjs/server", () => ({
+  clerkClient: async () => ({
+    users: { updateUserMetadata: updateUserMetadataMock },
+  }),
+}));
+
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -268,5 +278,163 @@ describe("Stripe Checkout決済確定Webhook（実DB・署名検証込み）", (
       .eq("stripe_checkout_session_id", TEST_SESSION_ID)
       .single();
     expect(after?.paid_at).toBe(before?.paid_at);
+  });
+});
+
+describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署名検証込み）", () => {
+  const ONBOARDING_USER_ID = "00000000-0000-0000-0000-000000000364";
+  const ONBOARDING_CLERK_ID = "clerk_test_stripe_checkout_webhook_onboarding";
+  const ONBOARDING_SUBSCRIPTION_ID = "sub_test_stripe_checkout_webhook_364";
+  const ONBOARDING_CUSTOMER_ID = "cus_test_stripe_checkout_webhook_364";
+
+  async function cleanupOnboarding() {
+    await supabase
+      .from("rank_changes")
+      .delete()
+      .eq("user_id", ONBOARDING_USER_ID);
+    await supabase
+      .from("subscriptions")
+      .delete()
+      .eq("user_id", ONBOARDING_USER_ID);
+    await supabase.from("users").delete().eq("id", ONBOARDING_USER_ID);
+  }
+
+  function postSubscriptionCompleted(eventId: string) {
+    const payload = JSON.stringify({
+      id: eventId,
+      object: "event",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_stripe_checkout_webhook_364",
+          object: "checkout.session",
+          mode: "subscription",
+          customer: ONBOARDING_CUSTOMER_ID,
+          subscription: ONBOARDING_SUBSCRIPTION_ID,
+          metadata: { clerk_user_id: ONBOARDING_CLERK_ID, plan: "standard" },
+        },
+      },
+    });
+    const signature = getStripe().webhooks.generateTestHeaderString({
+      payload,
+      secret: process.env.STRIPE_WEBHOOK_SECRET!,
+    });
+    return POST(
+      new Request("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: { "stripe-signature": signature },
+        body: payload,
+      })
+    );
+  }
+
+  beforeAll(async () => {
+    await cleanupOnboarding();
+    const { error } = await supabase.from("users").insert({
+      id: ONBOARDING_USER_ID,
+      clerk_user_id: ONBOARDING_CLERK_ID,
+      email: "stripe-checkout-webhook-onboarding-test@example.com",
+      first_name: "テスト",
+      last_name: "花子",
+      rank_code: "starter",
+      onboarding_completed: false,
+    });
+    if (error) throw error;
+
+    // Stripe APIへの問い合わせ（Subscriptionの取得）だけを差し替える
+    vi.spyOn(getStripe().subscriptions, "retrieve").mockResolvedValue({
+      id: ONBOARDING_SUBSCRIPTION_ID,
+      status: "active",
+      items: {
+        data: [
+          {
+            current_period_start: Math.floor(
+              new Date("2026-10-18T00:00:00Z").getTime() / 1000
+            ),
+            current_period_end: Math.floor(
+              new Date("2026-11-18T00:00:00Z").getTime() / 1000
+            ),
+          },
+        ],
+      },
+    } as never);
+  });
+
+  afterAll(async () => {
+    vi.restoreAllMocks();
+    await cleanupOnboarding();
+  });
+
+  it("受信すると、initial_fee_paid_rank_codeと入会時のrank_changesを記録し、subscriptionsを作成する", async () => {
+    const response = await postSubscriptionCompleted(
+      "evt_test_stripe_checkout_webhook_onboarding"
+    );
+    expect(response.status).toBe(200);
+
+    const { data: user } = await supabase
+      .from("users")
+      .select(
+        "rank_code, initial_fee_paid_rank_code, stripe_customer_id, onboarding_completed, billing_anchor_day"
+      )
+      .eq("id", ONBOARDING_USER_ID)
+      .single();
+    expect(user).toMatchObject({
+      rank_code: "standard",
+      initial_fee_paid_rank_code: "standard",
+      stripe_customer_id: ONBOARDING_CUSTOMER_ID,
+      onboarding_completed: true,
+    });
+    expect(user?.billing_anchor_day).not.toBeNull();
+
+    const { data: subscriptions } = await supabase
+      .from("subscriptions")
+      .select("stripe_subscription_id, status, rank_code")
+      .eq("user_id", ONBOARDING_USER_ID);
+    expect(subscriptions).toEqual([
+      {
+        stripe_subscription_id: ONBOARDING_SUBSCRIPTION_ID,
+        status: "active",
+        rank_code: "standard",
+      },
+    ]);
+
+    const { data: rankChanges } = await supabase
+      .from("rank_changes")
+      .select(
+        "from_rank_code, to_rank_code, changed_by, initial_fee_charged, stripe_subscription_id"
+      )
+      .eq("user_id", ONBOARDING_USER_ID);
+    expect(rankChanges).toEqual([
+      {
+        from_rank_code: null,
+        to_rank_code: "standard",
+        changed_by: "member",
+        initial_fee_charged: true,
+        stripe_subscription_id: ONBOARDING_SUBSCRIPTION_ID,
+      },
+    ]);
+
+    expect(updateUserMetadataMock).toHaveBeenCalledWith(ONBOARDING_CLERK_ID, {
+      publicMetadata: { onboarding_completed: true },
+    });
+  });
+
+  it("再配信しても、rank_changes・subscriptionsが2行にならない", async () => {
+    const response = await postSubscriptionCompleted(
+      "evt_test_stripe_checkout_webhook_onboarding_retry"
+    );
+    expect(response.status).toBe(200);
+
+    const { count: rankChangeCount } = await supabase
+      .from("rank_changes")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", ONBOARDING_USER_ID);
+    expect(rankChangeCount).toBe(1);
+
+    const { count: subscriptionCount } = await supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", ONBOARDING_USER_ID);
+    expect(subscriptionCount).toBe(1);
   });
 });
