@@ -11,10 +11,11 @@ import {
   type OpenPrInput,
 } from "@/lib/issue-deps-graph/build-graph";
 import {
-  failedTestsFromLog,
+  failedJobsOf,
   summarizeCi,
   type CiRunInput,
   type CiStatus,
+  type JobInput,
 } from "@/lib/issue-deps-graph/ci-status";
 import { jsonOutput } from "@/lib/issue-deps-graph/milestones";
 import { clientQuestionsOf } from "@/lib/issue-deps-graph/next-actions";
@@ -194,13 +195,39 @@ function ghApi<T>(endpoint: string): T {
 /** developへのマージ後に動くワークフロー（stgへのデプロイとstgのE2E） */
 const DEVELOP_CI_WORKFLOW = "deploy.yml";
 
+/** gh CLIと同じ認証でGitHub APIを呼ぶためのトークン（CIではGH_TOKEN） */
+function githubToken(): string {
+  return (
+    process.env.GH_TOKEN ??
+    execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim()
+  );
+}
+
+/**
+ * ジョブのログ。新しいgh CLIはログに色の制御文字があると出力を拒否し、拒否をやめるフラグは
+ * 古いgh CLIに無いため、ghを使わずにダウンロードする（リダイレクト先は署名付きURL）
+ */
+async function readJobLog(jobId: number): Promise<string> {
+  const res = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/jobs/${jobId}/logs`,
+    {
+      headers: {
+        Authorization: `Bearer ${githubToken()}`,
+        Accept: "application/vnd.github+json",
+      },
+    }
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
 /**
  * developへのマージ後のCIの結果。取得できなくても（権限不足など）ページ全体は生成したいので、
- * 失敗したらnullを返す
+ * 実行の一覧を取れなければnullを返す
  */
-function fetchDevelopCi(): CiStatus | null {
+async function fetchDevelopCi(): Promise<CiStatus | null> {
+  const repo = `repos/${REPO_OWNER}/${REPO_NAME}`;
   try {
-    const repo = `repos/${REPO_OWNER}/${REPO_NAME}`;
     const { workflow_runs } = ghApi<{
       workflow_runs: {
         id: number;
@@ -213,48 +240,34 @@ function fetchDevelopCi(): CiStatus | null {
     }>(
       `${repo}/actions/workflows/${DEVELOP_CI_WORKFLOW}/runs?branch=develop&event=push&per_page=50`
     );
-    const runs: CiRunInput[] = workflow_runs.map((r) => ({
-      id: r.id,
-      url: r.html_url,
-      title: r.display_title,
-      createdAt: r.created_at,
-      status: r.status,
-      conclusion: r.conclusion,
-    }));
-    const summary = summarizeCi(runs);
+    const summary = summarizeCi(
+      workflow_runs.map(
+        (r): CiRunInput => ({
+          id: r.id,
+          url: r.html_url,
+          title: r.display_title,
+          createdAt: r.created_at,
+          status: r.status,
+          conclusion: r.conclusion,
+        })
+      )
+    );
     if (!summary.failing || summary.latest === null) {
       return { summary, failedJobs: [] };
     }
-    const { jobs } = ghApi<{
-      jobs: {
-        id: number;
-        name: string;
-        html_url: string;
-        conclusion: string | null;
-      }[];
-    }>(`${repo}/actions/runs/${summary.latest.id}/jobs`);
-    const failedJobs = jobs
-      .filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out")
-      .map((j) => ({
-        name: j.name,
-        url: j.html_url,
-        tests: failedTestsFromLog(
-          execFileSync("gh", ["api", `${repo}/actions/jobs/${j.id}/logs`], {
-            encoding: "utf8",
-            maxBuffer: 64 * 1024 * 1024,
-          })
-        ),
-      }));
-    return { summary, failedJobs };
+    const { jobs } = ghApi<{ jobs: JobInput[] }>(
+      `${repo}/actions/runs/${summary.latest.id}/jobs`
+    );
+    return { summary, failedJobs: await failedJobsOf(jobs, readJobLog) };
   } catch (error) {
     console.error("developのCIの結果を取得できなかった:", error);
     return null;
   }
 }
 
-function main() {
+async function main() {
   const graph = buildGraph(fetchIssues(), fetchOpenPrs());
-  const developCi = fetchDevelopCi();
+  const developCi = await fetchDevelopCi();
 
   if (process.argv.includes("--json")) {
     process.stdout.write(
@@ -279,4 +292,7 @@ function main() {
   }
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
