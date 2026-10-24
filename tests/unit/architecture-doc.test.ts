@@ -55,6 +55,30 @@ describe(`${DOC}（層の責務と依存のルール）`, () => {
     expect(deps).toMatch(/domain.*何にも依存しない/);
   });
 
+  // 後続のlint（#439）はこの表をそのまま許可リストにするため、行の中身まで固定する
+  it.each([
+    ["src/domain/", "何にも依存しない"],
+    ["src/repositories/", "domain"],
+    ["src/queries/", "domain"],
+    ["src/use-cases/", "domain・repositories（"],
+    [
+      "src/infrastructure/",
+      "domain・repositories・queries・lib・emails・types・外部SDK",
+    ],
+    [
+      "src/composition/",
+      "domain・repositories・queries・use-cases・infrastructure",
+    ],
+    ["src/types/", "何にも依存しない"],
+    ["src/middleware.ts", "app と同じ"],
+  ])("依存の表で %s が import してよいのは「%s」", (dir, allowed) => {
+    const row = section(read(DOC), "依存してよい方向")
+      .split("\n")
+      .find((line) => line.startsWith(`| \`${dir}\``));
+    expect(row, `${dir} の行が無い`).toBeDefined();
+    expect(row!.split("|")[2].trim().startsWith(allowed)).toBe(true);
+  });
+
   it("書き込みは use-case、読み取りは Query Service を通す（CQRS）", () => {
     const cqrs = section(read(DOC), "書き込みと読み取り（CQRS）");
     expect(cqrs).toMatch(/書き込みは use-case を必ず通す/);
