@@ -224,11 +224,14 @@ export class LayerCoverageReporter implements Reporter {
   ): Promise<void> {
     const vitest = this.vitest;
     const coverage = this.coverage;
-    if (!vitest || !coverage) return;
+    // --coverage 無し（pnpm test:watch 等）は何も出さない
+    if (!vitest || !vitest.config.coverage.enabled) return;
 
     const skip = (why: string) =>
       this.log(`\n層ごとのカバレッジ検査: ${why}ため省略しました`);
     if (reason !== "passed") return skip("テストが成功しなかった");
+    // vitest の呼び出し順が変わる等で結果が届かなかったとき、黙って緑にしない
+    if (!coverage) return skip("カバレッジの結果を受け取れなかった");
     if (vitest.config.testNamePattern) return skip("テスト名で絞って実行した");
     // 実行しなかったテストの分が0%になり、検査の意味が無い
     const all = await vitest.globTestSpecifications();
