@@ -95,6 +95,15 @@ describe("redactSecrets", () => {
     expect(text).toBe('{"key":"[REDACTED:PRIVATE_KEY]"}');
   });
 
+  it("Dopplerが付けるメタ情報（DOPPLER_PROJECT等）は伏せない（コンテナ名が読めなくなるため）", () => {
+    const { text, counts } = redactSecrets("supabase_db_brand-closed-ec", {
+      DOPPLER_PROJECT: "brand-closed-ec",
+      DOPPLER_CONFIG: "stg_ci_config",
+    });
+    expect(text).toBe("supabase_db_brand-closed-ec");
+    expect(counts).toEqual({});
+  });
+
   it("文字列でない値は無視する", () => {
     const { text } = redactSecrets("x", {
       NUM: 12345678 as unknown as string,

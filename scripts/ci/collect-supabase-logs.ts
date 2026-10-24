@@ -22,6 +22,16 @@ import { pathToFileURL } from "node:url";
 /** これより短い値（"true"・ポート番号等）は伏せない。シークレットではなく、伏せると本文が読めなくなるため */
 export const MIN_SECRET_LENGTH = 8;
 
+/**
+ * Dopplerが自動で付けるメタ情報。シークレットではなく、DOPPLER_PROJECT（brand-closed-ec）は
+ * コンテナ名（supabase_db_brand-closed-ec）にも含まれ、伏せるとどのコンテナか読めなくなるため除く
+ */
+const DOPPLER_METADATA_KEYS = new Set([
+  "DOPPLER_PROJECT",
+  "DOPPLER_CONFIG",
+  "DOPPLER_ENVIRONMENT",
+]);
+
 export function redactSecrets(
   text: string,
   secrets: Record<string, unknown>
@@ -31,7 +41,9 @@ export function redactSecrets(
   const targets = Object.entries(secrets)
     .filter(
       (entry): entry is [string, string] =>
-        typeof entry[1] === "string" && entry[1].length >= MIN_SECRET_LENGTH
+        !DOPPLER_METADATA_KEYS.has(entry[0]) &&
+        typeof entry[1] === "string" &&
+        entry[1].length >= MIN_SECRET_LENGTH
     )
     .flatMap(([key, value]) =>
       [
