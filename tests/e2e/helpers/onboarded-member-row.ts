@@ -56,7 +56,10 @@ export async function ensureOnboardedMember(
   // stgでは、Clerkユーザーの作成で飛んだuser.created Webhookが、更新してから作成するまでの間に
   // 有効な行を作ることがある（#494）。その行を入会済みに更新する。
   // 作成の後に届いた場合は、Webhook側（insertIfAbsent）が既存の行を残して何もしない
-  if (error.code === "23505") {
+  if (
+    error.code === "23505" &&
+    error.message.includes("users_clerk_user_id_active_idx")
+  ) {
     const conflictedId = await updateActiveRow();
     if (conflictedId) return conflictedId;
   }
