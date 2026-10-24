@@ -143,8 +143,8 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Collect local Supabase logs (失敗時のみ)
         # 統合テストがときどきKongの502（upstream server）で落ちる原因を追うため、
-        # Kong・PostgREST・Postgres等のコンテナのログを残す（#497）。アーティファクトは
-        # Actionsのログと違いシークレットが伏せられないので、Dopplerの値を伏せてから書き出す
+        # Kong・PostgREST・Postgres等のコンテナのログを残す（#497）。Doppler由来の値は
+        # アーティファクトでは自動で伏せられないので、伏せてから書き出す
         id: supabase-logs
         if: failure()
         # shell: bash でpipefailにし、dopplerが失敗したら書き出さずに止める
@@ -153,11 +153,11 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Upload local Supabase logs (失敗時のみ)
-        # 伏せる処理が失敗したときはアップロードしない
+        # 伏せる処理が失敗したときはアップロードしない。再実行で名前が重ならないよう試行回数を付ける
         if: failure() && steps.supabase-logs.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: supabase-logs-integration
+          name: supabase-logs-integration-${{ github.run_attempt }}
           path: supabase-logs/
           retention-days: 3
 
@@ -272,7 +272,7 @@ jobs:
         if: failure() && steps.supabase-logs.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: supabase-logs-e2e-pr
+          name: supabase-logs-e2e-pr-${{ github.run_attempt }}
           path: supabase-logs/
           retention-days: 3
       - name: Upload Playwright report (動画・トレース含む、失敗時のみ)

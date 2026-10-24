@@ -73,6 +73,28 @@ describe("redactSecrets", () => {
     expect(counts).toEqual({ LONG: 1 });
   });
 
+  it("JSONの中でエスケープされた形・URLエンコードされた形も伏せる", () => {
+    const value = 'pa"ss/wo\\rd&x=1';
+    const jsonEscaped = JSON.stringify(value).slice(1, -1);
+    const urlEncoded = encodeURIComponent(value);
+    const { text, counts } = redactSecrets(
+      `raw=${value} json={"v":"${jsonEscaped}"} url=?v=${urlEncoded}`,
+      { PASSWORD: value }
+    );
+    expect(text).toBe(
+      'raw=[REDACTED:PASSWORD] json={"v":"[REDACTED:PASSWORD]"} url=?v=[REDACTED:PASSWORD]'
+    );
+    expect(counts).toEqual({ PASSWORD: 3 });
+  });
+
+  it("改行を含む値（PEM等）を、JSONの中で \\n にエスケープされた形でも伏せる", () => {
+    const pem = "-----BEGIN KEY-----\nabcdefgh\n-----END KEY-----";
+    const { text } = redactSecrets(`{"key":${JSON.stringify(pem)}}`, {
+      PRIVATE_KEY: pem,
+    });
+    expect(text).toBe('{"key":"[REDACTED:PRIVATE_KEY]"}');
+  });
+
   it("文字列でない値は無視する", () => {
     const { text } = redactSecrets("x", {
       NUM: 12345678 as unknown as string,
@@ -109,6 +131,10 @@ elif [ "$1" = "ps" ]; then
   echo "CONTAINER ID   NAMES  leaked=sk_live_supersecret"
 elif [ "$1" = "logs" ]; then
   name="\${@: -1}"
+  if [ "$name" = "supabase_rest_p" ] && [ -n "$FAIL_REST_LOGS" ]; then
+    echo "partial output key=sk_live_supersecret"
+    exit 1
+  fi
   echo "stdout of $name key=sk_live_supersecret"
   echo "stderr of $name" >&2
 else
@@ -123,11 +149,11 @@ fi
     rmSync(work, { recursive: true, force: true });
   });
 
-  function run(stdin: string) {
+  function run(stdin: string, env: Record<string, string> = {}) {
     return spawnSync("pnpm", ["-s", "tsx", SCRIPT, outDir], {
       input: stdin,
       encoding: "utf8",
-      env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` },
+      env: { ...process.env, ...env, PATH: `${binDir}:${process.env.PATH}` },
     });
   }
 
@@ -153,6 +179,23 @@ fi
     // 件数はキー名だけを出し、値は出さない
     expect(result.stdout).toContain("STRIPE_KEY: 3");
     expect(result.stdout).not.toContain("sk_live_supersecret");
+  });
+
+  it("あるコンテナのdocker logsが失敗しても、伏せる前の出力を表示せず、ほかのコンテナのログは書き出す", () => {
+    const result = run(JSON.stringify({ STRIPE_KEY: "sk_live_supersecret" }), {
+      FAIL_REST_LOGS: "1",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout + result.stderr).not.toContain("sk_live_supersecret");
+
+    expect(
+      readFileSync(path.join(outDir, "supabase_kong_p.log"), "utf8")
+    ).toContain("stdout of supabase_kong_p");
+    const rest = readFileSync(path.join(outDir, "supabase_rest_p.log"), "utf8");
+    expect(rest).toContain(
+      "docker logs --timestamps supabase_rest_p が失敗しました（終了コード: 1）"
+    );
+    expect(rest).not.toContain("sk_live_supersecret");
   });
 
   it("標準入力がJSONとして読めなければ、何も書き出さずに失敗する", () => {

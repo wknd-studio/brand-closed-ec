@@ -9,9 +9,10 @@ import { pathToFileURL } from "node:url";
  * 統合テストがときどきKongの502（"An invalid response was received from the upstream server"）で
  * 落ちる原因を、コンテナのログから追えるようにする。
  *
- * アーティファクトはActionsのログと違い、シークレットが自動で伏せられない。そのため標準入力で
- * Dopplerのシークレット（`doppler secrets download --no-file --format json`）を受け取り、
- * 値をすべて伏せてからファイルに書く（伏せる前の内容はディスクに書かない）。
+ * Doppler由来の値は、GitHubのsecretsに登録した値と違い、Actionsのログでもアーティファクトでも
+ * 自動では伏せられない。そのため標準入力でDopplerのシークレット
+ * （`doppler secrets download --no-file --format json`）を受け取り、値をすべて伏せてからファイルに書く
+ * （伏せる前の内容はディスクにもActionsのログにも出さない）。
  * 伏せた件数はキー名だけを出力する。0件なら、コンテナのログにDoppler由来の値が出ていなかったことになる。
  *
  * 使い方: doppler secrets download --no-file --format json | pnpm -s tsx scripts/ci/collect-supabase-logs.ts <出力先>
@@ -25,20 +26,31 @@ export function redactSecrets(
   text: string,
   secrets: Record<string, unknown>
 ): { text: string; counts: Record<string, number> } {
-  // ある値が別の値を含むとき、短い方を先に伏せると長い方が一部だけ残るため、長い順に伏せる
-  const entries = Object.entries(secrets)
+  // Kong・GoTrue等はJSON形式でログを出し、URLのクエリにも値が載りうるため、
+  // そのままの形に加えてJSONでエスケープした形・URLエンコードした形も伏せる
+  const targets = Object.entries(secrets)
     .filter(
       (entry): entry is [string, string] =>
         typeof entry[1] === "string" && entry[1].length >= MIN_SECRET_LENGTH
     )
-    .sort((a, b) => b[1].length - a[1].length);
+    .flatMap(([key, value]) =>
+      [
+        ...new Set([
+          value,
+          JSON.stringify(value).slice(1, -1),
+          encodeURIComponent(value),
+        ]),
+      ].map((form) => ({ key, form }))
+    )
+    // ある値が別の値を含むとき、短い方を先に伏せると長い方が一部だけ残るため、長い順に伏せる
+    .sort((a, b) => b.form.length - a.form.length);
 
   const counts: Record<string, number> = {};
   let result = text;
-  for (const [key, value] of entries) {
-    const parts = result.split(value);
+  for (const { key, form } of targets) {
+    const parts = result.split(form);
     if (parts.length === 1) continue;
-    counts[key] = parts.length - 1;
+    counts[key] = (counts[key] ?? 0) + parts.length - 1;
     result = parts.join(`[REDACTED:${key}]`);
   }
   return { text: result, counts };
@@ -52,11 +64,20 @@ export function selectSupabaseContainers(names: string): string[] {
 }
 
 function docker(args: string[]): string {
-  // docker logs はコンテナの標準エラー出力をこちらの標準エラー出力に流すため、両方を1つにまとめて読む
-  return execFileSync("bash", ["-c", 'docker "$@" 2>&1', "docker", ...args], {
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
-  });
+  try {
+    // docker logs はコンテナの標準エラー出力をこちらの標準エラー出力に流すため、両方を1つにまとめて読む
+    return execFileSync("bash", ["-c", 'docker "$@" 2>&1', "docker", ...args], {
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+    });
+  } catch (error) {
+    // 例外をそのまま投げると、Nodeが例外に入った伏せる前の出力を表示してしまう。
+    // 終了コードだけを残し、ほかのコンテナのログは書き出しを続ける
+    const status = (error as { status?: number | null }).status ?? "不明";
+    const message = `docker ${args.join(" ")} が失敗しました（終了コード: ${status}）`;
+    console.error(message);
+    return `${message}\n`;
+  }
 }
 
 function main() {
