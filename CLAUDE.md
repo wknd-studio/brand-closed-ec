@@ -93,7 +93,9 @@ feature/* →  Cloudflare Pages Preview URL
   - 新しいcodemodを `scripts/codemods/` に足すときは、codemod自体を別のコミット（trailer無し）にする。codemodの中身は人間が読む
   - ローカルでの確認: `pnpm -s tsx scripts/ci/verify-mechanical-changes.ts origin/develop HEAD`（macOSのBSD sedは `--sandbox` が無いため、`sed` のコミットはCIでだけ検査できる）
 - ついでのリファクタや無関係な修正は同じPRに混ぜず、別issueにする
-- 差分200行・変更ファイル5つは「分割を検討する目安」とする。超えたら目的が複数混ざっていないかを見直し、1目的のまま超える場合はその旨をPR本文に書く
+- **本番コード**の差分200行（追加＋削除）・本番コードのファイル5つは「分割を検討する目安」とする。超えたら目的が複数混ざっていないかを見直し、1目的のまま超える場合はその旨をPR本文に書く
+  - 本番コード = `src/` 配下（domain・use-cases・repositories / queries・infrastructure・app・components 等）とマイグレーションのSQL。テスト・生成物・ドキュメント・CI / 設定（`.github/`・`scripts/` 等）は数えない。TDDでテストを丁寧に書くほど目安を超える、ということが無いようにするため
+  - CIの `PR Diff Summary`（`.github/workflows/pr-diff-summary.yml`）が、差分を区分ごとに集計したコメントをPRに付け、push のたびに更新する。区分の判定は `scripts/ci/pr-diff-summary.ts`。ローカルでの確認: `pnpm -s tsx scripts/ci/pr-diff-summary.ts origin/develop HEAD`
 
 **タスク分解**: PRの粒度は、PRを作る時点ではなく、issueを起票してタスクを分解した時点で決める。issueは `.github/ISSUE_TEMPLATE/` のテンプレート（タスク／親issue）から起票する。
 
