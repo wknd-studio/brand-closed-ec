@@ -15,7 +15,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 EXCLUDED="$(sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$ROOT/scripts/supabase-excluded-services.txt")"
 
 # 例: "  -x, --exclude string   Names of containers to not start. [gotrue,realtime,...]"
-EXCLUDABLE="$(supabase start --help 2>/dev/null | sed -n 's/.*--exclude.*\[\(.*\)\].*/\1/p' | tr ',' '\n')"
+HELP="$(supabase start --help 2>/dev/null || true)"
+EXCLUDABLE="$(printf '%s\n' "$HELP" | sed -n 's/.*--exclude.*\[\(.*\)\].*/\1/p' | tr ',' '\n')"
 if [ -z "$EXCLUDABLE" ]; then
   echo "supabase start --help から --exclude で指定できる名前の一覧を取り出せませんでした" >&2
   exit 1
