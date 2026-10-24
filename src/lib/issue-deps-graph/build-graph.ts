@@ -4,6 +4,7 @@
  * GitHubからの取得はscripts/issue-deps-graph.tsが担う。
  */
 
+import { renderCiStatus, type CiStatus } from "./ci-status";
 import { escapeAttr, escapeHtml } from "./html";
 import {
   milestoneNames,
@@ -408,7 +409,11 @@ function filterAttrs(node: GraphNode): string {
   ].join("");
 }
 
-export function renderHtml(graph: Graph, generatedAt: string): string {
+export function renderHtml(
+  graph: Graph,
+  generatedAt: string,
+  ci: CiStatus | null = null
+): string {
   const legend = [
     ...(Object.keys(STATUS_LABELS) as IssueStatus[]).map(
       (s) =>
@@ -466,6 +471,12 @@ ${group
   h3 { font-size: 14px; margin: 16px 0 4px; }
   h4 { font-size: 13px; margin: 12px 0 4px; color: var(--sub); }
   .legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .ci-status { border-radius: 6px; padding: 8px 12px; margin-bottom: 16px; overflow-wrap: anywhere; }
+  .ci-status p { margin: 4px 0; }
+  .ci-status.passing, .ci-status.unknown { color: var(--muted); padding: 0; }
+  .ci-status.failing { background: var(--warn-bg); border: 2px solid var(--warn); }
+  .ci-status.failing h2 { margin: 0 0 4px; color: var(--warn); }
+  .ci-status.failing ul ul { list-style: disc; padding-left: 20px; }
   .next-actions { margin-bottom: 24px; }
   .next-actions h2 { margin-top: 0; }
   .next-actions .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 0 24px; }
@@ -524,6 +535,7 @@ ${group
   <h1>Issue依存グラフ</h1>
   <p class="meta">生成: ${escapeHtml(generatedAt)}</p>
 </header>
+${renderCiStatus(ci)}
 ${renderNextActions(graph)}
 <h2>依存グラフ</h2>
 <p class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックすると、待っているものと解放されるものを強調する（もう一度クリックで解除）。ホイール・ボタンで拡大縮小、ドラッグで移動。</p>
