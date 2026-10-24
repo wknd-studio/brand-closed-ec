@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getStripe, STRIPE_PRICE_IDS } from "@/lib/stripe";
 import type { Database } from "@/types/database.types";
 import { slotEmail } from "../helpers/clerk-test-invitation";
+import { ensureMemberRow } from "../helpers/onboarded-member-row";
 
 const TEST_EMAIL = slotEmail(
   "info+clerk_test_onboarding_success@wknd-studio.com"
@@ -49,22 +50,12 @@ test.describe.serial("決済完了画面", () => {
         })
       ).id;
 
-    const supabase = supabaseAdmin();
-    await supabase.from("users").delete().eq("clerk_user_id", clerkUserId);
-    const { error } = await supabase.from("users").insert({
-      clerk_user_id: clerkUserId,
-      email: TEST_EMAIL,
-      last_name: "テスト",
-      first_name: "太郎",
-      phone_number: "09012345678",
-      rank_code: "starter",
-      member_type: "individual",
-      onboarding_completed: false,
-      billing_anchor_day: Math.min(new Date().getDate(), 28),
+    // stgではcreateUserで飛んだuser.created Webhookが非同期に有効な行を作るため、
+    // 消してから作ると、その間に作られた行と一意制約違反で競合する（#503）。
+    // 有効な行があれば未入会に戻し、無ければ作る
+    await ensureMemberRow(supabaseAdmin(), clerkUserId, TEST_EMAIL, {
+      onboardingCompleted: false,
     });
-    if (error) {
-      throw new Error(`テスト会員行の作成に失敗しました: ${error.message}`);
-    }
   });
 
   test.afterAll(async () => {

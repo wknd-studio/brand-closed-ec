@@ -16,6 +16,27 @@ export async function ensureOnboardedMember(
   email: string,
   hooks: { beforeInsert?: () => Promise<void> } = {}
 ): Promise<string> {
+  return ensureMemberRow(
+    supabase,
+    clerkUserId,
+    email,
+    { onboardingCompleted: true },
+    hooks
+  );
+}
+
+/**
+ * 個人・STARTERプランのusers行を、`onboardingCompleted`の状態で用意する。
+ * 決済直前（未入会）の行が要るテスト（onboarding-success.spec.ts）は`false`を指定する。
+ * 前回の実行の行が残っていれば、その行を指定した状態に戻して使う
+ */
+export async function ensureMemberRow(
+  supabase: SupabaseClient<Database>,
+  clerkUserId: string,
+  email: string,
+  { onboardingCompleted }: { onboardingCompleted: boolean },
+  hooks: { beforeInsert?: () => Promise<void> } = {}
+): Promise<string> {
   const profile = {
     email,
     last_name: "テスト",
@@ -23,7 +44,7 @@ export async function ensureOnboardedMember(
     phone_number: "09012345678",
     rank_code: "starter",
     member_type: "individual",
-    onboarding_completed: true,
+    onboarding_completed: onboardingCompleted,
     billing_anchor_day: Math.min(new Date().getDate(), 28),
   };
 
@@ -54,7 +75,7 @@ export async function ensureOnboardedMember(
   if (!error) return created.id;
 
   // stgでは、Clerkユーザーの作成で飛んだuser.created Webhookが、更新してから作成するまでの間に
-  // 有効な行を作ることがある（#494）。その行を入会済みに更新する。
+  // 有効な行を作ることがある（#494）。その行を指定した状態に更新する。
   // 作成の後に届いた場合は、Webhook側（insertIfAbsent）が既存の行を残して何もしない
   if (
     error.code === "23505" &&
