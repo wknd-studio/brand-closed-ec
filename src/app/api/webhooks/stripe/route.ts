@@ -17,6 +17,25 @@ import {
   toSubscriptionPeriod,
 } from "@/infrastructure/stripe/stripe-subscription-mapper";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import type { StripeWebhookEventClaimResult } from "@/repositories/stripe-webhook-event-repository";
+
+/**
+ * claimできなかった再送への応答。処理済みなら2xxでスキップする。処理中なら2xx以外を
+ * 返してStripeに後で再送させる（Stripeは2xx以外の応答を配信失敗として自動で再送する）。
+ * 2xxを返すと、元の処理が落ちたりfailedになったりしたときに再送が来ず回復できない（issue #424）。
+ * 処理中の再送は正常系なのでSentryには送らない
+ */
+function skippedResponse(
+  claim: Exclude<StripeWebhookEventClaimResult, "claimed">
+) {
+  if (claim === "processed") {
+    return NextResponse.json({ received: true, skipped: true });
+  }
+  return NextResponse.json(
+    { error: "イベントを処理中です。後で再送してください" },
+    { status: 409 }
+  );
+}
 
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -49,14 +68,12 @@ export async function POST(req: Request) {
       // stripe_webhook_eventsによるDBレベルの冪等性チェック（issue #221）。
       // 処理中/処理済みの再送であればここでスキップし、後続のuse case側の
       // ステータスチェック（settlement.isPaid()）とあわせて二重の防御とする
-      const claimed = await webhookEventRepo.claim({
+      const claim = await webhookEventRepo.claim({
         eventId: event.id,
         type: event.type,
         payload: event,
       });
-      if (!claimed) {
-        return NextResponse.json({ received: true, skipped: true });
-      }
+      if (claim !== "claimed") return skippedResponse(claim);
 
       const deps = {
         orderRepo: new SupabaseOrderRepository(createAdminClient()),
@@ -151,14 +168,12 @@ export async function POST(req: Request) {
     const webhookEventRepo = new SupabaseStripeWebhookEventRepository(
       createAdminClient()
     );
-    const claimed = await webhookEventRepo.claim({
+    const claim = await webhookEventRepo.claim({
       eventId: event.id,
       type: event.type,
       payload: event,
     });
-    if (!claimed) {
-      return NextResponse.json({ received: true, skipped: true });
-    }
+    if (claim !== "claimed") return skippedResponse(claim);
 
     const deps = {
       orderRepo: new SupabaseOrderRepository(createAdminClient()),

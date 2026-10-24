@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const constructEventMock = vi.fn();
 const markFailedMock = vi.fn().mockResolvedValue(undefined);
+const claimMock = vi.fn();
 const retrieveSubscriptionMock = vi.fn().mockResolvedValue({
   status: "active",
   items: {
@@ -39,7 +40,7 @@ vi.mock(
       .fn()
       .mockImplementation(function () {
         return {
-          claim: vi.fn().mockResolvedValue(true),
+          claim: claimMock,
           markProcessed: vi.fn().mockResolvedValue(undefined),
           markFailed: markFailedMock,
         };
@@ -86,8 +87,68 @@ function makeRequest(body = "{}") {
 describe("POST /api/webhooks/stripe - Sentry例外送信", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    claimMock.mockResolvedValue("claimed");
     process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
   });
+
+  it.each([
+    {
+      eventType: "checkout.session.completed",
+      object: { id: "cs_7", object: "checkout.session", mode: "payment" },
+      useCase: markCheckoutOrderAsPaid,
+    },
+    {
+      eventType: "invoice.paid",
+      object: { id: "in_4" },
+      useCase: markInvoiceOrderAsPaid,
+    },
+  ])(
+    "$eventType: 処理中（processing）の再送は409を返し、Sentry.captureExceptionを呼ばない（issue #424）",
+    async ({ eventType, object, useCase }) => {
+      constructEventMock.mockReturnValue({
+        id: "evt_2",
+        type: eventType,
+        data: { object },
+      });
+      claimMock.mockResolvedValue("processing");
+
+      const res = await POST(makeRequest());
+
+      expect(res.status).toBe(409);
+      expect(useCase).not.toHaveBeenCalled();
+      expect(Sentry.captureException).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    {
+      eventType: "checkout.session.completed",
+      object: { id: "cs_8", object: "checkout.session", mode: "payment" },
+      useCase: markCheckoutOrderAsPaid,
+    },
+    {
+      eventType: "invoice.paid",
+      object: { id: "in_5" },
+      useCase: markInvoiceOrderAsPaid,
+    },
+  ])(
+    "$eventType: 処理済み（processed）の再送は200でスキップし、Sentry.captureExceptionを呼ばない（issue #424）",
+    async ({ eventType, object, useCase }) => {
+      constructEventMock.mockReturnValue({
+        id: "evt_3",
+        type: eventType,
+        data: { object },
+      });
+      claimMock.mockResolvedValue("processed");
+
+      const res = await POST(makeRequest());
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ received: true, skipped: true });
+      expect(useCase).not.toHaveBeenCalled();
+      expect(Sentry.captureException).not.toHaveBeenCalled();
+    }
+  );
 
   it("checkout.session.completed(mode: payment)の処理失敗時にSentry.captureExceptionを呼ぶ", async () => {
     constructEventMock.mockReturnValue({
