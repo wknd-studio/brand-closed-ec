@@ -75,7 +75,11 @@ test.describe("要相談商品の見積依頼フロー", () => {
     // ブランドの商品一覧ページで価格が「要相談」と表示されることを確認
     await expect(page.getByText("価格要相談").first()).toBeVisible();
 
-    await page.locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`).first().click();
+    const productLink = page
+      .locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`)
+      .first();
+    await expect(productLink).toBeVisible();
+    await productLink.click();
     await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}/[^/]+$`));
 
     // 商品詳細ページでも価格が「要相談」と表示されることを確認

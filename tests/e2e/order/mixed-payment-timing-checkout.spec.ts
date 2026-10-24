@@ -92,11 +92,12 @@ test.describe("支払いタイミングが混在するカートのチェック�
     await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}$`));
 
     // 先払い商品をカートに追加
-    await page
-      .locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`, {
-        hasText: AT_ORDER_PRODUCT_NAME,
-      })
-      .click();
+    const atOrderProductLink = page.locator(
+      `a[href^="/shop/${TEST_BRAND_NAME}/"]`,
+      { hasText: AT_ORDER_PRODUCT_NAME }
+    );
+    await expect(atOrderProductLink).toBeVisible();
+    await atOrderProductLink.click();
     await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}/[^/]+$`));
     await clickAddToCart(page);
 
