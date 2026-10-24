@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   buildGraph,
+  checkStateOf,
   issueNumberFromBranch,
   STALE_PR_DAYS,
   renderHtml,
@@ -22,6 +23,7 @@ function issue(
     labels: [],
     blockedBy: [],
     subIssueCount: 0,
+    clientQuestions: [],
     ...overrides,
   };
 }
@@ -36,6 +38,10 @@ function pr(number: number, overrides: Partial<OpenPrInput> = {}): OpenPrInput {
     closingIssueNumbers: [],
     createdAt: "2026-10-17T00:00:00Z",
     isDraft: false,
+    labels: [],
+    additions: 0,
+    deletions: 0,
+    checks: "success",
     ...overrides,
   };
 }
@@ -169,6 +175,61 @@ describe("buildGraph: downstream", () => {
   });
 });
 
+describe("buildGraph: unblocks", () => {
+  it("終わると未完了のブロッカーが無くなる直接の後続だけを数える", () => {
+    // 1 → 3、1 → 4、2 → 4、3 → 5
+    const g = buildGraph(
+      [
+        issue(1),
+        issue(2),
+        issue(3, { blockedBy: blockedBy(1) }),
+        issue(4, { blockedBy: blockedBy(1, 2) }),
+        issue(5, { blockedBy: blockedBy(3) }),
+      ],
+      []
+    );
+    expect(
+      Object.fromEntries(g.nodes.map((n) => [n.number, n.unblocks]))
+    ).toEqual({ 1: 1, 2: 0, 3: 1, 4: 0, 5: 0 });
+  });
+
+  it("取得範囲外の未完了ブロッカーも残っていれば数えない", () => {
+    const g = buildGraph(
+      [issue(1), issue(2, { blockedBy: blockedBy(1, 99) })],
+      []
+    );
+    expect(g.nodes[0].unblocks).toBe(0);
+  });
+});
+
+describe("buildGraph: 判断待ち", () => {
+  it("needs-decisionラベルがあれば判断待ち", () => {
+    const g = buildGraph([issue(1, { labels: ["needs-decision"] })], []);
+    expect(g.nodes[0].status).toBe("decision");
+  });
+
+  it("ブロッカーがあればブロック中を優先する", () => {
+    const g = buildGraph(
+      [issue(2, { labels: ["needs-decision"], blockedBy: blockedBy(99) })],
+      []
+    );
+    expect(g.nodes[0].status).toBe("blocked");
+  });
+});
+
+describe("checkStateOf", () => {
+  it.each([
+    ["SUCCESS", "success"],
+    ["FAILURE", "failure"],
+    ["ERROR", "failure"],
+    ["PENDING", "pending"],
+    ["EXPECTED", "pending"],
+    [null, "none"],
+  ] as const)("%s → %s", (rollup, expected) => {
+    expect(checkStateOf(rollup)).toBe(expected);
+  });
+});
+
 describe("buildGraph: kind", () => {
   it.each<[Partial<IssueInput>, string]>([
     [{}, "dev"],
@@ -201,8 +262,32 @@ describe("buildGraph: PRの停止日数とstale", () => {
         createdAt: "2026-09-22T09:00:00Z",
         ageDays: 25,
         isDraft: true,
+        highRisk: false,
+        changedLines: 0,
+        checks: "success",
       },
     ]);
+  });
+
+  it("PRのhigh-riskラベル・変更行数・CIの結果を持つ", () => {
+    const g = buildGraph(
+      [issue(1)],
+      [
+        pr(50, {
+          headRefName: "feature/1",
+          labels: ["high-risk"],
+          additions: 120,
+          deletions: 30,
+          checks: "failure",
+        }),
+      ],
+      NOW
+    );
+    expect(g.nodes[0].prs[0]).toMatchObject({
+      highRisk: true,
+      changedLines: 150,
+      checks: "failure",
+    });
   });
 
   it(`作成から${STALE_PR_DAYS}日以上経ったPRがあればstale`, () => {

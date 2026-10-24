@@ -27,6 +27,7 @@ function issue(
     labels: [],
     blockedBy: [],
     subIssueCount: 0,
+    clientQuestions: [],
     ...overrides,
   };
 }

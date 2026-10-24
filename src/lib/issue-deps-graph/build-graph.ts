@@ -30,7 +30,12 @@ export type IssueInput = {
   labels: string[];
   blockedBy: { number: number; state: "OPEN" | "CLOSED" }[];
   subIssueCount: number;
+  /** 本文の「## クライアントへの確認事項」の箇条書き（next-actions.tsのclientQuestionsOf） */
+  clientQuestions: string[];
 };
+
+// CIの結果（PRの最新コミットのstatusCheckRollup）。none: チェックが1つも無い
+export type CheckState = "success" | "failure" | "pending" | "none";
 
 export type OpenPrInput = {
   number: number;
@@ -39,11 +44,21 @@ export type OpenPrInput = {
   closingIssueNumbers: number[];
   createdAt: string;
   isDraft: boolean;
+  labels: string[];
+  additions: number;
+  deletions: number;
+  checks: CheckState;
 };
 
 // in-review: オープンなPRがある / blocked: 未完了のブロッカーがある
-// waiting: クライアント回答など開発外の要因で止まっている / ready: すぐ着手できる
-export type IssueStatus = "in-review" | "blocked" | "waiting" | "ready";
+// decision: 人間の判断を待っている / waiting: クライアント回答など開発外の要因で止まっている
+// ready: すぐ着手できる
+export type IssueStatus =
+  | "in-review"
+  | "blocked"
+  | "decision"
+  | "waiting"
+  | "ready";
 
 // dev: 実装 / non-dev: 法務・運用・外部サービスの設定など / parent: サブissueを持つ親issue
 export type IssueKind = "dev" | "non-dev" | "parent";
@@ -55,6 +70,11 @@ export type LinkedPr = {
   /** 作成からの経過日数（PRが止まっている日数の目安） */
   ageDays: number;
   isDraft: boolean;
+  /** 精読してからマージするPR（CLAUDE.md「PRのレビュー」） */
+  highRisk: boolean;
+  /** 追加と削除の行数の合計 */
+  changedLines: number;
+  checks: CheckState;
 };
 
 export type GraphNode = IssueInput & {
@@ -64,6 +84,8 @@ export type GraphNode = IssueInput & {
   prs: LinkedPr[];
   /** このissueが終わると着手できるようになるオープンなissueの数（間接的な後続を含む） */
   downstream: number;
+  /** このissueが終わると未完了のブロッカーが無くなる、直接の後続の数 */
+  unblocks: number;
   /** 作成からSTALE_PR_DAYS日以上経ったPRがある */
   stale: boolean;
 };
@@ -79,6 +101,12 @@ export const WAITING_LABEL = "waiting-client";
 /** このラベルが付いたissueは、開発外の作業（kind: non-dev）として扱う */
 export const NON_DEV_LABEL = "non-dev";
 
+/** このラベルが付いたissueは、人間の判断を待っているもの（status: decision）として扱う */
+export const NEEDS_DECISION_LABEL = "needs-decision";
+
+/** このラベルが付いたPRは、人間が差分を精読してからマージする */
+export const HIGH_RISK_LABEL = "high-risk";
+
 /** 作成からこの日数以上経ったPRを「止まっている」とみなす */
 export const STALE_PR_DAYS = 7;
 
@@ -91,6 +119,21 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function issueNumberFromBranch(branch: string): number | null {
   const match = /^(?:feature|hotfix)\/(\d+)(?:-|$)/.exec(branch);
   return match ? Number(match[1]) : null;
+}
+
+/** GitHubのstatusCheckRollupのstateをCheckStateにする */
+export function checkStateOf(rollup: string | null): CheckState {
+  switch (rollup) {
+    case "SUCCESS":
+      return "success";
+    case "FAILURE":
+    case "ERROR":
+      return "failure";
+    case null:
+      return "none";
+    default:
+      return "pending";
+  }
 }
 
 export function buildGraph(
@@ -113,6 +156,9 @@ export function buildGraph(
         (now.getTime() - new Date(pr.createdAt).getTime()) / DAY_MS
       ),
       isDraft: pr.isDraft,
+      highRisk: pr.labels.includes(HIGH_RISK_LABEL),
+      changedLines: pr.additions + pr.deletions,
+      checks: pr.checks,
     };
     for (const target of targets) {
       const byNumber = prsByIssue.get(target) ?? new Map<number, LinkedPr>();
@@ -134,6 +180,7 @@ export function buildGraph(
       openBlockers,
       prs: linkedPrs,
       downstream: 0,
+      unblocks: 0,
       stale: linkedPrs.some((p) => p.ageDays >= STALE_PR_DAYS),
       status: classify(i, kind, openBlockers, linkedPrs),
     };
@@ -151,6 +198,9 @@ export function buildGraph(
   }
   for (const node of nodes) {
     node.downstream = reachable(node.number, successors).length;
+    node.unblocks = nodes.filter(
+      (n) => n.openBlockers.length === 1 && n.openBlockers[0] === node.number
+    ).length;
   }
 
   return { nodes, edges };
@@ -190,6 +240,7 @@ function classify(
   if (prs.length > 0) return "in-review";
   // 親issueはサブissueが終わるまで閉じられないので、着手可能にはしない
   if (openBlockers.length > 0 || kind === "parent") return "blocked";
+  if (issue.labels.includes(NEEDS_DECISION_LABEL)) return "decision";
   if (issue.labels.includes(WAITING_LABEL)) return "waiting";
   return "ready";
 }
@@ -201,6 +252,7 @@ const STATUS_COLORS: Record<
   ready: { fill: "#dcfce7", stroke: "#16a34a", color: "#14532d" },
   "in-review": { fill: "#dbeafe", stroke: "#2563eb", color: "#1e3a8a" },
   blocked: { fill: "#f3f4f6", stroke: "#9ca3af", color: "#374151" },
+  decision: { fill: "#f3e8ff", stroke: "#9333ea", color: "#581c87" },
   waiting: { fill: "#fef3c7", stroke: "#d97706", color: "#78350f" },
 };
 
@@ -208,6 +260,7 @@ export const STATUS_LABELS: Record<IssueStatus, string> = {
   ready: "着手可能",
   "in-review": "PRあり",
   blocked: "ブロック中",
+  decision: "判断待ち",
   waiting: "外部待ち",
 };
 
@@ -420,9 +473,18 @@ ${group
   .next-actions li.stale { background: var(--warn-bg); border-left: 3px solid var(--warn); padding-left: 6px; }
   .next-actions li.stale .age { background: var(--warn); border-color: var(--warn); color: #fff; }
   .next-actions li.empty { color: var(--muted); }
-  .next-actions .pr { display: inline-flex; gap: 4px; align-items: baseline; }
+  .next-actions li[hidden] { display: none; }
+  .next-actions .pr { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+  .next-actions .client li { display: block; }
+  .next-actions .client li ul { list-style: disc; padding-left: 20px; }
+  .next-actions .client li li { border-bottom: none; display: list-item; }
+  .next-actions textarea { display: block; width: 100%; font: inherit; margin: 4px 0; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; color: var(--sub); white-space: nowrap; }
   .tag.draft { border-style: dashed; color: var(--muted); }
+  .tag.milestone { background: var(--soft); }
+  .tag.unblocks { border-color: #16a34a; color: #16a34a; font-weight: bold; }
+  .tag.ci-success { border-color: #16a34a; color: #16a34a; }
+  .tag.ci-failure, .tag.high-risk, .tag.warn { border-color: var(--warn); color: var(--warn); }
   .meta { color: var(--muted); font-size: 13px; margin: 0; }
   .chip { display: inline-block; border: 1px solid; border-radius: 4px; padding: 1px 8px; font-size: 12px; margin-right: 6px; white-space: nowrap; }
   .legend .chip { margin-right: 0; }
@@ -560,6 +622,21 @@ ${independent}
     await draw();
   }
 
+  // 「次にやること」の行を選んだマイルストーンで絞り込み、行が無くなった一覧には「なし」と出す
+  function filterNextActions() {
+    for (const ul of document.querySelectorAll(".next-actions .columns ul")) {
+      const rows = [...ul.querySelectorAll(":scope > li[data-milestone]")];
+      if (rows.length === 0) continue;
+      for (const row of rows) row.hidden = current !== "" && row.dataset.milestone !== current;
+      let empty = ul.querySelector(":scope > li.filtered-empty");
+      if (!empty) {
+        empty = el("li", { className: "empty filtered-empty", textContent: "なし（このマイルストーンでは）" });
+        ul.append(empty);
+      }
+      empty.hidden = rows.some((row) => !row.hidden);
+    }
+  }
+
   // 描画は非同期なので、続けて切り替えたときは最後に始めた描画だけを画面に反映する
   let latestDraw = 0;
 
@@ -579,6 +656,7 @@ ${independent}
     for (const section of document.querySelectorAll(".independent section")) {
       section.hidden = current !== "" && section.dataset.milestone !== current;
     }
+    filterNextActions();
     overview.innerHTML = overviewSvg;
     for (const node of overview.querySelectorAll(".node")) {
       node.classList.toggle("current", milestoneOfOverviewNode(node) === current);
@@ -618,6 +696,10 @@ ${independent}
     const node = e.target.closest(".node");
     const name = node ? milestoneOfOverviewNode(node) : null;
     if (name !== null) setMilestone(name, true);
+  });
+  document.getElementById("copy-client-message")?.addEventListener("click", async (e) => {
+    await navigator.clipboard.writeText(document.getElementById("client-message").value);
+    e.target.textContent = "コピーした";
   });
   milestoneSelect.addEventListener("change", () => setMilestone(milestoneSelect.value, true));
   addEventListener("popstate", () => setMilestone(milestoneFromHash(), false));

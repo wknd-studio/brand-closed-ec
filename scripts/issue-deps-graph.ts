@@ -5,11 +5,13 @@ import * as path from "node:path";
 
 import {
   buildGraph,
+  checkStateOf,
   renderHtml,
   type IssueInput,
   type OpenPrInput,
 } from "@/lib/issue-deps-graph/build-graph";
 import { jsonOutput } from "@/lib/issue-deps-graph/milestones";
+import { clientQuestionsOf } from "@/lib/issue-deps-graph/next-actions";
 
 /**
  * オープンなissueの依存グラフ（GitHub標準のBlocked by / Blocking）を生成する。
@@ -43,7 +45,7 @@ query($owner: String!, $name: String!, $cursor: String) {
     issues(states: OPEN, first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title url
+        number title url body
         milestone { title }
         labels(first: 20) { nodes { name } }
         blockedBy(first: 50) { nodes { number state } }
@@ -62,6 +64,7 @@ type IssuesResponse = {
           number: number;
           title: string;
           url: string;
+          body: string;
           milestone: { title: string } | null;
           labels: { nodes: { name: string }[] };
           blockedBy: { nodes: { number: number; state: "OPEN" | "CLOSED" }[] };
@@ -78,7 +81,9 @@ query($owner: String!, $name: String!, $cursor: String) {
     pullRequests(states: OPEN, first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number url headRefName createdAt isDraft
+        number url headRefName createdAt isDraft additions deletions
+        labels(first: 20) { nodes { name } }
+        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
         closingIssuesReferences(first: 20) { nodes { number } }
       }
     }
@@ -96,6 +101,14 @@ type PrsResponse = {
           headRefName: string;
           createdAt: string;
           isDraft: boolean;
+          additions: number;
+          deletions: number;
+          labels: { nodes: { name: string }[] };
+          commits: {
+            nodes: {
+              commit: { statusCheckRollup: { state: string } | null };
+            }[];
+          };
           closingIssuesReferences: { nodes: { number: number }[] };
         }[];
       };
@@ -122,6 +135,7 @@ function fetchIssues(): IssueInput[] {
         labels: n.labels.nodes.map((l) => l.name),
         blockedBy: n.blockedBy.nodes,
         subIssueCount: n.subIssues.totalCount,
+        clientQuestions: clientQuestionsOf(n.body),
       });
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
@@ -149,6 +163,12 @@ function fetchOpenPrs(): OpenPrInput[] {
         ),
         createdAt: n.createdAt,
         isDraft: n.isDraft,
+        labels: n.labels.nodes.map((l) => l.name),
+        additions: n.additions,
+        deletions: n.deletions,
+        checks: checkStateOf(
+          n.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null
+        ),
       });
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;

@@ -24,6 +24,7 @@ function issue(
     labels: [],
     blockedBy: [],
     subIssueCount: 0,
+    clientQuestions: [],
     ...overrides,
   };
 }
@@ -42,6 +43,10 @@ function pr(number: number, overrides: Partial<OpenPrInput> = {}): OpenPrInput {
     closingIssueNumbers: [],
     createdAt: "2026-10-17T00:00:00Z",
     isDraft: false,
+    labels: [],
+    additions: 0,
+    deletions: 0,
+    checks: "success",
     ...overrides,
   };
 }
