@@ -170,6 +170,44 @@ E2E テストはチェックアウト・Invoice発行等でメール送信コー
 
 ---
 
+## 失敗時のSupabaseのログ（暗号化）
+
+`Integration Tests`・`E2E Tests (PR)` が失敗したとき、ジョブ内で起動したローカルSupabaseのコンテナのログを、アーティファクト（`supabase-logs-integration-<試行回数>`・`supabase-logs-e2e-pr-<試行回数>`、保持期間3日）として残す。対象は Kong・PostgREST・Postgres・Auth 等の `supabase_*` のコンテナで、統合テストがときどき502で落ちる原因を追うためのもの（#497）。
+
+このリポジトリはpublicで、アーティファクトはGitHubにログインした誰でもダウンロードできる。そのため、ログは [age](https://age-encryption.org/) の公開鍵で暗号化し、暗号化したファイル `supabase-logs.tar.gz.age` だけをアップロードする。
+
+- **公開鍵**: `scripts/ci/log-recipients.txt` に置く（1行に1つ。`#` 以降はコメント）
+- **秘密鍵**: CI（GitHub secrets・Dopplerを含む）にもリポジトリにも置かない。復号できるのは、秘密鍵を持つ人の手元だけ
+- **fail closed**: 公開鍵のファイルが無い・空・不正なとき、または暗号化に失敗したときは、ログを集めるステップが失敗し、何もアップロードしない
+- **Actionsのログ**: ファイル名・件数・サイズだけを出す。ログの中身は出さない
+- **Dopplerのシークレット**: ログを集めるステップには渡していない
+
+### 鍵を作る・追加する
+
+```bash
+brew install age
+age-keygen -o ~/.config/age/brand-closed-ec-ci-logs.txt  # 秘密鍵。コミットしない・共有しない
+age-keygen -y ~/.config/age/brand-closed-ec-ci-logs.txt  # 公開鍵（age1...）を表示する
+```
+
+表示された公開鍵（`age1...`）を `scripts/ci/log-recipients.txt` に1行で追記し、PRでコミットする。
+
+- 復号する人を増やすとき: その人の公開鍵を同じファイルに1行ずつ足す。どの秘密鍵でも復号できる
+- 鍵を外すとき: その行を消す。消す前に作ったアーティファクトは、外した鍵でも復号できる（最長3日で消える）
+
+### ダウンロードして復号する
+
+```bash
+mkdir -p /tmp/supabase-logs && cd /tmp/supabase-logs
+gh run download <run-id> -n supabase-logs-integration-1   # E2Eなら supabase-logs-e2e-pr-1。再実行なら末尾が試行回数
+age -d -i ~/.config/age/brand-closed-ec-ci-logs.txt supabase-logs.tar.gz.age | tar -xzf -
+ls supabase-logs/   # docker-ps.txt と <コンテナ名>.log
+```
+
+`<run-id>` は、失敗したワークフロー実行のURL（`.../actions/runs/<run-id>`）の数字。
+
+---
+
 ## ローカル開発での Webhook テスト
 
 Clerk Webhook をローカルでテストするには ngrok が必要。
