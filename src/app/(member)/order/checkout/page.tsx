@@ -7,7 +7,8 @@ import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { groupCartItemsByPaymentTiming } from "@/lib/cart/types";
-import { fetchProductsByIds, type MemberRank } from "@/lib/sanity/products";
+import { fetchProductsByIds } from "@/lib/sanity/products";
+import { RankPrices } from "@/domain/value-objects/rank-prices";
 import CheckoutForm from "./checkout-form";
 
 type LineItem = {
@@ -79,7 +80,6 @@ export default async function CheckoutPage() {
 
   if (!user) redirect("/shop");
 
-  const userRank = user.rank.value as MemberRank;
   const addresses = await addressRepo.findByUserId(user.id);
 
   const addressDtos = addresses.map((a) => ({
@@ -102,9 +102,12 @@ export default async function CheckoutPage() {
 
   const lineItems = cart.items.map((item) => {
     const product = products.find((p) => p._id === item.productId);
-    const unitPrice = product?.is_negotiable
-      ? null
-      : (product?.prices?.[userRank] ?? null);
+    const unitPrice = product
+      ? (RankPrices.of({
+          isNegotiable: product.is_negotiable,
+          prices: product.prices,
+        }).priceFor(user.rank)?.amount ?? null)
+      : null;
     const isOutOfStock = product?.availability === "out_of_stock";
     return {
       ...item,

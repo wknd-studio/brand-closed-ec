@@ -4,6 +4,7 @@ import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-
 import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
 import { fetchProductsByIds } from "@/lib/sanity/products";
 import { buildFavoriteListItems } from "@/lib/favorites/build-list";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 import FavoriteListCard from "./favorite-list-card";
 
 export default async function FavoritesPage() {
@@ -23,7 +24,7 @@ export default async function FavoritesPage() {
   const items = buildFavoriteListItems(
     favoriteSanityProductIds,
     products,
-    userRank
+    MemberRank.of(userRank)
   );
 
   return (
