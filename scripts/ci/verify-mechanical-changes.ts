@@ -26,7 +26,7 @@ const TRAILER_KEY = "mechanical-change";
 const REPORT_MARKER = "<!-- mechanical-change-check -->";
 const NONE_MARKER = "<!-- mechanical-change-check:none -->";
 const CODEMODS_DIR = "scripts/codemods/";
-const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+const REPLAY_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // trailerの読み取り
@@ -470,7 +470,7 @@ function replayCommit(
       cwd: dir,
       encoding: "utf8",
       env: commandEnv(),
-      timeout: COMMAND_TIMEOUT_MS,
+      timeout: REPLAY_COMMAND_TIMEOUT_MS,
       maxBuffer: 64 * 1024 * 1024,
     });
     if (result.error || result.status !== 0) {
