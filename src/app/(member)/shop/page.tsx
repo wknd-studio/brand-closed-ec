@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchBrands, getAllowedRanks } from "@/lib/sanity/products";
+import { fetchBrands } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 
 export default async function ShopPage() {
   const { userId } = await requireAuth();
@@ -12,7 +13,7 @@ export default async function ShopPage() {
 
   const user = await userRepo.findByClerkUserId(userId!);
   const userRank = user?.rank.value ?? "starter";
-  const allowedRanks = getAllowedRanks(userRank);
+  const allowedRanks = MemberRank.of(userRank).accessibleRanks();
   const brands = await fetchBrands(allowedRanks);
 
   return (

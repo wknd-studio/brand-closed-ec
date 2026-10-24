@@ -3,7 +3,11 @@ import type {
   ProductRepository,
   ProductSnapshot,
 } from "@/repositories/product-repository";
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import {
+  MemberRank,
+  type MemberRankValue,
+} from "@/domain/value-objects/member-rank";
+import { RankPrices } from "@/domain/value-objects/rank-prices";
 import { Money } from "@/domain/value-objects/money";
 import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 
@@ -32,14 +36,17 @@ export class SanityProductRepository implements ProductRepository {
     );
 
     return products.map((p) => {
-      const unitPrice = p.is_negotiable ? 0 : p.prices?.[rank];
-      if (unitPrice == null) {
+      const price = RankPrices.of({
+        isNegotiable: p.is_negotiable,
+        prices: p.prices,
+      }).priceFor(MemberRank.of(rank));
+      if (!p.is_negotiable && price == null) {
         throw new ProductPriceNotSetError(p._id, rank);
       }
       return {
         sanityProductId: p._id,
         productName: p.name,
-        unitPrice: Money.of(unitPrice),
+        unitPrice: price ?? Money.zero(),
         isNegotiable: p.is_negotiable,
         minRank: p.min_rank as MemberRankValue,
         // 後方互換: payment_timing未設定の既存商品はat_order（従来のcheckoutフロー相当）として扱う

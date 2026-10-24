@@ -47,6 +47,11 @@ export class MemberRank {
     return RANK_ORDER.indexOf(this.value) >= RANK_ORDER.indexOf(minRank.value);
   }
 
+  /** このランクで閲覧できるランクの一覧（最下位から自ランクまで） */
+  accessibleRanks(): MemberRankValue[] {
+    return RANK_ORDER.slice(0, RANK_ORDER.indexOf(this.value) + 1);
+  }
+
   isHigherThan(other: MemberRank): boolean {
     return RANK_ORDER.indexOf(this.value) > RANK_ORDER.indexOf(other.value);
   }
