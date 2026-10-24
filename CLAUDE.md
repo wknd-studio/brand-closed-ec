@@ -107,6 +107,11 @@ feature/* →  Cloudflare Pages Preview URL
 - それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する
 - レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、同じバグを検出するlint・テストに変換する
 
+**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
+
+- developのCIが赤なら、新しいPRのマージより、直す・revertすることを優先する。原因のPRがすぐ直せなければ、まずそのマージコミットをrevertする（`git revert -m 1 <マージコミット>` をfeatureブランチで行い、develop向けのPRにする）
+- 赤のdevelopに別のPRを重ねてマージしない（どのマージで壊れたかが分からなくなり、stgにも出なくなる）
+
 **テスト自動選択ルール**: 機能を実装するたびに、以下の基準で必要なテストを自動的に作成する。
 
 | 実装内容                       | テスト種別         | ツール               |
