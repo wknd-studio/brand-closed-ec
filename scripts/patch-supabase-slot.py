@@ -28,8 +28,6 @@ PORT_KEYS = {
     ("[edge_runtime]", "inspector_port"): 8083,
 }
 
-APP_PORT_BASE = 3000
-
 
 def patch(path: str, slot: int) -> None:
     if slot < 1 or slot > 9:
@@ -83,10 +81,8 @@ def patch(path: str, slot: int) -> None:
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
 
-    app_port = APP_PORT_BASE + offset
     print(f"config.toml をslot{slot}用に書き換えました（ポートオフセット+{offset}）")
     print(f"  API: {54321 + offset}  DB: {54322 + offset}  Studio: {54323 + offset}")
-    print(f"  アプリ（Next.js/Playwright）は PORT={app_port} を使うこと")
 
 
 if __name__ == "__main__":

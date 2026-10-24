@@ -36,7 +36,7 @@ else
   # このワークツリーだけのローカル変更を誤ってコミットしないようにする
   git -C "$ROOT" update-index --skip-worktree supabase/config.toml
 fi
-APP_PORT=$((3000 + (SLOT - 1) * 1000))
+APP_PORT="$(app_port_for_slot "$SLOT")"
 
 if ! (cd "$ROOT" && doppler configure get config --plain 2>/dev/null | grep -q .); then
   echo "==> doppler setup（.doppler.yaml の project/config を使う）" >&2
