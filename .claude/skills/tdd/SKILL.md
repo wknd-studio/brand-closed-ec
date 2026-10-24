@@ -20,6 +20,18 @@ pnpm test:e2e
 - 失敗の理由が「未実装だから」になっているか確認する（import エラーやテスト自体の書き間違いで落ちているだけなら Step 1 に戻る）
 - 実装後（Step 4）に、実装を一時的に壊して（条件の反転・呼び出しの重複・エラー処理の削除など）テストが落ちることも確かめる。壊しても通るテストは守れていないので書き直す
 
+**Step 2.5: テストだけをコミットする**
+
+失敗を確認した状態のテストを、実装より先に1つのコミットにする（CLAUDE.md「コミット形式」）。どう失敗したか（失敗したテスト名と理由）を控え、PR本文の「実行したチェック」の「テストのコミットの時点で失敗していたこと」に書く。
+
+```bash
+git add <テストのファイル>
+git commit -m "test(scope): BRAND-XX $ARGUMENTS の完了条件を確かめる"
+```
+
+- このコミットではテストが赤のままでよい（CIのテストはPRの先端（head）のコミットでだけ動く）。pre-commitのlint-staged（eslint・prettier）は通す
+- Step 4 でテスト自体を直したら、テストの変更は実装と同じコミットに混ぜず、`test` のコミットとして分ける
+
 **Step 3: テストが通る最小限のコードを実装する**
 
 - 余分な機能を先回りして追加しない
@@ -36,12 +48,31 @@ pnpm lint
 
 - テストが通ったままであることを確認しながら整理
 
-**Step 6: ユーザーの承認を得てコミット**
+**Step 6: 実装 → 生成物 → ドキュメントの順にコミットする**
+
+Step 2.5 のテストのコミットに続けて、種類ごとに分けてコミットする（CLAUDE.md「コミット形式」）。該当しないコミットは作らなくてよい。
 
 ```bash
-git add <files>
+# 1. 実装（feat・fix・refactor）: 本番コードだけ
+git add <本番コードのファイル>
 git commit -m "feat(scope): BRAND-XX $ARGUMENTS"
+
+# 2. 生成物・機械的な変更: 手作業の変更と混ぜず、専用のコミットにする（CLAUDE.md「PR の粒度」）
+#   許可リストのコマンド（pnpm format・sed・codemod 等）は、最後の段落に Mechanical-Change: trailer で書く
+pnpm format
+git add -u
+git commit -m "style(scope): BRAND-XX フォーマットを揃える" -m "Mechanical-Change: pnpm format"
+#   型の再生成のようにリダイレクト（>）を含み許可リストに無いものは、trailer を付けない
+supabase gen types typescript --local > src/types/database.types.ts
+git add src/types/database.types.ts
+git commit -m "chore(types): BRAND-XX 型を再生成する"
+
+# 3. ドキュメント（spec.md・CLAUDE.md・docs/ 等）
+git add <ドキュメントのファイル>
+git commit -m "docs(scope): BRAND-XX $ARGUMENTS の仕様を反映する"
 ```
+
+- レビュー指摘への対応は、この順に並べ直さず追加のコミットでよい
 
 **Step 7: プッシュ → Cloudflare Pages が自動デプロイ**
 
