@@ -2,12 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { approveWaitlistEntry, rejectWaitlistEntry } from "./actions";
+import type {
+  WaitlistEntryRow,
+  WaitlistEntryState,
+} from "./load-waitlist-page";
 
-type WaitlistEntryRow = {
-  id: string;
-  emailAddress: string;
-  createdAt: number;
-  alreadyInvited: boolean;
+const STATE_LABELS: Record<
+  WaitlistEntryState,
+  { label: string; className: string }
+> = {
+  pending: { label: "承認待ち", className: "text-yellow-700" },
+  invited: { label: "招待済み（返信待ち）", className: "text-blue-700" },
+  registered: { label: "登録済み", className: "text-green-700" },
 };
 
 export function WaitlistTable({ entries }: { entries: WaitlistEntryRow[] }) {
@@ -64,18 +70,16 @@ export function WaitlistTable({ entries }: { entries: WaitlistEntryRow[] }) {
             <tr key={entry.id} className="border-b">
               <td className="py-2 pr-4">{entry.emailAddress}</td>
               <td className="py-2 pr-4">
-                {entry.alreadyInvited ? (
-                  <span className="text-blue-700">招待済み（返信待ち）</span>
-                ) : (
-                  <span className="text-yellow-700">承認待ち</span>
-                )}
+                <span className={STATE_LABELS[entry.state].className}>
+                  {STATE_LABELS[entry.state].label}
+                </span>
               </td>
               <td className="py-2 pr-4 text-gray-500">
                 {new Date(entry.createdAt).toLocaleString("ja-JP")}
               </td>
               <td className="py-2 space-x-3">
                 <button
-                  disabled={isPending || entry.alreadyInvited}
+                  disabled={isPending || entry.state !== "pending"}
                   onClick={() => handleApprove(entry.id, entry.emailAddress)}
                   className="text-blue-600 hover:underline text-xs disabled:opacity-40 disabled:no-underline"
                 >
