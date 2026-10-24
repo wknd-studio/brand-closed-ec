@@ -1,7 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+import {
+  LABELER_CONFIG,
+  loadChecklist,
+  parseRiskRules,
+  renderReviewChecklistSection,
+} from "./review-checklists";
 
 /**
  * PRの差分を区分（層）ごとに集計し、PRコメントの本文を作る（#472）。
@@ -9,7 +16,8 @@ import { pathToFileURL } from "node:url";
  * CLAUDE.md「PRの粒度」の目安（本番コードの行数・ファイル数）と比べられるようにする。
  *
  * コメントは REPORT_MARKER で始まり、`## 見出し` の節を並べた形にする。
- * 他の検査（例: #476 の high-risk の確認観点）は、renderComment に節を足して同じコメントに載せる。
+ * 他の検査は、renderComment に節を足して同じコメントに載せる
+ * （high-risk の区分ごとの確認観点は scripts/ci/review-checklists.ts。#476）。
  *
  * 使い方: pnpm -s tsx scripts/ci/pr-diff-summary.ts <base-ref> <head-ref> [--report <file>]
  *   例: pnpm -s tsx scripts/ci/pr-diff-summary.ts origin/develop HEAD
@@ -274,6 +282,14 @@ export function readDiff(base: string, head: string): DiffEntry[] {
   }));
 }
 
+/** GitHub Actions 上なら、head の時点のファイルへのURLを作る（ローカルでは undefined） */
+function githubBlobUrl(head: string) {
+  const { GITHUB_SERVER_URL: server, GITHUB_REPOSITORY: repo } = process.env;
+  if (!server || !repo) return undefined;
+  const sha = git(["rev-parse", head]).trim();
+  return (file: string) => `${server}/${repo}/blob/${sha}/${file}`;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const reportIndex = args.indexOf("--report");
@@ -288,8 +304,20 @@ function main() {
     process.exit(2);
   }
 
+  const diff = readDiff(base, head);
+  // 区分は作業ツリー（PRのhead）の labeler.yml で判定する。ラベル自体はベースブランチの
+  // labeler.yml で付く（Labeler ワークフロー）ため、labeler.yml を変えるPRでだけずれることがある
+  const reviewChecklists = renderReviewChecklistSection(
+    diff.map((e) => e.path),
+    {
+      rules: parseRiskRules(readFileSync(LABELER_CONFIG, "utf8")),
+      loadChecklist,
+      docUrl: githubBlobUrl(head),
+    }
+  );
   const comment = renderComment([
-    renderDiffSummarySection(summarizeDiff(readDiff(base, head))),
+    renderDiffSummarySection(summarizeDiff(diff)),
+    ...(reviewChecklists ? [reviewChecklists] : []),
   ]);
   if (reportPath) writeFileSync(reportPath, comment);
   console.log(comment);
