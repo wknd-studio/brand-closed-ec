@@ -132,8 +132,19 @@ export async function signUpViaInvitation(
   await expect(page).toHaveURL(/\/sign-up/);
   // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
   // 安定した要素属性(id・data-localization-key)でフォーム要素を指定する
-  await page.locator("#password-field").fill(password);
-  await page.locator("#legalAccepted-field").check();
+  const passwordField = page.locator("#password-field");
+  const legalAcceptedField = page.locator("#legalAccepted-field");
+  // stgでは、Clerkのフォームが登録（POST /v1/client/sign_ups）の応答で描き直され、
+  // その直後のクリックでチェックが入らない（`check()`が「Clicking the checkbox did
+  // not change its state」で失敗する）ことがあった（#520）。描き直しでは
+  // 入力済みのパスワードも消えうるため、パスワードの入力からまとめて、
+  // 両方が入った状態になるまでやり直す
+  await expect(async () => {
+    await passwordField.fill(password);
+    await legalAcceptedField.check();
+    await expect(passwordField).toHaveValue(password, { timeout: 1000 });
+    await expect(legalAcceptedField).toBeChecked({ timeout: 1000 });
+  }).toPass();
   await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
   await expect(page).toHaveURL(/\/onboarding\/account-type/);
