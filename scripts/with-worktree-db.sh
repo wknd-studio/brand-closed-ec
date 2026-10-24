@@ -49,8 +49,7 @@ fi
 if ! supabase status --workdir "$ROOT" >/dev/null 2>&1; then
   echo "==> スロット${SLOT}のSupabaseを起動します（CIと同じ最小構成）" >&2
   # 同じワークツリーで同時に起動された場合は、もう一方の起動完了を待って続行する
-  supabase start --workdir "$ROOT" \
-    -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta >&2 ||
+  bash "$ROOT/scripts/supabase-start-minimal.sh" --workdir "$ROOT" >&2 ||
     supabase status --workdir "$ROOT" >/dev/null
 fi
 

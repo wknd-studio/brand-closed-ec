@@ -61,12 +61,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
       - uses: supabase/setup-cli@v1
-        with: { version: 2.102.0 }
+        with: { version: 2.116.0 }
       - run: pnpm install --frozen-lockfile
       - name: Start local Supabase
         # このジョブはDBのスキーマとsrc/types/database.types.tsの整合性しか
-        # 見ないため、E2E同様に未使用コンテナの起動をスキップして時間を短縮する
-        run: supabase start -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta
+        # 見ないため、E2E同様に未使用コンテナの起動をスキップして時間を短縮する。
+        # ただし `supabase gen types --local` はpostgres-metaのイメージを一時的に起動して
+        # 使うため、postgres-metaだけは起動する（除外するとgen typesがイメージを別に
+        # pullし、レジストリのレート制限で失敗することがあった）
+        run: bash scripts/supabase-start-minimal.sh --keep postgres-meta
       - name: Apply local migrations
         run: supabase db reset
       - name: Generate types from local DB and diff against committed file
@@ -108,13 +111,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
       - uses: supabase/setup-cli@v1
-        with: { version: 2.102.0 }
+        with: { version: 2.116.0 }
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
       - name: Start local Supabase
         # 統合テストはDB（PostgreSQL・RLS・PostgREST）とAuthしか使わないため、
         # E2E同様に未使用コンテナの起動をスキップして時間を短縮する
-        run: supabase start -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta
+        run: bash scripts/supabase-start-minimal.sh
       - name: Apply local migrations
         run: supabase db reset
       - name: Run integration tests
@@ -169,7 +172,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
       - uses: supabase/setup-cli@v1
-        with: { version: 2.102.0 }
+        with: { version: 2.116.0 }
       - uses: dopplerhq/cli-action@v3
       - run: pnpm install --frozen-lockfile
       - name: Get installed Playwright version
@@ -204,7 +207,7 @@ jobs:
       - name: Start local Supabase
         # このアプリはStorage/Realtime/Edge Functions/Studio/inbucketを使わないため、
         # 未使用コンテナのDocker pull・起動をスキップしてCI時間を短縮する
-        run: supabase start -x storage,imgproxy,realtime,edge-runtime,functions,analytics,vector,inbucket,studio,meta
+        run: bash scripts/supabase-start-minimal.sh
       - name: Apply local migrations
         run: supabase db reset
       - name: Run E2E tests

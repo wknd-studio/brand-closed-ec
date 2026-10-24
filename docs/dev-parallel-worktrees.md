@@ -49,4 +49,4 @@ Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID
 
 ## Docker負荷の目安
 
-最小構成（api/db/authのみ、CIと同じ`-x`フラグ）なら1worktreeあたり数コンテナ。DBを使うタスクの間だけ起動し、PR作成後に停止するため、同時に動くのは実際にテスト中のワークツリーの分だけになる。
+最小構成（db・auth・rest・kongのみ。CIと同じ`scripts/supabase-start-minimal.sh`で起動し、除外するコンテナは`scripts/supabase-excluded-services.txt`に定義）なら1worktreeあたり4コンテナ・約230MB。DBを使うタスクの間だけ起動し、PR作成後に停止するため、同時に動くのは実際にテスト中のワークツリーの分だけになる。
