@@ -70,7 +70,7 @@ describe("admin/waitlist actions", () => {
     it("admin以外はrejectできない", async () => {
       authMock.mockResolvedValue({ userId: null, sessionClaims: null });
 
-      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+      const result = await rejectWaitlistEntry("wle_1");
 
       expect(result).toEqual({ error: "権限がありません" });
       expect(rejectMock).not.toHaveBeenCalled();
@@ -237,7 +237,7 @@ describe("admin/waitlist actions", () => {
       });
       rejectMock.mockResolvedValue({ id: "wle_1", status: "rejected" });
 
-      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+      const result = await rejectWaitlistEntry("wle_1");
 
       expect(getInvitationListMock).toHaveBeenCalledWith({
         query: "a@example.com",
@@ -253,11 +253,63 @@ describe("admin/waitlist actions", () => {
       expect(result).toBeUndefined();
     });
 
+    it("却下時はエントリIDでpendingのエントリを取得し、そのメールアドレス宛ての招待だけを取り消す", async () => {
+      getInvitationListMock.mockResolvedValue({
+        data: [
+          { id: "inv_1", emailAddress: "a@example.com", status: "pending" },
+        ],
+      });
+      rejectMock.mockResolvedValue({ id: "wle_1", status: "rejected" });
+
+      await rejectWaitlistEntry("wle_1");
+
+      expect(listWaitlistEntriesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ query: "wle_1", status: "pending" })
+      );
+      expect(getInvitationListMock).toHaveBeenCalledWith(
+        expect.objectContaining({ query: "a@example.com" })
+      );
+      expect(listWaitlistEntriesMock.mock.invocationCallOrder[0]).toBeLessThan(
+        getInvitationListMock.mock.invocationCallOrder[0]
+      );
+    });
+
+    it("存在しないエントリIDでは招待を取り消さず却下もしない", async () => {
+      // queryは部分一致のため、IDが完全一致しないエントリは対象外とする
+      listWaitlistEntriesMock.mockResolvedValue({
+        data: [
+          {
+            id: "wle_10",
+            emailAddress: "b@example.com",
+            status: "pending",
+          },
+        ],
+      });
+
+      const result = await rejectWaitlistEntry("wle_1");
+
+      expect(result).toEqual({ error: "参加希望が見つかりません" });
+      expect(getInvitationListMock).not.toHaveBeenCalled();
+      expect(revokeInvitationMock).not.toHaveBeenCalled();
+      expect(rejectMock).not.toHaveBeenCalled();
+    });
+
+    it("pendingでないエントリは招待を取り消さず却下もしない", async () => {
+      listWaitlistEntriesMock.mockResolvedValue({ data: [] });
+
+      const result = await rejectWaitlistEntry("wle_1");
+
+      expect(result).toEqual({ error: "参加希望が見つかりません" });
+      expect(getInvitationListMock).not.toHaveBeenCalled();
+      expect(revokeInvitationMock).not.toHaveBeenCalled();
+      expect(rejectMock).not.toHaveBeenCalled();
+    });
+
     it("招待が無い場合も却下できる", async () => {
       getInvitationListMock.mockResolvedValue({ data: [] });
       rejectMock.mockResolvedValue({ id: "wle_1", status: "rejected" });
 
-      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+      const result = await rejectWaitlistEntry("wle_1");
 
       expect(revokeInvitationMock).not.toHaveBeenCalled();
       expect(rejectMock).toHaveBeenCalledWith("wle_1");
@@ -273,7 +325,7 @@ describe("admin/waitlist actions", () => {
       const err = new Error("network error");
       revokeInvitationMock.mockRejectedValue(err);
 
-      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+      const result = await rejectWaitlistEntry("wle_1");
 
       expect(rejectMock).not.toHaveBeenCalled();
       expect(result).toEqual({ error: "network error" });
@@ -289,7 +341,7 @@ describe("admin/waitlist actions", () => {
         new ClerkAPIResponseError("not found", { data: [], status: 404 })
       );
 
-      const result = await rejectWaitlistEntry("wle_1", "a@example.com");
+      const result = await rejectWaitlistEntry("wle_1");
 
       expect(result).toEqual({ error: "not found" });
       expect(captureExceptionMock).not.toHaveBeenCalled();
