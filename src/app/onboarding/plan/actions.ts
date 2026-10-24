@@ -27,6 +27,7 @@ const VALID_PLANS: MemberRankValue[] = RANK_ORDER.filter(
 const REQUIRED_FIELD_MESSAGES: Record<RequiredProfileField, string> = {
   lastName: "姓を入力してください",
   firstName: "名を入力してください",
+  phoneNumber: "電話番号を入力してください",
   companyName: "会社名を入力してください",
   invoiceRegistrationNumber: "適格請求書発行事業者登録番号を入力してください",
 };
@@ -110,11 +111,17 @@ export async function selectPlan(
       };
     }
     if (error instanceof InvalidPhoneNumberError) {
-      return { error: "電話番号の形式が正しくありません", values };
+      return {
+        fieldErrors: { phoneNumber: "電話番号の形式が正しくありません" },
+        values,
+      };
     }
     if (error instanceof InvalidInvoiceRegistrationNumberError) {
       return {
-        error: "適格請求書発行事業者登録番号の形式が正しくありません",
+        fieldErrors: {
+          invoiceRegistrationNumber:
+            "適格請求書発行事業者登録番号の形式が正しくありません",
+        },
         values,
       };
     }

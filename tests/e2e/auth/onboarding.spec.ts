@@ -122,9 +122,9 @@ test.describe.serial("認証済みアクセス", () => {
     await page.getByRole("radio", { name: /STANDARD/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-    await expect(
-      page.getByText("電話番号の形式が正しくありません")
-    ).toBeVisible();
+    await expect(page.getByLabel("電話番号")).toHaveAccessibleDescription(
+      "電話番号の形式が正しくありません"
+    );
     await expect(page.getByLabel("姓", { exact: true })).toHaveValue("山田");
     await expect(page.getByLabel("名", { exact: true })).toHaveValue("太郎");
     await expect(page.getByLabel("電話番号")).toHaveValue("12345");
@@ -140,8 +140,12 @@ test.describe.serial("認証済みアクセス", () => {
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-    await expect(page.getByText("姓を入力してください")).toBeVisible();
-    await expect(page.getByText("名を入力してください")).toBeVisible();
+    await expect(
+      page.getByLabel("姓", { exact: true })
+    ).toHaveAccessibleDescription("姓を入力してください");
+    await expect(
+      page.getByLabel("名", { exact: true })
+    ).toHaveAccessibleDescription("名を入力してください");
     await expect(page).toHaveURL(/\/onboarding\/plan/);
   });
 
@@ -204,8 +208,10 @@ test.describe.serial("法人として登録", () => {
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
     await expect(
-      page.getByText(/適格請求書発行事業者登録番号の形式が正しくありません/)
-    ).toBeVisible();
+      page.getByLabel("適格請求書発行事業者登録番号")
+    ).toHaveAccessibleDescription(
+      "適格請求書発行事業者登録番号の形式が正しくありません"
+    );
     await expect(page.getByLabel("会社名")).toHaveValue("株式会社テスト");
     await expect(page.getByLabel("適格請求書発行事業者登録番号")).toHaveValue(
       "T123"

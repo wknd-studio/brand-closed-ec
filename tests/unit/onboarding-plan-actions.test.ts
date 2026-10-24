@@ -35,6 +35,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
 import { selectPlan } from "@/app/onboarding/plan/actions";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
+import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import { MissingRequiredProfileFieldsError } from "@/domain/errors/missing-required-profile-fields-error";
 
 function corporateFormData(overrides: Record<string, string> = {}) {
@@ -90,7 +91,7 @@ describe("selectPlan Server Action", () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("電話番号の形式エラーではエラーと入力値を返し、Sentryには送らない", async () => {
+  it("電話番号の形式エラーでは電話番号の項目エラーと入力値を返し、Sentryには送らない", async () => {
     vi.mocked(selectPlanUseCase).mockRejectedValue(
       new InvalidPhoneNumberError("090-1234-5678")
     );
@@ -98,10 +99,40 @@ describe("selectPlan Server Action", () => {
     const result = await selectPlan(null, corporateFormData());
 
     expect(result).toEqual({
-      error: "電話番号の形式が正しくありません",
+      fieldErrors: { phoneNumber: "電話番号の形式が正しくありません" },
       values: expectedValues,
     });
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("インボイス番号の形式エラーではインボイス番号の項目エラーと入力値を返し、Sentryには送らない", async () => {
+    vi.mocked(selectPlanUseCase).mockRejectedValue(
+      new InvalidInvoiceRegistrationNumberError("T123")
+    );
+
+    const result = await selectPlan(null, corporateFormData());
+
+    expect(result).toEqual({
+      fieldErrors: {
+        invoiceRegistrationNumber:
+          "適格請求書発行事業者登録番号の形式が正しくありません",
+      },
+      values: expectedValues,
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("電話番号が空の場合は入力を促す項目エラーを返す", async () => {
+    vi.mocked(selectPlanUseCase).mockRejectedValue(
+      new MissingRequiredProfileFieldsError(["phoneNumber"])
+    );
+
+    const result = await selectPlan(null, corporateFormData());
+
+    expect(result).toEqual({
+      fieldErrors: { phoneNumber: "電話番号を入力してください" },
+      values: expectedValues,
+    });
   });
 
   it("無効なプランの場合もエラーと入力値を返す", async () => {

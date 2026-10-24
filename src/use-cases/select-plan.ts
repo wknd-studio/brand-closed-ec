@@ -63,6 +63,7 @@ export async function selectPlan(
   const missingFields: RequiredProfileField[] = [];
   if (!lastName) missingFields.push("lastName");
   if (!firstName) missingFields.push("firstName");
+  if (!input.phoneNumber.trim()) missingFields.push("phoneNumber");
   if (isCorporate && !companyName) missingFields.push("companyName");
   if (isCorporate && !invoiceRegistrationNumberRaw) {
     missingFields.push("invoiceRegistrationNumber");

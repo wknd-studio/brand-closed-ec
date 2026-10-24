@@ -130,8 +130,17 @@ export default function PlanSelector({
             required
             placeholder="09012345678"
             defaultValue={values?.phoneNumber}
+            aria-invalid={!!fieldErrors?.phoneNumber}
+            aria-describedby={
+              fieldErrors?.phoneNumber ? "phoneNumber-error" : undefined
+            }
             className="mt-1 w-full rounded border p-2"
           />
+          {fieldErrors?.phoneNumber && (
+            <p id="phoneNumber-error" className="mt-1 text-sm text-red-600">
+              {fieldErrors.phoneNumber}
+            </p>
+          )}
         </div>
       </div>
       {isCorporate && (

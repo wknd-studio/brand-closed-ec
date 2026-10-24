@@ -199,6 +199,20 @@ describe("selectPlan", () => {
       }
     );
 
+    it("電話番号が空白だけの場合はphoneNumberを不足項目にする", async () => {
+      const userRepo = makeUserRepo();
+      vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
+      const accountGateway = makeAccountGateway();
+
+      await expect(
+        selectPlan(
+          { ...baseInput, plan: "starter", phoneNumber: " " },
+          { userRepo, accountGateway }
+        )
+      ).rejects.toMatchObject({ fields: ["phoneNumber"] });
+      expect(userRepo.save).not.toHaveBeenCalled();
+    });
+
     it("名だけが空白の場合はfirstNameだけを不足項目にする", async () => {
       const userRepo = makeUserRepo();
       vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
