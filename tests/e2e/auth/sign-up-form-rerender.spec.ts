@@ -19,7 +19,13 @@ test.describe("Clerkの登録フォームの描き直しでチェックが外れ
     // stgでは、Clerkのフォームが登録（POST /v1/client/sign_ups）の応答で
     // 描き直され、直後のクリックでチェックが入らないことがあった（#520）。
     // 描き直しのタイミングはテストから作れないため、最初の1回のクリックを
-    // 打ち消して「クリックしたがチェックが入らなかった」状態を再現する
+    // 打ち消して「クリックしたがチェックが入らなかった」状態を再現する。
+    // Clerkのフォームの構造が変わってクリックの対象がずれると、打ち消しが
+    // 起きないままテストが通ってしまうため、打ち消した回数も最後に確かめる
+    let swallowedClicks = 0;
+    await page.exposeFunction("onLegalAcceptedClickSwallowed", () => {
+      swallowedClicks += 1;
+    });
     await page.addInitScript(() => {
       let swallowed = false;
       document.addEventListener(
@@ -33,6 +39,11 @@ test.describe("Clerkの登録フォームの描き直しでチェックが外れ
           ) {
             swallowed = true;
             event.preventDefault();
+            void (
+              window as unknown as {
+                onLegalAcceptedClickSwallowed: () => Promise<void>;
+              }
+            ).onLegalAcceptedClickSwallowed();
           }
         },
         { capture: true }
@@ -42,5 +53,6 @@ test.describe("Clerkの登録フォームの描き直しでチェックが外れ
     await signUpViaInvitation(page, TEST_EMAIL, TEST_PASSWORD);
 
     await expect(page).toHaveURL(/\/onboarding\/account-type/);
+    expect(swallowedClicks).toBe(1);
   });
 });

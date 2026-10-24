@@ -138,13 +138,14 @@ export async function signUpViaInvitation(
   // その直後のクリックでチェックが入らない（`check()`が「Clicking the checkbox did
   // not change its state」で失敗する）ことがあった（#520）。描き直しでは
   // 入力済みのパスワードも消えうるため、パスワードの入力からまとめて、
-  // 両方が入った状態になるまでやり直す
+  // 両方が入った状態になるまでやり直す。toPassは既定ではテスト全体のタイムアウトまで
+  // やり直すため、セレクタの変更等で恒常的に入力できないときに原因が分かるよう上限を付ける
   await expect(async () => {
     await passwordField.fill(password);
     await legalAcceptedField.check();
     await expect(passwordField).toHaveValue(password, { timeout: 1000 });
     await expect(legalAcceptedField).toBeChecked({ timeout: 1000 });
-  }).toPass();
+  }).toPass({ timeout: 15_000 });
   await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
   await expect(page).toHaveURL(/\/onboarding\/account-type/);
