@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "doppler run -- next dev",
+    "dev": "doppler run -- next dev --port 3000",
     "build": "next build",
     "build:cloudflare": "opennextjs-cloudflare build",
     "deploy": "opennextjs-cloudflare build && wrangler deploy",
