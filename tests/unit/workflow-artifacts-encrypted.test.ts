@@ -116,7 +116,11 @@ describe(".github/workflows/ のアーティファクトのアップロード", 
   it.each(encrypted.map((u) => [u.key, u]))(
     "%s は、同じジョブで先に動く暗号化のステップが成功したときだけ動く（fail closed）",
     (_, { step, steps }) => {
-      const match = /steps\.([\w-]+)\.outcome == 'success'/.exec(step.if ?? "");
+      // 条件を足す（|| 等）と暗号化に失敗しても動きうるため、この形だけを許す
+      const match =
+        /^failure\(\) && steps\.([\w-]+)\.outcome == 'success'$/.exec(
+          step.if ?? ""
+        );
       expect(match, `if: ${step.if}`).not.toBeNull();
       const index = steps.findIndex((s) => s.id === match![1]);
       expect(index).toBeGreaterThanOrEqual(0);
