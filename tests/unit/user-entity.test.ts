@@ -4,6 +4,7 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
 import { makeOrder } from "./use-cases/helpers";
 
 function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
@@ -71,6 +72,15 @@ describe("User", () => {
       expect(() =>
         user.withdraw([makeOrder(), makeOrder()], new Date())
       ).toThrow(ActiveOrdersExistError);
+    });
+    it("退会済みなら MemberWithdrawnError をthrowし、退会日時を上書きしない", () => {
+      const withdrawnAt = new Date(2026, 0, 1);
+      const user = makeUser({ deletedAt: withdrawnAt });
+
+      expect(() => user.withdraw([], new Date(2026, 9, 24))).toThrow(
+        MemberWithdrawnError
+      );
+      expect(user.deletedAt).toEqual(withdrawnAt);
     });
   });
 
