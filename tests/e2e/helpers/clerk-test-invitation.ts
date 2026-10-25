@@ -76,6 +76,9 @@ export async function createTestInvitation(emailAddress: string) {
 
   const existingUserId = await getClerkUserIdByEmail(emailAddress);
   if (existingUserId) {
+    // 有効なusers行を残したままClerkユーザーを消すと、stgのuser.deleted Webhookが
+    // 「退会処理を通らない削除」としてSentryに通知するため、行を先に消す（#531）
+    await deleteMemberRows("clerk_user_id", existingUserId);
     await clerk.users.deleteUser(existingUserId);
   }
 
@@ -224,10 +227,14 @@ export async function signUpAndCompleteOnboarding(
 }
 
 export async function cleanupTestUser(emailAddress: string) {
-  // ClerkのFAPI/Backend APIがこの実行環境で断続的に失敗することがあり、
-  // ここで例外が伝播すると後続のSupabase側の削除が一切実行されず
-  // テスト用会員行が削除されずに残り続けてしまう。Clerk側の後片付けは
-  // ベストエフォートとし、Supabase側の削除は必ず実行する
+  // Clerkユーザーより先にusersの行を消す。有効な行を残したままClerkユーザーを消すと、
+  // stgのuser.deleted Webhookが「退会処理を通らない削除」としてSentryに通知するため（#531）。
+  // 行の削除に失敗したら例外を投げ、Clerkユーザーは残す（次の実行の後片付け・
+  // createTestInvitationが行を消してからClerkユーザーを消す）
+  await deleteMemberRows("email", emailAddress);
+
+  // ClerkのFAPI/Backend APIがこの実行環境で断続的に失敗することがあるため、
+  // Clerk側の後片付けはベストエフォートとする
   try {
     const clerk = await clerkClient();
     const clerkUserId = await getClerkUserIdByEmail(emailAddress);
@@ -236,14 +243,19 @@ export async function cleanupTestUser(emailAddress: string) {
     }
     await revokePendingInvitationsForEmail(emailAddress);
   } catch {
-    // ベストエフォート。Clerk側の後片付けに失敗してもSupabase側の削除は続行する
+    // ベストエフォート
   }
+}
 
+async function deleteMemberRows(
+  column: "email" | "clerk_user_id",
+  value: string
+) {
   const supabase = supabaseAdmin();
   const { data: users } = await supabase
     .from("users")
     .select("id")
-    .eq("email", emailAddress);
+    .eq(column, value);
 
   // usersを直接削除しようとすると、テスト中に作成したaddresses/orders/
   // cart_items/favoritesがuser_idを参照しているため外部キー制約違反で
@@ -269,10 +281,7 @@ export async function cleanupTestUser(emailAddress: string) {
     await supabase.from("favorites").delete().eq("user_id", user.id);
   }
 
-  const { error } = await supabase
-    .from("users")
-    .delete()
-    .eq("email", emailAddress);
+  const { error } = await supabase.from("users").delete().eq(column, value);
   if (error) {
     throw new Error(`テスト用会員行の削除に失敗しました: ${error.message}`);
   }

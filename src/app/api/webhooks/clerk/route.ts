@@ -84,6 +84,26 @@ export async function POST(req: Request) {
     }
   }
 
+  if (event.type === "user.deleted") {
+    const data = event.data as { id: string };
+
+    // 退会処理（withdraw.ts）を通らずにClerkアカウントが消えると、課金が続き会員も有効なまま残る。
+    // 解約の判断は業務判断を伴うため自動で退会扱いにはせず、運営者に通知だけする（#531）
+    const user = await new SupabaseUserRepository(
+      createAdminClient()
+    ).findByClerkUserId(data.id);
+    if (user) {
+      Sentry.captureMessage(
+        "退会処理を通らずにClerkアカウントが削除されました。Stripeのサブスクを解約し、users.deleted_atを設定してください",
+        {
+          level: "error",
+          tags: { webhook: "clerk", eventType: event.type },
+          extra: { clerkUserId: data.id, userId: user.id, svixId },
+        }
+      );
+    }
+  }
+
   if (
     event.type === "organizationMembership.created" ||
     event.type === "organizationMembership.updated"
