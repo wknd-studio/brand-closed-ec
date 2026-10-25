@@ -5,6 +5,7 @@ import {
   signUpViaInvitation,
   cleanupTestUser,
   slotEmail,
+  STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_EMAIL = slotEmail("info+clerk_test_onboarding@wknd-studio.com");
@@ -156,7 +157,9 @@ test.describe.serial("認証済みアクセス", () => {
     await page.locator('input[name="phoneNumber"]').fill("09012345678");
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
-    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    await expect(page).toHaveURL(/checkout\.stripe\.com/, {
+      timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+    });
   });
 });
 
@@ -230,7 +233,9 @@ test.describe.serial("法人として登録", () => {
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    await expect(page).toHaveURL(/checkout\.stripe\.com/, {
+      timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+    });
 
     const { data, error } = await supabaseAdmin()
       .from("users")
