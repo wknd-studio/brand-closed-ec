@@ -16,4 +16,9 @@ export class ClerkAccountGateway implements AccountGateway {
       publicMetadata: { onboarding_completed: completed },
     });
   }
+
+  async disableSelfDelete(clerkUserId: string): Promise<void> {
+    const clerk = await clerkClient();
+    await clerk.users.updateUser(clerkUserId, { deleteSelfEnabled: false });
+  }
 }

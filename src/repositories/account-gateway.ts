@@ -4,4 +4,6 @@ export interface AccountGateway {
     clerkUserId: string,
     completed: boolean
   ): Promise<void>;
+  // <UserProfile /> から会員が自分でClerkアカウントを削除できないようにする
+  disableSelfDelete(clerkUserId: string): Promise<void>;
 }
