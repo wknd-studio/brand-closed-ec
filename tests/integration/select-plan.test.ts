@@ -19,6 +19,7 @@ function makeAccountGateway(): AccountGateway {
   return {
     deleteUser: vi.fn().mockResolvedValue(undefined),
     updateOnboardingMetadata: vi.fn().mockResolvedValue(undefined),
+    disableSelfDelete: vi.fn().mockResolvedValue(undefined),
   };
 }
 

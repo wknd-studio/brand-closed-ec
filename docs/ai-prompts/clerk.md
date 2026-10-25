@@ -85,6 +85,15 @@ NEVER:
 - Use deprecated `<SignedIn>`, `<SignedOut>` (replaced by `<Show>`)
 - Tell users to sign up or get API keys first
 
+## Self Service Delete（このプロジェクト固有）
+
+会員が `<UserProfile />`（`<UserButton />` →「アカウントの管理」）から自分で Clerk アカウントを削除すると、退会処理（`src/use-cases/withdraw.ts`）を通らない。サブスクが解約されず、`users.deleted_at` も入らず、退会ブロック・退会時の ban（#416）も効かない。そのため二重に無効にしている（#530）。
+
+- Clerk ダッシュボードの Self Service Delete は無効にする（本番インスタンスを作るときも同じ。手順は #244）
+- `user.created` の Webhook（`src/use-cases/create-user.ts`）で、各ユーザーを `deleteSelfEnabled: false` に更新している（`AccountGateway.disableSelfDelete`）。ダッシュボードの設定が有効に戻っていても効く。更新に失敗したら Webhook は 500 を返し、Clerk の再送でやり直す（ユーザーが既に削除されていた 404 は成功扱い）
+- それより前に作られたユーザーは `scripts/disable-clerk-self-delete.ts` で一度だけ更新した
+- 退会は必ずアプリの退会処理を通す。`<UserProfile />` の削除ボタンを有効に戻したり、Clerk の削除を直接呼ぶ経路を足したりしない
+
 ## Deprecated (DO NOT use)
 
 ```typescript

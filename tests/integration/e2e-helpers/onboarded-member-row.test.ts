@@ -23,7 +23,15 @@ const supabase = createClient<Database>(
 async function deliverUserCreatedWebhook() {
   await createUser(
     { clerkUserId: CLERK_USER_ID, email: EMAIL, firstName: "", lastName: "" },
-    { userRepo: new SupabaseUserRepository(supabase) }
+    {
+      userRepo: new SupabaseUserRepository(supabase),
+      // 実在しないClerkユーザーのため、Clerkへの更新は何もしない
+      accountGateway: {
+        deleteUser: async () => {},
+        updateOnboardingMetadata: async () => {},
+        disableSelfDelete: async () => {},
+      },
+    }
   );
 }
 
