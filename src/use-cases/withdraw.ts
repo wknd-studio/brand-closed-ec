@@ -49,14 +49,14 @@ export async function withdraw(
   }
 
   try {
-    await accountGateway.deleteUser(input.clerkUserId);
+    await accountGateway.banUser(input.clerkUserId);
   } catch (err) {
     Sentry.captureException(err, {
       tags: { useCase: "withdraw" },
       extra: { clerkUserId: input.clerkUserId },
     });
     console.error(
-      "[退会] Clerk アカウント削除失敗（deleted_at でアクセス遮断済み）:",
+      "[退会] Clerk アカウントの ban 失敗（deleted_at でアクセス遮断済み）:",
       err
     );
   }
