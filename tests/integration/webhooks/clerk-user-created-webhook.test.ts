@@ -7,6 +7,12 @@ import type { Database } from "@/types/database.types";
 // 実DB・実際のsvix署名で確認する。next/headersはテスト環境では使えないため、
 // 送ったリクエストのヘッダーをそのまま返すようにモックする。
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
+// 実在しないClerkユーザーのため、Clerkへの更新（#530: 削除の無効化）はモックする
+vi.mock("@/infrastructure/clerk/clerk-account-gateway", () => ({
+  ClerkAccountGateway: vi.fn(function () {
+    return { disableSelfDelete: vi.fn().mockResolvedValue(undefined) };
+  }),
+}));
 
 import { headers } from "next/headers";
 import { POST } from "@/app/api/webhooks/clerk/route";

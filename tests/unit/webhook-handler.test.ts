@@ -16,12 +16,21 @@ vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({
   SupabaseUserRepository: vi.fn(),
 }));
 
+vi.mock("@/infrastructure/clerk/clerk-account-gateway", () => ({
+  ClerkAccountGateway: vi.fn(),
+}));
+
+vi.mock("@sentry/nextjs", () => ({
+  captureException: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server-admin", () => ({
   createAdminClient: vi.fn().mockReturnValue({}),
 }));
 
 import { headers } from "next/headers";
 import { Webhook } from "svix";
+import * as Sentry from "@sentry/nextjs";
 import { createUser } from "@/use-cases/create-user";
 import { POST } from "@/app/api/webhooks/clerk/route";
 
@@ -113,7 +122,35 @@ describe("POST /api/webhooks/clerk", () => {
           firstName: "太郎",
           lastName: "山田",
         },
-        expect.any(Object)
+        expect.objectContaining({
+          userRepo: expect.anything(),
+          accountGateway: expect.anything(),
+        })
+      );
+    });
+
+    // GitHub issue #530: Clerkへの更新（削除の無効化）が失敗したら2xx以外を返し、
+    // Clerk（svix）に再送させる
+    it("createUser が失敗したら 500 を返し、Sentry に送る", async () => {
+      setupHeaders();
+      const payload = {
+        type: "user.created",
+        data: {
+          id: "user_abc",
+          email_addresses: [{ email_address: "test@example.com" }],
+          first_name: "太郎",
+          last_name: "山田",
+        },
+      };
+      setupWebhook(() => payload);
+      const err = new Error("clerk down");
+      vi.mocked(createUser).mockRejectedValue(err);
+
+      const res = await POST(makeRequest(JSON.stringify(payload)));
+      expect(res.status).toBe(500);
+      expect(Sentry.captureException).toHaveBeenCalledWith(
+        err,
+        expect.anything()
       );
     });
   });
