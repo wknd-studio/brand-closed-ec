@@ -336,13 +336,19 @@ export class LayerCoverageReporter implements Reporter {
     const skip = (why: string) =>
       this.log(`\n層ごとのカバレッジ検査: ${why}ため省略しました`);
     if (reason !== "passed") return skip("テストが成功しなかった");
-    // vitest の呼び出し順が変わる等で結果が届かなかったとき、黙って緑にしない
-    if (!coverage) return skip("カバレッジの結果を受け取れなかった");
     if (vitest.config.testNamePattern) return skip("テスト名で絞って実行した");
     // 実行しなかったテストの分が0%になり、検査の意味が無い
     const all = await vitest.globTestSpecifications();
     if (testModules.length < all.length)
       return skip("テストファイルを絞って実行した");
+    // vitest の更新で呼び出し順が変わる等で結果が届かなかったとき、検査が止まったまま緑にしない
+    if (!coverage) {
+      this.log(
+        "\n層ごとのカバレッジ検査: 失敗（カバレッジの結果を受け取れなかった。scripts/ci/layer-coverage.ts の LayerCoverageReporter が vitest から結果を受け取れているか確認する）"
+      );
+      process.exitCode = 1;
+      return;
+    }
 
     const files = coverage
       .files()
