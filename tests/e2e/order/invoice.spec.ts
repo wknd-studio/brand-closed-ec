@@ -2,6 +2,7 @@ import { createClient } from "next-sanity";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect, withWorkerSuffix } from "../helpers/test-member";
+import { clickAddToCart } from "../helpers/cart";
 
 // 既存シードデータには要相談商品（is_negotiable: true）が1件も存在しないため、
 // テスト専用のブランド・商品を固定の明示的なIDで作成する。
@@ -64,20 +65,27 @@ test.describe("要相談商品の見積依頼フロー", () => {
     member,
   }) => {
     await page.goto("/shop");
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await page.getByRole("link", { name: new RegExp(TEST_BRAND_NAME) }).click();
-    await page.waitForLoadState("networkidle");
+    const brandLink = page.getByRole("link", {
+      name: new RegExp(TEST_BRAND_NAME),
+    });
+    await expect(brandLink).toBeVisible();
+    await brandLink.click();
+    await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}$`));
 
     // ブランドの商品一覧ページで価格が「要相談」と表示されることを確認
     await expect(page.getByText("価格要相談").first()).toBeVisible();
 
-    await page.locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`).first().click();
-    await page.waitForLoadState("networkidle");
+    const productLink = page
+      .locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`)
+      .first();
+    await expect(productLink).toBeVisible();
+    await productLink.click();
+    await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}/[^/]+$`));
 
     // 商品詳細ページでも価格が「要相談」と表示されることを確認
     await expect(page.getByText("価格要相談").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "カートに追加" }).click();
+    await clickAddToCart(page);
 
     const { userId } = member;
     await supabaseAdmin()
