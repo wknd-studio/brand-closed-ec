@@ -92,6 +92,7 @@ NEVER:
 - Clerk ダッシュボードの Self Service Delete は無効にする（本番インスタンスを作るときも同じ。手順は #244）
 - `user.created` の Webhook（`src/use-cases/create-user.ts`）で、各ユーザーを `deleteSelfEnabled: false` に更新している（`AccountGateway.disableSelfDelete`）。ダッシュボードの設定が有効に戻っていても効く。更新に失敗したら Webhook は 500 を返し、Clerk の再送でやり直す（ユーザーが既に削除されていた 404 は成功扱い）
 - それより前に作られたユーザーは `scripts/disable-clerk-self-delete.ts` で一度だけ更新した
+- それでも退会処理を通らずに削除されたら、`user.deleted` の Webhook が Sentry に error を送る（`users` 行が有効な会員のときだけ。自動で退会扱いにはしない。対応手順は `docs/runbooks/clerk-user-deleted.md`。#531）
 - 退会は必ずアプリの退会処理を通す。`<UserProfile />` の削除ボタンを有効に戻したり、Clerk の削除を直接呼ぶ経路を足したりしない
 
 ## Deprecated (DO NOT use)
