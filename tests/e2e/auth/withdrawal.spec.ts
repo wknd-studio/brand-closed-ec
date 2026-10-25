@@ -47,7 +47,7 @@ test.describe.serial("会員の退会", () => {
     await cleanupTestUser(email);
   });
 
-  test("退会するとログアウトされ、同じメールアドレス・パスワードでサインインできない", async ({
+  test("退会するとその場でログアウトされ、同じメールアドレス・パスワードでサインインできない", async ({
     page,
   }) => {
     // clerk.signInはClerkを読み込む非保護ページで呼ぶ必要がある
@@ -62,7 +62,18 @@ test.describe.serial("会員の退会", () => {
     // 確認ダイアログ内の「退会する」で確定する
     await page.getByRole("button", { name: "退会する" }).last().click();
 
-    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/withdrawn$/, { timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { name: "退会が完了しました" })
+    ).toBeVisible();
+    // banでClerkのセッションはその場で失効している
+    const { data: activeSessions } = await (
+      await clerkClient()
+    ).sessions.getSessionList({ userId: clerkUserId, status: "active" });
+    expect(activeSessions).toEqual([]);
+
+    await page.getByRole("button", { name: "トップへ戻る" }).click();
+    await expect(page).toHaveURL(/\/$/);
     // ログアウトしたので、保護されたページを開くとサインインへ戻される
     await page.goto("/shop");
     await expect(page).toHaveURL(/\/sign-in/);
@@ -71,13 +82,15 @@ test.describe.serial("会員の退会", () => {
     await page.goto("/sign-in");
     await page.locator("#identifier-field").fill(email);
     await page.locator('[data-localization-key="formButtonPrimary"]').click();
-    const passwordField = page.locator("#password-field");
-    // banされたユーザーは、メールアドレスの段階で弾かれることもある
-    if (await passwordField.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await passwordField.fill(TEST_PASSWORD);
-      await page.locator('[data-localization-key="formButtonPrimary"]').click();
-    }
-    await expect(page.locator(".cl-formFieldErrorText").first()).toBeVisible();
+    await page.locator("#password-field").fill(TEST_PASSWORD);
+    const passwordAttempt = page.waitForResponse((res) =>
+      res.url().includes("/attempt_first_factor")
+    );
+    await page.locator('[data-localization-key="formButtonPrimary"]').click();
+    // banされたユーザーは、パスワードが正しくてもClerkが403（user_banned）で弾く
+    const response = await passwordAttempt;
+    expect(response.status()).toBe(403);
+    expect((await response.json()).errors[0].code).toBe("user_banned");
     await expect(page).not.toHaveURL(/\/sign-in\/(factor-two|client-trust)/);
     await page.goto("/shop");
     await expect(page).toHaveURL(/\/sign-in/);
