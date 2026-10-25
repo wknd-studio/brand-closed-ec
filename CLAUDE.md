@@ -30,6 +30,7 @@ Next.js 16 App Router + TypeScript strict / Cloudflare Pages + Workers (`@cloudf
 
 - **Next.js**: `docs/ai-prompts/nextjs.md`を必ず参照すること
 - **Clerk**: `docs/ai-prompts/clerk.md` を必ず参照すること（非推奨APIの使用禁止・`<Show>` コンポーネントの使用など重要なルールあり）
+- **層の責務と依存のルール**: `docs/ai-prompts/architecture.md` を必ず参照すること（新しいコードの置き場所の判断フロー・書き込みは use-case／読み取りは Query Service・`src/lib` に置かないものなど。既存コードを真似る前にこちらを優先する）
 - **Sentry**: `docs/ai-prompts/sentry.md` を必ず参照すること（catchブロックでの`Sentry.captureException`送信・`setUser`のスコープに関する重要なルールあり）
 
 ## Gitブランチ戦略（厳守）
@@ -137,6 +138,8 @@ feature/* →  Cloudflare Pages Preview URL
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/domain/entities/*`, `src/domain/value-objects/*`    | ユニットテスト（DBもモックも無し）                                                        | ロジック・計算の分岐が正しいか                                                                                                        |
 | `src/infrastructure/supabase/*`（リポジトリ実装）        | 統合テスト（実DB接続）                                                                    | 実際のSELECT/RLSがエラーにならず通るか（`SelectQueryError`等はここで初めて表面化する）                                                |
+| `src/queries/*` の実装（Query Service）                  | 統合テスト（実DB接続）                                                                    | 実際のSELECT/RLSが通り、画面用のDTOとランクによる表示制限が正しいか                                                                   |
+| `src/composition/*`                                      | 不要（組み立てだけ。使う側の統合テスト・E2Eで通る）                                       | —                                                                                                                                     |
 | `src/use-cases/*`                                        | ユニットテスト（リポジトリをモック）                                                      | Webhook再配信時の冪等性・ロールバック等の分岐                                                                                         |
 | `src/app/api/**`（Webhookハンドラー・APIルート）         | 統合テスト（実DB + 実際のHTTPリクエスト）                                                 | ルーティング・署名検証を含めた一連の処理                                                                                              |
 | 会員登録〜決済のような複数画面をまたぐクリティカルフロー | E2E（Playwright）。**新規追加は最小限**、既存フローに影響する変更は該当specを実行して確認 | 実際にブラウザで動くか。テストDBのテーブル定義変更時は`tests/e2e/`内の`.insert()`/`.update()`/`.select()`も対象に含める（下記の理由） |
