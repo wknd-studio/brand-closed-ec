@@ -14,10 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  parseRecipients,
-  selectSupabaseContainers,
-} from "../../scripts/ci/collect-supabase-logs";
+import { selectSupabaseContainers } from "../../scripts/ci/collect-supabase-logs";
 
 const SCRIPT = path.resolve(
   __dirname,
@@ -29,57 +26,6 @@ const RECIPIENT_A =
   "age127ntmsa69zlmwspf6xgpctzwvtrn2hypvx603vk3wlt9m4sn59xsfz43c6";
 const RECIPIENT_B =
   "age15se39c5g8nykvympauejz5w96y6r3vudfhh0mrcvnnl4s2p7cq8s5n688h";
-
-describe("parseRecipients", () => {
-  it("コメント・空行を除いて、公開鍵を順に返す", () => {
-    expect(
-      parseRecipients(
-        `# CIのログの暗号化に使う公開鍵\n\n${RECIPIENT_A}\n  ${RECIPIENT_B}  # 予備\n`
-      )
-    ).toEqual([RECIPIENT_A, RECIPIENT_B]);
-  });
-
-  it("公開鍵が1つも無ければ失敗する", () => {
-    expect(() => parseRecipients("")).toThrow("公開鍵");
-    expect(() => parseRecipients("# コメントだけ\n\n")).toThrow("公開鍵");
-  });
-
-  it("age1で始まる公開鍵の形でない行があれば、行番号を出して失敗する", () => {
-    expect(() => parseRecipients(`${RECIPIENT_A}\nssh-ed25519 AAAA`)).toThrow(
-      "2行目"
-    );
-    // 1文字欠けている
-    expect(() => parseRecipients(RECIPIENT_A.slice(0, -1))).toThrow("1行目");
-    // 秘密鍵を誤って置いた
-    expect(() =>
-      parseRecipients(
-        "AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ"
-      )
-    ).toThrow("1行目");
-  });
-
-  it("不正な行の中身はエラーメッセージに出さない（秘密鍵を誤って置いた場合に備える）", () => {
-    const secretLike =
-      "AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ";
-    expect(() => parseRecipients(secretLike)).toThrow(
-      expect.objectContaining({
-        message: expect.not.stringContaining(secretLike),
-      })
-    );
-  });
-});
-
-describe("scripts/ci/log-recipients.txt（コミットされた公開鍵のファイル）", () => {
-  const file = path.resolve(__dirname, "../../scripts/ci/log-recipients.txt");
-
-  it("あれば、ageの公開鍵だけが書かれている（秘密鍵を誤ってコミットしていない）", () => {
-    // 本物の公開鍵を置くまではファイルが無く、CIのログ収集はfail closedで失敗する
-    if (!existsSync(file)) return;
-    const text = readFileSync(file, "utf8");
-    expect(text).not.toContain("AGE-SECRET-KEY-");
-    expect(parseRecipients(text).length).toBeGreaterThan(0);
-  });
-});
 
 describe("selectSupabaseContainers", () => {
   it("supabase_ で始まるコンテナだけを返す", () => {
@@ -191,10 +137,13 @@ if [ -n "$FAIL_AGE" ]; then echo "partial" > "$out"; exit 1; fi
     );
   }
 
-  // スクリプトが作る一時ディレクトリ（tsxのキャッシュ等は除く）
+  // スクリプトが作る一時ディレクトリ（tsxのキャッシュ等は除く）。暗号化は
+  // scripts/ci/encrypt-artifact.ts の一時ディレクトリで行う
   function leftoverTempDirs() {
-    return readdirSync(tmpDir).filter((name) =>
-      name.startsWith("supabase-logs-")
+    return readdirSync(tmpDir).filter(
+      (name) =>
+        name.startsWith("supabase-logs-") ||
+        name.startsWith("encrypt-artifact-")
     );
   }
 

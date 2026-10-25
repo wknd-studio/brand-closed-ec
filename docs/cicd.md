@@ -110,7 +110,7 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`stg_ci`、GitHub Secretsの`DOPPLER_TOKEN_CI`で参照）から取得する。`stg_ci`は`stg`のbranch configで、ClerkのキーだけをCI専用のClerk開発インスタンスのもので上書きし、それ以外は`stg`の値を引き継ぐ。ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
 
-どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、失敗したテストの動画・トレースをGitHub ActionsのArtifacts（`playwright-report-pr`・`playwright-report-stg`）としてアップロードする（保持期間7日）。ダウンロードして`.mp4`をそのまま再生するか、`pnpm exec playwright show-trace <trace.zip>`でトレースビューアを開いて確認できる。
+どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
 
 ### main への PR で stg の E2E の結果を確かめる（`Stg E2E Check`）
 
@@ -179,17 +179,35 @@ E2E テストはチェックアウト・Invoice発行等でメール送信コー
 
 ---
 
-## 失敗時のSupabaseのログ（暗号化）
+## 失敗時のアーティファクト（暗号化）
 
-`Integration Tests`・`E2E Tests (PR)` が失敗したとき、ジョブ内で起動したローカルSupabaseのコンテナのログを、アーティファクト（`supabase-logs-integration-<試行回数>`・`supabase-logs-e2e-pr-<試行回数>`、保持期間3日）として残す。対象は Kong・PostgREST・Postgres・Auth 等の `supabase_*` のコンテナで、統合テストがときどき502で落ちる原因を追うためのもの（#497）。
+このリポジトリはpublicで、アーティファクトはGitHubにログインした誰でもダウンロードできる。そのため、テストの失敗時に残すものは [age](https://age-encryption.org/) の公開鍵で暗号化し、暗号化したファイル（`.age`）だけをアップロードする。中身に何が含まれていても漏れないよう、値を探して伏せるのではなく暗号化する。
 
-このリポジトリはpublicで、アーティファクトはGitHubにログインした誰でもダウンロードできる。そのため、ログは [age](https://age-encryption.org/) の公開鍵で暗号化し、暗号化したファイル `supabase-logs.tar.gz.age` だけをアップロードする。
+| アーティファクト                       | ジョブ            | 中身                                                                                                                                                                 | 暗号化したファイル             |
+| -------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `supabase-logs-integration-<試行回数>` | Integration Tests | ジョブ内で起動したローカルSupabaseの `supabase_*` のコンテナ（Kong・PostgREST・Postgres・Auth等）のログ。統合テストがときどき502で落ちる原因を追うためのもの（#497） | `supabase-logs.tar.gz.age`     |
+| `supabase-logs-e2e-pr-<試行回数>`      | E2E Tests (PR)    | 同上                                                                                                                                                                 | `supabase-logs.tar.gz.age`     |
+| `playwright-report-pr-<試行回数>`      | E2E Tests (PR)    | `playwright-report/`・`test-results/`（HTMLレポート・動画・trace.zip）。trace.zipにはブラウザの通信（ヘッダー・本文・Cookie）と画面のスナップショットが入る（#513）  | `playwright-report.tar.gz.age` |
+| `playwright-report-stg-<試行回数>`     | E2E Tests (stg)   | 同上（stgに対するテスト）                                                                                                                                            | `playwright-report.tar.gz.age` |
 
-- **公開鍵**: `scripts/ci/log-recipients.txt` に置く（1行に1つ。`#` 以降はコメント）
+どれも保持期間は3日で、失敗したとき（Playwrightのレポートは E2E のステップが失敗したとき）だけ作る。
+
+- **公開鍵**: `scripts/ci/log-recipients.txt` に置く（1行に1つ。`#` 以降はコメント）。上の全てのアーティファクトで同じ鍵を使う
 - **秘密鍵**: CI（GitHub secrets・Dopplerを含む）にもリポジトリにも置かない。復号できるのは、秘密鍵を持つ人の手元だけ
-- **fail closed**: 公開鍵のファイルが無い・空・不正なとき、または暗号化に失敗したときは、ログを集めるステップが失敗し、何もアップロードしない
-- **Actionsのログ**: ファイル名・件数・サイズだけを出す。ログの中身は出さない
-- **Dopplerのシークレット**: ログを集めるステップには渡していない
+- **fail closed**: 公開鍵のファイルが無い・空・不正なとき、ageのインストールや暗号化に失敗したときは、暗号化のステップが失敗し、何もアップロードしない
+- **Actionsのログ**: パス・ファイル名・件数・サイズだけを出す。中身は出さない
+- **Dopplerのシークレット**: 暗号化のステップには渡していない
+- **暗号化の処理**: `scripts/ci/encrypt-artifact.ts`（`<出力先.age> <パス>...` をtar.gzにまとめて暗号化する）。Supabaseのログを集める `scripts/ci/collect-supabase-logs.ts` も、これを使って暗号化する
+
+### 暗号化しないアーティファクト
+
+`.github/workflows/` のアップロードを足すときは、暗号化するか、ここに理由を書いて対象外にする。`tests/unit/workflow-artifacts-encrypted.test.ts` が、全てのアップロードが `.age` だけを置くか、対象外の一覧にあるかを検査する（一覧は同ファイルの `EXEMPT`）。
+
+| アーティファクト           | ワークフロー            | 対象外にする理由                                                                                                                     |
+| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `pr-diff-summary`          | PR Diff Summary         | PRの差分を区分ごとに集計したMarkdownで、同じ内容をPRのコメントに公開している。publicなPRの差分から作るだけで、シークレットを読まない |
+| `mechanical-change-report` | Mechanical Change Check | 機械的な変更の再実行結果のMarkdownで、同じ内容をPRのコメントに公開している。シークレットを読まない                                   |
+| `github-pages`             | Issue Deps Graph        | 依存グラフのページで、GitHub Pagesとして公開するためのもの                                                                           |
 
 ### 鍵を作る・追加する
 
@@ -206,14 +224,31 @@ age-keygen -y ~/.config/age/brand-closed-ec-ci-logs.txt  # 公開鍵（age1...�
 
 ### ダウンロードして復号する
 
+`<run-id>` は、失敗したワークフロー実行のURL（`.../actions/runs/<run-id>`）の数字。アーティファクト名の末尾は試行回数（再実行なら2以降）。
+
+Supabaseのログ:
+
 ```bash
 mkdir -p /tmp/supabase-logs && cd /tmp/supabase-logs
-gh run download <run-id> -n supabase-logs-integration-1   # E2Eなら supabase-logs-e2e-pr-1。再実行なら末尾が試行回数
+gh run download <run-id> -n supabase-logs-integration-1   # E2Eなら supabase-logs-e2e-pr-1
 age -d -i ~/.config/age/brand-closed-ec-ci-logs.txt supabase-logs.tar.gz.age | tar -xzf -
 ls supabase-logs/   # docker-ps.txt と <コンテナ名>.log
 ```
 
-`<run-id>` は、失敗したワークフロー実行のURL（`.../actions/runs/<run-id>`）の数字。
+Playwrightのレポート（動画・トレース）:
+
+```bash
+mkdir -p /tmp/playwright-report && cd /tmp/playwright-report
+gh run download <run-id> -n playwright-report-pr-1   # stgなら playwright-report-stg-1
+age -d -i ~/.config/age/brand-closed-ec-ci-logs.txt playwright-report.tar.gz.age | tar -xzf -
+ls   # playwright-report/ と test-results/
+
+# 以下はリポジトリのチェックアウトで実行する（Playwrightのバージョンを揃えるため）
+pnpm exec playwright show-report /tmp/playwright-report/playwright-report
+pnpm exec playwright show-trace /tmp/playwright-report/test-results/<テスト名>/trace.zip
+```
+
+動画（`test-results/<テスト名>/video.webm`）はそのままブラウザ等で再生できる。
 
 ---
 
