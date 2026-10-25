@@ -13,10 +13,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { parseRecipients } from "../../scripts/ci/encrypt-artifact";
 
 const SCRIPT = path.resolve(__dirname, "../../scripts/ci/encrypt-artifact.ts");
+// 作業ディレクトリをリポジトリの外にして実行するため、tsxはリポジトリのものを絶対パスで読み込む
+const TSX = pathToFileURL(
+  path.resolve(__dirname, "../../node_modules/tsx/dist/loader.mjs")
+).href;
 
 // テスト用に作って秘密鍵を捨てたageの公開鍵（この鍵で暗号化したものは誰にも復号できない）
 const RECIPIENT_A =
@@ -151,7 +156,7 @@ if [ -n "$FAIL_AGE" ]; then echo "partial" > "$out"; exit 1; fi
       process.execPath,
       [
         "--import",
-        "tsx",
+        TSX,
         SCRIPT,
         options.out ?? outFile,
         ...(options.inputs ?? ["playwright-report", "test-results"]),

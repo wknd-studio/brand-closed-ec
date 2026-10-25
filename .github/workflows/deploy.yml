@@ -141,6 +141,13 @@ jobs:
             pnpm test:integration
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Install age (暗号化用・失敗時のみ)
+        # 失敗時に残すアーティファクトを暗号化するために使う（#497・#513）。インストールに失敗したら
+        # 後続の暗号化のステップも失敗し、何もアップロードしない
+        if: failure()
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age > /dev/null
       - name: Collect local Supabase logs (暗号化・失敗時のみ)
         # 統合テストがときどきKongの502（upstream server）で落ちる原因を追うため、
         # Kong・PostgREST・Postgres等のコンテナのログを残す（#497）。このリポジトリはpublicで
@@ -150,11 +157,7 @@ jobs:
         # 公開鍵のファイルが無い・不正、または暗号化に失敗したときは、何も書き出さずに失敗する
         id: supabase-logs
         if: failure()
-        shell: bash
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq age > /dev/null
-          pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs/supabase-logs.tar.gz.age
+        run: pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs/supabase-logs.tar.gz.age
       - name: Upload local Supabase logs (暗号化済み・失敗時のみ)
         # 暗号化に成功したときだけ、暗号化したファイルだけをアップロードする。
         # 再実行で名前が重ならないよう試行回数を付ける
@@ -265,15 +268,17 @@ jobs:
             pnpm test:e2e
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
+      - name: Install age (暗号化用・失敗時のみ)
+        # Integration Testsの同名のステップと同じ
+        if: failure()
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age > /dev/null
       - name: Collect local Supabase logs (暗号化・失敗時のみ)
         # Integration Testsの同名のステップと同じ（#497）
         id: supabase-logs
         if: failure()
-        shell: bash
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq age > /dev/null
-          pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs/supabase-logs.tar.gz.age
+        run: pnpm -s tsx scripts/ci/collect-supabase-logs.ts supabase-logs/supabase-logs.tar.gz.age
       - name: Upload local Supabase logs (暗号化済み・失敗時のみ)
         if: failure() && steps.supabase-logs.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -282,16 +287,25 @@ jobs:
           path: supabase-logs/supabase-logs.tar.gz.age
           if-no-files-found: error
           retention-days: 3
-      - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
-        # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
-        # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけアップロードする
+      - name: Encrypt Playwright report (動画・トレース含む、E2Eの失敗時のみ)
+        # trace.zipにはブラウザの通信（ヘッダー・本文・Cookie）と画面のスナップショットが入る。
+        # このリポジトリはpublicでアーティファクトは誰でもダウンロードできるため、
+        # scripts/ci/log-recipients.txtのageの公開鍵で暗号化し、暗号化したファイルだけを置く（#513）。
+        # 秘密鍵はCIに置かない（復号の手順はdocs/cicd.md）。暗号化だけなのでDopplerのシークレットは渡さない。
+        # 公開鍵のファイルが無い・不正、または暗号化に失敗したときは、何も書き出さずに失敗する
+        id: playwright-report
         if: failure() && steps.e2e.outcome == 'failure'
+        run: pnpm -s tsx scripts/ci/encrypt-artifact.ts playwright-report-encrypted/playwright-report.tar.gz.age playwright-report test-results
+      - name: Upload Playwright report (暗号化済み・E2Eの失敗時のみ)
+        # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
+        # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけ、暗号化に成功したときだけアップロードする。
+        # 再実行で名前が重ならないよう試行回数を付ける
+        if: failure() && steps.playwright-report.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-pr
-          path: |
-            playwright-report/
-            test-results/
+          name: playwright-report-pr-${{ github.run_attempt }}
+          path: playwright-report-encrypted/playwright-report.tar.gz.age
+          if-no-files-found: error
           retention-days: 3
 
   deploy-stg:
@@ -449,14 +463,24 @@ jobs:
         run: doppler run -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Upload Playwright report (動画・トレース含む、失敗時のみ)
-        # Freeプランのartifactストレージ上限(500MB)を動画・トレース付きレポートで
-        # 圧迫しないよう、デバッグに使うE2Eステップの失敗時だけアップロードする
+      - name: Install age (暗号化用・E2Eの失敗時のみ)
+        # Playwrightのレポートを暗号化するために使う（#513）
         if: failure() && steps.e2e.outcome == 'failure'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age > /dev/null
+      - name: Encrypt Playwright report (動画・トレース含む、E2Eの失敗時のみ)
+        # E2E Tests (PR)の同名のステップと同じ（#513）。stgに対するテストのため、
+        # trace.zipにはstgのレスポンス・Cookieが入る
+        id: playwright-report
+        if: failure() && steps.e2e.outcome == 'failure'
+        run: pnpm -s tsx scripts/ci/encrypt-artifact.ts playwright-report-encrypted/playwright-report.tar.gz.age playwright-report test-results
+      - name: Upload Playwright report (暗号化済み・E2Eの失敗時のみ)
+        # E2E Tests (PR)の同名のステップと同じ
+        if: failure() && steps.playwright-report.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-stg
-          path: |
-            playwright-report/
-            test-results/
+          name: playwright-report-stg-${{ github.run_attempt }}
+          path: playwright-report-encrypted/playwright-report.tar.gz.age
+          if-no-files-found: error
           retention-days: 3
