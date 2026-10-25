@@ -85,6 +85,13 @@ describe("E2Eのテスト会員の後片付け・準備", () => {
     expect(await countActiveRows()).toBe(0);
   });
 
+  it("cleanupTestUserは、Clerkユーザーの削除に失敗しても例外を投げず、usersの行は消えている", async () => {
+    clerkMock.users.deleteUser.mockRejectedValue(new Error("Clerk API error"));
+
+    await expect(cleanupTestUser(EMAIL)).resolves.toBeUndefined();
+    expect(await countActiveRows()).toBe(0);
+  });
+
   it("createTestInvitationは、前回のClerkユーザーを消す前にそのusersの行を消す", async () => {
     await createTestInvitation(EMAIL);
 

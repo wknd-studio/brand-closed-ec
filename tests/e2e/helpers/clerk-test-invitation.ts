@@ -229,21 +229,21 @@ export async function signUpAndCompleteOnboarding(
 export async function cleanupTestUser(emailAddress: string) {
   // Clerkユーザーより先にusersの行を消す。有効な行を残したままClerkユーザーを消すと、
   // stgのuser.deleted Webhookが「退会処理を通らない削除」としてSentryに通知するため（#531）。
+  // 行の削除に失敗したら例外を投げ、Clerkユーザーは残す（次の実行の後片付け・
+  // createTestInvitationが行を消してからClerkユーザーを消す）
+  await deleteMemberRows("email", emailAddress);
+
   // ClerkのFAPI/Backend APIがこの実行環境で断続的に失敗することがあるため、
-  // Clerk側の後片付けはベストエフォートとし、行の削除が失敗しても必ず試みる
+  // Clerk側の後片付けはベストエフォートとする
   try {
-    await deleteMemberRows("email", emailAddress);
-  } finally {
-    try {
-      const clerk = await clerkClient();
-      const clerkUserId = await getClerkUserIdByEmail(emailAddress);
-      if (clerkUserId) {
-        await clerk.users.deleteUser(clerkUserId).catch(() => {});
-      }
-      await revokePendingInvitationsForEmail(emailAddress);
-    } catch {
-      // ベストエフォート
+    const clerk = await clerkClient();
+    const clerkUserId = await getClerkUserIdByEmail(emailAddress);
+    if (clerkUserId) {
+      await clerk.users.deleteUser(clerkUserId).catch(() => {});
     }
+    await revokePendingInvitationsForEmail(emailAddress);
+  } catch {
+    // ベストエフォート
   }
 }
 
