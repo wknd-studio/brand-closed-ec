@@ -56,7 +56,7 @@ describe("withdraw", () => {
     ).rejects.toThrow(ActiveOrdersExistError);
   });
 
-  it("有料会員: Supabase論理削除 → Stripe解約 → Clerk削除を順に実行する", async () => {
+  it("有料会員: Supabase論理削除 → Stripe解約 → Clerk ban を順に実行する", async () => {
     const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
@@ -82,7 +82,7 @@ describe("withdraw", () => {
     expect(subscriptionGateway.cancelSubscription).toHaveBeenCalledWith(
       "sub_123"
     );
-    expect(accountGateway.deleteUser).toHaveBeenCalledWith("clerk-1");
+    expect(accountGateway.banUser).toHaveBeenCalledWith("clerk-1");
   });
 
   it("アクティブなsubscriptionがない会員: Stripe解約をスキップする", async () => {
@@ -105,7 +105,7 @@ describe("withdraw", () => {
     );
 
     expect(subscriptionGateway.cancelSubscription).not.toHaveBeenCalled();
-    expect(accountGateway.deleteUser).toHaveBeenCalled();
+    expect(accountGateway.banUser).toHaveBeenCalled();
   });
 
   it("Stripe解約失敗時はdeleted_atをロールバックしてエラーをthrowする", async () => {
@@ -136,10 +136,10 @@ describe("withdraw", () => {
 
     const rollbackCall = vi.mocked(userRepo.save).mock.calls[1];
     expect(rollbackCall[0].deletedAt).toBeNull();
-    expect(accountGateway.deleteUser).not.toHaveBeenCalled();
+    expect(accountGateway.banUser).not.toHaveBeenCalled();
   });
 
-  it("Clerk削除失敗時もvoidで正常終了し、console.errorでログを残す", async () => {
+  it("Clerk ban 失敗時もvoidで正常終了し、console.errorでログを残す", async () => {
     const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
@@ -148,7 +148,7 @@ describe("withdraw", () => {
     );
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
-    vi.mocked(accountGateway.deleteUser).mockRejectedValue(
+    vi.mocked(accountGateway.banUser).mockRejectedValue(
       new Error("Clerk error")
     );
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -170,7 +170,7 @@ describe("withdraw", () => {
     consoleSpy.mockRestore();
   });
 
-  it("Clerk削除失敗時にSentry.captureExceptionを呼ぶ", async () => {
+  it("Clerk ban 失敗時にSentry.captureExceptionを呼ぶ", async () => {
     const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
@@ -180,7 +180,7 @@ describe("withdraw", () => {
     const subscriptionGateway = makeSubscriptionGateway();
     const accountGateway = makeAccountGateway();
     const error = new Error("Clerk error");
-    vi.mocked(accountGateway.deleteUser).mockRejectedValue(error);
+    vi.mocked(accountGateway.banUser).mockRejectedValue(error);
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(Sentry.captureException).mockClear();
 

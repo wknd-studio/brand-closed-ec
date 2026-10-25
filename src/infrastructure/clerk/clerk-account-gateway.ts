@@ -3,9 +3,9 @@ import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import type { AccountGateway } from "@/repositories/account-gateway";
 
 export class ClerkAccountGateway implements AccountGateway {
-  async deleteUser(clerkUserId: string): Promise<void> {
+  async banUser(clerkUserId: string): Promise<void> {
     const clerk = await clerkClient();
-    await clerk.users.deleteUser(clerkUserId);
+    await clerk.users.banUser(clerkUserId);
   }
 
   async updateOnboardingMetadata(
