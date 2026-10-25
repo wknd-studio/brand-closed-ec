@@ -11,27 +11,36 @@ import type {
 import { LAYER_COVERAGE } from "./layer-coverage.config";
 
 /**
- * CLAUDE.md「変更した層ごとの確認ルール」を、層ごと・ファイルごとの行カバレッジで検査する（#455）。
+ * CLAUDE.md「変更した層ごとの確認ルール」を、層ごと・ファイルごとのカバレッジで検査する（#455）。
  * その層に合った種類のテスト（domain・use-cases はユニットテスト、リポジトリ実装・APIルートは
- * 実DBの統合テスト）で、実装の行が実際に実行されたかを見る。テストが import していても
+ * 実DBの統合テスト）で、実装が実際に実行されたかを見る。テストが import していても
  * モックに差し替えているだけで実装が一度も実行されない、ということをここで止める。
  *
- * vitest の coverage.thresholds を使わないのは、失敗時に「どの種類のテストが要るか・直し方」を
- * 出すためと、例外を issue番号付きで管理し、直ったら例外から外させるため。
+ * 指標は層ごとに選ぶ。業務ロジック（domain・use-cases）は、すべての分岐にユニットテストで
+ * 到達できるので分岐まで見る。外部との境界（アダプタ・Supabase の実装・APIルート）は、
+ * DBエラー等の分岐を層に合ったテストで起こしにくいため、各関数が一度は実行されたかだけを見る。
+ * 行の割合は使わない（小さいファイルでは1〜2行で大きく動き、設計どおりでも下回るため）。
+ *
+ * vitest の coverage.thresholds を使わないのは、失敗時に「どの種類のテストが要るか・
+ * 実行されなかった関数や分岐・直し方」を出し、エージェントがPRの前に自分で直せるようにするためと、
+ * 例外を issue番号付きで管理し、直ったら例外から外させるため。
  * 対象・閾値・例外は scripts/ci/layer-coverage.config.ts に書く。
  */
 
 export const LAYER_COVERAGE_CONFIG_PATH = "scripts/ci/layer-coverage.config.ts";
 const GUIDE = "CLAUDE.md「変更した層ごとの確認ルール」";
+// 実行されなかった箇所を出す上限（多すぎるとログが読めない）
+const MAX_LISTED_UNCOVERED = 10;
 
 export type Suite = "unit" | "integration";
+export type Metric = "functions" | "branches";
 
 export type Layer = {
   name: string;
   suite: Suite;
   include: string[];
-  /** ファイルごとの行カバレッジ（%）の下限 */
-  minLines: number;
+  /** ファイルごとのカバレッジ（%）の下限。書いていない指標は検査しない */
+  min: Partial<Record<Metric, number>>;
   /** 失敗時に出す、この層に要るテスト */
   howToTest: string;
 };
@@ -43,18 +52,37 @@ export type LayerCoverageConfig = {
   exceptions: CoverageException[];
 };
 
-export type FileLines = { file: string; covered: number; total: number };
+export type MetricCoverage = {
+  covered: number;
+  total: number;
+  /** 実行されなかった関数（名前と行）・分岐（行） */
+  uncovered: string[];
+};
+
+export type FileCoverage = { file: string } & Record<Metric, MetricCoverage>;
+
+export type Miss = {
+  metric: Metric;
+  pct: number;
+  min: number;
+  uncovered: string[];
+};
 
 export type LayerCoverageResult = {
   suite: Suite;
-  failures: { file: string; layer: Layer; pct: number; shortfall: number }[];
-  excepted: { file: string; issue: number; pct: number }[];
+  failures: { file: string; layer: Layer; misses: Miss[] }[];
+  excepted: { file: string; issue: number }[];
   staleExceptions: { exception: CoverageException; reason: string }[];
 };
 
 const SUITE_LABEL: Record<Suite, string> = {
   unit: "ユニットテスト（pnpm test・tests/unit/）",
   integration: "統合テスト（task test:integration・tests/integration/）",
+};
+
+const METRIC_LABEL: Record<Metric, string> = {
+  functions: "関数",
+  branches: "分岐",
 };
 
 export function coverageInclude(
@@ -89,12 +117,84 @@ export function layerCoverageOptions(suite: Suite) {
   };
 }
 
+/** istanbul のファイルごとのデータ（FileCoverage#toJSON()）のうち、ここで使う部分 */
+export type FileCoverageData = {
+  fnMap: Record<string, { name: string; loc: { start: { line: number } } }>;
+  f: Record<string, number>;
+  branchMap: Record<
+    string,
+    {
+      loc: { start: { line: number } };
+      locations: { start?: { line?: number } }[];
+    }
+  >;
+  b: Record<string, number[]>;
+};
+
+export function summarizeFileCoverage(
+  file: string,
+  data: FileCoverageData
+): FileCoverage {
+  const fns = Object.entries(data.fnMap);
+  const uncoveredFns = fns
+    .filter(([id]) => data.f[id] === 0)
+    .map(([, fn]) => {
+      // v8 は無名関数を (anonymous_N) と名付ける
+      const name = fn.name.startsWith("(anonymous") ? "無名関数" : fn.name;
+      return `${name}（${fn.loc.start.line}行目）`;
+    });
+
+  let branchTotal = 0;
+  const uncoveredBranchLines = new Set<number>();
+  for (const [id, branch] of Object.entries(data.branchMap)) {
+    data.b[id].forEach((count, i) => {
+      branchTotal++;
+      if (count > 0) return;
+      // v8 は暗黙の else の位置を持たないことがあるため、分岐全体の行で出す
+      uncoveredBranchLines.add(
+        branch.locations[i]?.start?.line ?? branch.loc.start.line
+      );
+    });
+  }
+  const branchCovered = Object.values(data.b)
+    .flat()
+    .filter((count) => count > 0).length;
+
+  return {
+    file,
+    functions: {
+      covered: fns.length - uncoveredFns.length,
+      total: fns.length,
+      uncovered: uncoveredFns,
+    },
+    branches: {
+      covered: branchCovered,
+      total: branchTotal,
+      uncovered: [...uncoveredBranchLines]
+        .sort((a, b) => a - b)
+        .map((line) => `${line}行目`),
+    },
+  };
+}
+
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function missesOf(coverage: FileCoverage, layer: Layer): Miss[] {
+  return (Object.entries(layer.min) as [Metric, number][]).flatMap(
+    ([metric, min]) => {
+      const { covered, total, uncovered } = coverage[metric];
+      // 関数・分岐が無いファイル（型定義だけ等）は、テストで実行するものが無い
+      if (total === 0) return [];
+      const pct = round((covered / total) * 100);
+      return pct < min ? [{ metric, pct, min, uncovered }] : [];
+    }
+  );
+}
+
 export function checkLayerCoverage(
-  files: FileLines[],
+  files: FileCoverage[],
   suite: Suite,
   config: LayerCoverageConfig
 ): LayerCoverageResult {
@@ -106,29 +206,24 @@ export function checkLayerCoverage(
   };
   const exceptions = config.exceptions.filter((e) => e.suite === suite);
 
-  for (const { file, covered, total } of files) {
+  for (const coverage of files) {
+    const { file } = coverage;
     const layer = layerOf(file, suite, config);
-    // 実行できる行が無いファイル（型定義だけ等）は、テストで実行するものが無い
-    if (!layer || total === 0) continue;
+    if (!layer) continue;
 
-    const pct = round((covered / total) * 100);
+    const misses = missesOf(coverage, layer);
     const exception = exceptions.find((e) => e.file === file);
     if (exception) {
-      if (pct >= layer.minLines) {
+      if (misses.length === 0) {
         result.staleExceptions.push({
           exception,
-          reason: `閾値（${layer.minLines}%）を満たしている（${pct}%）`,
+          reason: "閾値を満たしている",
         });
       } else {
-        result.excepted.push({ file, issue: exception.issue, pct });
+        result.excepted.push({ file, issue: exception.issue });
       }
-    } else if (pct < layer.minLines) {
-      result.failures.push({
-        file,
-        layer,
-        pct,
-        shortfall: round(layer.minLines - pct),
-      });
+    } else if (misses.length > 0) {
+      result.failures.push({ file, layer, misses });
     }
   }
 
@@ -143,12 +238,18 @@ export function checkLayerCoverage(
   return result;
 }
 
+function formatUncovered(uncovered: string[]): string {
+  const listed = uncovered.slice(0, MAX_LISTED_UNCOVERED).join("、");
+  const rest = uncovered.length - MAX_LISTED_UNCOVERED;
+  return rest > 0 ? `${listed}、ほか${rest}件` : listed;
+}
+
 export function formatLayerCoverageReport(result: LayerCoverageResult): string {
   const header = `層ごとのカバレッジ検査（${SUITE_LABEL[result.suite]}）`;
   const exceptedLine =
     result.excepted.length > 0
       ? `例外 ${result.excepted.length} 件: ${result.excepted
-          .map((e) => `${e.file}（${e.pct}%・#${e.issue}）`)
+          .map((e) => `${e.file}（#${e.issue}）`)
           .join("、")}`
       : "";
 
@@ -159,19 +260,26 @@ export function formatLayerCoverageReport(result: LayerCoverageResult): string {
   const lines = [`${header}: 失敗`, ""];
   if (result.failures.length > 0) {
     lines.push(
-      `層に合った種類のテストで実行された行が、閾値を下回るファイルが ${result.failures.length} 件あります。`
+      `層に合った種類のテストで実行されなかった関数・分岐があり、閾値を下回るファイルが ${result.failures.length} 件あります。`
     );
     for (const f of result.failures) {
       lines.push(
         `  ✗ ${f.file}`,
-        `      層: ${f.layer.name} / 必要なテスト: ${f.layer.howToTest}`,
-        `      ${SUITE_LABEL[result.suite]}での行カバレッジ ${f.pct}% < 閾値 ${f.layer.minLines}%（${f.shortfall}ポイント不足）`
+        `      層: ${f.layer.name} / 必要なテスト: ${f.layer.howToTest}`
       );
+      for (const miss of f.misses) {
+        const label = METRIC_LABEL[miss.metric];
+        lines.push(
+          `      ${label}カバレッジ ${miss.pct}% < 閾値 ${miss.min}%（実行されなかった${label}: ${formatUncovered(miss.uncovered)}）`
+        );
+      }
     }
     lines.push(
       "",
-      `直し方: ${GUIDE} の表にある種類のテストを追加し、実装（モックではなく、そのファイル自身のコード）を実行する。`,
-      `すぐに直せない場合だけ、テストを追加するissueを起票し、${LAYER_COVERAGE_CONFIG_PATH} の exceptions に issue番号付きで追加する（high-risk のレビュー対象）。`
+      `直し方: ${GUIDE} の表にある種類のテストを追加し、実行されなかった関数・分岐を、モックではなくそのファイル自身のコードとして実行する。`,
+      "  - どこからも使われていない関数は、テストを足さずに削除する",
+      "  - 層に合ったテストでは本当に到達できない行（起こせない防御のエラー等）だけ、`/* v8 ignore next -- @preserve 理由 */` で外す（@preserve が無いと効かない。PR Diff Summary に一覧が出て、人間が確認する）",
+      `  - すぐに直せない場合だけ、テストを追加するissueを起票し、${LAYER_COVERAGE_CONFIG_PATH} の exceptions に issue番号付きで追加する（high-risk のレビュー対象）`
     );
   }
   if (result.staleExceptions.length > 0) {
@@ -190,9 +298,7 @@ export function formatLayerCoverageReport(result: LayerCoverageResult): string {
 /** istanbul の CoverageMap のうち、ここで使う部分 */
 type CoverageMapLike = {
   files(): string[];
-  fileCoverageFor(file: string): {
-    toSummary(): { lines: { covered: number; total: number } };
-  };
+  fileCoverageFor(file: string): { toJSON(): unknown };
 };
 
 /**
@@ -238,16 +344,14 @@ export class LayerCoverageReporter implements Reporter {
     if (testModules.length < all.length)
       return skip("テストファイルを絞って実行した");
 
-    const files = coverage.files().map((absolute) => {
-      const { covered, total } = coverage
-        .fileCoverageFor(absolute)
-        .toSummary().lines;
-      return {
-        file: path.relative(vitest.config.root, absolute),
-        covered,
-        total,
-      };
-    });
+    const files = coverage
+      .files()
+      .map((absolute) =>
+        summarizeFileCoverage(
+          path.relative(vitest.config.root, absolute),
+          coverage.fileCoverageFor(absolute).toJSON() as FileCoverageData
+        )
+      );
     const result = checkLayerCoverage(files, this.suite, this.config);
     this.log(`\n${formatLayerCoverageReport(result)}`);
     if (result.failures.length > 0 || result.staleExceptions.length > 0) {

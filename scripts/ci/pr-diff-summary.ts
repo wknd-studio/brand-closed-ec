@@ -4,6 +4,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  readAddedCoverageIgnores,
+  renderCoverageIgnoreSection,
+} from "./coverage-ignores";
+import {
   LABELER_CONFIG,
   loadChecklist,
   parseRiskRules,
@@ -17,7 +21,8 @@ import {
  *
  * コメントは REPORT_MARKER で始まり、`## 見出し` の節を並べた形にする。
  * 他の検査は、renderComment に節を足して同じコメントに載せる
- * （high-risk の区分ごとの確認観点は scripts/ci/review-checklists.ts。#476）。
+ * （high-risk の区分ごとの確認観点は scripts/ci/review-checklists.ts。#476。
+ * カバレッジの検査から外した箇所は scripts/ci/coverage-ignores.ts。#455）。
  *
  * 使い方: pnpm -s tsx scripts/ci/pr-diff-summary.ts <base-ref> <head-ref> [--report <file>]
  *   例: pnpm -s tsx scripts/ci/pr-diff-summary.ts origin/develop HEAD
@@ -315,9 +320,13 @@ function main() {
       docUrl: githubBlobUrl(head),
     }
   );
+  const coverageIgnores = renderCoverageIgnoreSection(
+    readAddedCoverageIgnores(base, head)
+  );
   const comment = renderComment([
     renderDiffSummarySection(summarizeDiff(diff)),
     ...(reviewChecklists ? [reviewChecklists] : []),
+    ...(coverageIgnores ? [coverageIgnores] : []),
   ]);
   if (reportPath) writeFileSync(reportPath, comment);
   console.log(comment);

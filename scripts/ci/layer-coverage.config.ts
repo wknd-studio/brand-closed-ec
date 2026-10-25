@@ -7,7 +7,8 @@ import type { LayerCoverageConfig } from "./layer-coverage";
  * （.github/labeler.yml の scripts/ci/**）。
  *
  * 閾値は「層に合った種類のテストで実行されていること」の担保が目的で、網羅率の競争ではない。
- * 導入時（2026-10-24）の計測値を見て、domain・use-cases は高め、それ以外は低めから始めた。
+ * 業務ロジック（domain・use-cases）は関数100%・分岐90%、外部との境界（アダプタ・Supabase の実装・
+ * APIルート）は関数100%（各関数が一度は実行されたか）。理由は scripts/ci/layer-coverage.ts の先頭。
  *
  * interface だけの src/repositories/**・src/queries/** は対象にしない。
  */
@@ -17,14 +18,14 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       name: "domain（エンティティ・値オブジェクト・ドメインサービス）",
       suite: "unit",
       include: ["src/domain/**/*.ts"],
-      minLines: 80,
+      min: { functions: 100, branches: 90 },
       howToTest: "ユニットテスト（DBもモックも無し）で、計算・分岐を確かめる",
     },
     {
       name: "use-cases",
       suite: "unit",
       include: ["src/use-cases/**/*.ts"],
-      minLines: 80,
+      min: { functions: 100, branches: 90 },
       howToTest:
         "ユニットテスト（リポジトリをモック）で、冪等性・ロールバック等の分岐を確かめる",
     },
@@ -32,7 +33,7 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       name: "外部サービスのアダプタ",
       suite: "unit",
       include: ["src/infrastructure/{stripe,clerk,resend,sanity}/**/*.ts"],
-      minLines: 50,
+      min: { functions: 100 },
       howToTest:
         "ユニットテストで、SDK だけをモックし、アダプタ自身のコード（SDK に渡す引数・戻り値の変換）を実行する",
     },
@@ -41,7 +42,7 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       name: "Query Service の Supabase 実装",
       suite: "integration",
       include: ["src/infrastructure/supabase/**/*query*.ts"],
-      minLines: 50,
+      min: { functions: 100 },
       howToTest:
         "統合テスト（実DB接続）で、取得できる・他の会員のデータを取得できない・存在しないケースを確かめる",
     },
@@ -49,7 +50,7 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       name: "Supabase のリポジトリ実装",
       suite: "integration",
       include: ["src/infrastructure/supabase/**/*.ts"],
-      minLines: 50,
+      min: { functions: 100 },
       howToTest:
         "統合テスト（実DB接続）で、実際の SELECT・RLS がエラーにならず通ることを確かめる",
     },
@@ -57,7 +58,7 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       name: "APIルート（Webhookハンドラー等）",
       suite: "integration",
       include: ["src/app/api/**/route.ts"],
-      minLines: 50,
+      min: { functions: 100 },
       howToTest:
         "統合テスト（実DB + route の POST 等を Request で直接呼ぶ）で、署名検証を含めた一連の処理を確かめる",
     },
@@ -65,6 +66,13 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
   // 閾値を下回るが、テストの追加を別issueで行うファイル。テストを足して閾値を満たしたら、
   // 検査が「例外から外す」よう失敗するので削除する
   exceptions: [
+    ...[
+      "src/domain/entities/order-item.ts",
+      "src/domain/value-objects/member-rank.ts",
+      "src/use-cases/create-address.ts",
+      "src/use-cases/mark-invoice-order-as-paid.ts",
+      "src/use-cases/place-order.ts",
+    ].map((file) => ({ file, suite: "unit" as const, issue: 538 })),
     {
       file: "src/infrastructure/clerk/clerk-account-gateway.ts",
       suite: "unit",
@@ -84,6 +92,12 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       file: "src/infrastructure/supabase/supabase-address-repository.ts",
       suite: "integration",
       issue: 524,
+    },
+    {
+      // findActiveOrdersWithUser を Query Service へ移すときに無くなる
+      file: "src/infrastructure/supabase/supabase-order-repository.ts",
+      suite: "integration",
+      issue: 452,
     },
   ],
 };
