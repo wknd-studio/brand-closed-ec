@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "next-sanity";
-import {
-  fetchBrands,
-  fetchProducts,
-  getAllowedRanks,
-} from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
+import { fetchBrands, fetchProducts } from "@/lib/sanity/products";
 
 const writeClient = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
@@ -63,7 +60,7 @@ describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   });
 
   it("STARTERランクの会員はADVANCED限定商品を取得できない", async () => {
-    const allowedRanks = getAllowedRanks("starter");
+    const allowedRanks = MemberRank.of("starter").accessibleRanks();
     const { products } = await fetchProducts({
       allowedRanks,
       brand: "テストブランド（7ランク検証用）",
@@ -74,7 +71,7 @@ describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   });
 
   it("ADVANCEDランクの会員は両方の商品を取得できる", async () => {
-    const allowedRanks = getAllowedRanks("advanced");
+    const allowedRanks = MemberRank.of("advanced").accessibleRanks();
     const { products } = await fetchProducts({
       allowedRanks,
       brand: "テストブランド（7ランク検証用）",
@@ -85,8 +82,12 @@ describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   });
 
   it("ブランド一覧はアクセス可能な商品を持つ会員のランクに応じて件数が変わる", async () => {
-    const starterBrands = await fetchBrands(getAllowedRanks("starter"));
-    const advancedBrands = await fetchBrands(getAllowedRanks("advanced"));
+    const starterBrands = await fetchBrands(
+      MemberRank.of("starter").accessibleRanks()
+    );
+    const advancedBrands = await fetchBrands(
+      MemberRank.of("advanced").accessibleRanks()
+    );
 
     const starterCount = starterBrands.find(
       (b) => b.brand === "テストブランド（7ランク検証用）"
@@ -100,7 +101,7 @@ describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   });
 
   it("商品名のキーワードで検索できる", async () => {
-    const allowedRanks = getAllowedRanks("starter");
+    const allowedRanks = MemberRank.of("starter").accessibleRanks();
     const { products } = await fetchProducts({
       allowedRanks,
       keyword: "STARTER閲覧可",
@@ -110,7 +111,7 @@ describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   });
 
   it("ブランド名のキーワードで検索できる", async () => {
-    const allowedRanks = getAllowedRanks("starter");
+    const allowedRanks = MemberRank.of("starter").accessibleRanks();
     const { products } = await fetchProducts({
       allowedRanks,
       keyword: "7ランク検証用",
@@ -120,7 +121,7 @@ describeWithSanity("7ランクでのカタログ取得（実Sanity）", () => {
   });
 
   it("キーワード検索でもランク制限を超える商品は含まれない", async () => {
-    const allowedRanks = getAllowedRanks("starter");
+    const allowedRanks = MemberRank.of("starter").accessibleRanks();
     const { products } = await fetchProducts({
       allowedRanks,
       keyword: "テスト商品",
