@@ -89,6 +89,10 @@
   - 経緯: 旧ルール「`paid`以降（`paid`/`sourcing`/`ordered`/`preparing`/`shipping`）の注文が1件でもあればブロック、`paid`より前はブロックしない」は、決済単位分離（[[settlement]]、issue #219以降）により`orders.status`が決済単位のロールアップ値になったため判定不能になった（決済前・支払い済みの両方が同じ`processing`になりうる）。加えて旧ルールの実装（`status NOT IN ('delivered','cancelled')`）は決済前の注文もブロックしてしまうバグを持っていた（issue #208）。決済単位ベースの新ルールはこの2つの問題を同時に解消する
 - 強制退会は上記の自己退会ブロック条件を迂回できる（後述「アカウント停止・強制退会」節）。決済・配送が未解決のまま強制退会させた場合の運用は運営側の手動対応に委ねる
 - 退会後もデータは保持する（論理削除、`users.deleted_at`）。退会と同時にStripeサブスクリプションを解約する。
+- **Clerkユーザーは削除せずbanする**（2026-10-25、GitHub issue #416のA案・#532）: banでClerkのセッションはその場で失効し、以後は同じメールアドレス・パスワードでもサインインできない（Clerkが`user_banned`で拒否する）。Clerkユーザーと`users.clerk_user_id`は退会前のまま残るため、再入会ではbanを解除して同じClerkユーザー・同じ`users`行を使う（再入会の申し込み・承認・ban解除の仕組みはローンチ後に実装）。
+  - banに失敗しても退会は成立させ、Sentryに通知する。`deleted_at`が入っているため、middlewareとRLSでアクセスは遮断済み（セッションが残っていても`/withdrawn`へ送られる）
+  - banはClerkのPro以上の機能のため、本番インスタンスはProにしておく必要がある（開発用インスタンスのdev・stgは無料プランでも使える。#244）
+  - 退会直後は`/withdrawn`（退会完了の案内）へ移る。保護されたページのまま`signOut`すると、ClerkがそのページへのServer Actionを送り、middlewareが退会済みとして`/withdrawn`へリダイレクトするため`signOut`が終わらない
 - 再入会時: 注文履歴・住所などのデータは論理削除のため引き継がれる。プランは再入会時に改めて選択する。初期費用は`initial_fee_paid_rank_code`を基準に、選択プランがそれ以下なら免除、上回れば差分を請求する（差分計算のルールは[[subscription-billing]]）。
 - **退会はアプリ独自の`/settings`画面・`withdraw.ts`経由に一本化する**（2026-09-13確認）: Clerkには`<UserProfile />`から会員が直接Clerkアカウントを削除できる「Self Service Delete」機能があるが、これは**有効にしてはならない**。現状`user.deleted` Webhookハンドラーが存在せず、この経路でアカウントが消えると`users.deleted_at`が更新されず・Stripeサブスクリプションが解約されないまま課金が続き・上記の退会ブロック条件（6ヶ月未満・アクティブ注文あり）も完全にバイパスされる。ログイン情報変更（メール・パスワード・MFA）に`<UserProfile />`を使う場合も、Self Service Deleteは無効のまま維持し、退会導線は露出させない（issue #212）。
 
