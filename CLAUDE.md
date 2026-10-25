@@ -139,7 +139,12 @@ feature/* →  Cloudflare Pages Preview URL
 | `src/app/api/**`（Webhookハンドラー・APIルート）         | 統合テスト（実DB + 実際のHTTPリクエスト）                                                 | ルーティング・署名検証を含めた一連の処理                                                                                              |
 | 会員登録〜決済のような複数画面をまたぐクリティカルフロー | E2E（Playwright）。**新規追加は最小限**、既存フローに影響する変更は該当specを実行して確認 | 実際にブラウザで動くか。テストDBのテーブル定義変更時は`tests/e2e/`内の`.insert()`/`.update()`/`.select()`も対象に含める（下記の理由） |
 
-この表のうちE2E以外は **CIで検査済み**（#455）。`pnpm test`・`task test:integration` はカバレッジ付きで動き、層に合った種類のテストで実行された行が層ごとの閾値を下回るファイルがあると失敗する（外部サービスのアダプタ `src/infrastructure/{stripe,clerk,resend,sanity}/**` も、SDKだけをモックしたユニットテストで検査する）。テストが import していても、モックに差し替えて実装を一度も実行していなければ失敗する。失敗したらこの表の種類のテストを足す。対象・閾値・例外（issue番号付き）は `scripts/ci/layer-coverage.config.ts` にあり、変更は `high-risk` として人間がレビューする。テストファイルやテスト名で絞って実行したときは検査しない。
+この表のうちE2E以外は **CIで検査済み**（#455）。`pnpm test`・`task test:integration` はカバレッジ付きで動き、層に合った種類のテストでファイルごとに次を満たさないと失敗する。テストが import していても、モックに差し替えて実装を一度も実行していなければ失敗する。
+
+- domain・use-cases（ユニットテスト）: 関数100%・分岐90%。業務ロジックの分岐はすべてユニットテストで到達できるため
+- 外部サービスのアダプタ `src/infrastructure/{stripe,clerk,resend,sanity}/**`（SDKだけをモックしたユニットテスト）・Supabase の実装・APIルート（統合テスト）: 関数100%。各関数が一度は実行されていればよく、DBエラー等の起こしにくい分岐は問わない
+
+失敗したら、出力に出る「実行されなかった関数・分岐」に対して、この表の種類のテストを足す。どこからも使われていない関数は削除する。層に合ったテストでは本当に到達できない行だけ `/* v8 ignore next -- @preserve 理由 */` で外してよい（`@preserve` が無いと効かない。PR Diff Summary のコメントに一覧が出る）。対象・閾値・例外（issue番号付き）は `scripts/ci/layer-coverage.config.ts` にあり、変更は `high-risk` として人間がレビューする。テストファイルやテスト名で絞って実行したときは検査しない。
 
 `tests/e2e/`配下のSupabase admin clientは必ず`createClient<Database>(...)`のように型を付ける（型無しの`createClient(...)`は、存在しないカラムを指定してもtscがコンパイルエラーを出さず、実行時までカラム不整合に気づけない。過去に実際にこれで検出漏れが発生した）。
 
