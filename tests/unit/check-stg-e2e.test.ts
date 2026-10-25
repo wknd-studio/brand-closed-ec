@@ -153,6 +153,17 @@ describe("judgeStgE2e", () => {
     expect(verdict.message).toContain(STG_E2E_JOB);
   });
 
+  it("実行が終わっているのにstgのE2Eのジョブが無ければred。再実行ではなくジョブ名のずれを疑うよう出す", () => {
+    const verdict = judge({
+      run: run(),
+      jobs: [job({ name: "Deploy (staging)" })],
+    });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.message).toContain(run().html_url);
+    expect(verdict.message).toContain(STG_WORKFLOW);
+    expect(verdict.message).not.toContain("再実行");
+  });
+
   it("ほかのジョブの結果ではなく、stgのE2Eのジョブの結果で判定する", () => {
     expect(
       judge({
@@ -189,6 +200,8 @@ describe("ワークフローとの対応", () => {
 
   it("main宛てのPRで動き、ジョブ名が必須チェックに登録する名前と一致する", () => {
     expect(check).toMatch(/pull_request:\n\s+branches: \[main\]/);
+    // 既存のPRの向き先を後からmainに変えたとき（edited）も動かす。動かないと必須チェックが未報告のまま残る
+    expect(check).toMatch(/types: \[[^\]]*\bedited\b[^\]]*\]/);
     expect(check).toContain(`    name: ${CHECK_NAME}\n`);
   });
 
