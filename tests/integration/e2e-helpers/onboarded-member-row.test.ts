@@ -27,7 +27,7 @@ async function deliverUserCreatedWebhook() {
       userRepo: new SupabaseUserRepository(supabase),
       // 実在しないClerkユーザーのため、Clerkへの更新は何もしない
       accountGateway: {
-        deleteUser: async () => {},
+        banUser: async () => {},
         updateOnboardingMetadata: async () => {},
         disableSelfDelete: async () => {},
       },
