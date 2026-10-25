@@ -8,6 +8,10 @@ import { defineConfig, devices } from "@playwright/test";
 // "pnpm dev"（内部でdoppler runをネストする）を避ける必要がある（下記command参照）
 const PORT = process.env.PORT ?? "3000";
 const IS_WORKTREE = !!process.env.WORKTREE_SLOT;
+// 動いている開発サーバーを使い回すのは、メインのチェックアウト（スロット1・ポート3000）だけ。
+// スロット2以降のポートで動いているサーバーは別スロットのDBにつながっているおそれがあるため
+// （3000が使用中だった頃のメインの開発サーバーが3001へ移っていた等）、使い回さずエラーで止める
+const IS_MAIN_CHECKOUT_SLOT = (process.env.WORKTREE_SLOT || "1") === "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -63,7 +67,7 @@ export default defineConfig({
           ? `pnpm exec next dev --port ${PORT}`
           : "pnpm dev",
       url: `http://localhost:${PORT}`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: !process.env.CI && IS_MAIN_CHECKOUT_SLOT,
       // ビルド自体に数十秒〜数分かかるため、サーバー起動待ちのタイムアウトを延長する
       timeout: process.env.CI ? 300000 : 120000,
     },
