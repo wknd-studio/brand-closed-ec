@@ -10,8 +10,12 @@ export function SignOutToTopButton() {
   const { isLoaded } = useAuth();
 
   async function handleClick() {
-    await signOut();
-    window.location.assign("/");
+    try {
+      await signOut();
+    } finally {
+      // signOutが失敗しても、退会済みのためmiddlewareで保護ページには入れない
+      window.location.assign("/");
+    }
   }
 
   return (
