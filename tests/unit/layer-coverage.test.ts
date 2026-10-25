@@ -487,14 +487,24 @@ describe("LayerCoverageReporter", () => {
     expect(output).toContain("省略");
   });
 
-  it("カバレッジ付きで実行したのに結果が渡らなければ、黙って通さず省略したと出す", async () => {
+  it("カバレッジ付きで全テストを実行したのに結果が渡らなければ、黙って通さず失敗にする", async () => {
+    process.exitCode = undefined;
     const output: string[] = [];
     const reporter = new LayerCoverageReporter("unit", config, (message) =>
       output.push(message)
     );
     reporter.onInit(fakeVitest(2) as never);
     await reporter.onTestRunEnd(new Array(2).fill({}), [], "passed");
-    expect(output.join("\n")).toContain("省略");
+    expect(process.exitCode).toBe(1);
+    expect(output.join("\n")).toContain("カバレッジの結果を受け取れなかった");
+  });
+
+  it("テストファイルを絞って実行したときは、結果が渡らなくても失敗にしない", async () => {
+    process.exitCode = undefined;
+    const reporter = new LayerCoverageReporter("unit", config, () => {});
+    reporter.onInit(fakeVitest(2) as never);
+    await reporter.onTestRunEnd(new Array(1).fill({}), [], "passed");
+    expect(process.exitCode).toBeUndefined();
   });
 
   it("テストが失敗したときは、検査しない（テストの失敗を先に直す）", async () => {
