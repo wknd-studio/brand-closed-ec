@@ -1,0 +1,42 @@
+name: Stg E2E Check
+
+# main宛てのPR（develop → mainのリリース）で、PRの先端のコミットについて、developへのpushで動いた
+# Deployワークフローの「E2E Tests (stg)」が成功しているかを確かめる（#487）。
+# stgでE2Eが通ったコミットだけを本番に出すため、mainのブランチ保護の必須チェックに登録して使う。
+# hotfix/* はstgを通らないため対象外として成功で終える。判定は scripts/ci/check-stg-e2e.ts。
+#
+# stgのE2Eが終わる前に動いたとき（developへのマージ直後にPRを作った等）はredになる。
+# stgのE2Eが終わってから、PRのChecksでこのチェックを再実行する（Re-run jobs）。
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: stg-e2e-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  stg-e2e-check:
+    name: Stg E2E Check
+    runs-on: ubuntu-latest
+    # 実行・ジョブの結果を読むだけ
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Check E2E Tests (stg) for the PR head commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # ブランチ名はシェルに埋め込まず環境変数で渡す（スクリプトインジェクション対策）。
+          # pull_requestのgithub.shaはマージコミットのため、PRの先端のコミットを使う
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm -s tsx scripts/ci/check-stg-e2e.ts
