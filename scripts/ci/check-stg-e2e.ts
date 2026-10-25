@@ -89,6 +89,16 @@ export function judgeStgE2e(input: {
     };
   }
   const job = jobs.find((j) => j.name === STG_E2E_JOB);
+  if (job === undefined && run.status === "completed") {
+    return {
+      ok: false,
+      message: [
+        `コミット ${headSha} の実行は終わっているが、${STG_E2E_JOB} のジョブが無い。`,
+        `${STG_WORKFLOW} のstgのE2Eのジョブ名が変わっていないか確かめること（scripts/ci/check-stg-e2e.ts の STG_E2E_JOB と合わせる）。`,
+        `実行: ${run.html_url}`,
+      ].join("\n"),
+    };
+  }
   if (job === undefined) {
     return {
       ok: false,

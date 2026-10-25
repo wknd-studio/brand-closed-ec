@@ -10,7 +10,8 @@ name: Stg E2E Check
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    # editedは、既存のPRの向き先を後からmainに変えたときにも動かすため（動かないと必須チェックが未報告のまま残る）
+    types: [opened, edited, synchronize, reopened]
 
 concurrency:
   group: stg-e2e-check-${{ github.event.pull_request.number }}
