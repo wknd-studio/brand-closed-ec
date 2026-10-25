@@ -112,6 +112,15 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 
 どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、失敗したテストの動画・トレースをGitHub ActionsのArtifacts（`playwright-report-pr`・`playwright-report-stg`）としてアップロードする（保持期間7日）。ダウンロードして`.mp4`をそのまま再生するか、`pnpm exec playwright show-trace <trace.zip>`でトレースビューアを開いて確認できる。
 
+### main への PR で stg の E2E の結果を確かめる（`Stg E2E Check`）
+
+main への PR（develop → main のリリース）では、`.github/workflows/stg-e2e-check.yml` の `Stg E2E Check` が、PR の先端のコミットについて上記2.（`E2E Tests (stg)`）が成功しているかを確かめる（#487。判定は `scripts/ci/check-stg-e2e.ts`）。stg で E2E が通ったコミットだけを本番に出すため、main のブランチ保護の必須チェックに登録している。
+
+- 成功していれば green。失敗・取り消し・スキップ・まだ動いている・そのコミットでは動いていない場合は red で、どの実行・ジョブかのリンクをジョブのログと Summary に出す
+- `hotfix/*` → main の PR は stg を通らないため対象外（green で、対象外であることを出す）
+- stg の E2E が終わる前に動いて red になったときは、`E2E Tests (stg)` が成功してから PR の Checks で `Stg E2E Check` を「Re-run jobs」で再実行する（`gh run rerun <実行ID>` でもよい）。既存の PR の向き先を後から main に変えたときも動くよう `edited` でも動かしているため、PR 本文を編集しても再実行される
+- develop へ続けてマージすると、stg のデプロイ・E2E は直列化され待っている分が取り消されるため、途中のコミットの `E2E Tests (stg)` は取り消し（スキップ）になることがある。リリースは E2E が動いた develop の先端から作る
+
 ### ローカルでの実行
 
 ```bash

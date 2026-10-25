@@ -55,6 +55,8 @@ feature/* →  Cloudflare Pages Preview URL
 
 詳細は `requirements.md` の「4. Gitブランチ戦略」を参照。
 
+**main への PR の `Stg E2E Check`**: main への PR は、PR の先端のコミットについて develop への push で動いた `E2E Tests (stg)` が成功していないと red になる（`.github/workflows/stg-e2e-check.yml`。`hotfix/*` は対象外）。develop へのマージ直後に PR を作ると stg の E2E が終わる前に動いて red になるので、`E2E Tests (stg)` が成功してから、PR の Checks で `Stg E2E Check` を開き「Re-run jobs」で再実行すれば green になる（`gh run rerun <実行ID>` でもよい）。stg の E2E が失敗・取り消しなら、先にその実行を直す・再実行して成功させる
+
 ---
 
 ## 行動ルール
