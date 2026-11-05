@@ -14,6 +14,10 @@ const supabase = createClient<Database>(
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000363";
 const TEST_CLERK_ID = "clerk_test_subscription_onboarding_repo";
 
+// 同じstripe_subscription_idが別の会員で届く場合の、先に記録された側の会員
+const OTHER_USER_ID = "00000000-0000-0000-0000-000000000477";
+const OTHER_CLERK_ID = "clerk_test_subscription_onboarding_repo_other";
+
 const repo = new SupabaseSubscriptionOnboardingRepository(supabase);
 
 function makeInput(
@@ -33,9 +37,23 @@ function makeInput(
 }
 
 async function cleanup() {
-  await supabase.from("rank_changes").delete().eq("user_id", TEST_USER_ID);
-  await supabase.from("subscriptions").delete().eq("user_id", TEST_USER_ID);
-  await supabase.from("users").delete().eq("id", TEST_USER_ID);
+  const userIds = [TEST_USER_ID, OTHER_USER_ID];
+  await supabase.from("rank_changes").delete().in("user_id", userIds);
+  await supabase.from("subscriptions").delete().in("user_id", userIds);
+  await supabase.from("users").delete().in("id", userIds);
+}
+
+async function insertOtherUser() {
+  const { error } = await supabase.from("users").insert({
+    id: OTHER_USER_ID,
+    clerk_user_id: OTHER_CLERK_ID,
+    email: "subscription-onboarding-repo-other-test@example.com",
+    first_name: "テスト",
+    last_name: "次郎",
+    rank_code: "starter",
+    onboarding_completed: false,
+  });
+  if (error) throw error;
 }
 
 async function insertUser(initialFeePaidRankCode: string | null = null) {
@@ -252,10 +270,47 @@ describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC�
     expect(rankChanges).toHaveLength(1);
   });
 
-  it("有効な会員が見つからなければエラーにする", async () => {
-    await expect(repo.confirm(makeInput())).rejects.toThrow();
+  it("有効な会員が見つからなければ、何も変えずにmember_not_foundを返す", async () => {
+    await expect(repo.confirm(makeInput())).resolves.toBe("member_not_found");
 
     const { subscriptions, rankChanges } = await fetchState();
+    expect(subscriptions).toHaveLength(0);
+    expect(rankChanges).toHaveLength(0);
+  });
+
+  it("退会済みの会員なら、何も変えずにmember_not_foundを返す", async () => {
+    await insertUser();
+    const { error } = await supabase
+      .from("users")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", TEST_USER_ID);
+    if (error) throw error;
+
+    await expect(repo.confirm(makeInput())).resolves.toBe("member_not_found");
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user?.onboarding_completed).toBe(false);
+    expect(subscriptions).toHaveLength(0);
+    expect(rankChanges).toHaveLength(0);
+  });
+
+  it("同じstripe_subscription_idの行が別の会員で既にあれば、一意制約違反にせず、何も変えずにconflicting_subscriptionを返す", async () => {
+    await insertUser();
+    await insertOtherUser();
+    await repo.confirm(makeInput({ userId: OTHER_USER_ID }));
+
+    await expect(repo.confirm(makeInput())).resolves.toBe(
+      "conflicting_subscription"
+    );
+
+    const { user, subscriptions, rankChanges } = await fetchState();
+    expect(user).toEqual({
+      rank_code: "starter",
+      initial_fee_paid_rank_code: null,
+      stripe_customer_id: null,
+      billing_anchor_day: null,
+      onboarding_completed: false,
+    });
     expect(subscriptions).toHaveLength(0);
     expect(rankChanges).toHaveLength(0);
   });

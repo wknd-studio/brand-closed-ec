@@ -22,6 +22,7 @@ const COEXIST_ACTIVE_ID = "00000000-0000-0000-0000-000000000012";
 const CONFLICT_CLERK_ID = "clerk_test_infra_conflict";
 const INSERT_CLERK_ID = "clerk_test_infra_insert_if_absent";
 const BEFORE_ONBOARDING_CLERK_ID = "clerk_test_infra_save_before_onboarding";
+const KEEP_OTHER_COLUMNS_CLERK_ID = "clerk_test_infra_select_plan_keep_columns";
 
 // 不正なキーのクライアント。PostgRESTが認証エラーを返すため、DBエラー時の挙動を確認できる
 const brokenClient = createClient<Database>(
@@ -60,6 +61,7 @@ async function cleanupExtra() {
       CONFLICT_CLERK_ID,
       INSERT_CLERK_ID,
       BEFORE_ONBOARDING_CLERK_ID,
+      KEEP_OTHER_COLUMNS_CLERK_ID,
     ]);
 }
 
@@ -345,6 +347,60 @@ describe("SupabaseUserRepository", () => {
         .select("onboarding_completed")
         .eq("clerk_user_id", BEFORE_ONBOARDING_CLERK_ID);
       expect(rows).toEqual([{ onboarding_completed: true }]);
+    });
+
+    it("読み取りの後に他の処理が書いた stripe_customer_id・billing_anchor_day を上書きせず、プラン選択の列だけを更新する", async () => {
+      await repo.saveIfNotOnboarded(newUser(KEEP_OTHER_COLUMNS_CLERK_ID));
+      const existing = await repo.findByClerkUserId(
+        KEEP_OTHER_COLUMNS_CLERK_ID
+      );
+      // 読み取った後に、別のタブの決済画面がStripe Customerを作って保存したケース
+      await supabase
+        .from("users")
+        .update({
+          stripe_customer_id: "cus_test_keep",
+          billing_anchor_day: 15,
+          profile_completed_at: "2026-10-24T00:00:00+00:00",
+        })
+        .eq("id", existing!.id);
+
+      await expect(
+        repo.saveIfNotOnboarded(
+          existing!.with({
+            email: "keep-columns@example.com",
+            firstName: "太郎",
+            lastName: "法人",
+            phoneNumber: "09012345678",
+            rank: MemberRank.of("premium"),
+            onboardingCompleted: false,
+            memberType: MemberType.of("corporate"),
+            companyName: "テスト株式会社",
+            invoiceRegistrationNumber: "T1234567890123",
+          })
+        )
+      ).resolves.toBe(true);
+
+      const { data: row } = await supabase
+        .from("users")
+        .select(
+          "email, first_name, last_name, phone_number, rank_code, member_type, company_name, invoice_registration_number, stripe_customer_id, billing_anchor_day, profile_completed_at, onboarding_completed"
+        )
+        .eq("id", existing!.id)
+        .single();
+      expect(row).toEqual({
+        email: "keep-columns@example.com",
+        first_name: "太郎",
+        last_name: "法人",
+        phone_number: "09012345678",
+        rank_code: "premium",
+        member_type: "corporate",
+        company_name: "テスト株式会社",
+        invoice_registration_number: "T1234567890123",
+        stripe_customer_id: "cus_test_keep",
+        billing_anchor_day: 15,
+        profile_completed_at: "2026-10-24T00:00:00+00:00",
+        onboarding_completed: false,
+      });
     });
 
     it("DBエラーは例外になる", async () => {

@@ -1,15 +1,30 @@
 "use client";
 
-import { SignOutButton } from "@clerk/nextjs";
+import { useAuth, useClerk } from "@clerk/nextjs";
 
-// SignOutButtonは子要素が1つのReact要素かをReact.Children.onlyで確かめる。サーバーコンポーネントから
-// 子要素を渡すとこの確認を通らず画面ごと落ちるため（#493）、子要素ごとクライアントコンポーネントで描く
+// 退会でClerkユーザーがbanされるとセッションは失効済みで、signOutは何もせず遷移もしない。
+// セッションが残っている場合（banの失敗時など）はログアウトしてから、どちらでもトップへ移る。
+// Clerkの読み込み前のsignOutも何もしないため、読み込むまで押せなくする
 export function SignOutToTopButton() {
+  const { signOut } = useClerk();
+  const { isLoaded } = useAuth();
+
+  async function handleClick() {
+    try {
+      await signOut();
+    } finally {
+      // signOutが失敗しても、退会済みのためmiddlewareで保護ページには入れない
+      window.location.assign("/");
+    }
+  }
+
   return (
-    <SignOutButton redirectUrl="/">
-      <button className="text-sm underline underline-offset-4">
-        トップへ戻る
-      </button>
-    </SignOutButton>
+    <button
+      onClick={handleClick}
+      disabled={!isLoaded}
+      className="text-sm underline underline-offset-4"
+    >
+      トップへ戻る
+    </button>
   );
 }

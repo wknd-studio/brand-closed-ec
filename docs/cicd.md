@@ -110,7 +110,16 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`stg_ci`、GitHub Secretsの`DOPPLER_TOKEN_CI`で参照）から取得する。`stg_ci`は`stg`のbranch configで、ClerkのキーだけをCI専用のClerk開発インスタンスのもので上書きし、それ以外は`stg`の値を引き継ぐ。ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
 
-どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、失敗したテストの動画・トレースをGitHub ActionsのArtifacts（`playwright-report-pr`・`playwright-report-stg`）としてアップロードする（保持期間7日）。ダウンロードして`.mp4`をそのまま再生するか、`pnpm exec playwright show-trace <trace.zip>`でトレースビューアを開いて確認できる。
+どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
+
+### main への PR で stg の E2E の結果を確かめる（`Stg E2E Check`）
+
+main への PR（develop → main のリリース）では、`.github/workflows/stg-e2e-check.yml` の `Stg E2E Check` が、PR の先端のコミットについて上記2.（`E2E Tests (stg)`）が成功しているかを確かめる（#487。判定は `scripts/ci/check-stg-e2e.ts`）。stg で E2E が通ったコミットだけを本番に出すため、main のブランチ保護の必須チェックに登録している。
+
+- 成功していれば green。失敗・取り消し・スキップ・まだ動いている・そのコミットでは動いていない場合は red で、どの実行・ジョブかのリンクをジョブのログと Summary に出す
+- `hotfix/*` → main の PR は stg を通らないため対象外（green で、対象外であることを出す）
+- stg の E2E が終わる前に動いて red になったときは、`E2E Tests (stg)` が成功してから PR の Checks で `Stg E2E Check` を「Re-run jobs」で再実行する（`gh run rerun <実行ID>` でもよい）。既存の PR の向き先を後から main に変えたときも動くよう `edited` でも動かしているため、PR 本文を編集しても再実行される
+- develop へ続けてマージすると、stg のデプロイ・E2E は直列化され待っている分が取り消されるため、途中のコミットの `E2E Tests (stg)` は取り消し（スキップ）になることがある。リリースは E2E が動いた develop の先端から作る
 
 ### ローカルでの実行
 
@@ -167,6 +176,79 @@ E2E テストはチェックアウト・Invoice発行等でメール送信コー
 - `e2e-pr`ジョブ: CI内で`next dev`をこのジョブ専用に起動する使い捨てサーバーのため、「Run E2E tests」ステップの`doppler run -- env ...`に`DISABLE_EMAIL_SENDING="true"`を直接渡すだけで、他環境に一切影響しない
 - `e2e`（stg）ジョブ: `deploy-stg`でデプロイ済みの実際のCloudflare Workerに対してテストするため、Doppler側の値を変えるとstg環境全体（手動QA含む）に影響してしまう。そこで「Run E2E tests」の直前に`wrangler secret put DISABLE_EMAIL_SENDING`でstg Workerのシークレットを一時的に`true`に上書きし、直後（`if: always()`でテスト失敗時も含む）に`wrangler secret delete`で削除して元の状態（未設定＝実送信）に戻す
 - `production`環境・Doppler設定には一切触れない（本番は常に実送信する）
+
+---
+
+## 失敗時のアーティファクト（暗号化）
+
+このリポジトリはpublicで、アーティファクトはGitHubにログインした誰でもダウンロードできる。そのため、テストの失敗時に残すものは [age](https://age-encryption.org/) の公開鍵で暗号化し、暗号化したファイル（`.age`）だけをアップロードする。中身に何が含まれていても漏れないよう、値を探して伏せるのではなく暗号化する。
+
+| アーティファクト                       | ジョブ            | 中身                                                                                                                                                                 | 暗号化したファイル             |
+| -------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `supabase-logs-integration-<試行回数>` | Integration Tests | ジョブ内で起動したローカルSupabaseの `supabase_*` のコンテナ（Kong・PostgREST・Postgres・Auth等）のログ。統合テストがときどき502で落ちる原因を追うためのもの（#497） | `supabase-logs.tar.gz.age`     |
+| `supabase-logs-e2e-pr-<試行回数>`      | E2E Tests (PR)    | 同上                                                                                                                                                                 | `supabase-logs.tar.gz.age`     |
+| `playwright-report-pr-<試行回数>`      | E2E Tests (PR)    | `playwright-report/`・`test-results/`（HTMLレポート・動画・trace.zip）。trace.zipにはブラウザの通信（ヘッダー・本文・Cookie）と画面のスナップショットが入る（#513）  | `playwright-report.tar.gz.age` |
+| `playwright-report-stg-<試行回数>`     | E2E Tests (stg)   | 同上（stgに対するテスト）                                                                                                                                            | `playwright-report.tar.gz.age` |
+
+どれも保持期間は3日で、失敗したとき（Playwrightのレポートは E2E のステップが失敗したとき）だけ作る。
+
+- **公開鍵**: `scripts/ci/log-recipients.txt` に置く（1行に1つ。`#` 以降はコメント）。上の全てのアーティファクトで同じ鍵を使う
+- **秘密鍵**: CI（GitHub secrets・Dopplerを含む）にもリポジトリにも置かない。復号できるのは、秘密鍵を持つ人の手元だけ
+- **fail closed**: 公開鍵のファイルが無い・空・不正なとき、ageのインストールや暗号化に失敗したときは、暗号化のステップが失敗し、何もアップロードしない
+- **Actionsのログ**: パス・ファイル名・件数・サイズだけを出す。中身は出さない
+- **Dopplerのシークレット**: 暗号化のステップには渡していない
+- **暗号化の処理**: `scripts/ci/encrypt-artifact.ts`（`<出力先.age> <パス>...` をtar.gzにまとめて暗号化する）。Supabaseのログを集める `scripts/ci/collect-supabase-logs.ts` も、これを使って暗号化する
+
+### 暗号化しないアーティファクト
+
+`.github/workflows/` のアップロードを足すときは、暗号化するか、ここに理由を書いて対象外にする。`tests/unit/workflow-artifacts-encrypted.test.ts` が、全てのアップロードが `.age` だけを置くか、対象外の一覧にあるかを検査する（一覧は同ファイルの `EXEMPT`）。
+
+| アーティファクト           | ワークフロー            | 対象外にする理由                                                                                                                     |
+| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `pr-diff-summary`          | PR Diff Summary         | PRの差分を区分ごとに集計したMarkdownで、同じ内容をPRのコメントに公開している。publicなPRの差分から作るだけで、シークレットを読まない |
+| `mechanical-change-report` | Mechanical Change Check | 機械的な変更の再実行結果のMarkdownで、同じ内容をPRのコメントに公開している。シークレットを読まない                                   |
+| `github-pages`             | Issue Deps Graph        | 依存グラフのページで、GitHub Pagesとして公開するためのもの                                                                           |
+
+### 鍵を作る・追加する
+
+```bash
+brew install age
+age-keygen -o ~/.config/age/brand-closed-ec-ci-logs.txt  # 秘密鍵。コミットしない・共有しない
+age-keygen -y ~/.config/age/brand-closed-ec-ci-logs.txt  # 公開鍵（age1...）を表示する
+```
+
+表示された公開鍵（`age1...`）を `scripts/ci/log-recipients.txt` に1行で追記し、PRでコミットする。
+
+- 復号する人を増やすとき: その人の公開鍵を同じファイルに1行ずつ足す。どの秘密鍵でも復号できる
+- 鍵を外すとき: その行を消す。消す前に作ったアーティファクトは、外した鍵でも復号できる（最長3日で消える）
+
+### ダウンロードして復号する
+
+`<run-id>` は、失敗したワークフロー実行のURL（`.../actions/runs/<run-id>`）の数字。アーティファクト名の末尾は試行回数（再実行なら2以降）。
+
+Supabaseのログ:
+
+```bash
+mkdir -p /tmp/supabase-logs && cd /tmp/supabase-logs
+gh run download <run-id> -n supabase-logs-integration-1   # E2Eなら supabase-logs-e2e-pr-1
+age -d -i ~/.config/age/brand-closed-ec-ci-logs.txt supabase-logs.tar.gz.age | tar -xzf -
+ls supabase-logs/   # docker-ps.txt と <コンテナ名>.log
+```
+
+Playwrightのレポート（動画・トレース）:
+
+```bash
+mkdir -p /tmp/playwright-report && cd /tmp/playwright-report
+gh run download <run-id> -n playwright-report-pr-1   # stgなら playwright-report-stg-1
+age -d -i ~/.config/age/brand-closed-ec-ci-logs.txt playwright-report.tar.gz.age | tar -xzf -
+ls   # playwright-report/ と test-results/
+
+# 以下はリポジトリのチェックアウトで実行する（Playwrightのバージョンを揃えるため）
+pnpm exec playwright show-report /tmp/playwright-report/playwright-report
+pnpm exec playwright show-trace /tmp/playwright-report/test-results/<テスト名>/trace.zip
+```
+
+動画（`test-results/<テスト名>/video.webm`）はそのままブラウザ等で再生できる。
 
 ---
 

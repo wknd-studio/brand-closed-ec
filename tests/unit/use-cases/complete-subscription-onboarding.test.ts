@@ -18,18 +18,38 @@ function makeOnboardingRepo(): SubscriptionOnboardingRepository {
 }
 
 describe("completeSubscriptionOnboarding", () => {
-  it("userが見つからない場合はエラーをthrowする", async () => {
+  it("有効な会員が見つからない（退会済み・users行が無い）場合は、確定もClerkの更新もせずにmember_not_foundを返す", async () => {
     const userRepo = makeUserRepo();
     vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(null);
     const onboardingRepo = makeOnboardingRepo();
+    const accountGateway = makeAccountGateway();
 
     await expect(
       completeSubscriptionOnboarding(
         { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
-        { userRepo, onboardingRepo, accountGateway: makeAccountGateway() }
+        { userRepo, onboardingRepo, accountGateway }
       )
-    ).rejects.toThrow("ユーザーが見つかりません");
+    ).resolves.toBe("member_not_found");
     expect(onboardingRepo.confirm).not.toHaveBeenCalled();
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
+  });
+
+  it("確定の中で会員が見つからなかった（読み取りのあとに退会した）場合は、Clerkを更新せずにmember_not_foundを返す", async () => {
+    const onboardingRepo = makeOnboardingRepo();
+    vi.mocked(onboardingRepo.confirm).mockResolvedValue("member_not_found");
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      completeSubscriptionOnboarding(
+        { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+        {
+          userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
+          onboardingRepo,
+          accountGateway,
+        }
+      )
+    ).resolves.toBe("member_not_found");
+    expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
   });
 
   it("選んだランク・Stripe情報・課金基準日で入会の確定を1回の呼び出しで行う", async () => {

@@ -43,6 +43,8 @@ Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID
 | 2〜9     | Orcaのワークツリー                   | 3000+(N-1)   | 54321+(N-1)×1000 | `brand-closed-ec-slotN`   |
 
 - アプリポートは `scripts/worktree-slot-lib.sh` の `app_port_for_slot` で決める（3001〜3008）。1000刻みにするとスロット4が6000（ブラウザが接続を拒否するX11のポート）、スロット5が7000（macOSのAirPlayレシーバーが使うことがある）に当たるため、1つずつずらす。ブラウザのunsafe port・Supabaseのポートと重ならないことは `tests/unit/worktree-slot-port.test.ts` で確認している
+- メインのチェックアウトの開発サーバー（`task dev:next`・`pnpm dev`）は `--port 3000` を明示している。3000が使用中でも次の空きポート（スロット2の3001等）へ移らず、エラーで止まる
+- E2E（Playwright）が動いている開発サーバーを使い回す（`reuseExistingServer`）のはスロット1だけ。スロット2〜9は、そのポートが使用中ならエラーで止まる（別スロットのDBにつながったサーバーでテストが走らないようにするため）。いずれも `tests/unit/dev-server-port.test.ts` で確認している
 - スロットの確保状況は、全ワークツリーで共有されるgitの共通ディレクトリ（`<git-common-dir>/worktree-slots/<N>/owner`）に記録する。`mkdir` で確保するため、同時に確保が走っても重複しない
 - `worktree-db-stop.sh` を実行せずにワークツリーを削除した場合でも、次に別のワークツリーがスロットを確保するときに、持ち主が消えたスロットの残りのコンテナを停止してから再利用する
 - 確保の記録が無くても、`-slotN` のSupabaseコンテナが残っているスロットは使用中として扱う（停止に失敗した場合も同様）

@@ -4,7 +4,6 @@ import type { OrderRepository } from "@/repositories/order-repository";
 import type { SubscriptionRepository } from "@/repositories/subscription-repository";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
-import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 
 export type WithdrawInput = {
   clerkUserId: string;
@@ -34,9 +33,7 @@ export async function withdraw(
   if (!user) throw new Error("ユーザーが見つかりません");
 
   const activeOrders = await orderRepo.findActiveByUserId(user.id);
-  if (activeOrders.length > 0) throw new ActiveOrdersExistError();
-
-  const withdrawnUser = user.with({ deletedAt: new Date() });
+  const withdrawnUser = user.withdraw(activeOrders);
   await userRepo.save(withdrawnUser);
 
   const subscription = await subscriptionRepo.findActiveByUserId(user.id);
@@ -52,14 +49,14 @@ export async function withdraw(
   }
 
   try {
-    await accountGateway.deleteUser(input.clerkUserId);
+    await accountGateway.banUser(input.clerkUserId);
   } catch (err) {
     Sentry.captureException(err, {
       tags: { useCase: "withdraw" },
       extra: { clerkUserId: input.clerkUserId },
     });
     console.error(
-      "[退会] Clerk アカウント削除失敗（deleted_at でアクセス遮断済み）:",
+      "[退会] Clerk アカウントの ban 失敗（deleted_at でアクセス遮断済み）:",
       err
     );
   }

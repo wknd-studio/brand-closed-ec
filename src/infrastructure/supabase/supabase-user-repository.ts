@@ -84,6 +84,23 @@ function toFields(user: User) {
   };
 }
 
+// プラン選択で入力・選択する列。条件付きUPDATEでは読み取った行のすべてを書かず、これだけを更新する。
+// 読み取りの後に決済画面が保存したstripe_customer_id等を古い値で戻すと、Customerが作り直されて
+// 古いCustomerのサブスクリプションを見落とし、二重課金になりうる。
+// onboarding_completedはUPDATEの条件（false）で保証するため書かない
+function toPlanSelectionFields(user: User) {
+  return {
+    email: user.email,
+    first_name: user.firstName,
+    last_name: user.lastName,
+    phone_number: user.phoneNumber,
+    rank_code: user.rank.value,
+    member_type: user.memberType.value,
+    company_name: user.companyName,
+    invoice_registration_number: user.invoiceRegistrationNumber,
+  };
+}
+
 export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
@@ -144,14 +161,15 @@ export class SupabaseUserRepository implements UserRepository {
   }
 
   async saveIfNotOnboarded(user: User): Promise<boolean> {
-    const fields = toFields(user);
+    const fields = toPlanSelectionFields(user);
     if (await this.updateIfNotOnboarded(user.clerkUserId, fields)) return true;
 
     // 同じidの行が既にあれば挿入しない（読み取った行がその間に入会済み・退会済みになったケース）
     const { data, error } = await this.db
       .from("users")
       .upsert(
-        { id: user.id, ...fields },
+        // 行を作るときは他の列も初期値で埋める
+        { id: user.id, ...toFields(user) },
         { onConflict: "id", ignoreDuplicates: true }
       )
       .select("id");
@@ -166,7 +184,7 @@ export class SupabaseUserRepository implements UserRepository {
   // 条件付きUPDATE。確認と書き込みを1文で行うため、入会確定と競合しても入会済みの行を書き換えない
   private async updateIfNotOnboarded(
     clerkUserId: string,
-    fields: ReturnType<typeof toFields>
+    fields: ReturnType<typeof toPlanSelectionFields>
   ): Promise<boolean> {
     const { data, error } = await this.db
       .from("users")

@@ -167,6 +167,8 @@ hotfix/*     ──▶ main（緊急修正後、developへバックマージ必�
 | `develop → main`    | 2名以上        | 全CIグリーン必須 | stgでのQA完了を確認         |
 | `hotfix → main`     | 1名以上        | 全CIグリーン必須 | 即座にdevelopへバックマージ |
 
+「stgでのQA完了を確認」のうち、stgのE2Eの成功はCIの `Stg E2E Check`（mainのブランチ保護の必須チェック）が確かめる。PRの先端のコミットについて、developへのpushで動いたDeployワークフローの `E2E Tests (stg)` が成功していなければ失敗する（失敗・取り消し・スキップ・まだ動いている・そのコミットでは動いていない、のいずれも失敗）。`hotfix/*` はstgを通らないため対象外。`release/*` も対象で、developのコミットから切っただけならそのコミットの結果で通るが、releaseブランチに直接足したコミットは通らない（developに入れてから切り直す）。stgでの手動QAは引き続き人が確認する。
+
 ### 4-4. コミット・PRメッセージ規約（Conventional Commits）
 
 ```

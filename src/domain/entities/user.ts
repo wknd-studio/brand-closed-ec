@@ -3,6 +3,9 @@ import { MemberType } from "@/domain/value-objects/member-type";
 import { Money } from "@/domain/value-objects/money";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
+import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import type { Order } from "./order";
 
 interface UserProps {
   id: string;
@@ -105,6 +108,13 @@ export class User {
 
   getMonthlyLimit(): Money {
     return this.rank.getMonthlyLimit();
+  }
+
+  // 退会済み、または未解決の決済単位を持つ注文が1件でもあれば退会できない
+  withdraw(activeOrders: readonly Order[], now: Date = new Date()): User {
+    if (this.isWithdrawn()) throw new MemberWithdrawnError();
+    if (activeOrders.length > 0) throw new ActiveOrdersExistError();
+    return this.with({ deletedAt: now });
   }
 
   isWithdrawn(): boolean {

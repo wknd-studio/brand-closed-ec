@@ -33,7 +33,9 @@ export async function completeSubscriptionOnboarding(
   const { userRepo, onboardingRepo, accountGateway } = deps;
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
-  if (!user) throw new Error("ユーザーが見つかりません");
+  // 退会済み・users行が無い会員。再送しても成功しないため例外にせず、呼び出し側で
+  // 運営者に知らせる（決済済みのため手動で返金・解約する）
+  if (!user) return "member_not_found";
 
   // Stripe Webhookは同一イベントを複数回配信することがある。再配信時の冪等性
   // （同じSubscriptionで確定済みなら何もしない）はconfirmが1トランザクションの中で
@@ -52,8 +54,10 @@ export async function completeSubscriptionOnboarding(
       input.subscriptionStartedAt
     ),
   });
-  // 入会済みの会員への別のサブスクリプションは何も記録していないため、Clerkも触らない
-  if (result === "conflicting_subscription") return result;
+  // 確定していない（入会済みの会員への別のサブスクリプション・別の会員で記録済みの
+  // サブスクリプション・確定の中で会員が見つからない）ため、Clerkも触らない
+  if (result === "conflicting_subscription" || result === "member_not_found")
+    return result;
 
   await accountGateway.updateOnboardingMetadata(input.clerkUserId, true);
   return result;

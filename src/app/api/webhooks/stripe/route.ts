@@ -196,10 +196,16 @@ export async function POST(req: Request) {
             )
         );
 
-        // 課金済みなのに記録されないサブスクリプション。運営者が手動で返金・解約する
-        if (result === "conflicting_subscription") {
+        // 課金済みなのに記録されないサブスクリプション。再送しても成功しないため
+        // 200を返してイベントを処理済みにし、運営者が手動で返金・解約する
+        if (
+          result === "conflicting_subscription" ||
+          result === "member_not_found"
+        ) {
           Sentry.captureMessage(
-            "入会済みの会員に別のサブスクリプションの入会が届きました。手動で返金・解約してください",
+            result === "member_not_found"
+              ? "退会済み、または未登録の会員の入会が届きました。手動で返金・解約してください"
+              : "入会済みの会員、または別の会員で記録済みのサブスクリプションの入会が届きました。手動で返金・解約してください",
             {
               level: "error",
               tags: { webhook: "stripe", eventType: event.type },

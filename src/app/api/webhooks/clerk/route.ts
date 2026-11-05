@@ -1,10 +1,12 @@
 import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { createUser } from "@/use-cases/create-user";
 import { syncAdminMembership } from "@/use-cases/sync-admin-membership";
 import { removeAdminMembership } from "@/use-cases/remove-admin-membership";
 import { createAdminClient } from "@/lib/supabase/server-admin";
+import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";
 import { SupabaseAdminMembershipRepository } from "@/infrastructure/supabase/supabase-admin-membership-repository";
@@ -55,15 +57,51 @@ export async function POST(req: Request) {
       last_name: string | null;
     };
 
-    await createUser(
-      {
-        clerkUserId: data.id,
-        email: data.email_addresses[0]?.email_address ?? "",
-        firstName: data.first_name ?? "",
-        lastName: data.last_name ?? "",
-      },
-      { userRepo: new SupabaseUserRepository(createAdminClient()) }
-    );
+    try {
+      await createUser(
+        {
+          clerkUserId: data.id,
+          email: data.email_addresses[0]?.email_address ?? "",
+          firstName: data.first_name ?? "",
+          lastName: data.last_name ?? "",
+        },
+        {
+          userRepo: new SupabaseUserRepository(createAdminClient()),
+          accountGateway: new ClerkAccountGateway(),
+        }
+      );
+    } catch (err) {
+      // 2xx以外を返してClerk（svix）に再送させる
+      Sentry.captureException(err, {
+        tags: { webhook: "clerk", eventType: event.type },
+        extra: { clerkUserId: data.id, svixId },
+      });
+      console.error("[Clerk Webhook] user.created 処理失敗:", err);
+      return NextResponse.json(
+        { error: "処理に失敗しました" },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (event.type === "user.deleted") {
+    const data = event.data as { id: string };
+
+    // 退会処理（withdraw.ts）を通らずにClerkアカウントが消えると、課金が続き会員も有効なまま残る。
+    // 解約の判断は業務判断を伴うため自動で退会扱いにはせず、運営者に通知だけする（#531）
+    const user = await new SupabaseUserRepository(
+      createAdminClient()
+    ).findByClerkUserId(data.id);
+    if (user) {
+      Sentry.captureMessage(
+        "退会処理を通らずにClerkアカウントが削除されました。Stripeのサブスクを解約し、users.deleted_atを設定してください",
+        {
+          level: "error",
+          tags: { webhook: "clerk", eventType: event.type },
+          extra: { clerkUserId: data.id, userId: user.id, svixId },
+        }
+      );
+    }
   }
 
   if (

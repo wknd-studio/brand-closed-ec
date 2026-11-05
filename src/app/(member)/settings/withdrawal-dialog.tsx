@@ -1,14 +1,12 @@
 "use client";
 
 import { useTransition, useState } from "react";
-import { useClerk } from "@clerk/nextjs";
 import { deleteAccount } from "./actions";
 
 export default function WithdrawalDialog() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const { signOut } = useClerk();
 
   function handleWithdraw() {
     startTransition(async () => {
@@ -17,8 +15,10 @@ export default function WithdrawalDialog() {
         setError(result.error);
         return;
       }
-      // Clerk Cookie をクライアント側でクリアしてからリダイレクト
-      await signOut({ redirectUrl: "/" });
+      // ここでsignOutすると、Clerkがこの保護ページへ送るServer Actionをmiddlewareが退会済みとして
+      // /withdrawn へリダイレクトし、signOutが終わらない。Clerkのセッションはbanで失効済みのため、
+      // 公開ページの /withdrawn へ移り、そこでログアウトする
+      window.location.assign("/withdrawn");
     });
   }
 

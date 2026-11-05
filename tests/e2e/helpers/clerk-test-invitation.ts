@@ -12,6 +12,15 @@ function supabaseAdmin() {
 }
 
 /**
+ * 「このプランで始める」等を押してからStripe Checkoutの画面が開くまでを待つ時間。
+ * selectPlanのServer Action → /onboarding/paymentでのCheckout Session作成（Stripe API）
+ * → Stripeへの遷移が続くため、stgでは4.4〜4.7秒かかり、toHaveURLの既定の5秒では
+ * 遷移が起きているのに断続的に失敗していた（#518）。`checkout.spec.ts`の注文確定後の
+ * 遷移待ちと同じ15秒にする
+ */
+export const STRIPE_CHECKOUT_REDIRECT_TIMEOUT = 15000;
+
+/**
  * E2Eテストが使う固定のメールアドレス・Sanity ID等を、同時に走る複数の実行間で
  * 衝突しないよう一意化するためのサフィックスを付与する。
  *
@@ -67,6 +76,9 @@ export async function createTestInvitation(emailAddress: string) {
 
   const existingUserId = await getClerkUserIdByEmail(emailAddress);
   if (existingUserId) {
+    // 有効なusers行を残したままClerkユーザーを消すと、stgのuser.deleted Webhookが
+    // 「退会処理を通らない削除」としてSentryに通知するため、行を先に消す（#531）
+    await deleteMemberRows("clerk_user_id", existingUserId);
     await clerk.users.deleteUser(existingUserId);
   }
 
@@ -132,8 +144,20 @@ export async function signUpViaInvitation(
   await expect(page).toHaveURL(/\/sign-up/);
   // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
   // 安定した要素属性(id・data-localization-key)でフォーム要素を指定する
-  await page.locator("#password-field").fill(password);
-  await page.locator("#legalAccepted-field").check();
+  const passwordField = page.locator("#password-field");
+  const legalAcceptedField = page.locator("#legalAccepted-field");
+  // stgでは、Clerkのフォームが登録（POST /v1/client/sign_ups）の応答で描き直され、
+  // その直後のクリックでチェックが入らない（`check()`が「Clicking the checkbox did
+  // not change its state」で失敗する）ことがあった（#520）。描き直しでは
+  // 入力済みのパスワードも消えうるため、パスワードの入力からまとめて、
+  // 両方が入った状態になるまでやり直す。toPassは既定ではテスト全体のタイムアウトまで
+  // やり直すため、セレクタの変更等で恒常的に入力できないときに原因が分かるよう上限を付ける
+  await expect(async () => {
+    await passwordField.fill(password);
+    await legalAcceptedField.check();
+    await expect(passwordField).toHaveValue(password, { timeout: 1000 });
+    await expect(legalAcceptedField).toBeChecked({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   await page.locator('[data-localization-key="formButtonPrimary"]').click();
 
   await expect(page).toHaveURL(/\/onboarding\/account-type/);
@@ -182,8 +206,11 @@ export async function signUpAndCompleteOnboarding(
 
   // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
   // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
-  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい
-  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/);
+  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい。
+  // 中継点のURLを経ずにStripeへ着くこともあるため、待ち時間はStripeまでの分を取る
+  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/, {
+    timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+  });
 
   const { error } = await supabaseAdmin()
     .from("users")
@@ -200,10 +227,14 @@ export async function signUpAndCompleteOnboarding(
 }
 
 export async function cleanupTestUser(emailAddress: string) {
-  // ClerkのFAPI/Backend APIがこの実行環境で断続的に失敗することがあり、
-  // ここで例外が伝播すると後続のSupabase側の削除が一切実行されず
-  // テスト用会員行が削除されずに残り続けてしまう。Clerk側の後片付けは
-  // ベストエフォートとし、Supabase側の削除は必ず実行する
+  // Clerkユーザーより先にusersの行を消す。有効な行を残したままClerkユーザーを消すと、
+  // stgのuser.deleted Webhookが「退会処理を通らない削除」としてSentryに通知するため（#531）。
+  // 行の削除に失敗したら例外を投げ、Clerkユーザーは残す（次の実行の後片付け・
+  // createTestInvitationが行を消してからClerkユーザーを消す）
+  await deleteMemberRows("email", emailAddress);
+
+  // ClerkのFAPI/Backend APIがこの実行環境で断続的に失敗することがあるため、
+  // Clerk側の後片付けはベストエフォートとする
   try {
     const clerk = await clerkClient();
     const clerkUserId = await getClerkUserIdByEmail(emailAddress);
@@ -212,14 +243,19 @@ export async function cleanupTestUser(emailAddress: string) {
     }
     await revokePendingInvitationsForEmail(emailAddress);
   } catch {
-    // ベストエフォート。Clerk側の後片付けに失敗してもSupabase側の削除は続行する
+    // ベストエフォート
   }
+}
 
+async function deleteMemberRows(
+  column: "email" | "clerk_user_id",
+  value: string
+) {
   const supabase = supabaseAdmin();
   const { data: users } = await supabase
     .from("users")
     .select("id")
-    .eq("email", emailAddress);
+    .eq(column, value);
 
   // usersを直接削除しようとすると、テスト中に作成したaddresses/orders/
   // cart_items/favoritesがuser_idを参照しているため外部キー制約違反で
@@ -245,10 +281,7 @@ export async function cleanupTestUser(emailAddress: string) {
     await supabase.from("favorites").delete().eq("user_id", user.id);
   }
 
-  const { error } = await supabase
-    .from("users")
-    .delete()
-    .eq("email", emailAddress);
+  const { error } = await supabase.from("users").delete().eq(column, value);
   if (error) {
     throw new Error(`テスト用会員行の削除に失敗しました: ${error.message}`);
   }

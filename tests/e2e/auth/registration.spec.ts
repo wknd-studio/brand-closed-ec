@@ -3,6 +3,7 @@ import {
   signUpAsIndividual,
   cleanupTestUser,
   slotEmail,
+  STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
 } from "../helpers/clerk-test-invitation";
 
 const TEST_EMAIL = slotEmail("info+clerk_test_registration@wknd-studio.com");
@@ -23,6 +24,8 @@ test.describe("実際の登録画面を経由した新規会員登録", () => {
     await page.getByRole("radio", { name: /STARTER/ }).check();
     await page.getByRole("button", { name: /このプランで始める/ }).click();
 
-    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    await expect(page).toHaveURL(/checkout\.stripe\.com/, {
+      timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
+    });
   });
 });

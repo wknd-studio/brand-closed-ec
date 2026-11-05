@@ -43,7 +43,8 @@ tasks:
     cmds:
       - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
         silent: true
-      - doppler run -- pnpm next dev --turbo
+      # ポートを明示すると、3000が使用中でも次の空きポート（ワークツリーのスロット2以降のポート）へ移らずエラーで止まる
+      - doppler run -- pnpm next dev --turbo --port 3000
 
   dev:stripe:
     desc: Stripe Webhook を localhost:3000 へ転送
