@@ -7,7 +7,7 @@ import type { LayerCoverageConfig } from "./layer-coverage";
  * （.github/labeler.yml の scripts/ci/**）。
  *
  * 閾値は「層に合った種類のテストで実行されていること」の担保が目的で、網羅率の競争ではない。
- * 業務ロジック（domain・use-cases）は関数100%・分岐90%、外部との境界（アダプタ・Supabase の実装・
+ * 業務ロジック（domain・use-cases）は関数100%・分岐100%、外部との境界（アダプタ・Supabase の実装・
  * APIルート）は関数100%（各関数が一度は実行されたか）。理由は scripts/ci/layer-coverage.ts の先頭。
  *
  * interface だけの src/repositories/**・src/queries/** は対象にしない。
@@ -18,14 +18,14 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       name: "domain（エンティティ・値オブジェクト・ドメインサービス）",
       suite: "unit",
       include: ["src/domain/**/*.ts"],
-      min: { functions: 100, branches: 90 },
+      min: { functions: 100, branches: 100 },
       howToTest: "ユニットテスト（DBもモックも無し）で、計算・分岐を確かめる",
     },
     {
       name: "use-cases",
       suite: "unit",
       include: ["src/use-cases/**/*.ts"],
-      min: { functions: 100, branches: 90 },
+      min: { functions: 100, branches: 100 },
       howToTest:
         "ユニットテスト（リポジトリをモック）で、冪等性・ロールバック等の分岐を確かめる",
     },
@@ -67,9 +67,11 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
   // 検査が「例外から外す」よう失敗するので削除する
   exceptions: [
     ...[
+      "src/domain/entities/order.ts",
       "src/domain/entities/order-item.ts",
       "src/domain/value-objects/member-rank.ts",
       "src/use-cases/create-address.ts",
+      "src/use-cases/mark-checkout-order-as-paid.ts",
       "src/use-cases/mark-invoice-order-as-paid.ts",
       "src/use-cases/place-order.ts",
     ].map((file) => ({ file, suite: "unit" as const, issue: 538 })),
