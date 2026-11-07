@@ -52,7 +52,7 @@ risk:payment:
           - "src/app/onboarding/plan/actions.ts"
           - "src/app/onboarding/payment/**"
 
-# ゲート自体を弱める変更（CI・権限設定・lint・完了チェック）
+# ゲート自体を弱める変更（CI・権限設定・lint・完了チェック・テストの設定）
 risk:gate:
   - changed-files:
       - any-glob-to-any-file:
@@ -61,6 +61,8 @@ risk:gate:
           - "eslint.config.mjs"
           - "Taskfile.yml"
           - "scripts/ci/**"
+          # テストの対象・層ごとのカバレッジ検査の配線（閾値・例外は scripts/ci/layer-coverage.config.ts）
+          - "vitest*.config.ts"
 
 # 依存の追加・更新（スクリプトだけの変更も区別できないため対象にする）
 risk:deps:
@@ -104,6 +106,8 @@ high-risk:
           - "eslint.config.mjs"
           - "Taskfile.yml"
           - "scripts/ci/**"
+          # テストの対象・層ごとのカバレッジ検査の配線（閾値・例外は scripts/ci/layer-coverage.config.ts）
+          - "vitest*.config.ts"
           # risk:deps
           - "package.json"
           - "pnpm-lock.yaml"
