@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@sentry/nextjs", () => ({
-  captureException: vi.fn(),
-}));
-
-import * as Sentry from "@sentry/nextjs";
 import { placeOrder, type PlaceOrderInput } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
@@ -20,6 +15,7 @@ import {
   fixedProduct,
   negotiableProduct,
   afterOrderFixedProduct,
+  makeErrorReporter,
 } from "./helpers";
 
 const baseInput = {
@@ -41,6 +37,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     const result = await placeOrder(baseInput, deps);
@@ -80,6 +77,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([negotiableProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     const result = await placeOrder(
@@ -119,6 +117,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([afterOrderFixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     const result = await placeOrder(
@@ -159,6 +158,7 @@ describe("placeOrder", () => {
       ]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow(
@@ -186,6 +186,7 @@ describe("placeOrder", () => {
       ]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     await expect(
@@ -220,6 +221,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     await expect(
@@ -248,6 +250,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([{ ...fixedProduct, minRank: "premium" }]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     const error = await placeOrder(baseInput, deps).catch((e: unknown) => e);
@@ -269,6 +272,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     const result = await placeOrder(
@@ -329,6 +333,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     await placeOrder(baseInput, deps);
@@ -349,6 +354,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("DB接続エラー");
@@ -372,6 +378,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway,
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
@@ -381,13 +388,15 @@ describe("placeOrder", () => {
     expect(orderRepo.delete).toHaveBeenCalledWith(savedOrderId);
   });
 
-  it("Checkout Session作成の失敗を補償削除できなかった場合、Sentryに送信する", async () => {
+  it("Checkout Session作成の失敗を補償削除できなかった場合、ErrorReporterへ通知する", async () => {
     const orderRepo = makeOrderRepo();
     vi.mocked(orderRepo.delete).mockRejectedValue(new Error("削除も失敗"));
     const paymentGateway = makePaymentGateway();
     vi.mocked(paymentGateway.createCheckoutSession).mockRejectedValue(
       new Error("Stripeエラー")
     );
+
+    const errorReporter = makeErrorReporter();
 
     const deps = {
       userRepo: makeUserRepo(),
@@ -396,11 +405,12 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway,
       notificationService: makeNotificationService(),
+      errorReporter,
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
 
-    expect(Sentry.captureException).toHaveBeenCalledWith(
+    expect(errorReporter.captureException).toHaveBeenCalledWith(
       expect.any(Error),
       expect.objectContaining({
         tags: expect.objectContaining({ useCase: "placeOrder" }),
@@ -416,6 +426,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]), // paymentTiming: at_order
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
     };
 
     const tamperedInput = {

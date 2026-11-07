@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@sentry/nextjs", () => ({
-  captureException: vi.fn(),
-}));
-
-import * as Sentry from "@sentry/nextjs";
 import { withdraw } from "@/use-cases/withdraw";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import {
@@ -16,6 +11,7 @@ import {
   makeAccountGateway,
   makeUser,
   makeOrder,
+  makeErrorReporter,
 } from "./helpers";
 
 describe("withdraw", () => {
@@ -32,6 +28,7 @@ describe("withdraw", () => {
           subscriptionRepo: makeSubscriptionRepo(),
           subscriptionGateway: makeSubscriptionGateway(),
           accountGateway: makeAccountGateway(),
+          errorReporter: makeErrorReporter(),
         }
       )
     ).rejects.toThrow("ユーザーが見つかりません");
@@ -51,6 +48,7 @@ describe("withdraw", () => {
           subscriptionRepo: makeSubscriptionRepo(),
           subscriptionGateway: makeSubscriptionGateway(),
           accountGateway: makeAccountGateway(),
+          errorReporter: makeErrorReporter(),
         }
       )
     ).rejects.toThrow(ActiveOrdersExistError);
@@ -74,6 +72,7 @@ describe("withdraw", () => {
         subscriptionRepo,
         subscriptionGateway,
         accountGateway,
+        errorReporter: makeErrorReporter(),
       }
     );
 
@@ -101,6 +100,7 @@ describe("withdraw", () => {
         subscriptionRepo,
         subscriptionGateway,
         accountGateway,
+        errorReporter: makeErrorReporter(),
       }
     );
 
@@ -130,6 +130,7 @@ describe("withdraw", () => {
           subscriptionRepo,
           subscriptionGateway,
           accountGateway,
+          errorReporter: makeErrorReporter(),
         }
       )
     ).rejects.toThrow();
@@ -162,6 +163,7 @@ describe("withdraw", () => {
           subscriptionRepo,
           subscriptionGateway,
           accountGateway,
+          errorReporter: makeErrorReporter(),
         }
       )
     ).resolves.toBeUndefined();
@@ -170,7 +172,7 @@ describe("withdraw", () => {
     consoleSpy.mockRestore();
   });
 
-  it("Clerk ban 失敗時にSentry.captureExceptionを呼ぶ", async () => {
+  it("Clerk ban 失敗時にErrorReporterへ通知する", async () => {
     const user = makeUser({ rank: "basic" });
     const userRepo = makeUserRepo(user);
     const orderRepo = makeOrderRepo();
@@ -182,7 +184,7 @@ describe("withdraw", () => {
     const error = new Error("Clerk error");
     vi.mocked(accountGateway.banUser).mockRejectedValue(error);
     vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(Sentry.captureException).mockClear();
+    const errorReporter = makeErrorReporter();
 
     await withdraw(
       { clerkUserId: "clerk-1" },
@@ -192,10 +194,11 @@ describe("withdraw", () => {
         subscriptionRepo,
         subscriptionGateway,
         accountGateway,
+        errorReporter,
       }
     );
 
-    expect(Sentry.captureException).toHaveBeenCalledWith(
+    expect(errorReporter.captureException).toHaveBeenCalledWith(
       error,
       expect.objectContaining({
         tags: expect.objectContaining({ useCase: "withdraw" }),
