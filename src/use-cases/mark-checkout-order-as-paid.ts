@@ -1,13 +1,14 @@
-import * as Sentry from "@sentry/nextjs";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { NotificationService } from "@/repositories/notification-service";
+import type { ErrorReporter } from "@/repositories/error-reporter";
 
 export type MarkCheckoutOrderAsPaidInput = { stripeCheckoutSessionId: string };
 export type MarkCheckoutOrderAsPaidDeps = {
   orderRepo: OrderRepository;
   userRepo: UserRepository;
   notificationService: NotificationService;
+  errorReporter: ErrorReporter;
 };
 
 /** Checkout Sessionの決済完了を、対応する決済単位のpaidとして記録する */
@@ -15,7 +16,7 @@ export async function markCheckoutOrderAsPaid(
   input: MarkCheckoutOrderAsPaidInput,
   deps: MarkCheckoutOrderAsPaidDeps
 ): Promise<void> {
-  const { orderRepo, userRepo, notificationService } = deps;
+  const { orderRepo, userRepo, notificationService, errorReporter } = deps;
 
   const order = await orderRepo.findByStripeCheckoutSessionId(
     input.stripeCheckoutSessionId
@@ -33,8 +34,8 @@ export async function markCheckoutOrderAsPaid(
     // 運営者が未払い決済単位をキャンセルした後、顧客が古いCheckoutページで決済を
     // 完了させた、またはStripeが遅延Webhookを再送したケース（issue #270）。
     // 例外を投げてWebhookに500を返すとStripeが最大3日間リトライを続けてしまうため、
-    // 要手動対応としてSentryに記録した上で200を返す（入金自体は実際にされている）
-    Sentry.captureException(
+    // 要手動対応としてErrorReporterで通知した上で200を返す（入金自体は実際にされている）
+    errorReporter.captureException(
       new Error("キャンセル済みの決済単位への入金Webhookを受信しました"),
       {
         tags: { useCase: "markCheckoutOrderAsPaid" },

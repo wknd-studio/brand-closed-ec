@@ -15,6 +15,7 @@ import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-ad
 import { SanityProductRepository } from "@/infrastructure/sanity/sanity-product-repository";
 import { StripePaymentGateway } from "@/infrastructure/stripe/stripe-payment-gateway";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
+import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 
 type PlaceOrderResult = { error: string };
 
@@ -55,6 +56,7 @@ export async function placeOrder(
             productRepo: new SanityProductRepository(),
             paymentGateway: new StripePaymentGateway(),
             notificationService: new ResendNotificationService(),
+            errorReporter: new SentryErrorReporter(),
           }
         )
     );

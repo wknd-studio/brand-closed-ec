@@ -134,6 +134,7 @@ beforeAll(async () => {
       productRepo,
       paymentGateway,
       notificationService,
+      errorReporter: { captureException: vi.fn() },
     }
   );
 

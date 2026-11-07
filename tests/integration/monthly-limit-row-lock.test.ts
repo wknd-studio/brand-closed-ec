@@ -105,6 +105,7 @@ async function runPlaceOrder() {
       productRepo,
       paymentGateway,
       notificationService,
+      errorReporter: { captureException: vi.fn() },
     }
   );
 }

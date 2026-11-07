@@ -12,6 +12,7 @@ import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-
 import { SupabaseSubscriptionOnboardingRepository } from "@/infrastructure/supabase/supabase-subscription-onboarding-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 import {
   toSubscriptionStatus,
   toSubscriptionPeriod,
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
         orderRepo: new SupabaseOrderRepository(createAdminClient()),
         userRepo: new SupabaseUserRepository(createAdminClient()),
         notificationService: new ResendNotificationService(),
+        errorReporter: new SentryErrorReporter(),
       };
 
       try {
@@ -256,6 +258,7 @@ export async function POST(req: Request) {
       orderRepo: new SupabaseOrderRepository(createAdminClient()),
       userRepo: new SupabaseUserRepository(createAdminClient()),
       notificationService: new ResendNotificationService(),
+      errorReporter: new SentryErrorReporter(),
     };
 
     try {

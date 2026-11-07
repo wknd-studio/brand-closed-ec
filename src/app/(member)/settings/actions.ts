@@ -15,6 +15,7 @@ import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-orde
 import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 import type { AddressType } from "@/domain/entities/address";
 
 type ActionResult = { success: true } | { error: string };
@@ -136,6 +137,7 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
         subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
         subscriptionGateway: new StripeSubscriptionGateway(),
         accountGateway: new ClerkAccountGateway(),
+        errorReporter: new SentryErrorReporter(),
       }
     );
     return { success: true };

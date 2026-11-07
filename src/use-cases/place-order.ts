@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/nextjs";
 import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
 import { CartItem } from "@/domain/value-objects/cart-item";
@@ -21,6 +20,7 @@ import type {
   CheckoutLineItem,
 } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
+import type { ErrorReporter } from "@/repositories/error-reporter";
 
 export type PlaceOrderInput = {
   clerkUserId: string;
@@ -41,6 +41,7 @@ export type PlaceOrderDeps = {
   productRepo: ProductRepository;
   paymentGateway: PaymentGateway;
   notificationService: NotificationService;
+  errorReporter: ErrorReporter;
 };
 
 export async function placeOrder(
@@ -54,6 +55,7 @@ export async function placeOrder(
     productRepo,
     paymentGateway,
     notificationService,
+    errorReporter,
   } = deps;
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
@@ -182,8 +184,8 @@ export async function placeOrder(
       await orderRepo.delete(order.id);
     } catch (deleteError) {
       // 補償削除自体の失敗は、孤児化した注文が残っていることに誰も気づけなくなる
-      // ため、元のエラーとは別にSentryへ送信する（docs/ai-prompts/sentry.md、issue #272）
-      Sentry.captureException(deleteError, {
+      // ため、元のエラーとは別にErrorReporterで通知する（docs/ai-prompts/sentry.md、issue #272）
+      errorReporter.captureException(deleteError, {
         tags: { useCase: "placeOrder", step: "compensatingDelete" },
         extra: { orderId: order.id, cause },
       });

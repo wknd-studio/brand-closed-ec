@@ -22,6 +22,7 @@ import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
+import type { ErrorReporter } from "@/repositories/error-reporter";
 import type { AdminUserRepository } from "@/repositories/admin-user-repository";
 import type { AdminMembershipRepository } from "@/repositories/admin-membership-repository";
 import type {
@@ -341,5 +342,11 @@ export function makeAdminMembershipRepo(
     findByAdminUserId: vi.fn().mockResolvedValue(membership),
     save: vi.fn().mockResolvedValue(undefined),
     deleteByAdminUserId: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+export function makeErrorReporter(): ErrorReporter {
+  return {
+    captureException: vi.fn(),
   };
 }

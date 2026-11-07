@@ -123,7 +123,7 @@ use-case の中に `if (user.rankCode === "gold" && ...)` のような判定を�
 
 ## 外側の関心事はポート経由
 
-エラー通知（Sentry）・メール送信・外部サービスの操作など、外側の関心事は use-case から直接呼ばない。ポート（interface）を `src/repositories/` に定義し、実装を `src/infrastructure/` に置いて、composition で注入する（エラー通知のポート化は #447）。
+エラー通知（Sentry）・メール送信・外部サービスの操作など、外側の関心事は use-case から直接呼ばない。ポート（interface）を `src/repositories/` に定義し、実装を `src/infrastructure/` に置いて、composition で注入する（エラー通知は `ErrorReporter`（`src/repositories/error-reporter.ts`）。実装は `src/infrastructure/sentry/`）。
 
 - use-case から `@sentry/nextjs` などの外部SDKを import しない
 - app（Server Action・Route Handler）の catch での `Sentry.captureException` は、`docs/ai-prompts/sentry.md` のとおり app に書いてよい
