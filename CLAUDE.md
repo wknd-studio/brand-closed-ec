@@ -78,7 +78,7 @@ feature/* →  Cloudflare Pages Preview URL
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
 - **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、次の2つを満たせば、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop --body-file <本文ファイル>` まで進めてよい。PR本文は `.github/pull_request_template.md` の各項目を埋める（該当しない欄は「なし」と書く）。
   - `task check` がgreen
-  - レビュー用サブエージェント `spec-reviewer`（`.claude/agents/spec-reviewer.md`）に、`git diff origin/develop...HEAD` の差分・担当issueの本文・関連する `specs/*/spec.md` だけを渡してレビューさせ、重大な指摘を解消済み（指摘と対応はPR本文に書く）
+  - レビュー用サブエージェント `spec-reviewer`（`.claude/agents/spec-reviewer.md`）に、`git diff origin/develop...HEAD` の差分・担当issueの本文・関連する `specs/*/spec.md`・層の責務の基準の `docs/ai-prompts/architecture.md` だけを渡してレビューさせ、重大な指摘を解消済み（指摘と対応はPR本文に書く）
 
   PR本文冒頭の「レビューの要点」は、人間が最初に読み、残りを読むかを決める欄なので短く書く（空欄だとCIの `PR Review Summary` が失敗する）。
   - **変わる振る舞い**: 利用者・運営者・システムから見て何が変わるかを1〜2行で。変更したファイルの列挙にしない
