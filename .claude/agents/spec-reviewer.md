@@ -21,7 +21,7 @@ tools: Read, Grep, Glob
 2. **担当範囲外の変更**: issueの目的に関係しない変更（ついでのリファクタ・無関係な修正・別issueの内容）。CLAUDE.md の「PR の粒度」（1PR = 1目的 = 1issue）に照らす
 3. **正確性に関わる欠陥**: バグ、境界値・エラー時の分岐漏れ、RLS・認可の抜け、冪等性の欠如、テストが実装の誤りを検出できない（壊しても通る）など
 4. **層の責務違反**: `docs/ai-prompts/architecture.md` を基準に、差分で追加・変更したコードが置くべき層にあるかを見る。依存の向き（import）は lint が止めるので、lint で検出できない責務の違反を見る。最低限、次を確かめる
-   - **app に業務判断が無いか**: `src/app/` の Server Action・page・layout・Route Handler（と `src/components/`）に、金額・ランク・状態遷移などの判定（「〜できるか」「いくらか」「次の状態は何か」）が書かれていない。app がするのは入力の受け取り・認証済みユーザーの取得・composition が返す use-case / Query Service の呼び出し・表示だけ
+   - **app に業務判断が無いか**: `src/app/` の Server Action・page・layout・Route Handler・`src/middleware.ts`（と `src/components/`）に、金額・ランク・状態遷移などの判定（「〜できるか」「いくらか」「次の状態は何か」）が書かれていない。app がするのは入力の受け取り・認証済みユーザーの取得・composition が返す use-case / Query Service の呼び出し・表示だけ
    - **use-case に業務ルールが無いか**: `src/use-cases/` に判定ロジック（`if (user.rankCode === "gold" && ...)` のような条件）が書かれていない。あれば、どの entity・value object・domain service のメソッドにするかを添えて domain へ移す提案をする。手順の分岐（取得できなければエラーにする、前の手順が失敗したら補償処理をする等）は業務ルールではないので指摘しない
    - **読み取りが Query Service を通っているか**: page・layout・middleware が画面に出すデータを、`src/queries/` の interface と `src/infrastructure/` の実装を通して取っている。app での直接クエリ（`createClient`・`.from("...")`・`sanityClient.fetch` 等）、集約の repository への画面用の型・メソッドの追加、use-case からの Query Service の利用をしていない
    - **domain の再実装が無いか**: domain にある判定・定数（`MemberRank` の判定・`RANK_ORDER` 等）と同じものを、別の層（app・components・use-case・Query Service の実装・クエリの条件）で書き直していない。domain を Grep して同じ判定・定数が無いかを確かめる
