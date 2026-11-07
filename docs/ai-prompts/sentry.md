@@ -31,6 +31,23 @@ try {
 
 参考実装: `src/app/api/webhooks/stripe/route.ts`（署名検証失敗の400パスは送らない。catchブロック内の例外のみ送る）
 
+### use-cases では `ErrorReporter` を使う
+
+use-cases は `@sentry/nextjs` を import しない（`docs/ai-prompts/architecture.md` の「外側の関心事はポート経由」）。use-case の中で例外を握りつぶす・処理を続けるときは、`deps` で受け取った `ErrorReporter`（`src/repositories/error-reporter.ts`）の `captureException` を呼ぶ。tags・extra は `Sentry.captureException` と同じ形で渡せる。
+
+```ts
+} catch (err) {
+  errorReporter.captureException(err, {
+    tags: { useCase: "withdraw" },
+    extra: { clerkUserId: input.clerkUserId },
+  });
+}
+```
+
+- Sentry 版の実装は `src/infrastructure/sentry/sentry-error-reporter.ts`（`SentryErrorReporter`）。use-case を組み立てる側で `errorReporter: new SentryErrorReporter()` を注入する
+- ユニットテストでは `tests/unit/use-cases/helpers.ts` の `makeErrorReporter()` をモックとして渡し、`errorReporter.captureException` が呼ばれることを確認する
+- app（Server Action・Route Handler）の catch では、これまでどおり `Sentry.captureException` を直接呼んでよい
+
 ## `Sentry.setUser()`について: `middleware.ts`では呼ばない、共通ヘルパーに1箇所だけ書く
 
 Sentryは「現在アクティブなリクエストのスコープ」を自動的に分離する仕組みを持っており、通常のリクエスト処理中（Server Action・Route Handler・Server Component）であれば、`setUser()`はどこで呼んでもそのリクエストだけに閉じる。**Server Actionごとに毎回書く必要はない**。
