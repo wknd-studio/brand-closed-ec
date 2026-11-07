@@ -146,8 +146,8 @@ describe("対象の層（scripts/ci/layer-coverage.config.ts）", () => {
   });
 
   it.each([
-    ["src/domain/entities/order.ts", "unit", { functions: 100, branches: 90 }],
-    ["src/use-cases/place-order.ts", "unit", { functions: 100, branches: 90 }],
+    ["src/domain/entities/order.ts", "unit", { functions: 100, branches: 100 }],
+    ["src/use-cases/place-order.ts", "unit", { functions: 100, branches: 100 }],
     [
       "src/infrastructure/stripe/stripe-payment-gateway.ts",
       "unit",
