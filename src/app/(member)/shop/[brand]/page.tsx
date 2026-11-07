@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchProducts, getAllowedRanks } from "@/lib/sanity/products";
+import { fetchProducts } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ProductGrid from "./product-grid";
@@ -21,7 +22,7 @@ export default async function BrandProductsPage({
 
   const user = await userRepo.findByClerkUserId(userId!);
   const userRank = user?.rank.value ?? "starter";
-  const allowedRanks = getAllowedRanks(userRank);
+  const allowedRanks = MemberRank.of(userRank).accessibleRanks();
   const [{ products, total }, theme] = await Promise.all([
     fetchProducts({ allowedRanks, brand }),
     fetchBrandTheme(brand),

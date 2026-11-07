@@ -1,4 +1,4 @@
-import { isProductAccessible } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 
 export type FavoriteListItem<T> = {
   product: T;
@@ -14,7 +14,7 @@ export function buildFavoriteListItems<
 >(
   favoriteSanityProductIds: string[],
   products: T[],
-  userRank: string
+  userRank: MemberRank
 ): FavoriteListItem<T>[] {
   const productById = new Map(
     products.map((product) => [product._id, product])
@@ -25,6 +25,6 @@ export function buildFavoriteListItems<
     .filter((product): product is T => product !== undefined)
     .map((product) => ({
       product,
-      isAccessible: isProductAccessible(userRank, product.min_rank),
+      isAccessible: userRank.canAccess(MemberRank.of(product.min_rank)),
     }));
 }

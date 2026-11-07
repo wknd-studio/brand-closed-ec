@@ -8,6 +8,7 @@ import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
 import { OrderSettlement } from "@/domain/entities/order-settlement";
+import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
@@ -69,7 +70,11 @@ export async function placeOrder(
     );
     if (!product) throw new Error("商品が見つかりません");
     if (!user.rank.canAccess(MemberRank.of(product.minRank))) {
-      throw new Error("アクセス権限のない商品が含まれています");
+      throw new ProductNotAccessibleError(
+        product.sanityProductId,
+        user.rank.value,
+        product.minRank
+      );
     }
   }
 

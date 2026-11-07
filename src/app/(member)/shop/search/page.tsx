@@ -1,7 +1,8 @@
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchProducts, getAllowedRanks } from "@/lib/sanity/products";
+import { fetchProducts } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 import ProductGrid from "../[brand]/product-grid";
 import SearchForm from "./search-form";
 
@@ -19,7 +20,7 @@ export default async function SearchPage({
 
   const user = await userRepo.findByClerkUserId(userId!);
   const userRank = user?.rank.value ?? "starter";
-  const allowedRanks = getAllowedRanks(userRank);
+  const allowedRanks = MemberRank.of(userRank).accessibleRanks();
 
   const { products, total } = keyword
     ? await fetchProducts({ allowedRanks, keyword })

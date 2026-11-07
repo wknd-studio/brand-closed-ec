@@ -4,11 +4,9 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { PortableText } from "@portabletext/react";
 import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import {
-  fetchProductById,
-  isProductAccessible,
-  type MemberRank,
-} from "@/lib/sanity/products";
+import { fetchProductById } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
+import { RankPrices } from "@/domain/value-objects/rank-prices";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ImageGallery from "./image-gallery";
@@ -29,18 +27,20 @@ export default async function ProductDetailPage({
 
   const user = await userRepo.findByClerkUserId(userId!);
   const userRank = user?.rank.value ?? "starter";
+  const rank = MemberRank.of(userRank);
   const [product, theme] = await Promise.all([
     fetchProductById(id),
     fetchBrandTheme(brand),
   ]);
 
-  if (!product || !isProductAccessible(userRank, product.min_rank)) {
+  if (!product || !rank.canAccess(MemberRank.of(product.min_rank))) {
     notFound();
   }
 
-  const rankPrice = product.is_negotiable
-    ? null
-    : (product.prices?.[userRank as MemberRank] ?? null);
+  const rankPrice = RankPrices.of({
+    isNegotiable: product.is_negotiable,
+    prices: product.prices,
+  }).priceFor(rank);
   const isOutOfStock = product.availability === "out_of_stock";
 
   return (
@@ -88,7 +88,7 @@ export default async function ProductDetailPage({
                 </p>
               ) : rankPrice != null ? (
                 <p className="text-2xl font-bold">
-                  ¥{rankPrice.toLocaleString()}
+                  ¥{rankPrice.amount.toLocaleString()}
                   <span className="ml-1 text-sm font-normal text-gray-500">
                     （{userRank} ランク価格）
                   </span>
@@ -109,7 +109,7 @@ export default async function ProductDetailPage({
                 productId: id,
                 productName: product.name,
                 thumbnail: product.images?.[0] ?? null,
-                unitPrice: rankPrice,
+                unitPrice: rankPrice?.amount ?? null,
                 availability: product.availability as
                   | "available"
                   | "out_of_stock"

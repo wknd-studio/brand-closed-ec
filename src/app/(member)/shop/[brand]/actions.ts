@@ -2,11 +2,8 @@
 
 import { requireAuth } from "@/lib/auth/current-user";
 import { createAdminClient } from "@/lib/supabase/server-admin";
-import {
-  fetchProducts,
-  getAllowedRanks,
-  type Product,
-} from "@/lib/sanity/products";
+import { fetchProducts, type Product } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 
 export async function fetchMoreProducts(
   offset: number,
@@ -22,7 +19,9 @@ export async function fetchMoreProducts(
     .eq("clerk_user_id", userId)
     .single();
 
-  const allowedRanks = getAllowedRanks(user?.rank_code ?? "starter");
+  const allowedRanks = MemberRank.of(
+    user?.rank_code ?? "starter"
+  ).accessibleRanks();
   const { products } = await fetchProducts({ allowedRanks, offset, ...params });
   return products;
 }

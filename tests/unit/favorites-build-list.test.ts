@@ -5,6 +5,7 @@ vi.mock("next-sanity", () => ({
 }));
 
 import { buildFavoriteListItems } from "@/lib/favorites/build-list";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 
 type FakeProduct = { _id: string; min_rank: string; name: string };
 
@@ -22,7 +23,11 @@ describe("buildFavoriteListItems", () => {
       makeProduct({ _id: "c" }),
     ];
 
-    const result = buildFavoriteListItems(["c", "a", "b"], products, "starter");
+    const result = buildFavoriteListItems(
+      ["c", "a", "b"],
+      products,
+      MemberRank.of("starter")
+    );
 
     expect(result.map((r) => r.product._id)).toEqual(["c", "a", "b"]);
   });
@@ -30,7 +35,11 @@ describe("buildFavoriteListItems", () => {
   it("会員ランクが商品のmin_rank未満の場合はisAccessible:falseになる", () => {
     const products = [makeProduct({ _id: "a", min_rank: "premium" })];
 
-    const result = buildFavoriteListItems(["a"], products, "starter");
+    const result = buildFavoriteListItems(
+      ["a"],
+      products,
+      MemberRank.of("starter")
+    );
 
     expect(result[0].isAccessible).toBe(false);
   });
@@ -38,7 +47,11 @@ describe("buildFavoriteListItems", () => {
   it("会員ランクが商品のmin_rank以上の場合はisAccessible:trueになる", () => {
     const products = [makeProduct({ _id: "a", min_rank: "starter" })];
 
-    const result = buildFavoriteListItems(["a"], products, "premium");
+    const result = buildFavoriteListItems(
+      ["a"],
+      products,
+      MemberRank.of("premium")
+    );
 
     expect(result[0].isAccessible).toBe(true);
   });
@@ -49,7 +62,7 @@ describe("buildFavoriteListItems", () => {
     const result = buildFavoriteListItems(
       ["a", "deleted-id"],
       products,
-      "starter"
+      MemberRank.of("starter")
     );
 
     expect(result.map((r) => r.product._id)).toEqual(["a"]);

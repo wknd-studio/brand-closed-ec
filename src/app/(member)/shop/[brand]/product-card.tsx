@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { MemberRank, Product } from "@/lib/sanity/products";
+import type { Product } from "@/lib/sanity/products";
+import { MemberRank } from "@/domain/value-objects/member-rank";
+import { RankPrices } from "@/domain/value-objects/rank-prices";
 import FavoriteButton from "@/components/favorite-button";
 
 export default function ProductCard({
@@ -10,9 +12,10 @@ export default function ProductCard({
   product: Product;
   userRank: string;
 }) {
-  const rankPrice = product.is_negotiable
-    ? null
-    : (product.prices?.[userRank as MemberRank] ?? null);
+  const rankPrice = RankPrices.of({
+    isNegotiable: product.is_negotiable,
+    prices: product.prices,
+  }).priceFor(MemberRank.of(userRank));
 
   return (
     <Link
@@ -53,7 +56,9 @@ export default function ProductCard({
         {product.is_negotiable ? (
           <p className="text-sm font-semibold text-gray-600">価格要相談</p>
         ) : rankPrice != null ? (
-          <p className="text-sm font-semibold">¥{rankPrice.toLocaleString()}</p>
+          <p className="text-sm font-semibold">
+            ¥{rankPrice.amount.toLocaleString()}
+          </p>
         ) : null}
       </div>
     </Link>

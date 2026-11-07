@@ -1,24 +1,5 @@
 import { sanityClient } from "./client";
-import { RANK_ORDER } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
-
-export type MemberRank = MemberRankValue;
-
-export function getAllowedRanks(userRank: string): string[] {
-  const idx = RANK_ORDER.indexOf(userRank as MemberRank);
-  if (idx === -1) return [RANK_ORDER[0]];
-  return [...RANK_ORDER].slice(0, idx + 1);
-}
-
-export function isProductAccessible(
-  userRank: string,
-  productMinRank: string
-): boolean {
-  const userIdx = RANK_ORDER.indexOf(userRank as MemberRank);
-  const minIdx = RANK_ORDER.indexOf(productMinRank as MemberRank);
-  if (userIdx === -1 || minIdx === -1) return false;
-  return userIdx >= minIdx;
-}
 
 export const PAGE_SIZE = 12;
 
@@ -33,7 +14,7 @@ export type Product = {
   brand: string;
   retail_price: number;
   is_negotiable: boolean;
-  prices: Partial<Record<MemberRank, number>> | null;
+  prices: Partial<Record<MemberRankValue, number>> | null;
   min_rank: string;
   availability: string;
   thumbnail: string | null;
@@ -47,7 +28,7 @@ export type ProductDetail = {
   description: unknown[] | null;
   retail_price: number;
   is_negotiable: boolean;
-  prices: Partial<Record<MemberRank, number>> | null;
+  prices: Partial<Record<MemberRankValue, number>> | null;
   min_rank: string;
   availability: string;
   images: string[] | null;
