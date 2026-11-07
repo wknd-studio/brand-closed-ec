@@ -1,9 +1,9 @@
-import * as Sentry from "@sentry/nextjs";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { SubscriptionRepository } from "@/repositories/subscription-repository";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
+import type { ErrorReporter } from "@/repositories/error-reporter";
 
 export type WithdrawInput = {
   clerkUserId: string;
@@ -15,6 +15,7 @@ export type WithdrawDeps = {
   subscriptionRepo: SubscriptionRepository;
   subscriptionGateway: SubscriptionGateway;
   accountGateway: AccountGateway;
+  errorReporter: ErrorReporter;
 };
 
 export async function withdraw(
@@ -27,6 +28,7 @@ export async function withdraw(
     subscriptionRepo,
     subscriptionGateway,
     accountGateway,
+    errorReporter,
   } = deps;
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
@@ -51,7 +53,7 @@ export async function withdraw(
   try {
     await accountGateway.banUser(input.clerkUserId);
   } catch (err) {
-    Sentry.captureException(err, {
+    errorReporter.captureException(err, {
       tags: { useCase: "withdraw" },
       extra: { clerkUserId: input.clerkUserId },
     });
