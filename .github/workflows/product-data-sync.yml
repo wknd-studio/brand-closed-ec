@@ -28,6 +28,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { ref: "${{ matrix.ref }}" }
+      - name: Checkout CI actions of this workflow
+        # CLIのインストール手順（.github/actions/install-cli）は、checkoutしたブランチ（mainの
+        # こともある）ではなく、このワークフローと同じコミットのものを使う。mainへ昇格する前でも
+        # 本番の同期のジョブがインストールで落ちないようにするため（#546）
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: ci-tools
+          sparse-checkout: .github/actions/install-cli
+          # cone mode だとルート直下のファイル（package.json 等）まで入るため、actionだけを取る
+          sparse-checkout-cone-mode: false
       - name: Check sync script is released to this branch
         # 同期機能がまだmainに昇格していない間、本番ジョブが毎日失敗し続けないよう、
         # checkoutしたコードにスクリプトが無ければ以降をスキップする
@@ -44,8 +55,9 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.released.outputs.ok == 'true'
         with: { node-version: "22", cache: "pnpm" }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./ci-tools/.github/actions/install-cli
         if: steps.released.outputs.ok == 'true'
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
         if: steps.released.outputs.ok == 'true'
       - run: doppler run -- pnpm tsx scripts/product-import/run-scheduled-sync.ts
