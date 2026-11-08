@@ -114,6 +114,10 @@ describe("CI の CLI のインストール", () => {
       expect(checkout, key).toBeDefined();
       expect(checkout?.with?.ref).toBe("${{ github.sha }}");
       expect(checkout?.with?.["sparse-checkout"]).toContain(INSTALL_ACTION);
+      // cone mode の既定だとルート直下のファイル（package.json 等）まで入るため、actionだけを取る
+      expect(String(checkout?.with?.["sparse-checkout-cone-mode"])).toBe(
+        "false"
+      );
     }
   });
 

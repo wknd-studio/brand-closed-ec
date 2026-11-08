@@ -59,6 +59,8 @@ describe("is_retryable", () => {
     ["5xx（500）", "0", "500"],
     ["タイムアウト（curl 28）", "28", "000"],
     ["接続失敗（curl 7）", "7", "000"],
+    ["本体の受信中のタイムアウト（curl 28・200）", "28", "200"],
+    ["本体の受信中の切断（curl 18・200）", "18", "200"],
   ])("%s はやり直す", (_label, curlExit, httpCode) => {
     expect(call(`is_retryable ${curlExit} ${httpCode}`).status).toBe(0);
   });
@@ -124,6 +126,12 @@ describe("fetch_with_retry", () => {
     const { status, calls } = fetchWith(["0:504", "28:000", "0:200"]);
     expect(status).toBe(0);
     expect(calls).toHaveLength(3);
+  });
+
+  it("200を受け取ったあとの受信中にタイムアウトしても、やり直して成功する", () => {
+    const { status, calls } = fetchWith(["28:200", "0:200"]);
+    expect(status).toBe(0);
+    expect(calls).toHaveLength(2);
   });
 
   it("5xxが続けば上限回数で諦めて失敗する", () => {
