@@ -29,13 +29,13 @@ risk:auth:
       - any-glob-to-any-file:
           - "src/middleware.ts"
           - "src/lib/auth/**"
-          - "src/lib/supabase/server-admin.ts"
+          - "src/infrastructure/supabase/server-admin.ts"
 
 # 決済・注文・金額計算
 risk:payment:
   - changed-files:
       - any-glob-to-any-file:
-          - "src/lib/stripe.ts"
+          - "src/infrastructure/stripe/client.ts"
           - "src/infrastructure/stripe/**"
           - "src/use-cases/place-order.ts"
           - "src/use-cases/cancel-order.ts"
@@ -82,9 +82,9 @@ high-risk:
           # risk:auth
           - "src/middleware.ts"
           - "src/lib/auth/**"
-          - "src/lib/supabase/server-admin.ts"
+          - "src/infrastructure/supabase/server-admin.ts"
           # risk:payment
-          - "src/lib/stripe.ts"
+          - "src/infrastructure/stripe/client.ts"
           - "src/infrastructure/stripe/**"
           - "src/use-cases/place-order.ts"
           - "src/use-cases/cancel-order.ts"
