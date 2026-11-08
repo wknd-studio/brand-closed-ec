@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/infrastructure/supabase/server";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import InvoiceCompleteClient from "./invoice-complete-client";
 

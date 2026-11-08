@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { getStripe, STRIPE_PRICE_IDS } from "@/lib/stripe";
+import { getStripe, STRIPE_PRICE_IDS } from "@/infrastructure/stripe/client";
 import type {
   OnboardingCheckoutGateway,
   OnboardingCheckoutSessionInput,

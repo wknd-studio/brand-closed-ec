@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { validateAndPreview } from "@/lib/product-import/validate-and-preview";
-import type { UnifiedProductRecord } from "@/lib/product-import/unified-product-schema";
+import { validateAndPreview } from "@/sanity/tools/product-import/validate-and-preview";
+import type { UnifiedProductRecord } from "@/sanity/tools/product-import/unified-product-schema";
 
 function record(
   overrides: Partial<UnifiedProductRecord> = {},

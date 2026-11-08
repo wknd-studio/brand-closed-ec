@@ -5,7 +5,7 @@ import * as Sentry from "@sentry/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth/current-user";
 import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import { RANK_ORDER } from "@/domain/value-objects/member-rank";

@@ -1,6 +1,6 @@
 # 認証・認可
 
-ルート保護（`src/middleware.ts`）・ログインユーザーの取得（`src/lib/auth/`）・RLSを迂回するservice roleクライアント（`src/lib/supabase/server-admin.ts`）の変更。漏れると、ログインしていない人や他の会員・権限の無い運営者が操作できてしまう。
+ルート保護（`src/middleware.ts`）・ログインユーザーの取得（`src/lib/auth/`）・RLSを迂回するservice roleクライアント（`src/infrastructure/supabase/server-admin.ts`）の変更。漏れると、ログインしていない人や他の会員・権限の無い運営者が操作できてしまう。
 
 ## 確認観点
 

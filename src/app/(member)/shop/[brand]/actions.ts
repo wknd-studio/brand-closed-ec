@@ -1,7 +1,7 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth/current-user";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { fetchProducts, type Product } from "@/lib/sanity/products";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 

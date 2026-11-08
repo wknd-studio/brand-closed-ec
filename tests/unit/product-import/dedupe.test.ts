@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { findMatchingProduct } from "@/lib/product-import/dedupe";
-import type { ExistingProductRef } from "@/lib/product-import/dedupe";
-import type { UnifiedProductRecord } from "@/lib/product-import/unified-product-schema";
+import { findMatchingProduct } from "@/sanity/tools/product-import/dedupe";
+import type { ExistingProductRef } from "@/sanity/tools/product-import/dedupe";
+import type { UnifiedProductRecord } from "@/sanity/tools/product-import/unified-product-schema";
 
 function record(
   overrides: Partial<UnifiedProductRecord> = {}

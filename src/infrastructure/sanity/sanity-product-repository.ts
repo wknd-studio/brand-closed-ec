@@ -1,4 +1,4 @@
-import { sanityClient } from "@/lib/sanity/client";
+import { sanityClient } from "@/infrastructure/sanity/client";
 import type {
   ProductRepository,
   ProductSnapshot,

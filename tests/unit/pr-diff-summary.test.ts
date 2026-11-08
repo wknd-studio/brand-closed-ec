@@ -23,7 +23,7 @@ describe("classifyPath", () => {
     ["src/app/api/webhooks/stripe/route.ts", "app"],
     ["src/app/(shop)/products/page.tsx", "app"],
     ["src/composition/order.ts", "app"],
-    ["src/lib/stripe.ts", "app"],
+    ["src/lib/cn.ts", "app"],
     ["src/middleware.ts", "app"],
     ["src/components/header.tsx", "components"],
     ["src/components/ui/button.tsx", "components"],

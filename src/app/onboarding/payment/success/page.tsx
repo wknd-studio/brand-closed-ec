@@ -1,8 +1,8 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
-import { getStripe } from "@/lib/stripe";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { getStripe } from "@/infrastructure/stripe/client";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
 import { isOnboardingCompleted } from "./actions";

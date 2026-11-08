@@ -20,14 +20,14 @@ vi.mock("next/navigation", () => ({
 
 const retrieveCheckoutSessionMock = vi.fn();
 const listSubscriptionsMock = vi.fn();
-vi.mock("@/lib/stripe", () => ({
+vi.mock("@/infrastructure/stripe/client", () => ({
   getStripe: () => ({
     checkout: { sessions: { retrieve: retrieveCheckoutSessionMock } },
     subscriptions: { list: listSubscriptionsMock },
   }),
 }));
 
-vi.mock("@/lib/supabase/server-admin", () => ({
+vi.mock("@/infrastructure/supabase/server-admin", () => ({
   createAdminClient: vi.fn(() => ({})),
 }));
 

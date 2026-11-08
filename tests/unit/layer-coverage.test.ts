@@ -112,7 +112,7 @@ describe("対象の層（scripts/ci/layer-coverage.config.ts）", () => {
     "src/types/database.types.ts",
     "src/app/(member)/order/checkout/page.tsx",
     "src/app/api/webhooks/stripe/helpers.ts",
-    "src/lib/stripe.ts",
+    "src/lib/cn.ts",
   ])("%s はどちらのテストでも対象外", (file) => {
     expect(layerOf(file, "unit", LAYER_COVERAGE)).toBeUndefined();
     expect(layerOf(file, "integration", LAYER_COVERAGE)).toBeUndefined();
