@@ -72,7 +72,7 @@ repository を通さない直接クエリは、domain や repository にある�
 
 ## 外部サービスのクライアント
 
-Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastructure/` に置く（例（#448 で移す予定）: `src/infrastructure/supabase/client.ts`。現在は `src/lib/supabase/`・`src/lib/sanity/client.ts`・`src/lib/stripe.ts`・`src/lib/email/index.ts` にある）。クライアントを使ってよいのは `src/infrastructure/` の中だけ（#440）。
+Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastructure/` に置く（`src/infrastructure/supabase/server.ts`・`server-admin.ts`・`src/infrastructure/sanity/client.ts`・`src/infrastructure/stripe/client.ts`・`src/infrastructure/resend/client.ts`）。クライアントを使ってよいのは `src/infrastructure/` の中だけ（#440）。
 
 - 例外: `src/sanity/`（Sanity Studio）は Studio の中で Sanity のクライアントを使ってよい（「層構成の対象外」を参照）
 - Clerk の認証済みユーザーの取得（`auth()` を包んだ共通ヘルパー）は Next.js のリクエストに結びついた処理なので、`src/lib/auth/` に置く。Clerk の管理API（ユーザーの削除等）を呼ぶ処理は gateway として `src/infrastructure/clerk/` に置く
@@ -99,14 +99,14 @@ Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastr
 
 ## メールテンプレート
 
-メールテンプレート（React Email）は `src/emails/` に置く（現在の `src/lib/email/templates/` から移す。#448）。テンプレートは props を受け取って表示するだけにし、送信（Resend の呼び出し）は `NotificationService` の実装（`src/infrastructure/resend/`）が行う。
+メールテンプレート（React Email）は `src/emails/` に置く。テンプレートは props を受け取って表示するだけにし、送信（テンプレートの描画と Resend の呼び出し）は `NotificationService` の実装（`src/infrastructure/resend/`）が行う。
 
 ## 層構成の対象外
 
 次は Next.js アプリの層構成の対象外とし、Studio 側にまとめる。
 
 - `src/sanity/`（Sanity Studio のスキーマ・構成・コンポーネント）
-- Studio 用ツール（現在の `src/lib/product-import`。商品の取り込み）。`src/sanity/` 配下へ移す
+- Studio 用ツール（`src/sanity/tools/product-import/`。商品の取り込み）
 
 これらは Studio の中で完結させ、Next.js アプリの層（domain・use-cases 等）から import しない。Studio から Next.js アプリの層を import することもしない。
 

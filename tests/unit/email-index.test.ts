@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// tests/setup.tsがグローバルに@/lib/email/indexをモックしているため、
+// tests/setup.tsがグローバルに@/infrastructure/resend/clientをモックしているため、
 // このファイルではgetResend()の実装自体を検証するために解除する
 vi.unmock("@/infrastructure/resend/client");
 

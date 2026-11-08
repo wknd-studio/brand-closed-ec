@@ -50,7 +50,7 @@ const OTHER_BENEFITS = [
 ];
 
 // 料金・月間仕入れ上限はdocs/archive/service-spec.mdおよびsrc/domain/value-objects/member-rank.ts
-// のMONTHLY_LIMITS（暫定値）に基づく表示専用の値。Stripeの実価格（src/lib/stripe.ts）とは独立して
+// のMONTHLY_LIMITS（暫定値）に基づく表示専用の値。Stripeの実価格（src/infrastructure/stripe/client.ts）とは独立して
 // 管理する。改定時はここも更新すること。
 const PLANS = [
   {

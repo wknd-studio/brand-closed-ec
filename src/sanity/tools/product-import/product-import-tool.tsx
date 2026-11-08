@@ -42,7 +42,7 @@ type Phase = "idle" | "previewing" | "previewed" | "applying" | "applied";
 
 /**
  * 検証プレビュー→確定を行うSanity Studioカスタムツール（FR-016, FR-019, User Story 1）。
- * ロジックはsrc/lib/product-import/配下の共有関数（csv-adapter・validate-and-preview・apply-import）を
+ * ロジックはsrc/sanity/tools/product-import/配下の共有関数（csv-adapter・validate-and-preview・apply-import）を
  * そのまま呼び出す。オンデマンド実行時のプレビュー確認（FR-022）とも同じロジックを共有する。
  * CSVは必ず対象csvCatalogの`pending_csv`（保留中のCSV）に事前保存されている前提のため、
  * このツール自体にはファイル選択UIを持たない（ユーザーとの協議: 商品CSVカタログ側で
