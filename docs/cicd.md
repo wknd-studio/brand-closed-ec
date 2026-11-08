@@ -179,6 +179,23 @@ E2E テストはチェックアウト・Invoice発行等でメール送信コー
 
 ---
 
+## CLI のインストール（Supabase CLI・Doppler CLI）
+
+CI の Supabase CLI・Doppler CLI は、共通の composite action `.github/actions/install-cli` でインストールする（`supabase/setup-cli`・`dopplerhq/cli-action` は使わない。#546）。
+
+```yaml
+- uses: ./.github/actions/install-cli
+  with: { tool: supabase, version: 2.116.0 }
+```
+
+- `github.com/<repo>/releases/download/` は一部のリリースで504を返し続けたことがあるため、同じファイルを API（`api.github.com/repos/<repo>/releases/assets/<id>`。`gh release download` と同じ経路）から取る。トークンは `github.token`（読み取りだけ。fork の PR でも使える）
+- 5xx・タイムアウトだけを、間隔をあけて数回やり直す。4xx（403・404・429 等）はやり直さずに失敗する
+- 取得したファイルはリリースの `checksums.txt` の SHA-256 と照合してから展開する
+- 版はジョブごとに `version` で固定する。上げるときは `tests/unit/workflow-cli-install.test.ts` の `EXPECTED_VERSIONS` も一緒に変える
+- `product-data-sync.yml` は `main` をチェックアウトするジョブがあるため、このワークフローと同じコミットの action を `ci-tools/` に sparse checkout して使う
+
+---
+
 ## 失敗時のアーティファクト（暗号化）
 
 このリポジトリはpublicで、アーティファクトはGitHubにログインした誰でもダウンロードできる。そのため、テストの失敗時に残すものは [age](https://age-encryption.org/) の公開鍵で暗号化し、暗号化したファイル（`.age`）だけをアップロードする。中身に何が含まれていても漏れないよう、値を探して伏せるのではなく暗号化する。

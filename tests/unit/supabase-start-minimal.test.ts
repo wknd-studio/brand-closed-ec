@@ -197,7 +197,7 @@ describe("除外指定の定義が1か所にまとまっている", () => {
       .map(
         (job) =>
           job.match(
-            /supabase\/setup-cli@v1\s+with: \{ version: ([\d.]+) \}/
+            /\.github\/actions\/install-cli\s+with: \{ tool: supabase, version: ([\d.]+) \}/
           )?.[1]
       );
     expect(versions).toEqual(["2.116.0", "2.116.0", "2.116.0"]);
