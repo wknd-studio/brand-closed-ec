@@ -1,0 +1,25 @@
+name: Install CLI
+description: >-
+  Supabase CLI・Doppler CLI を GitHub のリリースから API 経由（リトライ・checksums 照合付き）で
+  インストールする。github.com/.../releases/download/ の504で supabase/setup-cli・
+  dopplerhq/cli-action が止まったため（#546）。中身は install-cli.sh
+inputs:
+  tool:
+    description: supabase か doppler
+    required: true
+  version:
+    description: インストールする版（v無し。例 2.116.0）
+    required: true
+  github-token:
+    description: API の認証に使うトークン（読み取りだけ。未認証だと API の上限が1時間60回と少ない）
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: bash "${{ github.action_path }}/install-cli.sh" "$TOOL" "$VERSION"
+      env:
+        TOOL: ${{ inputs.tool }}
+        VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
