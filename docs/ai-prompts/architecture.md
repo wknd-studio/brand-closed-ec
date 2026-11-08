@@ -42,6 +42,7 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 | `src/middleware.ts`       | app と同じ（composition・domain・queries・lib）                                          |
 | `src/instrumentation*.ts` | 外部SDK（Sentry 等の初期化）だけ                                                         |
 
+- 同じ層の中（`src/use-cases/` から `@/use-cases/...` 等）は、表に書かなくても使ってよい。lint では、domain・repositories・queries・use-cases・infrastructure について、表に無い `@/` の import・外部SDK（表で許可した層を除く）・親ディレクトリへの相対 import（`../`）をエラーにする（#439）
 - `src/types/`（DB の型）を使ってよいのは infrastructure だけ。DB の行の形を infrastructure の外に漏らさず、domain・DTO に変換して渡す
 - use-case から Query Service は使わない。書き込みの判断に要るデータは repository から集約として取る（読み取りと書き込みのモデルを混ぜないため）
 - app・components・lib から repositories・infrastructure は使わない（#441）
