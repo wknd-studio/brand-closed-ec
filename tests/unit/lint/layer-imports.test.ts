@@ -105,6 +105,10 @@ describe("層の依存方向（no-restricted-imports）", () => {
         expect(messages).toHaveLength(1);
         expect(messages[0].severity).toBe(2);
         expect(messages[0].message).toContain(DOC);
+        // 直し方として、その層から import してよいものを示す
+        expect(messages[0].message).toContain(
+          `src/${file.split("/")[1]}/ から import してよいのは`
+        );
       }
     );
   });
@@ -261,29 +265,34 @@ describe("architecture.md の「依存してよい方向」の表と lint の許
     "infrastructure",
   ];
 
-  it.each(linted)(
-    "src/%s/ は lint で許可リストが設定されている",
-    async (layer) => {
+  // 後続issue（#440・#441 等）で層のブロックを足したら、ここにも足す（足し忘れると落ちる）
+  it("lint で許可リストが設定されている層は、突き合わせの対象の層と一致する", async () => {
+    const configured: string[] = [];
+    for (const layer of LAYER_NAMES) {
       const config = await eslint.calculateConfigForFile(
         `src/${layer}/sample.ts`
       );
-      expect(allowedFromLint(config)).not.toBeNull();
+      if (allowedFromLint(config)) configured.push(layer);
     }
-  );
+    expect(configured.sort()).toEqual([...linted].sort());
+  });
 
-  it.each([...LAYER_NAMES])(
-    "src/%s/ に lint の許可リストがあれば、表の行と一致する",
+  it.each(linted)(
+    "src/%s/ の lint の許可リストは、表の行と一致する",
     async (layer) => {
       const config = await eslint.calculateConfigForFile(
         `src/${layer}/sample.ts`
       );
       const fromLint = allowedFromLint(config);
-      if (!fromLint) return;
+      expect(
+        fromLint,
+        `src/${layer}/ に lint の許可リストが無い`
+      ).not.toBeNull();
       const fromDoc = table.get(layer);
       expect(fromDoc, `表に src/${layer}/ の行が無い`).toBeDefined();
       expect({
-        layers: [...fromLint.layers].sort(),
-        external: fromLint.external,
+        layers: [...fromLint!.layers].sort(),
+        external: fromLint!.external,
       }).toEqual({
         layers: [...fromDoc!.layers].sort(),
         external: fromDoc!.external,
