@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 
 const STATUS_LABEL: Record<string, string> = {

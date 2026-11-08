@@ -3,9 +3,9 @@ import * as cheerio from "cheerio";
 import {
   normalizeAvailability,
   parseNumber,
-} from "@/sanity/tools/product-import/csv-adapter";
-import type { CatalogScraper } from "@/sanity/tools/product-import/catalog-scraper";
-import type { UnifiedProductRecord } from "@/sanity/tools/product-import/unified-product-schema";
+} from "@/lib/product-import/csv-adapter";
+import type { CatalogScraper } from "@/lib/product-import/catalog-scraper";
+import type { UnifiedProductRecord } from "@/lib/product-import/unified-product-schema";
 
 /**
  * 今後の実業者アダプター実装のひな形となる参照実装（T022）。

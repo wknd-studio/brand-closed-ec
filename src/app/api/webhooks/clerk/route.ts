@@ -5,7 +5,7 @@ import * as Sentry from "@sentry/nextjs";
 import { createUser } from "@/use-cases/create-user";
 import { syncAdminMembership } from "@/use-cases/sync-admin-membership";
 import { removeAdminMembership } from "@/use-cases/remove-admin-membership";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";

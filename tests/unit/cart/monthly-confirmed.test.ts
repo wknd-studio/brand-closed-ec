@@ -5,7 +5,7 @@ const findByClerkUserId = vi.fn();
 const sumConfirmedAmountByUserId = vi.fn();
 
 // Supabaseへ直接クエリすると from() が呼ばれて失敗する
-vi.mock("@/infrastructure/supabase/server-admin", () => ({
+vi.mock("@/lib/supabase/server-admin", () => ({
   createAdminClient: vi.fn().mockReturnValue({
     from: () => {
       throw new Error("Supabaseへの直接クエリは禁止");

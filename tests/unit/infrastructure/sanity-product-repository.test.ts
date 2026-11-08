@@ -3,7 +3,7 @@ import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-e
 
 const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 
-vi.mock("@/infrastructure/sanity/client", () => ({
+vi.mock("@/lib/sanity/client", () => ({
   sanityClient: { fetch: fetchMock },
 }));
 

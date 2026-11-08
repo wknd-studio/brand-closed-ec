@@ -1,4 +1,4 @@
-import { sanityClient } from "@/infrastructure/sanity/client";
+import { sanityClient } from "./client";
 
 export type BrandTheme = {
   primaryColorHex: string;

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
-import { createServerClient } from "@/infrastructure/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";

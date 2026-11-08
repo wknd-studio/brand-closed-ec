@@ -4,12 +4,12 @@ import { useClient } from "sanity";
 import {
   mapCsvToUnifiedRecords,
   type CsvAdapterCatalog,
-} from "@/sanity/tools/product-import/csv-adapter";
+} from "@/lib/product-import/csv-adapter";
 import {
   validateAndPreview,
   type PreviewResult,
   type ValidationError,
-} from "@/sanity/tools/product-import/validate-and-preview";
+} from "@/lib/product-import/validate-and-preview";
 
 const API_VERSION = "2026-05-17";
 

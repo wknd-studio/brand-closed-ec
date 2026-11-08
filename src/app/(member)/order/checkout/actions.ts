@@ -8,7 +8,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { placeOrder as placeOrderUseCase } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";

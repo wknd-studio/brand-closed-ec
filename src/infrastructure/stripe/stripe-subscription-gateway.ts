@@ -1,4 +1,4 @@
-import { getStripe } from "@/infrastructure/stripe/client";
+import { getStripe } from "@/lib/stripe";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 
 export class StripeSubscriptionGateway implements SubscriptionGateway {

@@ -7,10 +7,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import {
-  addFavoriteAction,
-  removeFavoriteAction,
-} from "@/app/(member)/favorites/actions";
+import { addFavoriteAction, removeFavoriteAction } from "./actions";
 
 type FavoritesContextValue = {
   favoriteIds: Set<string>;

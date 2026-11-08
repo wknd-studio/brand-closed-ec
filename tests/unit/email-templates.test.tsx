@@ -1,13 +1,13 @@
 import { render } from "@react-email/components";
 import { describe, expect, it } from "vitest";
-import { CheckoutPaidMemberEmail } from "@/emails/checkout-paid-member";
-import { CheckoutPaidOperatorEmail } from "@/emails/checkout-paid-operator";
-import { InvoicePaidOperatorEmail } from "@/emails/invoice-paid-operator";
-import { LimitExceededMemberEmail } from "@/emails/limit-exceeded-member";
-import { OrderConfirmingEmail } from "@/emails/order-confirming";
-import { OrderOperatorNotificationEmail } from "@/emails/order-operator-notification";
-import { ShippingNotificationEmail } from "@/emails/shipping-notification";
-import { DeliveryNotificationEmail } from "@/emails/delivery-notification";
+import { CheckoutPaidMemberEmail } from "@/lib/email/templates/checkout-paid-member";
+import { CheckoutPaidOperatorEmail } from "@/lib/email/templates/checkout-paid-operator";
+import { InvoicePaidOperatorEmail } from "@/lib/email/templates/invoice-paid-operator";
+import { LimitExceededMemberEmail } from "@/lib/email/templates/limit-exceeded-member";
+import { OrderConfirmingEmail } from "@/lib/email/templates/order-confirming";
+import { OrderOperatorNotificationEmail } from "@/lib/email/templates/order-operator-notification";
+import { ShippingNotificationEmail } from "@/lib/email/templates/shipping-notification";
+import { DeliveryNotificationEmail } from "@/lib/email/templates/delivery-notification";
 
 const fixedItem = {
   productName: "テスト商品A",

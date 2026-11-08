@@ -8,44 +8,44 @@ vi.mock("@react-email/components", () => ({
   render: vi.fn().mockResolvedValue("<html></html>"),
 }));
 
-vi.mock("@/emails/order-confirming", () => ({
+vi.mock("@/lib/email/templates/order-confirming", () => ({
   OrderConfirmingEmail: vi.fn(),
 }));
-vi.mock("@/emails/checkout-paid-member", () => ({
+vi.mock("@/lib/email/templates/checkout-paid-member", () => ({
   CheckoutPaidMemberEmail: vi.fn(),
 }));
-vi.mock("@/emails/checkout-paid-operator", () => ({
+vi.mock("@/lib/email/templates/checkout-paid-operator", () => ({
   CheckoutPaidOperatorEmail: vi.fn(),
 }));
-vi.mock("@/emails/delivery-notification", () => ({
+vi.mock("@/lib/email/templates/delivery-notification", () => ({
   DeliveryNotificationEmail: vi.fn(),
 }));
-vi.mock("@/emails/invoice-paid-operator", () => ({
+vi.mock("@/lib/email/templates/invoice-paid-operator", () => ({
   InvoicePaidOperatorEmail: vi.fn(),
 }));
-vi.mock("@/emails/shipping-notification", () => ({
+vi.mock("@/lib/email/templates/shipping-notification", () => ({
   ShippingNotificationEmail: vi.fn(),
 }));
-vi.mock("@/emails/order-operator-notification", () => ({
+vi.mock("@/lib/email/templates/order-operator-notification", () => ({
   OrderOperatorNotificationEmail: vi.fn(),
 }));
-vi.mock("@/emails/limit-exceeded-member", () => ({
+vi.mock("@/lib/email/templates/limit-exceeded-member", () => ({
   LimitExceededMemberEmail: vi.fn(),
 }));
 
 const sendMock = vi.fn();
-vi.mock("@/infrastructure/resend/client", () => ({
+vi.mock("@/lib/email/index", () => ({
   getResend: () => ({ emails: { send: sendMock } }),
 }));
 
 import * as Sentry from "@sentry/nextjs";
-import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
-import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
-import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
-import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
-import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
-import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
-import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
+import { sendOrderConfirmingEmail } from "@/lib/email/order-confirming";
+import { sendCheckoutPaidEmails } from "@/lib/email/checkout-paid";
+import { sendDeliveryNotificationEmail } from "@/lib/email/delivery-notification";
+import { sendInvoicePaidEmail } from "@/lib/email/invoice-paid";
+import { sendShippingNotificationEmail } from "@/lib/email/shipping-notification";
+import { sendOrderOperatorNotification } from "@/lib/email/order-operator-notification";
+import { sendLimitExceededEmail } from "@/lib/email/limit-exceeded";
 
 const resendError = { name: "application_error", message: "送信失敗" };
 

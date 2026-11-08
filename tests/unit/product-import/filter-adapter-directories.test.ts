@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { filterAdapterDirectories } from "@/sanity/tools/product-import/filter-adapter-directories";
+import { filterAdapterDirectories } from "@/lib/product-import/filter-adapter-directories";
 
 describe("filterAdapterDirectories", () => {
   it("__で始まるディレクトリ（雛形・テスト用）を除外する", () => {

@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/current-user";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
 import { fetchProductsByIds } from "@/lib/sanity/products";

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
+import { createAdminClient } from "@/lib/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import CancelOrderButton from "./cancel-order-button";
 

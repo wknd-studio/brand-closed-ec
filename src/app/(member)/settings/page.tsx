@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/infrastructure/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import WithdrawalDialog from "./withdrawal-dialog";

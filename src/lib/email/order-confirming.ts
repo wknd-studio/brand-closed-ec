@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
-import { OrderConfirmingEmail } from "@/emails/order-confirming";
-import { getResend } from "./client";
+import { OrderConfirmingEmail } from "./templates/order-confirming";
+import { getResend } from "./index";
 
 type LineItem = {
   productName: string;

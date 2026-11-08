@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { clerk } from "@clerk/testing/playwright";
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
-import { getStripe, STRIPE_PRICE_IDS } from "@/infrastructure/stripe/client";
+import { getStripe, STRIPE_PRICE_IDS } from "@/lib/stripe";
 import type { Database } from "@/types/database.types";
 import { slotEmail } from "../helpers/clerk-test-invitation";
 import { ensureMemberRow } from "../helpers/onboarded-member-row";

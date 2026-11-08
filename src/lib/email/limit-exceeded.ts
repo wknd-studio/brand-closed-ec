@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
-import { LimitExceededMemberEmail } from "@/emails/limit-exceeded-member";
-import { getResend } from "./client";
+import { LimitExceededMemberEmail } from "./templates/limit-exceeded-member";
+import { getResend } from "./index";
 
 type Params = {
   to: string;

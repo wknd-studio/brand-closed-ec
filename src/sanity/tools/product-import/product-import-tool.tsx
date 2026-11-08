@@ -13,13 +13,13 @@ import {
   Text,
 } from "@sanity/ui";
 
-import { applyImport } from "@/sanity/tools/product-import/apply-import";
-import type { CsvAdapterCatalog } from "@/sanity/tools/product-import/csv-adapter";
+import { applyImport } from "@/lib/product-import/apply-import";
+import type { CsvAdapterCatalog } from "@/lib/product-import/csv-adapter";
 import {
   fetchCsvUploadText,
   markPendingCsvImported,
-} from "@/sanity/tools/product-import/csv-upload";
-import { describeOrigin } from "@/sanity/tools/product-import/unified-product-schema";
+} from "@/lib/product-import/csv-upload";
+import { describeOrigin } from "@/lib/product-import/unified-product-schema";
 
 import { useImportPreview } from "./use-import-preview";
 

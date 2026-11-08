@@ -22,7 +22,7 @@ vi.mock("@sentry/nextjs", () => ({
   startSpan: vi.fn((_options: unknown, callback: () => unknown) => callback()),
 }));
 
-vi.mock("@/infrastructure/stripe/client", () => ({
+vi.mock("@/lib/stripe", () => ({
   getStripe: () => ({
     webhooks: { constructEvent: constructEventMock },
     subscriptions: { retrieve: retrieveSubscriptionMock },
@@ -32,7 +32,7 @@ vi.mock("@/infrastructure/stripe/client", () => ({
   },
 }));
 
-vi.mock("@/infrastructure/supabase/server-admin", () => ({
+vi.mock("@/lib/supabase/server-admin", () => ({
   createAdminClient: vi.fn().mockReturnValue({}),
 }));
 vi.mock("@/infrastructure/supabase/supabase-order-repository", () => ({

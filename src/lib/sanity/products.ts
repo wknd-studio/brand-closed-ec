@@ -1,4 +1,4 @@
-import { sanityClient } from "@/infrastructure/sanity/client";
+import { sanityClient } from "./client";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 
 export const PAGE_SIZE = 12;

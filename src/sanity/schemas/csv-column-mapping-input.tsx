@@ -15,7 +15,7 @@ import {
 import { set, unset, useClient, useFormValue } from "sanity";
 import type { ObjectInputProps } from "sanity";
 
-import { fetchCsvUploadText } from "@/sanity/tools/product-import/csv-upload";
+import { fetchCsvUploadText } from "@/lib/product-import/csv-upload";
 
 const API_VERSION = "2026-05-17";
 

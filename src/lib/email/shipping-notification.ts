@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
-import { ShippingNotificationEmail } from "@/emails/shipping-notification";
-import { getResend } from "./client";
+import { ShippingNotificationEmail } from "./templates/shipping-notification";
+import { getResend } from "./index";
 
 type Params = {
   orderId: string;
