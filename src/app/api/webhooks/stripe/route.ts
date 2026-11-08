@@ -1,11 +1,15 @@
-import { getStripe, STRIPE_PRICE_IDS, type PaidRank } from "@/lib/stripe";
+import {
+  getStripe,
+  STRIPE_PRICE_IDS,
+  type PaidRank,
+} from "@/infrastructure/stripe/client";
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { SPAN_OP } from "@/lib/observability/span";
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
 import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseStripeWebhookEventRepository } from "@/infrastructure/supabase/supabase-stripe-webhook-event-repository";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";

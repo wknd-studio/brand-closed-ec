@@ -4,7 +4,7 @@ const createCustomerMock = vi.fn();
 const listSubscriptionsMock = vi.fn();
 const createCheckoutSessionMock = vi.fn();
 
-vi.mock("@/lib/stripe", () => ({
+vi.mock("@/infrastructure/stripe/client", () => ({
   getStripe: () => ({
     customers: { create: createCustomerMock },
     subscriptions: { list: listSubscriptionsMock },

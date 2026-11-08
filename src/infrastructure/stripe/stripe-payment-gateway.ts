@@ -1,4 +1,4 @@
-import { getStripe } from "@/lib/stripe";
+import { getStripe } from "@/infrastructure/stripe/client";
 import type {
   PaymentGateway,
   CheckoutLineItem,

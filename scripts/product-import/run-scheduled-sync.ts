@@ -3,9 +3,9 @@ import * as path from "node:path";
 
 import { createClient, type SanityClient } from "@sanity/client";
 
-import { unifiedRecordsToCsv } from "@/lib/product-import/csv-export";
-import { filterAdapterDirectories } from "@/lib/product-import/filter-adapter-directories";
-import type { CatalogScraper } from "@/lib/product-import/catalog-scraper";
+import { unifiedRecordsToCsv } from "@/sanity/tools/product-import/csv-export";
+import { filterAdapterDirectories } from "@/sanity/tools/product-import/filter-adapter-directories";
+import type { CatalogScraper } from "@/sanity/tools/product-import/catalog-scraper";
 
 const VENDORS_DIR = path.join(__dirname, "vendors");
 

@@ -22,7 +22,7 @@ vi.mock("@/use-cases/place-order", () => ({
   placeOrder: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server-admin", () => ({
+vi.mock("@/infrastructure/supabase/server-admin", () => ({
   createAdminClient: vi.fn().mockReturnValue({}),
 }));
 vi.mock("@/infrastructure/supabase/supabase-user-repository", () => ({

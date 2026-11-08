@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
-import { InvoicePaidOperatorEmail } from "./templates/invoice-paid-operator";
-import { getResend } from "./index";
+import { InvoicePaidOperatorEmail } from "@/emails/invoice-paid-operator";
+import { getResend } from "./client";
 
 type Params = {
   orderId: string;

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { unifiedRecordsToCsv } from "@/lib/product-import/csv-export";
-import { mapCsvToUnifiedRecords } from "@/lib/product-import/csv-adapter";
-import type { CsvColumnMapping } from "@/lib/product-import/csv-adapter";
-import type { UnifiedProductRecord } from "@/lib/product-import/unified-product-schema";
+import { unifiedRecordsToCsv } from "@/sanity/tools/product-import/csv-export";
+import { mapCsvToUnifiedRecords } from "@/sanity/tools/product-import/csv-adapter";
+import type { CsvColumnMapping } from "@/sanity/tools/product-import/csv-adapter";
+import type { UnifiedProductRecord } from "@/sanity/tools/product-import/unified-product-schema";
 
 function record(
   overrides: Partial<UnifiedProductRecord> = {}

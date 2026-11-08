@@ -1,8 +1,8 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
-import { CheckoutPaidMemberEmail } from "./templates/checkout-paid-member";
-import { CheckoutPaidOperatorEmail } from "./templates/checkout-paid-operator";
-import { getResend } from "./index";
+import { CheckoutPaidMemberEmail } from "@/emails/checkout-paid-member";
+import { CheckoutPaidOperatorEmail } from "@/emails/checkout-paid-operator";
+import { getResend } from "./client";
 
 type LineItem = {
   productName: string;

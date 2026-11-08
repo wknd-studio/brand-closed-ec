@@ -3,13 +3,13 @@ import type { Order } from "@/domain/entities/order";
 import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
-import { sendOrderConfirmingEmail } from "@/lib/email/order-confirming";
-import { sendOrderOperatorNotification } from "@/lib/email/order-operator-notification";
-import { sendLimitExceededEmail } from "@/lib/email/limit-exceeded";
-import { sendShippingNotificationEmail } from "@/lib/email/shipping-notification";
-import { sendDeliveryNotificationEmail } from "@/lib/email/delivery-notification";
-import { sendCheckoutPaidEmails } from "@/lib/email/checkout-paid";
-import { sendInvoicePaidEmail } from "@/lib/email/invoice-paid";
+import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
+import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
+import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
+import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
+import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
+import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
+import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
 
 export class ResendNotificationService implements NotificationService {
   async sendOrderConfirming(

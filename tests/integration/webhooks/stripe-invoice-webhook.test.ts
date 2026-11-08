@@ -10,7 +10,7 @@ import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import { Money } from "@/domain/value-objects/money";
 import { OrderSettlement } from "@/domain/entities/order-settlement";
-import { getStripe } from "@/lib/stripe";
+import { getStripe } from "@/infrastructure/stripe/client";
 import { POST } from "@/app/api/webhooks/stripe/route";
 
 const supabase = createClient<Database>(

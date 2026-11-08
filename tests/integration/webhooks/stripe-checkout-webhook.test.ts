@@ -17,7 +17,7 @@ import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import { Money } from "@/domain/value-objects/money";
-import { getStripe } from "@/lib/stripe";
+import { getStripe } from "@/infrastructure/stripe/client";
 import { POST } from "@/app/api/webhooks/stripe/route";
 
 // mode=subscriptionの入会確定で呼ばれるClerkのmetadata更新（外部API）だけを差し替える

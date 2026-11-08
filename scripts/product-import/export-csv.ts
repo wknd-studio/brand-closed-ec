@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { unifiedRecordsToCsv } from "@/lib/product-import/csv-export";
-import type { CatalogScraper } from "@/lib/product-import/catalog-scraper";
+import { unifiedRecordsToCsv } from "@/sanity/tools/product-import/csv-export";
+import type { CatalogScraper } from "@/sanity/tools/product-import/catalog-scraper";
 
 /**
  * 技術者が手元で実行する、スクレイピング結果をCSVファイルへ書き出すCLI（User Story 2）。
