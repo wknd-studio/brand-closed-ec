@@ -41,9 +41,10 @@ asset_name() {
 # 引数: <curlの終了コード> <HTTPステータス>。やり直すなら0を返す
 is_retryable() {
   local curl_exit="$1" http_code="$2"
-  # 接続できない・タイムアウト等で応答が無い
-  [[ "$http_code" == "000" && "$curl_exit" != "0" ]] && return 0
+  [[ "$http_code" =~ ^4[0-9][0-9]$ ]] && return 1
   [[ "$http_code" =~ ^5[0-9][0-9]$ ]] && return 0
+  # 接続できない・タイムアウト・受信中の切断（200を受け取ったあとを含む）
+  [[ "$curl_exit" != "0" ]] && return 0
   return 1
 }
 

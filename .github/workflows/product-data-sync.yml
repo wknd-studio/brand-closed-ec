@@ -37,6 +37,8 @@ jobs:
           ref: ${{ github.sha }}
           path: ci-tools
           sparse-checkout: .github/actions/install-cli
+          # cone mode だとルート直下のファイル（package.json 等）まで入るため、actionだけを取る
+          sparse-checkout-cone-mode: false
       - name: Check sync script is released to this branch
         # 同期機能がまだmainに昇格していない間、本番ジョブが毎日失敗し続けないよう、
         # checkoutしたコードにスクリプトが無ければ以降をスキップする
