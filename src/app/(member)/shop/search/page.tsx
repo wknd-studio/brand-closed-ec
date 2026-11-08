@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/infrastructure/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { fetchProducts } from "@/lib/sanity/products";
 import { MemberRank } from "@/domain/value-objects/member-rank";

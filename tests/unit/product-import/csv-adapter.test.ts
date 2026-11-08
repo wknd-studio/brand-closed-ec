@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { mapCsvToUnifiedRecords } from "@/lib/product-import/csv-adapter";
-import type { CsvAdapterCatalog } from "@/lib/product-import/csv-adapter";
+import { mapCsvToUnifiedRecords } from "@/sanity/tools/product-import/csv-adapter";
+import type { CsvAdapterCatalog } from "@/sanity/tools/product-import/csv-adapter";
 
 describe("mapCsvToUnifiedRecords", () => {
   it("業者Aの列構成（日本語ヘッダー、JANあり、在庫は「あり/なし」）を統一データ形式へ変換する", () => {

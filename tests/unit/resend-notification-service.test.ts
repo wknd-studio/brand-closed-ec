@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@/lib/email/checkout-paid", () => ({
+vi.mock("@/infrastructure/resend/checkout-paid", () => ({
   sendCheckoutPaidEmails: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { sendCheckoutPaidEmails } from "@/lib/email/checkout-paid";
+import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";

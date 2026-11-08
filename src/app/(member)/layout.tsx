@@ -6,7 +6,7 @@ import { CartProvider } from "@/lib/cart/context";
 import { getMonthlyUsageInfo } from "@/lib/cart/monthly-confirmed";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { FavoritesProvider } from "@/lib/favorites/context";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { applyImport } from "@/lib/product-import/apply-import";
-import type { UnifiedProductRecord } from "@/lib/product-import/unified-product-schema";
+import { applyImport } from "@/sanity/tools/product-import/apply-import";
+import type { UnifiedProductRecord } from "@/sanity/tools/product-import/unified-product-schema";
 
 const FULL_DEFAULT_RATES = {
   starter: 60,

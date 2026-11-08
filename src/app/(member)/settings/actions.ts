@@ -8,7 +8,7 @@ import { createAddress } from "@/use-cases/create-address";
 import { updateAddress } from "@/use-cases/update-address";
 import { deleteAddress } from "@/use-cases/delete-address";
 import { setDefaultAddress } from "@/use-cases/set-default-address";
-import { createAdminClient } from "@/lib/supabase/server-admin";
+import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";

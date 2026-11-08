@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   markPendingCsvImported,
   fetchCsvUploadText,
-} from "@/lib/product-import/csv-upload";
+} from "@/sanity/tools/product-import/csv-upload";
 
 describe("markPendingCsvImported", () => {
   it("対象csvCatalogのpending_csvフィールドを削除する", async () => {

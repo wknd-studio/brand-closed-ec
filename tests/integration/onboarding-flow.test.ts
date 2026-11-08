@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { getStripe } from "@/lib/stripe";
+import { getStripe } from "@/infrastructure/stripe/client";
 
 /**
  * 入会の流れ（プラン選択 → 決済画面 → 決済完了画面 → 入会確定のWebhook → ショップ）を

@@ -10,7 +10,7 @@ const createInvoiceItemMock = vi.fn();
 const finalizeInvoiceMock = vi.fn();
 const sendInvoiceMock = vi.fn();
 
-vi.mock("@/lib/stripe", () => ({
+vi.mock("@/infrastructure/stripe/client", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: createCheckoutSessionMock } },
     customers: { create: createCustomerMock },
