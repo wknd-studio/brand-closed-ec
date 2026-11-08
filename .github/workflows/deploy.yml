@@ -65,8 +65,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: supabase/setup-cli@v1
-        with: { version: 2.116.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.116.0 }
       - run: pnpm install --frozen-lockfile
       - name: Start local Supabase
         # このジョブはDBのスキーマとsrc/types/database.types.tsの整合性しか
@@ -116,9 +116,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: supabase/setup-cli@v1
-        with: { version: 2.116.0 }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.116.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Start local Supabase
         # 統合テストはDB（PostgreSQL・RLS・PostgREST）とAuthしか使わないため、
@@ -180,7 +181,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Build
         # tsc --noEmitでは検出できないServer/Client Componentの境界誤り・Workers
@@ -204,9 +206,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: supabase/setup-cli@v1
-        with: { version: 2.116.0 }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.116.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Get installed Playwright version
         id: playwright-version
@@ -333,9 +336,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: supabase/setup-cli@v1
-        with: { version: 2.102.0 }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.102.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
         run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
@@ -376,9 +380,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: supabase/setup-cli@v1
-        with: { version: 2.102.0 }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.102.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
         run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
@@ -412,7 +417,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
-      - uses: dopplerhq/cli-action@v3
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Get installed Playwright version
         id: playwright-version
