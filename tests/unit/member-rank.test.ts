@@ -25,6 +25,24 @@ describe("MemberRank", () => {
     });
   });
 
+  describe("isUnlimitedMonthlyLimit()", () => {
+    it("enterprise の月間仕入れ上限は無制限と判定する", () => {
+      expect(
+        MemberRank.isUnlimitedMonthlyLimit(
+          MemberRank.of("enterprise").getMonthlyLimit().amount
+        )
+      ).toBe(true);
+    });
+
+    it("enterprise 以外の月間仕入れ上限は無制限と判定しない", () => {
+      expect(
+        MemberRank.isUnlimitedMonthlyLimit(
+          MemberRank.of("premium").getMonthlyLimit().amount
+        )
+      ).toBe(false);
+    });
+  });
+
   describe("canAccess()", () => {
     it("同ランクはアクセス可能", () => {
       expect(MemberRank.of("basic").canAccess(MemberRank.of("basic"))).toBe(

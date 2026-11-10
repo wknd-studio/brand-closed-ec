@@ -3,7 +3,9 @@ import {
   sumCartFixedTotal,
   canAddToCart,
   canChangeCartQuantity,
+  monthlyLimitStatus,
 } from "@/domain/services/cart-limit";
+import { MemberRank } from "@/domain/value-objects/member-rank";
 
 const lines = [
   { productId: "p1", unitPrice: 10_000, quantity: 2 },
@@ -179,5 +181,48 @@ describe("canChangeCartQuantity", () => {
         monthlyLimit: 0,
       })
     ).toBe(false);
+  });
+});
+
+describe("monthlyLimitStatus", () => {
+  it("上限から確定額とカートの確定額を引いた残量を返す", () => {
+    // 100,000 - (50,000 + 25,000) = 25,000
+    expect(
+      monthlyLimitStatus({
+        lines: [...lines, negotiable],
+        confirmedAmount: 50_000,
+        monthlyLimit: 100_000,
+      })
+    ).toEqual({ isUnlimited: false, remaining: 25_000, isOver: false });
+  });
+
+  it("ちょうど上限と同額なら残量0で、超過ではない", () => {
+    expect(
+      monthlyLimitStatus({
+        lines,
+        confirmedAmount: 75_000,
+        monthlyLimit: 100_000,
+      })
+    ).toEqual({ isUnlimited: false, remaining: 0, isOver: false });
+  });
+
+  it("上限を超えていれば残量は負で、超過とする", () => {
+    expect(
+      monthlyLimitStatus({
+        lines,
+        confirmedAmount: 80_000,
+        monthlyLimit: 100_000,
+      })
+    ).toEqual({ isUnlimited: false, remaining: -5_000, isOver: true });
+  });
+
+  it("無制限のランクの上限なら、無制限とする", () => {
+    expect(
+      monthlyLimitStatus({
+        lines,
+        confirmedAmount: 80_000,
+        monthlyLimit: MemberRank.of("enterprise").getMonthlyLimit().amount,
+      }).isUnlimited
+    ).toBe(true);
   });
 });
