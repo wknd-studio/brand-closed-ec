@@ -16,8 +16,8 @@ vi.mock("@/infrastructure/supabase/supabase-address-repository", () => ({
   SupabaseAddressRepository: vi.fn(),
 }));
 
-vi.mock("@/infrastructure/supabase/server-admin", () => ({
-  createAdminClient: vi.fn().mockReturnValue({}),
+vi.mock("@/infrastructure/supabase/server", () => ({
+  createServerClient: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock("next/cache", () => ({
