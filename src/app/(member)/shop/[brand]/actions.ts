@@ -3,7 +3,7 @@
 import { requireAuth } from "@/lib/auth/current-user";
 import { catalogQueryService } from "@/composition/catalog-query";
 import type { ProductCardDto } from "@/queries/catalog-query-service";
-import { findShopMemberRank } from "../member-rank";
+import { findShopMemberRank } from "@/app/(member)/shop/member-rank";
 
 export async function fetchMoreProducts(
   offset: number,

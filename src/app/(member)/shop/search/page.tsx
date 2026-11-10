@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth/current-user";
 import { catalogQueryService } from "@/composition/catalog-query";
-import { findShopMemberRank } from "../member-rank";
-import ProductGrid from "../[brand]/product-grid";
+import { findShopMemberRank } from "@/app/(member)/shop/member-rank";
+import ProductGrid from "@/app/(member)/shop/[brand]/product-grid";
 import SearchForm from "./search-form";
 
 export default async function SearchPage({

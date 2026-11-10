@@ -42,6 +42,21 @@ const LAYER_IMPORTS = [
     external: true,
     hint: "手順は src/use-cases/ に、組み立ては src/composition/ に置き、infrastructure からは呼ばない。",
   },
+  // app・middleware は composition が返す use-case（書き込み）・Query Service（読み取り）だけを使う（#441）。
+  // 禁止リスト（repositories・infrastructure だけ）では use-cases の直接 import を止められないため許可リストにする
+  {
+    layer: "app",
+    allow: ["composition", "domain", "queries", "lib", "components"],
+    external: true,
+    hint: "書き込みは use-case、読み取りは Query Service を、@/composition が返すものだけ使う。use-case・repository・infrastructure を直接 import しない（import type も含む）。",
+  },
+  {
+    layer: "middleware",
+    file: "src/middleware.ts",
+    allow: ["composition", "domain", "queries", "lib"],
+    external: true,
+    hint: "読み取りは Query Service を、@/composition が返すものだけ使う。use-case・repository・infrastructure を直接 import しない（import type も含む）。",
+  },
 ];
 
 // domain の内部の定数（#442）。ルールの正になっている定数を domain の外で使うと、ルールのコピーが生まれる
@@ -108,15 +123,50 @@ const clientSyntaxRule = [
   },
 ];
 
-function layerImportsConfig({ layer, allow, external, hint }) {
-  const allowed = [layer, ...allow];
+// app から使われる側の components・lib（#441）。repository・infrastructure を使うと page に読み取りが戻り、
+// app を使うと依存が循環する。表の許可リストより緩い、禁止リストの形で入れている
+const APP_SIDE_DOC =
+  "docs/ai-prompts/architecture.md の「依存してよい方向」を参照（#441）";
+
+const appSidePatterns = [
+  {
+    group: [
+      "@/repositories",
+      "@/repositories/**",
+      "@/infrastructure",
+      "@/infrastructure/**",
+    ],
+    message: `src/components/・src/lib/ から @/repositories・@/infrastructure は import しない（import type も含む。型は domain の型か queries の DTO を使う）。DB・外部サービスのデータは app で composition が返す Query Service から取り、props で渡す。${APP_SIDE_DOC}`,
+  },
+  {
+    group: ["@/app", "@/app/**"],
+    message: `src/components/・src/lib/ は app から使われる側なので @/app を import しない。Server Action は app から props で受け取る。${APP_SIDE_DOC}`,
+  },
+];
+
+// 親ディレクトリへの相対 import。group（gitignore 形式）の ../* は ./../x や ./x/../../y に当たらないため、
+// パスのどこかに .. の区切りがあるものを正規表現で当てる
+const PARENT_RELATIVE = "(^|/)\\.\\.(/|$)";
+
+const appSideRelativePattern = {
+  regex: PARENT_RELATIVE,
+  message: `../ で src/repositories/・src/infrastructure/・src/app/ に出られるため、src/components/・src/lib/ では親ディレクトリへの相対 import は使わず @/components/...・@/lib/... のように書く。${APP_SIDE_DOC}`,
+};
+
+// 層の許可リストの対象のファイル。middleware は1ファイル
+const layerFile = ({ layer, file }) => file ?? `src/${layer}/**`;
+
+function layerImportsConfig({ layer, file, allow, external, hint }) {
+  // 同じ層の中は常に許可する（1ファイルの middleware には同じ層が無い）
+  const allowed = file ? allow : [layer, ...allow];
+  const scope = file ?? `src/${layer}/`;
   const allowedText = [
     ...allowed.map((name) => `@/${name}`),
     ...(external ? ["外部SDK"] : []),
   ].join("・");
-  const message = `src/${layer}/ から import してよいのは ${allowedText} だけ。${hint}${ARCHITECTURE_DOC}`;
+  const message = `${scope} から import してよいのは ${allowedText} だけ。${hint}${ARCHITECTURE_DOC}`;
   return {
-    files: [`src/${layer}/**/*.{ts,tsx}`],
+    files: [file ?? `src/${layer}/**/*.{ts,tsx}`],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -129,10 +179,15 @@ function layerImportsConfig({ layer, allow, external, hint }) {
               ],
               message,
             },
-            {
-              group: ["../*"],
-              message: `../ で層の外に出られるため、親ディレクトリへの相対 import は使わず @/${layer}/... のように書く。${message}`,
-            },
+            file
+              ? {
+                  regex: "^\\.",
+                  message: `相対 import で層の外に出られるため、相対 import は使わず @/composition/... のように書く。${message}`,
+                }
+              : {
+                  regex: PARENT_RELATIVE,
+                  message: `../ で層の外に出られるため、親ディレクトリへの相対 import は使わず @/${layer}/... のように書く。${message}`,
+                },
             ...(external
               ? []
               : [
@@ -143,6 +198,8 @@ function layerImportsConfig({ layer, allow, external, hint }) {
                   },
                 ]),
             ...(layer === "domain" ? [] : domainConstantPatterns),
+            // 外部SDKを許す層のうち、DB・外部サービスのクライアントを使ってよいのは infrastructure だけ（#440）
+            ...(external && layer !== "infrastructure" ? clientPatterns : []),
           ],
         },
       ],
@@ -188,13 +245,31 @@ const eslintConfig = defineConfig([
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: [
-      ...LAYER_IMPORTS.map(({ layer }) => `src/${layer}/**`),
+      ...LAYER_IMPORTS.map(layerFile),
+      "src/components/**",
+      "src/lib/**",
       "src/sanity/**",
     ],
     rules: {
       "no-restricted-imports": [
         "error",
         { patterns: [...domainConstantPatterns, ...clientPatterns] },
+      ],
+    },
+  },
+  {
+    files: ["src/components/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            ...domainConstantPatterns,
+            ...clientPatterns,
+            ...appSidePatterns,
+            appSideRelativePattern,
+          ],
+        },
       ],
     },
   },
