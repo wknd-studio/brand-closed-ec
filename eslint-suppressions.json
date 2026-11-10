@@ -1,2 +1,17 @@
 {
+  "src/app/admin/orders/[id]/page.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/app/admin/orders/page.tsx": {
+    "no-restricted-imports": {
+      "count": 2
+    }
+  },
+  "src/lib/sanity/brand-theme.ts": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  }
 }
