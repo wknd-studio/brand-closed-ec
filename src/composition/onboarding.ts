@@ -32,6 +32,7 @@ export function createUser(input: CreateUserInput) {
   });
 }
 
+// users の書き込みと、退会済みの行の確認（再入会の拒否）があるため admin（architecture.md）
 export function selectPlan(input: SelectPlanInput) {
   return selectPlanUseCase(input, {
     userRepo: new SupabaseUserRepository(createAdminClient()),
@@ -39,6 +40,7 @@ export function selectPlan(input: SelectPlanInput) {
   });
 }
 
+// users の書き込み（Stripe Customer の保存）があるため admin（architecture.md）
 export function startOnboardingCheckout(input: StartOnboardingCheckoutInput) {
   return startOnboardingCheckoutUseCase(input, {
     userRepo: new SupabaseUserRepository(createAdminClient()),

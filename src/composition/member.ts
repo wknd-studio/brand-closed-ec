@@ -14,6 +14,7 @@ import {
   type DetectMemberDeletedWithoutWithdrawalInput,
 } from "@/use-cases/detect-member-deleted-without-withdrawal";
 
+// 退会で deleted_at を入れた後の取り消し（cancelWithdrawal）は会員のクライアントでは書けないため admin（architecture.md）
 export function withdraw(input: WithdrawInput) {
   const supabase = createAdminClient();
   return withdrawUseCase(input, {
