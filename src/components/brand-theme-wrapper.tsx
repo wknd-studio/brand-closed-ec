@@ -1,13 +1,13 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
-import type { BrandTheme } from "@/lib/sanity/brand-theme";
+import type { BrandThemeDto } from "@/queries/brand-theme-query-service";
 import { resolveBrandThemeCssVars } from "@/lib/brand-theme-style";
 
 export default function BrandThemeWrapper({
   theme,
   children,
 }: {
-  theme: BrandTheme | null;
+  theme: BrandThemeDto | null;
   children: React.ReactNode;
 }) {
   const style = resolveBrandThemeCssVars(theme) as CSSProperties;

@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { PortableText } from "@portabletext/react";
 import { catalogQueryService } from "@/composition/catalog-query";
 import { findShopMemberRank } from "@/app/(member)/shop/member-rank";
-import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
+import { brandThemeQueryService } from "@/composition/brand-theme-query";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ImageGallery from "./image-gallery";
 import AddToCartButton from "./add-to-cart-button";
@@ -22,7 +22,7 @@ export default async function ProductDetailPage({
   const rank = await findShopMemberRank(userId!);
   const [product, theme] = await Promise.all([
     catalogQueryService().findProductDetail({ rank, productId: id }),
-    fetchBrandTheme(brand),
+    brandThemeQueryService().findBrandTheme(brand),
   ]);
 
   if (!product) notFound();
