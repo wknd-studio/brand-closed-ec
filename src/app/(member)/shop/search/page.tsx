@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/infrastructure/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchProducts } from "@/lib/sanity/products";
+import { catalogQueryService } from "@/composition/catalog-query";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import ProductGrid from "../[brand]/product-grid";
 import SearchForm from "./search-form";
@@ -19,11 +19,10 @@ export default async function SearchPage({
   const userRepo = new SupabaseUserRepository(supabase);
 
   const user = await userRepo.findByClerkUserId(userId!);
-  const userRank = user?.rank.value ?? "starter";
-  const allowedRanks = MemberRank.of(userRank).accessibleRanks();
+  const rank = user?.rank ?? MemberRank.of("starter");
 
   const { products, total } = keyword
-    ? await fetchProducts({ allowedRanks, keyword })
+    ? await catalogQueryService().findProducts({ rank, keyword })
     : { products: [], total: 0 };
 
   return (
@@ -41,7 +40,6 @@ export default async function SearchPage({
             key={keyword}
             initialProducts={products}
             total={total}
-            userRank={userRank}
             keyword={keyword}
           />
         </div>

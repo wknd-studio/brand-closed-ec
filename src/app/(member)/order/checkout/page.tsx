@@ -5,8 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { memberOrderQueryService } from "@/composition/member-order-query";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { groupCartItemsByPaymentTiming } from "@/lib/cart/types";
-import { fetchProductsByIds } from "@/lib/sanity/products";
-import { RankPrices } from "@/domain/value-objects/rank-prices";
+import { catalogQueryService } from "@/composition/catalog-query";
 import CheckoutForm from "./checkout-form";
 
 type LineItem = {
@@ -67,33 +66,28 @@ export default async function CheckoutPage() {
   const cart = parseCart(cookieStore.get(COOKIE_NAME)?.value);
   if (cart.items.length === 0) redirect("/shop");
 
-  const queryService = await memberOrderQueryService();
-  const [checkout, products] = await Promise.all([
-    queryService.findCheckout(userId!),
-    fetchProductsByIds(cart.items.map((i) => i.productId)),
-  ]);
-
+  const checkout = await (
+    await memberOrderQueryService()
+  ).findCheckout(userId!);
   if (!checkout) redirect("/shop");
   const { rank, shippingAddresses, billingAddresses } = checkout;
 
+  const products = await catalogQueryService().findCheckoutProducts({
+    rank,
+    productIds: cart.items.map((i) => i.productId),
+  });
+
   const lineItems = cart.items.map((item) => {
-    const product = products.find((p) => p._id === item.productId);
-    const unitPrice = product
-      ? (RankPrices.of({
-          isNegotiable: product.is_negotiable,
-          prices: product.prices,
-        }).priceFor(rank)?.amount ?? null)
-      : null;
-    const isOutOfStock = product?.availability === "out_of_stock";
+    const product = products.find((p) => p.id === item.productId);
     return {
       ...item,
-      unitPrice,
-      isOutOfStock,
+      unitPrice: product?.unitPrice ?? null,
+      isOutOfStock: product?.isOutOfStock ?? false,
       productName: product?.name ?? item.productName,
       thumbnail: product?.thumbnail ?? item.thumbnail,
       // 表示用のグループ分けはサーバー側の最新payment_timingを根拠にする
       // （unitPriceと同様、カートCookieの値は表示のキャッシュとしてのみ扱う）
-      paymentTiming: product?.payment_timing ?? "at_order",
+      paymentTiming: product?.paymentTiming ?? "at_order",
     };
   });
 

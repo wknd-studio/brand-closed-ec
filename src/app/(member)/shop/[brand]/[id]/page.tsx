@@ -4,9 +4,8 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { PortableText } from "@portabletext/react";
 import { createServerClient } from "@/infrastructure/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchProductById } from "@/lib/sanity/products";
+import { catalogQueryService } from "@/composition/catalog-query";
 import { MemberRank } from "@/domain/value-objects/member-rank";
-import { RankPrices } from "@/domain/value-objects/rank-prices";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ImageGallery from "./image-gallery";
@@ -26,21 +25,14 @@ export default async function ProductDetailPage({
   const userRepo = new SupabaseUserRepository(supabase);
 
   const user = await userRepo.findByClerkUserId(userId!);
-  const userRank = user?.rank.value ?? "starter";
-  const rank = MemberRank.of(userRank);
+  const rank = user?.rank ?? MemberRank.of("starter");
   const [product, theme] = await Promise.all([
-    fetchProductById(id),
+    catalogQueryService().findProductDetail({ rank, productId: id }),
     fetchBrandTheme(brand),
   ]);
 
-  if (!product || !rank.canAccess(MemberRank.of(product.min_rank))) {
-    notFound();
-  }
+  if (!product) notFound();
 
-  const rankPrice = RankPrices.of({
-    isNegotiable: product.is_negotiable,
-    prices: product.prices,
-  }).priceFor(rank);
   const isOutOfStock = product.availability === "out_of_stock";
 
   return (
@@ -53,7 +45,7 @@ export default async function ProductDetailPage({
           ← {brand} の商品一覧に戻る
         </Link>
         <div className="grid gap-10 md:grid-cols-2">
-          <ImageGallery images={(product.images ?? []).filter(Boolean)} />
+          <ImageGallery images={product.images} />
 
           <div className="space-y-6">
             <div className="space-y-1">
@@ -64,7 +56,7 @@ export default async function ProductDetailPage({
                 </h1>
                 <FavoriteButton sanityProductId={id} className="shrink-0" />
               </div>
-              {product.categories && product.categories.length > 0 && (
+              {product.categories.length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-1">
                   {product.categories.map((c) => (
                     <span
@@ -80,17 +72,17 @@ export default async function ProductDetailPage({
 
             <div className="space-y-1 rounded-lg bg-gray-50 p-4">
               <p className="text-xs text-gray-400">
-                参考小売価格 ¥{product.retail_price.toLocaleString()}
+                参考小売価格 ¥{product.retailPrice.toLocaleString()}
               </p>
-              {product.is_negotiable ? (
+              {product.isNegotiable ? (
                 <p className="text-xl font-semibold text-gray-700">
                   価格要相談
                 </p>
-              ) : rankPrice != null ? (
+              ) : product.unitPrice != null ? (
                 <p className="text-2xl font-bold">
-                  ¥{rankPrice.amount.toLocaleString()}
+                  ¥{product.unitPrice.toLocaleString()}
                   <span className="ml-1 text-sm font-normal text-gray-500">
-                    （{userRank} ランク価格）
+                    （{rank.value} ランク価格）
                   </span>
                 </p>
               ) : null}
@@ -108,24 +100,21 @@ export default async function ProductDetailPage({
               item={{
                 productId: id,
                 productName: product.name,
-                thumbnail: product.images?.[0] ?? null,
-                unitPrice: rankPrice?.amount ?? null,
-                availability: product.availability as
-                  | "available"
-                  | "out_of_stock"
-                  | "discontinued",
-                paymentTiming: product.payment_timing ?? "at_order",
+                thumbnail: product.images[0] ?? null,
+                unitPrice: product.unitPrice,
+                availability: product.availability,
+                paymentTiming: product.paymentTiming,
               }}
               isOutOfStock={isOutOfStock}
             />
 
-            {(product.files?.length ?? 0) > 0 && (
+            {product.files.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700">
                   添付ファイル
                 </p>
                 <ul className="space-y-1">
-                  {product.files!.map((file, i) => (
+                  {product.files.map((file, i) => (
                     <li key={i}>
                       <a
                         href={file.url}

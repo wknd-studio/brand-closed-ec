@@ -4,18 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMoreProducts } from "./actions";
 import ProductCard from "./product-card";
 import ProductCardSkeleton from "./product-card-skeleton";
-import type { Product } from "@/lib/sanity/products";
+import type { ProductCardDto } from "@/queries/catalog-query-service";
 
 export default function ProductGrid({
   initialProducts,
   total,
-  userRank,
   brand,
   keyword,
 }: {
-  initialProducts: Product[];
+  initialProducts: ProductCardDto[];
   total: number;
-  userRank: string;
   brand?: string;
   keyword?: string;
 }) {
@@ -51,11 +49,7 @@ export default function ProductGrid({
     <div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {products.map((product) => (
-          <ProductCard
-            key={product._id}
-            product={product}
-            userRank={userRank}
-          />
+          <ProductCard key={product.id} product={product} />
         ))}
         {isLoading &&
           Array.from({ length: 4 }).map((_, i) => (

@@ -1,30 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Product } from "@/lib/sanity/products";
-import { MemberRank } from "@/domain/value-objects/member-rank";
-import { RankPrices } from "@/domain/value-objects/rank-prices";
+import type { ProductCardDto } from "@/queries/catalog-query-service";
 import FavoriteButton from "@/components/favorite-button";
 
-export default function ProductCard({
-  product,
-  userRank,
-}: {
-  product: Product;
-  userRank: string;
-}) {
-  const rankPrice = RankPrices.of({
-    isNegotiable: product.is_negotiable,
-    prices: product.prices,
-  }).priceFor(MemberRank.of(userRank));
-
+export default function ProductCard({ product }: { product: ProductCardDto }) {
   return (
     <Link
-      href={`/shop/${encodeURIComponent(product.brand)}/${product._id}`}
+      href={`/shop/${encodeURIComponent(product.brand)}/${product.id}`}
       className="block overflow-hidden rounded-lg border bg-white transition hover:shadow-md"
     >
       <div className="relative aspect-square bg-gray-100">
         <FavoriteButton
-          sanityProductId={product._id}
+          sanityProductId={product.id}
           className="absolute right-2 top-2 z-10"
         />
         {product.thumbnail ? (
@@ -51,13 +38,13 @@ export default function ProductCard({
         <p className="text-xs text-gray-500">{product.brand}</p>
         <p className="line-clamp-2 text-sm font-medium">{product.name}</p>
         <p className="text-xs text-gray-400">
-          参考小売価格 ¥{product.retail_price.toLocaleString()}
+          参考小売価格 ¥{product.retailPrice.toLocaleString()}
         </p>
-        {product.is_negotiable ? (
+        {product.isNegotiable ? (
           <p className="text-sm font-semibold text-gray-600">価格要相談</p>
-        ) : rankPrice != null ? (
+        ) : product.unitPrice != null ? (
           <p className="text-sm font-semibold">
-            ¥{rankPrice.amount.toLocaleString()}
+            ¥{product.unitPrice.toLocaleString()}
           </p>
         ) : null}
       </div>
