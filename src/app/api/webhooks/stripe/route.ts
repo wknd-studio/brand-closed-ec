@@ -5,12 +5,10 @@ import {
   markCheckoutOrderAsPaid,
   markInvoiceOrderAsPaid,
 } from "@/composition/order-payment";
-import { completeSubscriptionOnboarding } from "@/composition/onboarding";
+import { completeOnboardingCheckout } from "@/composition/onboarding";
 import {
   constructStripeWebhookEvent,
-  isPaidRank,
   processStripeWebhookEventOnce,
-  retrieveOnboardingSubscription,
   type ProcessStripeWebhookEventOnceResult,
 } from "@/composition/stripe-webhook";
 
@@ -86,110 +84,20 @@ export async function POST(req: Request) {
         return failedResponse("[Checkout Webhook] 処理失敗:", outcome.error);
       }
     } else if (session.mode === "subscription") {
-      const clerkUserId = session.metadata?.clerk_user_id;
-      const plan = session.metadata?.plan;
-
-      // ENTERPRISE（Dashboardで作る契約）などアプリ外で作られたセッションには入会の
-      // metadataが無い。2xx以外を返すとStripeが再送を続け、失敗が続くとエンドポイントが
-      // 無効化されるため、運営者に知らせたうえで200を返す
-      if (!clerkUserId || !plan || !isPaidRank(plan)) {
-        Sentry.captureMessage(
-          "入会のCheckoutセッションのmetadataが無い、または不正なため入会を確定しませんでした",
-          {
-            level: "warning",
-            tags: { webhook: "stripe", eventType: event.type },
-            extra: {
-              stripeCheckoutSessionId: session.id,
-              eventId: event.id,
-              metadata: session.metadata,
-            },
-          }
-        );
-        return NextResponse.json({ received: true });
-      }
-
-      // 入会は決済完了で確定する（docs/signup-flow.md 設計決定事項#5）。入会のCheckoutは
-      // カード決済に限定しているため、paid以外は想定外として運営者に知らせる
-      if (session.payment_status !== "paid") {
-        Sentry.captureMessage(
-          "入会のCheckoutセッションが支払い済みでないため入会を確定しませんでした",
-          {
-            level: "warning",
-            tags: { webhook: "stripe", eventType: event.type },
-            extra: {
-              stripeCheckoutSessionId: session.id,
-              eventId: event.id,
-              clerkUserId,
-              paymentStatus: session.payment_status,
-            },
-          }
-        );
-        return NextResponse.json({ received: true });
-      }
-
-      const stripeCustomerId = session.customer as string;
-      const stripeSubscriptionId = session.subscription as string;
-
-      // 同じイベントの再送はここでスキップし、同じサブスクリプションの別イベントは
-      // 入会確定のRPC（confirm_subscription_onboarding）の冪等性で防ぐ
-      const outcome = await processStripeWebhookEventOnce({
-        event: { eventId: event.id, type: event.type, payload: event },
-        process: async () => {
-          const {
-            status,
-            currentPeriodStart,
-            currentPeriodEnd,
-            subscriptionStartedAt,
-          } = await retrieveOnboardingSubscription(stripeSubscriptionId);
-
-          const result = await Sentry.startSpan(
-            { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
-            () =>
-              completeSubscriptionOnboarding({
-                clerkUserId,
-                plan,
-                stripeCustomerId,
-                stripeSubscriptionId,
-                status,
-                currentPeriodStart,
-                currentPeriodEnd,
-                subscriptionStartedAt,
-              })
-          );
-
-          // 課金済みなのに記録されないサブスクリプション。再送しても成功しないため
-          // 200を返してイベントを処理済みにし、運営者が手動で返金・解約する
-          if (
-            result === "conflicting_subscription" ||
-            result === "member_not_found"
-          ) {
-            Sentry.captureMessage(
-              result === "member_not_found"
-                ? "退会済み、または未登録の会員の入会が届きました。手動で返金・解約してください"
-                : "入会済みの会員、または別の会員で記録済みのサブスクリプションの入会が届きました。手動で返金・解約してください",
-              {
-                level: "error",
-                tags: { webhook: "stripe", eventType: event.type },
-                extra: {
-                  stripeCheckoutSessionId: session.id,
-                  eventId: event.id,
-                  clerkUserId,
-                  stripeCustomerId,
-                  stripeSubscriptionId,
-                },
-              }
-            );
-          }
-        },
-        failureReport: {
-          tags: { webhook: "stripe", eventType: event.type },
-          extra: {
+      // 入会を確定しない入力（metadata・payment_statusが不正）や確定できなかった結果は、
+      // use-caseが運営者に知らせたうえで200を返させる
+      const outcome = await Sentry.startSpan(
+        { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
+        () =>
+          completeOnboardingCheckout({
+            event: { eventId: event.id, type: event.type, payload: event },
             stripeCheckoutSessionId: session.id,
-            eventId: event.id,
-            clerkUserId,
-          },
-        },
-      });
+            metadata: session.metadata,
+            paymentStatus: session.payment_status,
+            stripeCustomerId: session.customer as string,
+            stripeSubscriptionId: session.subscription as string,
+          })
+      );
       if (outcome.status === "skipped") return skippedResponse(outcome.claim);
       if (outcome.status === "failed") {
         return failedResponse(
