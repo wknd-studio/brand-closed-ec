@@ -44,7 +44,9 @@ import OnboardingPaymentPage from "@/app/onboarding/payment/page";
 import { makeUser } from "./use-cases/helpers";
 
 // Stripe Customerを保存済みの会員（usersの行のidは"user-1"）
-const user = makeUser({ rank: "starter", onboardingCompleted: false }).with({
+const user = makeUser({
+  rank: "starter",
+  onboardingCompleted: false,
   id: "user-1",
   stripeCustomerId: "cus_1",
 });

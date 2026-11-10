@@ -18,9 +18,7 @@ function makeCheckoutGateway(): OnboardingCheckoutGateway {
 function setup(stripeCustomerId: string | null) {
   const userRepo = makeUserRepo();
   vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(
-    makeUser({ rank: "premium", onboardingCompleted: false }).with({
-      stripeCustomerId,
-    })
+    makeUser({ rank: "premium", onboardingCompleted: false, stripeCustomerId })
   );
   const checkoutGateway = makeCheckoutGateway();
   return { userRepo, checkoutGateway };

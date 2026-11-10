@@ -206,7 +206,9 @@ describe("StripeOnboardingPaymentQueryService.findPaymentCompleted - 有効な�
     listSubscriptionsMock.mockResolvedValue({ data: [{ status: "active" }] });
     const userRepo = makeUserRepo();
     vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(
-      makeUser({ rank: "premium", onboardingCompleted: false }).with({
+      makeUser({
+        rank: "premium",
+        onboardingCompleted: false,
         stripeCustomerId: "cus_1",
       })
     );

@@ -250,7 +250,7 @@ describe("SupabaseAddressRepository（service role）", () => {
 
     await repo.clearDefault(USER_A_ID, "shipping");
     const next = await repo.findById(ADDRESS_A2_ID);
-    await repo.update(next!.with({ isDefault: true }));
+    await repo.update(next!.makeDefault());
 
     expect((await repo.findById(ADDRESS_A1_ID))?.isDefault).toBe(false);
     expect((await repo.findById(ADDRESS_A2_ID))?.isDefault).toBe(true);
@@ -278,7 +278,9 @@ describe("SupabaseAddressRepository（会員のクライアント・RLS）", () 
     expect(await repoAsA.countByUserIdAndType(USER_A_ID, "shipping")).toBe(1);
 
     const saved = await repoAsA.findById(ADDRESS_A1_ID);
-    await repoAsA.update(saved!.with({ isDefault: true, city: "港区" }));
+    await repoAsA.update(
+      Address.of({ ...saved!, isDefault: true, city: "港区" })
+    );
     expect(await repoAsA.findById(ADDRESS_A1_ID)).toMatchObject({
       isDefault: true,
       city: "港区",
@@ -300,7 +302,7 @@ describe("SupabaseAddressRepository（会員のクライアント・RLS）", () 
   it("他の会員の住所は更新・既定の解除・削除ができない", async () => {
     const original = await adminRepo.findById(ADDRESS_B1_ID);
 
-    await repoAsA.update(original!.with({ city: "書き換え" }));
+    await repoAsA.update(Address.of({ ...original!, city: "書き換え" }));
     await repoAsA.clearDefault(USER_B_ID, "shipping");
     await repoAsA.delete(ADDRESS_B1_ID);
 

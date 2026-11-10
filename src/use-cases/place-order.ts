@@ -165,9 +165,7 @@ export async function placeOrder(
       throw error;
     }
     await orderRepo.save(
-      order.applySettlement(
-        settlement.with({ stripeCheckoutSessionId: session.sessionId })
-      )
+      order.applySettlement(settlement.attachCheckoutSession(session.sessionId))
     );
 
     if (afterOrderItems.length > 0) {

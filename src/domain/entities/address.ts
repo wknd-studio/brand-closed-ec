@@ -2,10 +2,8 @@ import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 
 export type AddressType = "shipping" | "billing" | "headquarters";
 
-interface AddressProps {
-  id: string;
-  type: AddressType;
-  isDefault: boolean;
+/** 会員が書き換えられる住所の内容（宛名・住所・電話番号） */
+export interface AddressContent {
   recipientLastName: string;
   recipientFirstName: string;
   postalCode: string;
@@ -14,6 +12,12 @@ interface AddressProps {
   addressLine1: string;
   addressLine2: string;
   phoneNumber: string;
+}
+
+interface AddressProps extends AddressContent {
+  id: string;
+  type: AddressType;
+  isDefault: boolean;
 }
 
 export class Address {
@@ -47,7 +51,7 @@ export class Address {
     return new Address(props);
   }
 
-  with(overrides: Partial<AddressProps>): Address {
+  private with(overrides: Partial<AddressProps>): Address {
     return Address.of({
       id: this.id,
       type: this.type,
@@ -62,6 +66,26 @@ export class Address {
       phoneNumber: this.phoneNumber,
       ...overrides,
     });
+  }
+
+  /** 住所の内容を書き換える。ID・種別・既定かどうかは変えない */
+  update(content: AddressContent): Address {
+    // 構造的部分型でより広いオブジェクトが渡されても、ID・種別・既定を上書きしないよう項目を取り出す
+    return this.with({
+      recipientLastName: content.recipientLastName,
+      recipientFirstName: content.recipientFirstName,
+      postalCode: content.postalCode,
+      prefecture: content.prefecture,
+      city: content.city,
+      addressLine1: content.addressLine1,
+      addressLine2: content.addressLine2,
+      phoneNumber: content.phoneNumber,
+    });
+  }
+
+  /** 既定の住所にする。同じ種別の他の住所の既定の解除はリポジトリ側（clearDefault）で行う */
+  makeDefault(): Address {
+    return this.with({ isDefault: true });
   }
 
   toSnapshot(): AddressSnapshot {

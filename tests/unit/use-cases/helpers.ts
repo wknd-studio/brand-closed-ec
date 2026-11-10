@@ -39,10 +39,12 @@ export function makeUser(
     firstName: string;
     lastName: string;
     phoneNumber: PhoneNumber | null;
+    id: string;
+    stripeCustomerId: string | null;
   }>
 ) {
   return User.of({
-    id: "00000000-0000-0000-0000-000000000001",
+    id: overrides?.id ?? "00000000-0000-0000-0000-000000000001",
     clerkUserId: "clerk-1",
     email: "test@example.com",
     firstName: overrides?.firstName ?? "太郎",
@@ -56,7 +58,7 @@ export function makeUser(
     billingAnchorDay: overrides?.billingAnchorDay ?? 1,
     onboardingCompleted: overrides?.onboardingCompleted ?? true,
     deletedAt: null,
-    stripeCustomerId: null,
+    stripeCustomerId: overrides?.stripeCustomerId ?? null,
   });
 }
 

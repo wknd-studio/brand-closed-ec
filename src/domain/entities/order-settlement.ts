@@ -1,5 +1,6 @@
 import { Money } from "@/domain/value-objects/money";
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
+import { CheckoutSessionNotAttachableError } from "@/domain/errors/checkout-session-not-attachable-error";
 
 export type SettlementFlow = "checkout" | "invoice";
 
@@ -76,7 +77,7 @@ export class OrderSettlement {
     return new OrderSettlement(props);
   }
 
-  with(overrides: Partial<OrderSettlementProps>): OrderSettlement {
+  private with(overrides: Partial<OrderSettlementProps>): OrderSettlement {
     return new OrderSettlement({
       id: this.id,
       orderId: this.orderId,
@@ -106,6 +107,22 @@ export class OrderSettlement {
   /** 請求済みで未払い（invoice_sent）、または上限超過で運営者の対応待ち（limit_exceeded） */
   isUnresolved(): boolean {
     return this.status === "invoice_sent" || this.isLimitExceeded();
+  }
+
+  /**
+   * 注文確定時に作ったCheckout Sessionを紐付ける。決済前（pending_payment）のCheckoutの
+   * 決済単位で、まだ紐付いていないものだけ（Webhookは紐付いたIDで決済単位を探すため付け替えない）
+   */
+  attachCheckoutSession(sessionId: string): OrderSettlement {
+    if (
+      this.flow !== "checkout" ||
+      this.status !== "pending_payment" ||
+      this.stripeCheckoutSessionId !== null ||
+      sessionId === ""
+    ) {
+      throw new CheckoutSessionNotAttachableError(this.id);
+    }
+    return this.with({ stripeCheckoutSessionId: sessionId });
   }
 
   /** paid → paid（Webhookの再配信）も拒否する。冪等性はuse-case側で扱う */

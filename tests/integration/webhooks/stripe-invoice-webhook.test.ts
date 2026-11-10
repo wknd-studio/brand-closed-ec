@@ -9,6 +9,7 @@ import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import { Money } from "@/domain/value-objects/money";
+import { Order } from "@/domain/entities/order";
 import { OrderItem } from "@/domain/entities/order-item";
 import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { getStripe } from "@/infrastructure/stripe/client";
@@ -161,7 +162,9 @@ beforeAll(async () => {
   });
   // 明細は注文の決済単位にしか紐付けられない（注文の不変条件）ため、決済単位を加えてから紐付ける
   await orderRepo.save(
-    placed!.applySettlement(settlement).with({
+    Order.of({
+      ...placed!,
+      settlements: [...placed!.settlements, settlement],
       items: placed!.items.map((i) =>
         OrderItem.of({ ...i, settlementId: settlement.id })
       ),

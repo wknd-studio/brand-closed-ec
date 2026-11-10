@@ -5,6 +5,7 @@ import {
   type SettlementStatus,
 } from "@/domain/entities/order-settlement";
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
+import { CheckoutSessionNotAttachableError } from "@/domain/errors/checkout-session-not-attachable-error";
 import { Money } from "@/domain/value-objects/money";
 
 function makeSettlement(
@@ -133,6 +134,63 @@ describe("OrderSettlement", () => {
         );
       }
     );
+  });
+
+  describe("attachCheckoutSession()", () => {
+    it("決済前のCheckoutの決済単位にCheckout SessionのIDを紐付ける", () => {
+      const settlement = makeSettlement({ stripeCheckoutSessionId: null });
+
+      const attached = settlement.attachCheckoutSession("cs_test_new");
+
+      expect(attached.stripeCheckoutSessionId).toBe("cs_test_new");
+      expect(attached.status).toBe("pending_payment");
+      expect(settlement.stripeCheckoutSessionId).toBeNull();
+    });
+
+    it("Invoiceの決済単位には紐付けられない", () => {
+      const settlement = makeSettlement({
+        flow: "invoice",
+        status: "invoice_sent",
+        stripeCheckoutSessionId: null,
+        stripeInvoiceId: "in_test_001",
+      });
+
+      expect(() => settlement.attachCheckoutSession("cs_test_new")).toThrow(
+        CheckoutSessionNotAttachableError
+      );
+    });
+
+    it.each<SettlementStatus>(["paid", "cancelled"])(
+      "決済前でない（%s）決済単位には紐付けられない",
+      (status) => {
+        const settlement = makeSettlement({
+          status,
+          stripeCheckoutSessionId: null,
+        });
+
+        expect(() => settlement.attachCheckoutSession("cs_test_new")).toThrow(
+          CheckoutSessionNotAttachableError
+        );
+      }
+    );
+
+    it("既にCheckout Sessionが紐付いている決済単位は付け替えられない", () => {
+      const settlement = makeSettlement({
+        stripeCheckoutSessionId: "cs_test_001",
+      });
+
+      expect(() => settlement.attachCheckoutSession("cs_test_new")).toThrow(
+        CheckoutSessionNotAttachableError
+      );
+    });
+
+    it("空のIDは紐付けられない", () => {
+      const settlement = makeSettlement({ stripeCheckoutSessionId: null });
+
+      expect(() => settlement.attachCheckoutSession("")).toThrow(
+        CheckoutSessionNotAttachableError
+      );
+    });
   });
 
   describe("状態の判定", () => {

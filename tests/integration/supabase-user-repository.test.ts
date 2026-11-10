@@ -271,7 +271,12 @@ describe("SupabaseUserRepository", () => {
       await insertRow({ phone_number: "09012345678" });
       const user = await repo.findById(MAPPER_ID);
 
-      await repo.save(user!.with({ phoneNumber: null }));
+      await repo.save(
+        User.of({
+          ...user!,
+          phoneNumber: null,
+        })
+      );
 
       const { data: row } = await supabase
         .from("users")
@@ -285,7 +290,12 @@ describe("SupabaseUserRepository", () => {
   describe("save()", () => {
     it("initial_fee_paid_rank_codeは書き換えない（入会確定等のRPCだけが更新する）", async () => {
       const user = await repo.findById(TEST_USER_ID);
-      await repo.save(user!.with({ initialFeePaidRank: null }));
+      await repo.save(
+        User.of({
+          ...user!,
+          initialFeePaidRank: null,
+        })
+      );
 
       const { data } = await supabase
         .from("users")
@@ -297,7 +307,12 @@ describe("SupabaseUserRepository", () => {
 
     it("ランクを更新できる", async () => {
       const user = await repo.findById(TEST_USER_ID);
-      await repo.save(user!.with({ rank: MemberRank.of("standard") }));
+      await repo.save(
+        User.of({
+          ...user!,
+          rank: MemberRank.of("standard"),
+        })
+      );
 
       const reloaded = await repo.findById(TEST_USER_ID);
       expect(reloaded!.rank.value).toBe("standard");
@@ -393,7 +408,8 @@ describe("SupabaseUserRepository", () => {
 
       await expect(
         repo.saveIfNotOnboarded(
-          existing!.with({
+          User.of({
+            ...existing!,
             firstName: "上書き",
             rank: MemberRank.of("starter"),
             onboardingCompleted: false,
@@ -444,7 +460,8 @@ describe("SupabaseUserRepository", () => {
 
       await expect(
         repo.saveIfNotOnboarded(
-          existing!.with({
+          User.of({
+            ...existing!,
             email: "keep-columns@example.com",
             firstName: "太郎",
             lastName: "法人",
@@ -500,7 +517,12 @@ describe("SupabaseUserRepository", () => {
 
     it("同じclerk_user_idの有効な行があれば何もせず成功する（既存行を上書きしない）", async () => {
       const before = await repo.findByClerkUserId(INSERT_CLERK_ID);
-      await repo.save(before!.with({ firstName: "入力済み" }));
+      await repo.save(
+        User.of({
+          ...before!,
+          firstName: "入力済み",
+        })
+      );
 
       await expect(
         repo.insertIfAbsent(newUser(INSERT_CLERK_ID))

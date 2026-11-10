@@ -7,6 +7,7 @@ import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-regist
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import { makeOrder, makeOrderItem, makeSettlement } from "./use-cases/helpers";
 
 function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
@@ -254,12 +255,9 @@ describe("User", () => {
 });
 
 describe("User の電話番号", () => {
-  it("値オブジェクトで持ち、with() でも引き継ぐ", () => {
+  it("値オブジェクトで持つ", () => {
     const user = makeUser({ phoneNumber: PhoneNumber.of("090-1234-5678") });
     expect(user.phoneNumber?.value).toBe("09012345678");
-    expect(user.with({ firstName: "次郎" }).phoneNumber?.value).toBe(
-      "09012345678"
-    );
   });
 });
 
@@ -268,11 +266,96 @@ describe("User.initialFeePaidRank", () => {
     expect(makeUser().initialFeePaidRank).toBeNull();
   });
 
-  it("指定した支払い済み最高ランクを保持し、with()でも引き継ぐ", () => {
+  it("指定した支払い済み最高ランクを保持する", () => {
     const user = makeUser({ initialFeePaidRank: MemberRank.of("pro") });
     expect(user.initialFeePaidRank?.value).toBe("pro");
-    expect(user.with({ firstName: "次郎" }).initialFeePaidRank?.value).toBe(
-      "pro"
-    );
+  });
+});
+
+describe("User.selectPlan()", () => {
+  const individualApplication = {
+    email: "new@example.com",
+    firstName: "次郎",
+    lastName: "佐藤",
+    phoneNumber: PhoneNumber.of("08011112222"),
+    rank: MemberRank.of("premium"),
+    memberType: MemberType.of("individual"),
+    companyName: null,
+    invoiceRegistrationNumber: null,
+  };
+
+  function makeApplyingUser() {
+    return makeUser({
+      onboardingCompleted: false,
+      stripeCustomerId: "cus_keep",
+      billingAnchorDay: 15,
+      initialFeePaidRank: MemberRank.of("basic"),
+    });
+  }
+
+  it("未入会の会員のプラン選択の内容（連絡先・氏名・電話番号・ランク・会員種別）で更新する", () => {
+    const user = makeApplyingUser();
+
+    const selected = user.selectPlan(individualApplication);
+
+    expect(selected.email).toBe("new@example.com");
+    expect(selected.firstName).toBe("次郎");
+    expect(selected.lastName).toBe("佐藤");
+    expect(selected.phoneNumber?.value).toBe("08011112222");
+    expect(selected.rank.value).toBe("premium");
+    expect(selected.memberType.value).toBe("individual");
+    expect(selected.onboardingCompleted).toBe(false);
+    expect(user.rank.value).toBe("basic");
+  });
+
+  it("プラン選択と関係の無い項目（ID・Stripe Customer・請求基準日・支払い済み最高ランク等）は変えない", () => {
+    const user = makeApplyingUser();
+
+    const selected = user.selectPlan(individualApplication);
+
+    expect(selected.id).toBe(user.id);
+    expect(selected.clerkUserId).toBe(user.clerkUserId);
+    expect(selected.stripeCustomerId).toBe("cus_keep");
+    expect(selected.billingAnchorDay).toBe(15);
+    expect(selected.profileCompletedAt).toEqual(user.profileCompletedAt);
+    expect(selected.initialFeePaidRank?.value).toBe("basic");
+    expect(selected.deletedAt).toBeNull();
+  });
+
+  it("法人として選択すると会社名・インボイス番号を持つ", () => {
+    const selected = makeApplyingUser().selectPlan({
+      ...individualApplication,
+      memberType: MemberType.of("corporate"),
+      companyName: "テスト株式会社",
+      invoiceRegistrationNumber: InvoiceRegistrationNumber.of("T1234567890123"),
+    });
+
+    expect(selected.memberType.value).toBe("corporate");
+    expect(selected.companyName).toBe("テスト株式会社");
+    expect(selected.invoiceRegistrationNumber?.value).toBe("T1234567890123");
+  });
+
+  it("法人なのに会社名・インボイス番号が無ければ MissingCorporateProfileError をthrowする", () => {
+    expect(() =>
+      makeApplyingUser().selectPlan({
+        ...individualApplication,
+        memberType: MemberType.of("corporate"),
+      })
+    ).toThrow(MissingCorporateProfileError);
+  });
+
+  it("入会済みの会員は OnboardingAlreadyCompletedError をthrowする（ランク・会員種別を書き換えない）", () => {
+    expect(() =>
+      makeUser({ onboardingCompleted: true }).selectPlan(individualApplication)
+    ).toThrow(OnboardingAlreadyCompletedError);
+  });
+
+  it("退会済みの会員は MemberWithdrawnError をthrowする", () => {
+    expect(() =>
+      makeUser({
+        onboardingCompleted: false,
+        deletedAt: new Date(2026, 9, 24),
+      }).selectPlan(individualApplication)
+    ).toThrow(MemberWithdrawnError);
   });
 });

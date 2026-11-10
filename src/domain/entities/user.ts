@@ -7,6 +7,7 @@ import type { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-r
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import type { Order } from "./order";
 
 interface UserProps {
@@ -27,6 +28,18 @@ interface UserProps {
   companyName?: string | null;
   invoiceRegistrationNumber?: InvoiceRegistrationNumber | null;
   initialFeePaidRank?: MemberRank | null;
+}
+
+/** プラン選択の申込内容（入会手続き中に会員が入力する項目） */
+export interface PlanApplication {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: PhoneNumber;
+  rank: MemberRank;
+  memberType: MemberType;
+  companyName: string | null;
+  invoiceRegistrationNumber: InvoiceRegistrationNumber | null;
 }
 
 export class User {
@@ -80,7 +93,7 @@ export class User {
     return new User(props);
   }
 
-  with(overrides: Partial<UserProps>): User {
+  private with(overrides: Partial<UserProps>): User {
     return new User({ ...this.toProps(), ...overrides });
   }
 
@@ -111,6 +124,27 @@ export class User {
 
   getMonthlyLimit(): Money {
     return this.rank.getMonthlyLimit();
+  }
+
+  // 入会手続き中（未入会）の会員がプラン選択をやり直したときに、申込内容で書き換える。
+  // 入会済みの会員のランク・会員種別はここでは変えない（決済でサブスクリプションが二重にできるため）。
+  // 法人の会社名・インボイス番号の必須はコンストラクタが検査する
+  selectPlan(application: PlanApplication): User {
+    if (this.isWithdrawn()) throw new MemberWithdrawnError();
+    if (this.hasCompletedOnboarding()) {
+      throw new OnboardingAlreadyCompletedError();
+    }
+    // 構造的部分型でより広いオブジェクトが渡されても、申込内容以外を上書きしないよう項目を取り出す
+    return this.with({
+      email: application.email,
+      firstName: application.firstName,
+      lastName: application.lastName,
+      phoneNumber: application.phoneNumber,
+      rank: application.rank,
+      memberType: application.memberType,
+      companyName: application.companyName,
+      invoiceRegistrationNumber: application.invoiceRegistrationNumber,
+    });
   }
 
   // 退会済み、またはキャンセルされていない注文のうち未解決の決済単位を持つものが

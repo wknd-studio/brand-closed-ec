@@ -79,13 +79,12 @@ export async function selectPlan(
     : null;
 
   const user = existing
-    ? existing.with({
+    ? existing.selectPlan({
         email: input.email,
         firstName,
         lastName,
         phoneNumber,
         rank: MemberRank.of(input.plan),
-        onboardingCompleted: false,
         memberType,
         companyName: companyName ?? null,
         invoiceRegistrationNumber,

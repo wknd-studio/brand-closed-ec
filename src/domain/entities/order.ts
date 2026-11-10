@@ -172,7 +172,7 @@ export class Order {
     }
   }
 
-  with(overrides: Partial<OrderProps>): Order {
+  private with(overrides: Partial<OrderProps>): Order {
     return Order.of({ ...this.toProps(), ...overrides });
   }
 

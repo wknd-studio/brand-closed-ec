@@ -371,8 +371,10 @@ describe("Order", () => {
       ).toBe("settlement_of_other_order");
     });
 
-    it("withで明細を空にするとInvalidOrderError", () => {
-      expect(reasonOf(() => makeOrder().with({ items: [] }))).toBe("no_items");
+    it("明細を空にして組み立て直すとInvalidOrderError", () => {
+      expect(reasonOf(() => Order.of({ ...makeOrder(), items: [] }))).toBe(
+        "no_items"
+      );
     });
   });
 
