@@ -303,8 +303,8 @@ export default function AddressForm(props: Props) {
               name="phone_number"
               defaultValue={addr?.phoneNumber ?? ""}
               required
-              // domain の PhoneNumber と同じ形式（0始まりの10〜11桁。ハイフンは任意）
-              pattern="0(?:-?\d){9,10}"
+              // domain の PhoneNumber と同じ形式（ハイフンをすべて除いて0始まりの10〜11桁。tests/unit/address-form.test.tsx で一致を確かめる）
+              pattern="-*0(?:-*\d){9,10}-*"
               title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
               placeholder="09012345678"
               {...invalidProps("phoneNumber")}
