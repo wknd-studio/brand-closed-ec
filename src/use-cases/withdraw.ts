@@ -34,8 +34,8 @@ export async function withdraw(
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
   if (!user) throw new Error("ユーザーが見つかりません");
 
-  const activeOrders = await orderRepo.findActiveByUserId(user.id);
-  const withdrawnUser = user.withdraw(activeOrders);
+  const orders = await orderRepo.findByUserId(user.id);
+  const withdrawnUser = user.withdraw(orders);
   await userRepo.save(withdrawnUser);
 
   const subscription = await subscriptionRepo.findActiveByUserId(user.id);
@@ -45,7 +45,7 @@ export async function withdraw(
         subscription.stripeSubscriptionId
       );
     } catch (err) {
-      await userRepo.save(user.with({ deletedAt: null }));
+      await userRepo.save(withdrawnUser.cancelWithdrawal());
       throw err;
     }
   }

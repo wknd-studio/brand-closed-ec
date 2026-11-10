@@ -333,15 +333,13 @@ export class SupabaseOrderRepository implements OrderRepository {
     await this.db.from("orders").delete().eq("id", orderId);
   }
 
-  async findActiveByUserId(userId: string): Promise<Order[]> {
-    const { data } = await this.db
+  async findByUserId(userId: string): Promise<Order[]> {
+    const { data, error } = await this.db
       .from("orders")
       .select(ORDER_SELECT)
-      .eq("user_id", userId)
-      .neq("status", "cancelled");
-    return (data ?? [])
-      .map((row) => toOrder(row as unknown as OrderRow))
-      .filter((order) => order.hasUnresolvedSettlement());
+      .eq("user_id", userId);
+    if (error) throw new Error(`Order取得に失敗: ${error.message}`);
+    return (data ?? []).map((row) => toOrder(row as unknown as OrderRow));
   }
 
   async findActiveOrdersWithUser(): Promise<OrderWithUser[]> {

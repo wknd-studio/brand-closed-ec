@@ -5,7 +5,7 @@ import { MemberType } from "@/domain/value-objects/member-type";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
-import { makeOrder } from "./use-cases/helpers";
+import { makeOrder, makeSettlement } from "./use-cases/helpers";
 
 function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
   return User.of({
@@ -52,8 +52,22 @@ describe("User", () => {
   });
 
   describe("withdraw()", () => {
-    it("未解決の注文が0件なら、deletedAt に退会日時を立てた User を返す", () => {
-      const now = new Date(2026, 9, 24, 12, 0, 0);
+    const now = new Date(2026, 9, 24, 12, 0, 0);
+    const unresolved = (status: "invoice_sent" | "limit_exceeded") =>
+      makeOrder({ settlements: [makeSettlement({ status })] });
+    const resolved = makeOrder({
+      settlements: [makeSettlement({ status: "paid", paidAt: now })],
+    });
+    const beforePayment = makeOrder({
+      settlements: [makeSettlement({ status: "pending_payment" })],
+    });
+    // 注文はキャンセル済みだが、決済単位の状態が未解決のまま残っている
+    const cancelledWithUnresolved = makeOrder({
+      status: "cancelled",
+      settlements: [makeSettlement({ status: "invoice_sent" })],
+    });
+
+    it("注文が0件なら、deletedAt に退会日時を立てた User を返す", () => {
       const user = makeUser({ deletedAt: null });
 
       const withdrawn = user.withdraw([], now);
@@ -63,16 +77,55 @@ describe("User", () => {
       expect(user.deletedAt).toBeNull();
     });
 
-    it("未解決の注文が1件以上なら ActiveOrdersExistError をthrowする", () => {
+    it.each([
+      ["請求済み未払い（invoice_sent）", "invoice_sent"],
+      ["上限超過（limit_exceeded）", "limit_exceeded"],
+    ] as const)(
+      "キャンセルされていない注文に%sの決済単位があれば ActiveOrdersExistError をthrowする",
+      (_, status) => {
+        const user = makeUser({ deletedAt: null });
+
+        expect(() => user.withdraw([unresolved(status)], now)).toThrow(
+          ActiveOrdersExistError
+        );
+      }
+    );
+
+    it("未解決の決済単位を持たない注文（支払い済み・決済前・決済単位なし）だけなら退会できる", () => {
       const user = makeUser({ deletedAt: null });
 
-      expect(() => user.withdraw([makeOrder()], new Date())).toThrow(
-        ActiveOrdersExistError
+      const withdrawn = user.withdraw(
+        [resolved, beforePayment, makeOrder({ settlements: [] })],
+        now
       );
+
+      expect(withdrawn.deletedAt).toEqual(now);
+    });
+
+    it("キャンセル済みの注文は、未解決の決済単位が残っていても退会を止めない", () => {
+      const user = makeUser({ deletedAt: null });
+
+      const withdrawn = user.withdraw([cancelledWithUnresolved], now);
+
+      expect(withdrawn.deletedAt).toEqual(now);
+    });
+
+    it("退会を止めない注文に混ざって、未解決の決済単位を持つ注文が1件でもあれば ActiveOrdersExistError をthrowする", () => {
+      const user = makeUser({ deletedAt: null });
+
       expect(() =>
-        user.withdraw([makeOrder(), makeOrder()], new Date())
+        user.withdraw(
+          [
+            resolved,
+            cancelledWithUnresolved,
+            unresolved("limit_exceeded"),
+            beforePayment,
+          ],
+          now
+        )
       ).toThrow(ActiveOrdersExistError);
     });
+
     it("退会済みなら MemberWithdrawnError をthrowし、退会日時を上書きしない", () => {
       const withdrawnAt = new Date(2026, 0, 1);
       const user = makeUser({ deletedAt: withdrawnAt });
@@ -81,6 +134,21 @@ describe("User", () => {
         MemberWithdrawnError
       );
       expect(user.deletedAt).toEqual(withdrawnAt);
+    });
+  });
+
+  describe("cancelWithdrawal()", () => {
+    it("退会を取り消し、deletedAt を null に戻した User を返す", () => {
+      const withdrawn = makeUser({ deletedAt: null }).withdraw(
+        [],
+        new Date(2026, 9, 24)
+      );
+
+      const restored = withdrawn.cancelWithdrawal();
+
+      expect(restored.deletedAt).toBeNull();
+      expect(restored.isWithdrawn()).toBe(false);
+      expect(withdrawn.isWithdrawn()).toBe(true);
     });
   });
 

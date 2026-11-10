@@ -196,7 +196,7 @@ export function makeOrderRepo(order?: Order): OrderRepository {
     save: vi.fn().mockResolvedValue(undefined),
     saveNewOrderWithLimitCheck: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
-    findActiveByUserId: vi.fn().mockResolvedValue([]),
+    findByUserId: vi.fn().mockResolvedValue([]),
     findActiveOrdersWithUser: vi.fn().mockResolvedValue([]),
     findByIdWithUser: vi.fn().mockResolvedValue(null),
   };

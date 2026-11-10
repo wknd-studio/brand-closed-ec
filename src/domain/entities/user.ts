@@ -110,11 +110,23 @@ export class User {
     return this.rank.getMonthlyLimit();
   }
 
-  // 退会済み、または未解決の決済単位を持つ注文が1件でもあれば退会できない
-  withdraw(activeOrders: readonly Order[], now: Date = new Date()): User {
+  // 退会済み、またはキャンセルされていない注文のうち未解決の決済単位を持つものが
+  // 1件でもあれば退会できない（docs/domain/membership.md）。orders は会員の全注文
+  withdraw(orders: readonly Order[], now: Date = new Date()): User {
     if (this.isWithdrawn()) throw new MemberWithdrawnError();
-    if (activeOrders.length > 0) throw new ActiveOrdersExistError();
+    if (
+      orders.some(
+        (order) => !order.isCancelled() && order.hasUnresolvedSettlement()
+      )
+    ) {
+      throw new ActiveOrdersExistError();
+    }
     return this.with({ deletedAt: now });
+  }
+
+  // 退会処理の途中で失敗したときの取り消し（補償処理）。退会前の状態に戻す
+  cancelWithdrawal(): User {
+    return this.with({ deletedAt: null });
   }
 
   isWithdrawn(): boolean {

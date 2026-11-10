@@ -73,11 +73,10 @@ export interface OrderRepository {
   delete(orderId: string): Promise<void>;
 
   /**
-   * 退会ゲートチェック用: ユーザーの未解決の決済単位（invoice_sent・limit_exceeded）
-   * を持つ注文を取得する（issue #208・#268）。決済前（pending_payment）・支払い済み
-   * （paid）・キャンセル済みの注文は含まない
+   * 会員の注文を状態に関わらずすべて取得する。退会できるかの判定
+   * （どの注文が退会を止めるか）は User.withdraw() が行う（#587）
    */
-  findActiveByUserId(userId: string): Promise<Order[]>;
+  findByUserId(userId: string): Promise<Order[]>;
 
   /** 管理画面用: アクティブな注文一覧をユーザー情報込みで取得 */
   findActiveOrdersWithUser(): Promise<OrderWithUser[]>;
