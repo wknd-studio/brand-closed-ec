@@ -32,6 +32,11 @@ const MONTHLY_LIMITS: Record<MemberRankValue, number> = {
 export class MemberRank {
   private constructor(readonly value: MemberRankValue) {}
 
+  /** セルフサービスで選べるランクの一覧（下位から順）。ENTERPRISEは個別契約のため含まない（FR-006） */
+  static selfServiceRanks(): MemberRankValue[] {
+    return RANK_ORDER.filter((rank) => rank !== "enterprise");
+  }
+
   static of(value: string): MemberRank {
     if (!(RANK_ORDER as readonly string[]).includes(value)) {
       throw new Error(`不正なランク値: ${value}`);
