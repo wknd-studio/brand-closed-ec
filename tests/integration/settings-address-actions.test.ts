@@ -269,4 +269,69 @@ describe("設定画面の住所アクション（会員Aとしてログイン中
       expect((await findRow(ADDRESS_B1_ID))?.is_default).toBe(true);
     });
   });
+
+  // 入力値の検証（#632）で拒否されたときは、項目ごとの文言を返し、保存しない
+  describe.each([
+    {
+      name: "作成",
+      run: (formData: FormData) => {
+        formData.set("type", "billing");
+        return createAddressAction(formData);
+      },
+    },
+    {
+      name: "更新",
+      run: (formData: FormData) => updateAddressAction(ADDRESS_A2_ID, formData),
+    },
+  ])("住所の$nameで入力値が不正なとき", ({ run }) => {
+    async function expectNothingSaved() {
+      const { data } = await adminClient
+        .from("addresses")
+        .select("*")
+        .eq("user_id", USER_A_ID)
+        .eq("type", "billing");
+      expect(data).toEqual([]);
+      expect(await findRow(ADDRESS_A2_ID)).toEqual(
+        expect.objectContaining(addressRow(ADDRESS_A2_ID, USER_A_ID))
+      );
+    }
+
+    it("空の必須項目をすべて示す", async () => {
+      const result = await run(
+        addressForm({ recipient_last_name: "", city: "  " })
+      );
+
+      expect(result).toEqual({
+        fieldErrors: {
+          recipientLastName: "姓を入力してください",
+          city: "市区町村を入力してください",
+        },
+      });
+      await expectNothingSaved();
+    });
+
+    it("郵便番号の形式が不正なことを示す", async () => {
+      const result = await run(addressForm({ postal_code: "123" }));
+
+      expect(result).toEqual({
+        fieldErrors: {
+          postalCode:
+            "郵便番号は7桁の数字で入力してください（ハイフンは任意。例: 150-0001）",
+        },
+      });
+      await expectNothingSaved();
+    });
+
+    it("電話番号の形式が不正なことを示す", async () => {
+      const result = await run(addressForm({ phone_number: "12345" }));
+
+      expect(result).toEqual({
+        fieldErrors: {
+          phoneNumber:
+            "電話番号は0から始まる10〜11桁の数字で入力してください（ハイフンは任意）",
+        },
+      });
+      await expectNothingSaved();
+    });
+  });
 });
