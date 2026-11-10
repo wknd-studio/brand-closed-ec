@@ -130,6 +130,10 @@ describe("catch 節での Sentry への送信（docs/ai-prompts/sentry.md）", (
       code: `import * as Sentry from "@sentry/nextjs";\nexport async function run(f: () => Promise<void>) {\n  try {\n    await f();\n  } catch (err) {\n    if (err instanceof TypeError) return null;\n    Sentry.captureException(err);\n    return null;\n  }\n}\n`,
     },
     {
+      name: "名前付き import の captureException を呼ぶ",
+      code: `import { captureException } from "@sentry/nextjs";\nexport async function run(f: () => Promise<void>) {\n  try {\n    await f();\n  } catch (err) {\n    captureException(err);\n    return null;\n  }\n}\n`,
+    },
+    {
       name: "再throwする",
       code: `export async function run(f: () => Promise<void>) {\n  try {\n    await f();\n  } catch (err) {\n    console.error(err);\n    throw err;\n  }\n}\n`,
     },
