@@ -45,4 +45,6 @@ export interface MemberQueryService {
   findOnboardingCompleted(clerkUserId: string): Promise<boolean>;
   // 決済完了画面の Stripe Customer。未作成・退会済み・存在しない会員は null
   findStripeCustomerId(clerkUserId: string): Promise<string | null>;
+  // 商品画面の価格を決めるランク。退会済み・存在しない会員は null
+  findMemberRank(clerkUserId: string): Promise<MemberRank | null>;
 }

@@ -2,10 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { PortableText } from "@portabletext/react";
-import { createServerClient } from "@/infrastructure/supabase/server";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { catalogQueryService } from "@/composition/catalog-query";
-import { MemberRank } from "@/domain/value-objects/member-rank";
+import { findShopMemberRank } from "../../member-rank";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ImageGallery from "./image-gallery";
@@ -21,11 +19,7 @@ export default async function ProductDetailPage({
   const brand = decodeURIComponent(encodedBrand);
   const { userId } = await requireAuth();
 
-  const supabase = await createServerClient();
-  const userRepo = new SupabaseUserRepository(supabase);
-
-  const user = await userRepo.findByClerkUserId(userId!);
-  const rank = user?.rank ?? MemberRank.of("starter");
+  const rank = await findShopMemberRank(userId!);
   const [product, theme] = await Promise.all([
     catalogQueryService().findProductDetail({ rank, productId: id }),
     fetchBrandTheme(brand),

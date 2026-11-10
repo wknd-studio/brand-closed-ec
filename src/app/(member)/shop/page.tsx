@@ -1,20 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/infrastructure/supabase/server";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { catalogQueryService } from "@/composition/catalog-query";
-import { MemberRank } from "@/domain/value-objects/member-rank";
+import { findShopMemberRank } from "./member-rank";
 
 export default async function ShopPage() {
   const { userId } = await requireAuth();
-  const supabase = await createServerClient();
-  const userRepo = new SupabaseUserRepository(supabase);
-
-  const user = await userRepo.findByClerkUserId(userId!);
-  const brands = await catalogQueryService().findBrands(
-    user?.rank ?? MemberRank.of("starter")
-  );
+  const rank = await findShopMemberRank(userId!);
+  const brands = await catalogQueryService().findBrands(rank);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">

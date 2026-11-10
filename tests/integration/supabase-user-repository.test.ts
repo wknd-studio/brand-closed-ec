@@ -4,6 +4,9 @@ import type { Database } from "@/types/database.types";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
+import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
+import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import { User } from "@/domain/entities/user";
 
 const supabase = createClient<Database>(
@@ -41,7 +44,7 @@ function newUser(
     email: `${clerkUserId}@example.com`,
     firstName: "",
     lastName: "",
-    phoneNumber: "",
+    phoneNumber: null,
     profileCompletedAt: null,
     rank: MemberRank.of("starter"),
     billingAnchorDay: null,
@@ -205,6 +208,80 @@ describe("SupabaseUserRepository", () => {
     });
   });
 
+  // DBの行と値オブジェクトの変換（mapper）
+  describe("電話番号・インボイス登録番号の復元と保存", () => {
+    const MAPPER_CLERK_ID = "clerk_test_infra_mapper";
+    const MAPPER_ID = "00000000-0000-0000-0000-000000000014";
+
+    async function insertRow(
+      fields: Partial<Database["public"]["Tables"]["users"]["Insert"]>
+    ) {
+      await supabase.from("users").delete().eq("id", MAPPER_ID);
+      const { error } = await supabase.from("users").insert({
+        id: MAPPER_ID,
+        clerk_user_id: MAPPER_CLERK_ID,
+        email: "mapper@example.com",
+        first_name: "変換",
+        last_name: "テスト",
+        ...fields,
+      });
+      if (error) throw error;
+    }
+
+    afterAll(async () => {
+      await supabase.from("users").delete().eq("id", MAPPER_ID);
+    });
+
+    it("phone_number が空文字（プロフィール未入力）の行は電話番号を null で復元する", async () => {
+      await insertRow({ phone_number: "" });
+
+      const user = await repo.findById(MAPPER_ID);
+      expect(user!.phoneNumber).toBeNull();
+      expect(user!.hasCompletedProfile()).toBe(false);
+    });
+
+    it("ハイフン付きの phone_number は値オブジェクトで正規化して復元する", async () => {
+      await insertRow({ phone_number: "090-1234-5678" });
+
+      const user = await repo.findById(MAPPER_ID);
+      expect(user!.phoneNumber?.value).toBe("09012345678");
+    });
+
+    it("形式が不正な phone_number の行は復元時に例外になる", async () => {
+      await insertRow({ phone_number: "12345" });
+
+      await expect(repo.findById(MAPPER_ID)).rejects.toThrow(
+        InvalidPhoneNumberError
+      );
+    });
+
+    it("法人のインボイス登録番号を値オブジェクトで復元する", async () => {
+      await insertRow({
+        phone_number: "09012345678",
+        member_type: "corporate",
+        company_name: "株式会社変換",
+        invoice_registration_number: "T1234567890123",
+      });
+
+      const user = await repo.findById(MAPPER_ID);
+      expect(user!.invoiceRegistrationNumber?.value).toBe("T1234567890123");
+    });
+
+    it("電話番号が null の会員は phone_number に空文字を保存する", async () => {
+      await insertRow({ phone_number: "09012345678" });
+      const user = await repo.findById(MAPPER_ID);
+
+      await repo.save(user!.with({ phoneNumber: null }));
+
+      const { data: row } = await supabase
+        .from("users")
+        .select("phone_number")
+        .eq("id", MAPPER_ID)
+        .single();
+      expect(row).toEqual({ phone_number: "" });
+    });
+  });
+
   describe("save()", () => {
     it("initial_fee_paid_rank_codeは書き換えない（入会確定等のRPCだけが更新する）", async () => {
       const user = await repo.findById(TEST_USER_ID);
@@ -236,11 +313,12 @@ describe("SupabaseUserRepository", () => {
         newUser(CONFLICT_CLERK_ID, {
           firstName: "花子",
           lastName: "法人",
-          phoneNumber: "09012345678",
+          phoneNumber: PhoneNumber.of("09012345678"),
           rank: MemberRank.of("premium"),
           memberType: MemberType.of("corporate"),
           companyName: "株式会社テスト",
-          invoiceRegistrationNumber: "T1234567890123",
+          invoiceRegistrationNumber:
+            InvoiceRegistrationNumber.of("T1234567890123"),
         })
       );
 
@@ -370,12 +448,13 @@ describe("SupabaseUserRepository", () => {
             email: "keep-columns@example.com",
             firstName: "太郎",
             lastName: "法人",
-            phoneNumber: "09012345678",
+            phoneNumber: PhoneNumber.of("09012345678"),
             rank: MemberRank.of("premium"),
             onboardingCompleted: false,
             memberType: MemberType.of("corporate"),
             companyName: "テスト株式会社",
-            invoiceRegistrationNumber: "T1234567890123",
+            invoiceRegistrationNumber:
+              InvoiceRegistrationNumber.of("T1234567890123"),
           })
         )
       ).resolves.toBe(true);

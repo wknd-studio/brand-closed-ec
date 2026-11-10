@@ -2,6 +2,8 @@ export class Money {
   readonly amount: number;
 
   private constructor(amount: number) {
+    if (!Number.isInteger(amount))
+      throw new Error(`金額は円の整数である必要があります: ${amount}`);
     if (amount < 0)
       throw new Error(`金額は0以上である必要があります: ${amount}`);
     this.amount = amount;
@@ -17,10 +19,6 @@ export class Money {
 
   add(other: Money): Money {
     return new Money(this.amount + other.amount);
-  }
-
-  subtract(other: Money): Money {
-    return new Money(Math.max(0, this.amount - other.amount));
   }
 
   isOver(limit: Money): boolean {

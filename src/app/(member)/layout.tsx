@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import Header from "@/components/header";
 import CartSidebar from "@/components/cart-sidebar";
-import { CartProvider } from "@/lib/cart/context";
+import { CartProvider } from "@/components/cart/cart-provider";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { FavoritesProvider } from "@/components/favorites/favorites-provider";
 import { addFavoriteAction, removeFavoriteAction } from "./favorites/actions";

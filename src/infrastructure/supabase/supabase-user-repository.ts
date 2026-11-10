@@ -4,6 +4,8 @@ import type { UserRepository } from "@/repositories/user-repository";
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
+import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 
 type UserRow = {
   id: string;
@@ -31,7 +33,8 @@ function toUser(row: UserRow): User {
     email: row.email,
     firstName: row.first_name,
     lastName: row.last_name,
-    phoneNumber: row.phone_number,
+    // 列はNOT NULL DEFAULT ''。空文字はプロフィール未入力
+    phoneNumber: row.phone_number ? PhoneNumber.of(row.phone_number) : null,
     profileCompletedAt: row.profile_completed_at
       ? new Date(row.profile_completed_at)
       : null,
@@ -42,7 +45,9 @@ function toUser(row: UserRow): User {
     stripeCustomerId: row.stripe_customer_id,
     memberType: MemberType.of(row.member_type),
     companyName: row.company_name,
-    invoiceRegistrationNumber: row.invoice_registration_number,
+    invoiceRegistrationNumber: row.invoice_registration_number
+      ? InvoiceRegistrationNumber.of(row.invoice_registration_number)
+      : null,
     initialFeePaidRank: row.initial_fee_paid_rank_code
       ? MemberRank.of(row.initial_fee_paid_rank_code)
       : null,
@@ -71,7 +76,7 @@ function toFields(user: User) {
     email: user.email,
     first_name: user.firstName,
     last_name: user.lastName,
-    phone_number: user.phoneNumber,
+    phone_number: user.phoneNumber?.value ?? "",
     profile_completed_at: user.profileCompletedAt?.toISOString() ?? null,
     rank_code: user.rank.value,
     billing_anchor_day: user.billingAnchorDay,
@@ -80,7 +85,7 @@ function toFields(user: User) {
     stripe_customer_id: user.stripeCustomerId,
     member_type: user.memberType.value,
     company_name: user.companyName,
-    invoice_registration_number: user.invoiceRegistrationNumber,
+    invoice_registration_number: user.invoiceRegistrationNumber?.value ?? null,
   };
 }
 
@@ -93,11 +98,11 @@ function toPlanSelectionFields(user: User) {
     email: user.email,
     first_name: user.firstName,
     last_name: user.lastName,
-    phone_number: user.phoneNumber,
+    phone_number: user.phoneNumber?.value ?? "",
     rank_code: user.rank.value,
     member_type: user.memberType.value,
     company_name: user.companyName,
-    invoice_registration_number: user.invoiceRegistrationNumber,
+    invoice_registration_number: user.invoiceRegistrationNumber?.value ?? null,
   };
 }
 
