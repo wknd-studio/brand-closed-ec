@@ -60,7 +60,6 @@ function makeDeps(
       url: "https://checkout.stripe.com/test",
     })),
     createInvoiceForOrder: vi.fn(),
-    ensureCustomer: vi.fn(),
   };
   const notificationService: NotificationService = {
     sendOrderConfirming: vi.fn().mockResolvedValue(undefined),

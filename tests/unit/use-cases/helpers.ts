@@ -253,7 +253,6 @@ export function makePaymentGateway(): PaymentGateway {
       url: "https://stripe.com/pay/sess_1",
     }),
     createInvoiceForOrder: vi.fn().mockResolvedValue("inv_1"),
-    ensureCustomer: vi.fn().mockResolvedValue("cus_1"),
   };
 }
 

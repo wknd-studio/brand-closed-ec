@@ -13,6 +13,8 @@ export interface OnboardingCheckoutGateway {
     userId: string;
     clerkUserId: string;
     email: string;
+    // 請求書（Invoice PDF）の宛名
+    name: string;
   }): Promise<string>;
   // 新しく決済させると二重課金になる（解約・失効していない）サブスクリプションがあるか
   hasActiveSubscription(stripeCustomerId: string): Promise<boolean>;

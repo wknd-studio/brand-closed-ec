@@ -32,23 +32,48 @@ describe("StripeOnboardingCheckoutGateway", () => {
   });
 
   describe("createCustomer()", () => {
-    it("会員を特定できるmetadataを付け、usersの行ごとに一意な冪等キーで作る", async () => {
+    it("請求書の宛名と会員を特定できるmetadataを付けて作る", async () => {
       createCustomerMock.mockResolvedValue({ id: "cus_1" });
 
       const id = await gateway.createCustomer({
         userId: USER_ID,
         clerkUserId: "clerk-1",
         email: "test@example.com",
+        name: "テスト株式会社",
       });
 
       expect(id).toBe("cus_1");
       expect(createCustomerMock).toHaveBeenCalledWith(
         {
           email: "test@example.com",
+          name: "テスト株式会社",
           metadata: { supabase_user_id: USER_ID, clerk_user_id: "clerk-1" },
         },
-        { idempotencyKey: `onboarding-customer-${USER_ID}` }
+        {
+          idempotencyKey: expect.stringMatching(
+            new RegExp(`^onboarding-customer-${USER_ID}-[0-9a-f]{64}$`)
+          ),
+        }
       );
+    });
+
+    it("同じ会員・同じ宛名なら同じ冪等キー、宛名が変われば別の冪等キーで作る", async () => {
+      createCustomerMock.mockResolvedValue({ id: "cus_1" });
+      const input = {
+        userId: USER_ID,
+        clerkUserId: "clerk-1",
+        email: "test@example.com",
+      };
+
+      await gateway.createCustomer({ ...input, name: "テスト株式会社" });
+      await gateway.createCustomer({ ...input, name: "テスト株式会社" });
+      await gateway.createCustomer({ ...input, name: "別名株式会社" });
+
+      const keys = createCustomerMock.mock.calls.map(
+        ([, options]) => options.idempotencyKey
+      );
+      expect(keys[0]).toBe(keys[1]);
+      expect(keys[2]).not.toBe(keys[0]);
     });
   });
 
