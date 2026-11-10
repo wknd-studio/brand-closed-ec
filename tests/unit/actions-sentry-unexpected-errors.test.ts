@@ -44,7 +44,7 @@ import {
 } from "@/composition/address";
 import { withdraw } from "@/composition/member";
 import { cancelOrder as cancelOrderUseCase } from "@/composition/order";
-import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
+import { DomainError } from "@/domain/errors/domain-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import {
@@ -103,7 +103,9 @@ describe.each(addressCases)("$useCase の Server Action", (c) => {
   });
 
   it("DomainError は Sentry に送らない", async () => {
-    vi.mocked(c.mock).mockRejectedValue(new InvalidPhoneNumberError("123"));
+    // 住所の入力値の検証エラーは項目ごとの文言を返すため、それ以外の DomainError で確かめる
+    class OtherDomainError extends DomainError {}
+    vi.mocked(c.mock).mockRejectedValue(new OtherDomainError("業務ルール違反"));
 
     expect(await c.run()).toEqual({ error: c.error });
     expect(Sentry.captureException).not.toHaveBeenCalled();
