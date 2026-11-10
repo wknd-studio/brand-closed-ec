@@ -66,20 +66,6 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
   // 閾値を下回るが、テストの追加を別issueで行うファイル。テストを足して閾値を満たしたら、
   // 検査が「例外から外す」よう失敗するので削除する
   exceptions: [
-    ...[
-      "src/domain/entities/order.ts",
-      "src/domain/entities/order-item.ts",
-      "src/domain/value-objects/member-rank.ts",
-      "src/use-cases/create-address.ts",
-      "src/use-cases/mark-checkout-order-as-paid.ts",
-      "src/use-cases/mark-invoice-order-as-paid.ts",
-      "src/use-cases/place-order.ts",
-    ].map((file) => ({ file, suite: "unit" as const, issue: 538 })),
-    {
-      file: "src/infrastructure/supabase/supabase-address-repository.ts",
-      suite: "integration",
-      issue: 524,
-    },
     {
       // findActiveOrdersWithUser を Query Service へ移すときに無くなる
       file: "src/infrastructure/supabase/supabase-order-repository.ts",

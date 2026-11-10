@@ -118,6 +118,27 @@ describe("markCheckoutOrderAsPaid", () => {
     expect(orderRepo.save).not.toHaveBeenCalled();
   });
 
+  it("会員が見つからない（退会済み等）場合も入金は記録し、通知だけ送らない", async () => {
+    const orderRepo = makeOrderRepo(makeOrder());
+    const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findById).mockResolvedValue(null);
+    const notificationService = makeNotificationService();
+
+    await markCheckoutOrderAsPaid(
+      { stripeCheckoutSessionId: "sess_1" },
+      {
+        orderRepo,
+        userRepo,
+        notificationService,
+        errorReporter: makeErrorReporter(),
+      }
+    );
+
+    const saved = vi.mocked(orderRepo.save).mock.calls[0]?.[0];
+    expect(saved?.settlements[0]?.status).toBe("paid");
+    expect(notificationService.sendCheckoutPaid).not.toHaveBeenCalled();
+  });
+
   // issue #270: 運営者が未払い決済単位をキャンセルした後、顧客が古いCheckoutページで
   // 決済を完了させる、またはStripeが遅延Webhookを再送すると発生しうる
   it("キャンセル済みの決済単位への入金は例外を投げず、ErrorReporterへ通知して正常終了する（Webhookに200を返しStripeのリトライを止めるため）", async () => {

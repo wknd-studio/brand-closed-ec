@@ -75,6 +75,19 @@ describe("MemberRank", () => {
     });
   });
 
+  describe("selfServiceRanks()", () => {
+    it("セルフサービスで選べるのは、個別契約のenterpriseを除くランク（下位から順）", () => {
+      expect(MemberRank.selfServiceRanks()).toEqual([
+        "starter",
+        "basic",
+        "standard",
+        "pro",
+        "advanced",
+        "premium",
+      ]);
+    });
+  });
+
   describe("of()", () => {
     it("旧ランク値（free, entry）は不正な値としてエラーになる", () => {
       expect(() => MemberRank.of("free")).toThrow();

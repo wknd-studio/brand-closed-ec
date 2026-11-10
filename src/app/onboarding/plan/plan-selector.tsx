@@ -4,11 +4,13 @@ import { useActionState, useEffect } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { selectPlan, type SelectPlanResult } from "./actions";
-import { RANK_ORDER } from "@/domain/value-objects/member-rank";
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import {
+  MemberRank,
+  type MemberRankValue,
+} from "@/domain/value-objects/member-rank";
 
 // 表示ラベル・説明はdocs/archive/service-spec.mdの「プラン概要」表と一致させる。
-// 対象プランの一覧自体はRANK_ORDER（enterpriseを除く）から動的に生成する。
+// 対象プランの一覧自体はMemberRank.selfServiceRanks()から動的に生成する。
 const PLAN_LABELS: Record<
   MemberRankValue,
   { label: string; description: string }
@@ -40,9 +42,10 @@ const PLAN_LABELS: Record<
   enterprise: { label: "ENTERPRISE", description: "個別契約プラン" },
 };
 
-const PLANS = RANK_ORDER.filter((rank) => rank !== "enterprise").map(
-  (rank) => ({ id: rank, ...PLAN_LABELS[rank] })
-);
+const PLANS = MemberRank.selfServiceRanks().map((rank) => ({
+  id: rank,
+  ...PLAN_LABELS[rank],
+}));
 
 export default function PlanSelector({
   isCorporate,

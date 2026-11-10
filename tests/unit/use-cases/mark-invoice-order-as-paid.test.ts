@@ -122,6 +122,55 @@ describe("markInvoiceOrderAsPaid", () => {
     expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
   });
 
+  it("注文に該当Invoice IDの決済単位が無ければ、何も記録せず正常終了する", async () => {
+    const order = makeOrder({
+      items: [afterOrderItem()],
+      settlements: [invoiceSettlement({ stripeInvoiceId: "inv_other" })],
+    });
+    const orderRepo = makeOrderRepo(order);
+    const notificationService = makeNotificationService();
+
+    await expect(
+      markInvoiceOrderAsPaid(
+        { stripeInvoiceId: "inv_1" },
+        {
+          orderRepo,
+          userRepo: makeUserRepo(),
+          notificationService,
+          errorReporter: makeErrorReporter(),
+        }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+  });
+
+  it("会員が見つからない（退会済み等）場合も入金は記録し、通知だけ送らない", async () => {
+    const order = makeOrder({
+      items: [afterOrderItem()],
+      settlements: [invoiceSettlement()],
+    });
+    const orderRepo = makeOrderRepo(order);
+    const userRepo = makeUserRepo();
+    vi.mocked(userRepo.findById).mockResolvedValue(null);
+    const notificationService = makeNotificationService();
+
+    await markInvoiceOrderAsPaid(
+      { stripeInvoiceId: "inv_1" },
+      {
+        orderRepo,
+        userRepo,
+        notificationService,
+        errorReporter: makeErrorReporter(),
+      }
+    );
+
+    const saved = vi.mocked(orderRepo.save).mock.calls[0]?.[0];
+    expect(saved?.settlements[0]?.status).toBe("paid");
+    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+  });
+
   // issue #270: 運営者が未払い決済単位をキャンセルした後、Stripeが遅延Webhookを
   // 再送すると発生しうる
   it("キャンセル済みの決済単位への入金は例外を投げず、ErrorReporterへ通知して正常終了する（Webhookに200を返しStripeのリトライを止めるため）", async () => {
