@@ -157,7 +157,8 @@ used_versions() {
       bad = 1
       pending = 0
     }
-    /uses: *[^ ]*actions\/install-cli *$/ { pending = 1; start = FNR }
+    # クォート・行末のコメント・@ref 付きでも拾う（読み飛ばすと、その版が検査から漏れる）
+    /uses:.*actions\/install-cli/ { pending = 1; start = FNR }
     END {
       if (!found) { print "::error::install-cli の使用箇所が見つかりません" > "/dev/stderr"; bad = 1 }
       exit bad

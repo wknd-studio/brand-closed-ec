@@ -121,7 +121,8 @@ jobs:
           source .github/actions/install-cli/install-cli.sh
           used_versions .github/workflows/*.yml > "$RUNNER_TEMP/cli-versions"
           while read -r tool version; do
-            GITHUB_PATH= bash .github/actions/install-cli/install-cli.sh "$tool" "$version"
+            # 版の一覧を標準入力から読ませない（読まれると残りの版が黙って飛ばされる）
+            GITHUB_PATH= bash .github/actions/install-cli/install-cli.sh "$tool" "$version" < /dev/null
           done < "$RUNNER_TEMP/cli-versions"
         env:
           GH_TOKEN: ${{ github.token }}
