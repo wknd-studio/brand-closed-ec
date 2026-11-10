@@ -8,10 +8,5 @@
     "no-restricted-imports": {
       "count": 2
     }
-  },
-  "src/lib/sanity/brand-theme.ts": {
-    "no-restricted-imports": {
-      "count": 1
-    }
   }
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { catalogQueryService } from "@/composition/catalog-query";
 import { findShopMemberRank } from "@/app/(member)/shop/member-rank";
-import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
+import { brandThemeQueryService } from "@/composition/brand-theme-query";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ProductGrid from "./product-grid";
 
@@ -18,7 +18,7 @@ export default async function BrandProductsPage({
   const rank = await findShopMemberRank(userId!);
   const [{ products, total }, theme] = await Promise.all([
     catalogQueryService().findProducts({ rank, brand }),
-    fetchBrandTheme(brand),
+    brandThemeQueryService().findBrandTheme(brand),
   ]);
 
   return (

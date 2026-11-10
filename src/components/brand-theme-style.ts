@@ -1,8 +1,8 @@
-import { resolveFontFamily } from "./brand-theme-fonts";
-import type { BrandTheme } from "./sanity/brand-theme";
+import { resolveFontFamily } from "@/lib/brand-theme-fonts";
+import type { BrandThemeDto } from "@/queries/brand-theme-query-service";
 
 export function resolveBrandThemeCssVars(
-  theme: BrandTheme | null
+  theme: BrandThemeDto | null
 ): Record<string, string> {
   if (!theme) return {};
 
