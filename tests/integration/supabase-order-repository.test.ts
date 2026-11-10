@@ -63,6 +63,35 @@ function clientAs(clerkUserId: string) {
   );
 }
 
+// 指定したテーブルへのリクエストにだけ PostgREST のエラーを返すクライアント。
+// 実DBでは SELECT を失敗させにくいため、ネットワーク層で失敗を差し込む
+function clientFailingOn(table: string) {
+  return createClient<Database>(
+    supabaseUrl,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: { persistSession: false },
+      global: {
+        fetch: async (input, init) => {
+          const url = new URL(input instanceof Request ? input.url : input);
+          if (url.pathname === `/rest/v1/${table}`) {
+            return new Response(
+              JSON.stringify({
+                code: "XX000",
+                message: "injected failure",
+                details: null,
+                hint: null,
+              }),
+              { status: 500, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          return fetch(input, init);
+        },
+      },
+    }
+  );
+}
+
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000020";
 const OTHER_USER_ID = "00000000-0000-0000-0000-000000000021";
 // users に存在しない会員ID（注文が無い会員として使う）
@@ -397,6 +426,24 @@ describe("SupabaseOrderRepository", () => {
         0
       );
     });
+
+    it("注文が無い会員は 0 を返す", async () => {
+      expect(
+        await repo.sumConfirmedAmountByUserId(NO_ORDER_USER_ID, period)
+      ).toBe(0);
+    });
+
+    // 失敗を「注文0件」と同じ扱いにすると、確定額が実際より少なく返り、
+    // 月次上限の事前チェックやカートの残額表示を誤らせる（#597）
+    it.each(["orders", "order_items"])(
+      "%s の SELECT がエラーを返したときは 0 を返さず例外を投げる",
+      async (table) => {
+        const failingRepo = new SupabaseOrderRepository(clientFailingOn(table));
+        await expect(
+          failingRepo.sumConfirmedAmountByUserId(TEST_USER_ID, period)
+        ).rejects.toThrow("確定額の集計に失敗");
+      }
+    );
   });
 
   describe("findByIdWithUser()", () => {

@@ -402,6 +402,42 @@ describe("SupabaseMemberQueryService.findMemberLayout", () => {
     });
   });
 
+  // 実際より少ない確定額（多い残額）を表示しないよう、0 円にせずエラーにする。
+  // 投げた例外は onRequestError（instrumentation.ts）で Sentry に送られる（#597）
+  it("確定額の集計がエラーになったときは、0 円にせず例外を投げる", async () => {
+    const failingService = new SupabaseMemberQueryService(
+      createClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          auth: { persistSession: false },
+          global: {
+            fetch: async (input, init) => {
+              const url = new URL(input instanceof Request ? input.url : input);
+              if (url.pathname === "/rest/v1/orders") {
+                return new Response(
+                  JSON.stringify({
+                    code: "XX000",
+                    message: "injected failure",
+                  }),
+                  {
+                    status: 500,
+                    headers: { "Content-Type": "application/json" },
+                  }
+                );
+              }
+              return fetch(input, init);
+            },
+          },
+        }
+      )
+    );
+
+    await expect(failingService.findMemberLayout(CLERK_USER)).rejects.toThrow(
+      "確定額の集計に失敗"
+    );
+  });
+
   it("存在しない会員は null", async () => {
     expect(
       await queryService.findMemberLayout("clerk_test_not_exists")
