@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Address, reconstituteAddress } from "@/domain/entities/address";
+import type { AddressContent } from "@/domain/entities/address";
+import { MissingRequiredAddressFieldsError } from "@/domain/errors/missing-required-address-fields-error";
+import { InvalidPostalCodeError } from "@/domain/errors/invalid-postal-code-error";
+import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 
 const baseProps = {
   id: "addr-001",
@@ -121,6 +125,127 @@ describe("Address", () => {
       expect(updated.id).toBe("addr-001");
       expect(updated.type).toBe("shipping");
       expect(updated.isDefault).toBe(false);
+    });
+  });
+
+  // 作成・更新の両方で同じ検証が効くことを確かめる
+  describe.each([
+    {
+      name: "create()",
+      apply: (content: AddressContent) =>
+        Address.create({
+          id: "addr-new",
+          type: "shipping",
+          content,
+          isFirstOfType: false,
+        }),
+    },
+    {
+      name: "update()",
+      apply: (content: AddressContent) =>
+        reconstituteAddress(baseProps).update(content),
+    },
+  ])("$name の入力値の検証", ({ apply }) => {
+    const valid: AddressContent = {
+      recipientLastName: "山田",
+      recipientFirstName: "太郎",
+      postalCode: "100-0001",
+      prefecture: "東京都",
+      city: "千代田区",
+      addressLine1: "丸の内1-1-1",
+      addressLine2: "",
+      phoneNumber: "03-1234-5678",
+    };
+
+    it.each([
+      "recipientLastName",
+      "recipientFirstName",
+      "postalCode",
+      "prefecture",
+      "city",
+      "addressLine1",
+      "phoneNumber",
+    ] as const)(
+      "%s が空なら MissingRequiredAddressFieldsError を投げる",
+      (field) => {
+        expect(() => apply({ ...valid, [field]: "" })).toThrow(
+          new MissingRequiredAddressFieldsError([field])
+        );
+      }
+    );
+
+    it("空白だけの必須項目も空として扱い、空の項目をすべて返す", () => {
+      try {
+        apply({ ...valid, recipientLastName: "  ", city: "　" });
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(MissingRequiredAddressFieldsError);
+        expect((err as MissingRequiredAddressFieldsError).fields).toEqual([
+          "recipientLastName",
+          "city",
+        ]);
+      }
+    });
+
+    it("建物名・部屋番号（addressLine2）は空でもよい", () => {
+      expect(apply({ ...valid, addressLine2: "" }).addressLine2).toBe("");
+    });
+
+    it.each(["1000001", "100-0001"])(
+      "郵便番号 %s を受け付ける",
+      (postalCode) => {
+        expect(apply({ ...valid, postalCode }).postalCode).toBe(postalCode);
+      }
+    );
+
+    it.each(["100-001", "10000011", "100_0001", "abc-defg", "１００-０００１"])(
+      "郵便番号 %s は InvalidPostalCodeError を投げる",
+      (postalCode) => {
+        expect(() => apply({ ...valid, postalCode })).toThrow(
+          InvalidPostalCodeError
+        );
+      }
+    );
+
+    it.each(["09012345678", "03-1234-5678"])(
+      "電話番号 %s を受け付ける",
+      (phoneNumber) => {
+        expect(apply({ ...valid, phoneNumber }).phoneNumber).toBe(phoneNumber);
+      }
+    );
+
+    it.each(["12345", "9012345678", "090-1234-56789", "090abcd5678"])(
+      "電話番号 %s は InvalidPhoneNumberError を投げる",
+      (phoneNumber) => {
+        expect(() => apply({ ...valid, phoneNumber })).toThrow(
+          InvalidPhoneNumberError
+        );
+      }
+    );
+
+    it("前後の空白を除いた値を保持する", () => {
+      const addr = apply({
+        ...valid,
+        recipientLastName: " 山田 ",
+        postalCode: " 100-0001 ",
+        addressLine2: " 101号室 ",
+        phoneNumber: " 03-1234-5678 ",
+      });
+      expect(addr.recipientLastName).toBe("山田");
+      expect(addr.postalCode).toBe("100-0001");
+      expect(addr.addressLine2).toBe("101号室");
+      expect(addr.phoneNumber).toBe("03-1234-5678");
+    });
+  });
+
+  describe("reconstituteAddress() は検証しない", () => {
+    it("DBに既にある不正な値の行も復元できる", () => {
+      const addr = reconstituteAddress({
+        ...baseProps,
+        postalCode: "invalid",
+        phoneNumber: "123",
+      });
+      expect(addr.postalCode).toBe("invalid");
     });
   });
 
