@@ -126,7 +126,8 @@ const clientSyntaxRule = [
 // supabase-js の結果の error を捨てない（#614）。supabase-js は失敗しても例外を投げず { data: null, error } を返すため、
 // error を見ないと、書き込みの失敗（RLSの拒否・制約違反）が成功扱いに、読み取りの失敗が「見つからない」「0件」に化ける。
 // クエリ（.from("...")・.rpc(...)）を await した結果は、error を含めて分割代入させる。
-// 取り出した error を使っていないことは @typescript-eslint/no-unused-vars が検出する
+// 取り出した error を使っていないことは @typescript-eslint/no-unused-vars が検出する（next の設定では warn だが、
+// pnpm lint の --max-warnings 0 で失敗になる）。await せずに builder を返す・.then() で受ける書き方は検出しない
 const SUPABASE_ERROR_DOC =
   "const { data, error } = await ...; if (error) throw error; のように error を取り出して投げる（#614）";
 
