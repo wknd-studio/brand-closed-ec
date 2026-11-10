@@ -6,6 +6,9 @@
 # 5xx・タイムアウトだけを間隔をあけてやり直す。4xx（403・404・429等）はやり直さずに失敗する。
 # 取得したファイルは、リリースの checksums.txt の SHA-256 と照合してから展開する。
 #
+# Supabase CLI は v2.102.0 から、シムの supabase と本体の supabase-go の2つが同じディレクトリに
+# 無いと動かない（#549）。tarball の LICENSE・completions 等は要らないため、丸ごとは展開しない。
+#
 # 使い方: bash install-cli.sh <supabase|doppler> <版>
 #   例: bash install-cli.sh supabase 2.116.0
 # 環境変数: GH_TOKEN（任意。あれば API の認証に使う）・INSTALL_CLI_DIR（展開先。既定は $RUNNER_TEMP 配下）
@@ -118,6 +121,50 @@ asset_url() {
   echo "$url"
 }
 
+# 引数: <tarball> <展開先> <CLI>。<CLI> と、tarball にあれば <CLI>-go を展開先に置く
+extract_cli() {
+  local file="$1" dest="$2" tool="$3" entry
+  local -a members=()
+  while IFS= read -r entry; do
+    entry="${entry#./}"
+    [[ "$entry" == "$tool" || "$entry" == "$tool-go" ]] && members+=("$entry")
+  done < <(tar -tzf "$file")
+  if [[ " ${members[*]-} " != *" $tool "* ]]; then
+    echo "::error::tarball に $tool がありません: $file" >&2
+    return 1
+  fi
+  mkdir -p "$dest"
+  tar -xzf "$file" -C "$dest" "${members[@]}"
+}
+
+# 引数: <ワークフローのファイル...>。install-cli に渡している CLI と版を「<CLI> <版>」で重複なく返す。
+# デプロイのジョブでしか使わない版を、PR の CI でもインストールして確かめるため（#549）。
+# `uses: …/install-cli` のステップの with: が `with: { tool: <CLI>, version: <版> }` の1行でなければ失敗する
+used_versions() {
+  awk '
+    # 同じステップの if: 等は読み飛ばし、with: の行か次のステップまで見る
+    pending && /with:/ && match($0, /with: *\{ *tool: *[a-z]+, *version: *[0-9.]+ *\}/) {
+      line = substr($0, RSTART, RLENGTH)
+      gsub(/with: *\{ *tool: *|version: *|[ ,}]+$/, "", line)
+      sub(/, */, " ", line)
+      print line
+      found = 1
+      pending = 0
+      next
+    }
+    pending && (/with:/ || /^ *- /) {
+      printf "::error::%s:%d の install-cli の with: が読めません（with: { tool: <CLI>, version: <版> } の1行で書く）\n", FILENAME, start > "/dev/stderr"
+      bad = 1
+      pending = 0
+    }
+    /uses: *[^ ]*actions\/install-cli *$/ { pending = 1; start = FNR }
+    END {
+      if (!found) { print "::error::install-cli の使用箇所が見つかりません" > "/dev/stderr"; bad = 1 }
+      exit bad
+    }
+  ' "$@" | sort -u
+}
+
 main() {
   local tool="$1" version="$2"
   local repo tag os arch name work dest url
@@ -142,8 +189,7 @@ main() {
   fetch_with_retry "$url" "$work/checksums.txt" "application/octet-stream"
   verify_checksum "$work/$name" "$name" "$work/checksums.txt"
 
-  mkdir -p "$dest"
-  tar -xzf "$work/$name" -C "$dest" "$tool"
+  extract_cli "$work/$name" "$dest" "$tool"
   rm -rf "$work"
   [[ -n "${GITHUB_PATH:-}" ]] && echo "$dest" >> "$GITHUB_PATH"
   "$dest/$tool" --version
