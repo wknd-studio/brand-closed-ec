@@ -51,6 +51,19 @@ describe("SanityCatalogQueryService.findBrands", () => {
       { brand: "Bブランド", count: 2, thumbnail: "b1.jpg" },
     ]);
   });
+  it("最下位のランクの会員は、そのランクの商品だけで絞る（閲覧できないランクの商品を数えない）", async () => {
+    fetchMock.mockResolvedValue([]);
+
+    await service.findBrands(MemberRank.of("starter"));
+
+    expect(fetchMock.mock.calls[0][1]).toEqual({ allowedRanks: ["starter"] });
+  });
+
+  it("閲覧できる商品が無ければ空の一覧", async () => {
+    fetchMock.mockResolvedValue([]);
+
+    expect(await service.findBrands(MemberRank.of("basic"))).toEqual([]);
+  });
 });
 
 describe("SanityCatalogQueryService.findProducts", () => {
@@ -121,6 +134,16 @@ describe("SanityCatalogQueryService.findProducts", () => {
       brand: "ブランドA",
       keyword: "*バッグ*",
     });
+  });
+  it("条件に当たる商品が無ければ空の一覧と0件", async () => {
+    fetchMock.mockResolvedValueOnce([]).mockResolvedValueOnce(0);
+
+    expect(
+      await service.findProducts({
+        rank: MemberRank.of("starter"),
+        keyword: "存在しない商品",
+      })
+    ).toEqual({ products: [], total: 0 });
   });
 });
 
@@ -292,6 +315,17 @@ describe("SanityCatalogQueryService.findCheckoutProducts", () => {
         paymentTiming: "at_order",
       },
     ]);
+  });
+
+  it("Sanity で削除済みの商品は含めない", async () => {
+    fetchMock.mockResolvedValue([sanityProduct()]);
+
+    const result = await service.findCheckoutProducts({
+      rank: MemberRank.of("starter"),
+      productIds: ["prod-1", "deleted"],
+    });
+
+    expect(result.map((p) => p.id)).toEqual(["prod-1"]);
   });
 
   it("カートが空なら Sanity に問い合わせない", async () => {
