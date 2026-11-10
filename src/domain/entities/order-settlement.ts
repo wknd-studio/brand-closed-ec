@@ -1,4 +1,5 @@
 import { Money } from "@/domain/value-objects/money";
+import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 
 export type SettlementFlow = "checkout" | "invoice";
 
@@ -8,6 +9,29 @@ export type SettlementStatus =
   | "limit_exceeded"
   | "paid"
   | "cancelled";
+
+/**
+ * 決済単位の状態遷移の表（docs/domain/settlement.md「決済単位ごとの状態遷移」）。
+ * 初期状態（checkoutはpending_payment、invoiceはinvoice_sent・limit_exceeded）は
+ * 作成時に決まるため、遷移には含めない。paid・cancelledは終端。
+ */
+const ALLOWED_TRANSITIONS: Record<
+  SettlementStatus,
+  ReadonlySet<SettlementStatus>
+> = {
+  pending_payment: new Set(["paid", "cancelled"]),
+  invoice_sent: new Set(["paid", "cancelled"]),
+  limit_exceeded: new Set(["cancelled"]),
+  paid: new Set(),
+  cancelled: new Set(),
+};
+
+export function isAllowedSettlementTransition(
+  from: SettlementStatus,
+  to: SettlementStatus
+): boolean {
+  return ALLOWED_TRANSITIONS[from].has(to);
+}
 
 interface OrderSettlementProps {
   id: string;
@@ -75,17 +99,32 @@ export class OrderSettlement {
     return this.status === "cancelled";
   }
 
-  markPaid(at: Date): OrderSettlement {
-    if (this.isCancelled()) {
-      throw new Error("キャンセル済みの決済単位は支払い済みにできません");
-    }
-    return this.with({ status: "paid", paidAt: at });
+  isLimitExceeded(): boolean {
+    return this.status === "limit_exceeded";
   }
 
+  /** 請求済みで未払い（invoice_sent）、または上限超過で運営者の対応待ち（limit_exceeded） */
+  isUnresolved(): boolean {
+    return this.status === "invoice_sent" || this.isLimitExceeded();
+  }
+
+  /** paid → paid（Webhookの再配信）も拒否する。冪等性はuse-case側で扱う */
+  markPaid(at: Date): OrderSettlement {
+    return this.transitionTo("paid", { paidAt: at });
+  }
+
+  /** paidのキャンセル（返金）はreturnsのフローで扱うため拒否する */
   cancel(at: Date): OrderSettlement {
-    if (this.isPaid()) {
-      throw new Error("支払い済みの決済単位はキャンセルできません");
+    return this.transitionTo("cancelled", { cancelledAt: at });
+  }
+
+  private transitionTo(
+    to: SettlementStatus,
+    overrides: Partial<OrderSettlementProps>
+  ): OrderSettlement {
+    if (!isAllowedSettlementTransition(this.status, to)) {
+      throw new InvalidStatusTransitionError(this.status, to);
     }
-    return this.with({ status: "cancelled", cancelledAt: at });
+    return this.with({ ...overrides, status: to });
   }
 }

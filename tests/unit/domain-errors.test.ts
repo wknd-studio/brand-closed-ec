@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { DomainError } from "@/domain/errors/domain-error";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
+import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 
@@ -59,6 +60,24 @@ describe("InvalidStatusTransitionError", () => {
   it("name が InvalidStatusTransitionError", () => {
     const err = new InvalidStatusTransitionError("pending", "cancelled");
     expect(err.name).toBe("InvalidStatusTransitionError");
+  });
+});
+
+describe("OrderNotCancellableError", () => {
+  it("DomainError を継承している", () => {
+    const err = new OrderNotCancellableError("order-001");
+    expect(err).toBeInstanceOf(DomainError);
+  });
+
+  it("orderId を保持し、管理画面にそのまま出せるメッセージを持つ", () => {
+    const err = new OrderNotCancellableError("order-001");
+    expect(err.orderId).toBe("order-001");
+    expect(err.message).toBe("この注文はキャンセルできません");
+  });
+
+  it("name が OrderNotCancellableError", () => {
+    const err = new OrderNotCancellableError("order-001");
+    expect(err.name).toBe("OrderNotCancellableError");
   });
 });
 

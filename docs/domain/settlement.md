@@ -98,6 +98,17 @@ flowchart TD
 - `invoice`決済単位: 運営者が対象明細を選び請求作成を実行した時点で作成され、同時に月次仕入れ上限チェックを行う。上限超過なら`limit_exceeded`（再発行不可、運営者が手動キャンセルのみ可能）、上限内ならその場でStripe Invoiceを発行し`invoice_sent`に。→（Stripeの`invoice.paid` Webhook）→ `paid`
 - **`confirming`という決済単位側の状態は持たない**。価格交渉や請求タイミングを待っている間、対象の明細はまだどの決済単位にも属していない（`settlement_id IS NULL`）だけであり、決済単位自体がまだ存在しないため、待機状態を表す決済単位のステータスは不要
 - 決済単位が`paid`になった時点で、その決済単位に紐づく明細が調達側の進捗に応じて先へ進む（`at_order`の明細はここで初めて対応待ちキューに入る。`after_order`の明細はすでにキューに入っているので、単に「支払い済み」という事実が記録されるだけ）
+- **遷移の表（2026-11-10、issue #585）**: 作成後に許可する遷移は次の表のとおりで、`src/domain/entities/order-settlement.ts`の`ALLOWED_TRANSITIONS`が正。表に無い遷移は`InvalidStatusTransitionError`で拒否する。初期状態（`checkout`は`pending_payment`、`invoice`は`invoice_sent`・`limit_exceeded`）は作成時に決まり、遷移には含めない
+
+  | 遷移元            | `paid`                          | `cancelled`                                                     |
+  | ----------------- | ------------------------------- | --------------------------------------------------------------- |
+  | `pending_payment` | ✅ `checkout.session.completed` | ✅ 注文のキャンセル・放置されたCheckoutの自動キャンセル（#202） |
+  | `invoice_sent`    | ✅ `invoice.paid`               | ✅ 注文のキャンセル                                             |
+  | `limit_exceeded`  | ❌（Invoiceを発行していない）   | ✅ 運営者の手動キャンセル                                       |
+  | `paid`            | ❌                              | ❌（返金は[[returns]]のフローで扱う）                           |
+  | `cancelled`       | ❌                              | ❌                                                              |
+  - `paid`→`paid`（Webhookの再配信）もdomainでは拒否する。冪等性は`mark-checkout-order-as-paid`・`mark-invoice-order-as-paid`が「すでに`paid`なら何もしない」ことで扱う
+  - `pending_payment`・`invoice_sent`・`limit_exceeded`の間の遷移（請求の再発行等）は持たない
 
 **対応待ちキューへの入場条件（[[procurement]]と対）**
 
