@@ -5,7 +5,7 @@ import { MemberType } from "@/domain/value-objects/member-type";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
-import { makeOrder, makeSettlement } from "./use-cases/helpers";
+import { makeOrder, makeOrderItem, makeSettlement } from "./use-cases/helpers";
 
 function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
   return User.of({
@@ -95,7 +95,19 @@ describe("User", () => {
       const user = makeUser({ deletedAt: null });
 
       const withdrawn = user.withdraw(
-        [resolved, beforePayment, makeOrder({ settlements: [] })],
+        [
+          resolved,
+          beforePayment,
+          makeOrder({
+            items: [
+              makeOrderItem({
+                paymentTiming: "after_order",
+                settlementId: null,
+              }),
+            ],
+            settlements: [],
+          }),
+        ],
         now
       );
 
