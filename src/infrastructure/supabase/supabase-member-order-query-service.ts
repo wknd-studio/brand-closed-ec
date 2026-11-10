@@ -9,6 +9,12 @@ import type {
   MemberOrderQueryService,
 } from "@/queries/member-order-query-service";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import type { OrderItem } from "@/domain/entities/order-item";
+import {
+  ORDER_ITEM_COLUMNS,
+  toOrderItem,
+  type OrderItemRow,
+} from "@/infrastructure/supabase/supabase-order-repository";
 
 type AddressRow = {
   id: string;
@@ -20,15 +26,6 @@ type AddressRow = {
   prefecture: string;
   city: string;
   address_line1: string;
-};
-
-type OrderItemRow = {
-  id: string;
-  product_name_snapshot: string;
-  quantity: number;
-  unit_price_snapshot: number | null;
-  is_negotiable: boolean;
-  payment_timing: string;
 };
 
 function toAddressDto(row: AddressRow): CheckoutAddressDto {
@@ -44,20 +41,20 @@ function toAddressDto(row: AddressRow): CheckoutAddressDto {
   };
 }
 
-function toItemDto(row: OrderItemRow): CompletedOrderItemDto {
+function toItemDto(item: OrderItem): CompletedOrderItemDto {
   return {
-    id: row.id,
-    productNameSnapshot: row.product_name_snapshot,
-    quantity: row.quantity,
-    unitPriceSnapshot: row.is_negotiable ? null : row.unit_price_snapshot,
-    isNegotiable: row.is_negotiable,
+    id: item.id,
+    productNameSnapshot: item.productNameSnapshot,
+    quantity: item.quantity,
+    unitPriceSnapshot: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
+    isNegotiable: item.isNegotiable,
   };
 }
 
 // 注文の会員を users との内部結合で絞る。部分UNIQUEのため同じ clerk_user_id の退会済みの行が
 // 残りうるので、有効な行（deleted_at IS NULL）の会員の注文だけにする
-const ORDER_SELECT =
-  "id, created_at, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable, payment_timing)";
+// 明細は OrderItem に変換し、後払いかどうかの振り分けを domain（OrderItem.isAfterOrder）に任せる
+const ORDER_SELECT = `id, created_at, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at), order_items(${ORDER_ITEM_COLUMNS})`;
 
 // URL から来た注文IDが UUID の形でないとき（invalid_text_representation）
 function isInvalidUuid(error: PostgrestError): boolean {
@@ -112,16 +109,12 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     if (error) throw error;
     if (!data) return null;
 
-    const items = data.order_items as OrderItemRow[];
+    const items = (data.order_items as OrderItemRow[]).map(toOrderItem);
     return {
       orderId: data.id,
       createdAt: new Date(data.created_at).toISOString(),
-      atOrderItems: items
-        .filter((i) => i.payment_timing === "at_order")
-        .map(toItemDto),
-      afterOrderItems: items
-        .filter((i) => i.payment_timing === "after_order")
-        .map(toItemDto),
+      atOrderItems: items.filter((i) => !i.isAfterOrder()).map(toItemDto),
+      afterOrderItems: items.filter((i) => i.isAfterOrder()).map(toItemDto),
     };
   }
 
@@ -145,9 +138,9 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     }
     if (!data) return null;
 
-    const afterOrderItems = (data.order_items as OrderItemRow[]).filter(
-      (i) => i.payment_timing === "after_order"
-    );
+    const afterOrderItems = (data.order_items as OrderItemRow[])
+      .map(toOrderItem)
+      .filter((i) => i.isAfterOrder());
     if (afterOrderItems.length === 0) return null;
     return {
       orderId: data.id,

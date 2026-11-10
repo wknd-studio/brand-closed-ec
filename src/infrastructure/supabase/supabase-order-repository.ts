@@ -97,7 +97,7 @@ type OrderRow = {
   order_settlements: OrderSettlementRow[];
 };
 
-type OrderItemRow = {
+export type OrderItemRow = {
   id: string;
   sanity_product_id: string;
   product_name_snapshot: string;
@@ -135,7 +135,7 @@ function toAddressSnapshot(json: Json): AddressSnapshot {
   });
 }
 
-function toOrderItem(row: OrderItemRow): OrderItem {
+export function toOrderItem(row: OrderItemRow): OrderItem {
   return OrderItem.of({
     id: row.id,
     sanityProductId: row.sanity_product_id,
@@ -181,8 +181,11 @@ function toOrder(row: OrderRow): Order {
   });
 }
 
-const ORDER_SELECT =
-  "*, order_items(id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price, payment_timing, settlement_id), order_settlements(*)";
+// toOrderItem が読む order_items の列（Query Service の実装でも使う）
+export const ORDER_ITEM_COLUMNS =
+  "id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price, payment_timing, settlement_id";
+
+const ORDER_SELECT = `*, order_items(${ORDER_ITEM_COLUMNS}), order_settlements(*)`;
 
 const ORDER_WITH_USER_SELECT =
   "id, created_at, status, users!orders_user_id_fkey(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable, payment_timing, settlement_id), order_settlements(id, flow, status, amount_snapshot, stripe_checkout_session_id, stripe_invoice_id)";
