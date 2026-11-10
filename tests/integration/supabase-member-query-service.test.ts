@@ -187,6 +187,7 @@ beforeAll(async () => {
     {
       id: OTHER_USER_ID,
       clerk_user_id: CLERK_OTHER_USER,
+      stripe_customer_id: "cus_test_member_query_other",
       email: `${CLERK_OTHER_USER}@example.com`,
       first_name: "テスト",
       last_name: "次郎",
@@ -197,6 +198,7 @@ beforeAll(async () => {
     {
       id: WITHDRAWN_USER_ID,
       clerk_user_id: CLERK_WITHDRAWN_USER,
+      stripe_customer_id: "cus_test_member_query_withdrawn",
       email: `${CLERK_WITHDRAWN_USER}@example.com`,
       first_name: "テスト",
       last_name: "三郎",
@@ -208,6 +210,7 @@ beforeAll(async () => {
     {
       id: PENDING_USER_ID,
       clerk_user_id: CLERK_PENDING_USER,
+      stripe_customer_id: "cus_test_member_query_pending",
       email: `${CLERK_PENDING_USER}@example.com`,
       first_name: "テスト",
       last_name: "四郎",
@@ -412,6 +415,30 @@ describe("SupabaseMemberQueryService.findMemberLayout", () => {
   });
 });
 
+describe("SupabaseMemberQueryService.findStripeCustomerId", () => {
+  it("会員の Stripe Customer を返す（入会の確定前でも）", async () => {
+    expect(await queryService.findStripeCustomerId(CLERK_PENDING_USER)).toBe(
+      "cus_test_member_query_pending"
+    );
+  });
+
+  it("Stripe Customer が未作成の会員は null", async () => {
+    expect(await queryService.findStripeCustomerId(CLERK_USER)).toBeNull();
+  });
+
+  it("存在しない会員は null", async () => {
+    expect(
+      await queryService.findStripeCustomerId("clerk_test_not_exists")
+    ).toBeNull();
+  });
+
+  it("退会済みの会員は null", async () => {
+    expect(
+      await queryService.findStripeCustomerId(CLERK_WITHDRAWN_USER)
+    ).toBeNull();
+  });
+});
+
 describe("SupabaseMemberQueryService.findOnboardingCompleted", () => {
   it("入会が確定した会員は true", async () => {
     expect(await queryService.findOnboardingCompleted(CLERK_USER)).toBe(true);
@@ -465,6 +492,9 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
     expect(
       await rlsQueryService.findOnboardingCompleted(CLERK_PENDING_USER)
     ).toBe(false);
+    expect(await rlsQueryService.findStripeCustomerId(CLERK_PENDING_USER)).toBe(
+      "cus_test_member_query_pending"
+    );
   });
 
   it("引数に他の会員を渡しても、RLS によりトークンの会員以外のデータは取得できない", async () => {
@@ -477,5 +507,8 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
     expect(await rlsQueryService.findOnboardingCompleted(CLERK_USER)).toBe(
       false
     );
+    expect(
+      await rlsQueryService.findStripeCustomerId(CLERK_PENDING_USER)
+    ).toBeNull();
   });
 });
