@@ -111,6 +111,38 @@ describe("placeOrder Server Action - Sentry例外送信", () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
+  it("現在のランクで購入できない商品のエラーは商品名と対処を返し、Sentry.captureExceptionを呼ばない", async () => {
+    const { ProductNotAccessibleError } =
+      await import("@/domain/errors/product-not-accessible-error");
+    vi.mocked(placeOrderUseCase).mockRejectedValue(
+      new ProductNotAccessibleError("prod-1", "starter", "pro")
+    );
+
+    const result = await placeOrder("addr-1", "addr-1");
+
+    expect(result).toEqual({
+      error:
+        "「テスト商品」は現在のランクでは購入できません。カートから外してから注文してください",
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("購入できない商品がカートに見つからないときは、商品名なしで原因と対処を返す", async () => {
+    const { ProductNotAccessibleError } =
+      await import("@/domain/errors/product-not-accessible-error");
+    vi.mocked(placeOrderUseCase).mockRejectedValue(
+      new ProductNotAccessibleError("prod-unknown", "starter", "pro")
+    );
+
+    const result = await placeOrder("addr-1", "addr-1");
+
+    expect(result).toEqual({
+      error:
+        "現在のランクでは購入できない商品が含まれています。カートから外してから注文してください",
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
   it("Sentry.startSpanでラップして実行する", async () => {
     vi.mocked(placeOrderUseCase).mockResolvedValue({
       redirectUrl: "https://checkout.stripe.com/cs_1",

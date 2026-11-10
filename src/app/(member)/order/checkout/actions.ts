@@ -9,6 +9,7 @@ import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { placeOrder as placeOrderUseCase } from "@/composition/order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
+import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 
 type PlaceOrderResult = { error: string };
 
@@ -52,6 +53,17 @@ export async function placeOrder(
     if (err instanceof NegotiableProductNotOrderableError) {
       return {
         error: `「${err.productName}」は現在ご注文いただけません。カートから削除してから注文してください`,
+      };
+    }
+    if (err instanceof ProductNotAccessibleError) {
+      // ランク降格等でカートに残った商品。想定内のためSentryには送らない
+      const productName = cart.items.find(
+        (item) => item.productId === err.productId
+      )?.productName;
+      return {
+        error: productName
+          ? `「${productName}」は現在のランクでは購入できません。カートから外してから注文してください`
+          : "現在のランクでは購入できない商品が含まれています。カートから外してから注文してください",
       };
     }
     Sentry.captureException(err, {
