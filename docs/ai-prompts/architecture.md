@@ -46,7 +46,7 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 - `src/types/`（DB の型）を使ってよいのは infrastructure だけ。DB の行の形を infrastructure の外に漏らさず、domain・DTO に変換して渡す
 - use-case から Query Service は使わない。書き込みの判断に要るデータは repository から集約として取る（読み取りと書き込みのモデルを混ぜないため）
 - app・middleware は composition が返す use-case（書き込み）・Query Service（読み取り）だけを使い、use-cases・repositories・infrastructure を直接 import しない。lint では、上の表どおりの許可リストで、表に無い `@/` の import と相対 import で層の外に出ること（app は `../`、middleware は相対 import すべて）をエラーにする（#441）
-- components・lib から repositories・infrastructure・app は使わない。DB・外部サービスのデータは app で Query Service から取って props で渡し、Server Action も app から props で受け取る。lint では、この3つの import をエラーにする（components・lib は、表の許可リストより緩いこの禁止だけを lint する。#441）
+- components・lib から repositories・infrastructure・app は使わない。DB・外部サービスのデータは app で Query Service から取って props で渡し、Server Action も app から props で受け取る。lint では、この3つの import と、親ディレクトリへの相対 import（`../`）をエラーにする（components・lib は、表の許可リストより緩いこの禁止だけを lint する。#441）
 - `import type` で repository・infrastructure の型だけを使う場合も禁止に含める。型だけの依存でも、画面が集約・DB の形に引きずられるため。画面で要る型は domain の型か queries の DTO を使う（#441）
 - domain の内部の定数（ルールの正になっている `RANK_ORDER` 等）は domain の外で使わない。外からは value object・entity のメソッドを使う（#442）。lint では、`src/domain/` 以外の `src/` から `src/domain/` で export している定数を import するとエラーにする。定数を新しく export したら `eslint.config.mjs` の `DOMAIN_CONSTANTS` に足す（足し忘れると `tests/unit/lint/layer-imports.test.ts` が落ちる）。tests・scripts は対象外
 
