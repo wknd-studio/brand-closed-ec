@@ -639,4 +639,63 @@ describe("SupabaseOrderRepository", () => {
       expect(await repo.findById(ORDER_ID)).not.toBeNull();
     });
   });
+
+  // supabase-js は失敗しても例外を投げず error を返すため、捨てると「見つからない」「0件」に化ける（#614）
+  describe("DBエラー", () => {
+    it.each([
+      [
+        "findById",
+        "orders",
+        (r: SupabaseOrderRepository) => r.findById(ORDER_ID),
+      ],
+      [
+        "findByStripeCheckoutSessionId",
+        "order_settlements",
+        (r: SupabaseOrderRepository) =>
+          r.findByStripeCheckoutSessionId(STRIPE_SESSION_ID),
+      ],
+      [
+        "findByStripeInvoiceId",
+        "order_settlements",
+        (r: SupabaseOrderRepository) =>
+          r.findByStripeInvoiceId(STRIPE_INVOICE_ID),
+      ],
+      [
+        "findActiveOrdersWithUser",
+        "orders",
+        (r: SupabaseOrderRepository) => r.findActiveOrdersWithUser(),
+      ],
+      [
+        "findByIdWithUser",
+        "orders",
+        (r: SupabaseOrderRepository) => r.findByIdWithUser(ORDER_ID),
+      ],
+    ] as const)("%s は読み取りの失敗で例外を投げる", async (_, table, call) => {
+      await expect(
+        call(new SupabaseOrderRepository(clientFailingOn(table)))
+      ).rejects.toThrow("injected failure");
+    });
+
+    it("findById・findByIdWithUser は不正なUUIDで例外を投げる", async () => {
+      await expect(repo.findById("not-a-uuid")).rejects.toThrow();
+      await expect(repo.findByIdWithUser("not-a-uuid")).rejects.toThrow();
+    });
+
+    it("findByIdWithUser は存在しないIDでnullを返す", async () => {
+      expect(
+        await repo.findByIdWithUser("00000000-0000-0000-0000-0000000006f0")
+      ).toBeNull();
+    });
+
+    it("save は制約違反（存在しない会員）で例外を投げる", async () => {
+      await expect(
+        repo.save(
+          makeOrder({
+            id: "00000000-0000-0000-0000-0000000006f1",
+            userId: NO_ORDER_USER_ID,
+          })
+        )
+      ).rejects.toThrow("Order保存に失敗");
+    });
+  });
 });
