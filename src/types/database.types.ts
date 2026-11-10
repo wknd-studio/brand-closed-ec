@@ -726,6 +726,7 @@ export type Database = {
         };
         Returns: string;
       };
+      delete_order: { Args: { p_order_id: string }; Returns: undefined };
       get_current_admin_user_id: { Args: never; Returns: string };
       get_current_user_id: { Args: never; Returns: string };
       place_order_with_limit_check: {
