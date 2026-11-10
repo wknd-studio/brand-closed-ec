@@ -4,7 +4,6 @@ import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { Order } from "@/domain/entities/order";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
-import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
@@ -79,18 +78,12 @@ export async function placeOrder(
         product.minRank
       );
     }
-    if (product.isNegotiable) {
-      throw new NegotiableProductNotOrderableError(
-        product.sanityProductId,
-        product.productName
-      );
-    }
     return CartItem.of({
       sanityProductId: c.sanityProductId,
       productName: product.productName,
       quantity: c.quantity,
-      unitPrice: product.unitPrice,
-      isNegotiable: false,
+      unitPrice: product.isNegotiable ? Money.zero() : product.unitPrice,
+      isNegotiable: product.isNegotiable,
       paymentTiming: product.paymentTiming,
     });
   });
