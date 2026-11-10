@@ -624,6 +624,80 @@ describe("Order", () => {
     });
   });
 
+  // at_orderの明細の決済単位（注文確定時に1件だけ作られるCheckout）と、そこに載せる明細
+  describe("checkoutSettlement()", () => {
+    it("Checkoutの決済単位を返す（Invoiceの決済単位があっても）", () => {
+      const order = makeOrder({
+        settlements: [
+          makeSettlement({
+            id: "s-invoice",
+            flow: "invoice",
+            status: "invoice_sent",
+          }),
+          makeSettlement({ id: "s-checkout" }),
+        ],
+      });
+      expect(order.checkoutSettlement()?.id).toBe("s-checkout");
+    });
+
+    it("Checkoutの決済単位が無ければnull（after_orderの明細のみの注文）", () => {
+      const order = makeOrder({
+        settlements: [
+          makeSettlement({
+            id: "s-invoice",
+            flow: "invoice",
+            status: "invoice_sent",
+          }),
+        ],
+      });
+      expect(order.checkoutSettlement()).toBeNull();
+    });
+
+    it("Order.placeで作った注文では、at_orderの明細があるときだけ返す", () => {
+      expect(placeOrder([makeCartItem()]).checkoutSettlement()).not.toBeNull();
+      expect(
+        placeOrder([
+          makeCartItem({ paymentTiming: "after_order" }),
+        ]).checkoutSettlement()
+      ).toBeNull();
+    });
+  });
+
+  describe("itemsIn()", () => {
+    it("指定した決済単位に紐付いた明細だけを返す", () => {
+      const s1 = makeSettlement({ id: "s1" });
+      const order = makeOrder({
+        items: [
+          makeItem({ id: "i1", settlementId: "s1" }),
+          makeItem({
+            id: "i2",
+            paymentTiming: "after_order",
+            settlementId: null,
+          }),
+          makeItem({ id: "i3", settlementId: "s2" }),
+        ],
+        settlements: [
+          s1,
+          makeSettlement({ id: "s2", flow: "invoice", status: "invoice_sent" }),
+        ],
+      });
+      expect(order.itemsIn(s1).map((i) => i.id)).toEqual(["i1"]);
+    });
+
+    it("Order.placeで作った注文では、Checkoutの決済単位にat_orderの明細だけが載る", () => {
+      const order = placeOrder([
+        makeCartItem({
+          sanityProductId: "prod-after",
+          paymentTiming: "after_order",
+        }),
+        makeCartItem(),
+      ]);
+      expect(
+        order.itemsIn(order.checkoutSettlement()!).map((i) => i.sanityProductId)
+      ).toEqual(["prod-at"]);
+    });
+  });
+
   describe("applySettlement()", () => {
     it("同じidの決済単位を差し替え、statusをロールアップし直す", () => {
       const order = makeOrder({
