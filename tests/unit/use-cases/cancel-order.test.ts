@@ -17,7 +17,11 @@ describe("cancelOrder", () => {
   });
 
   it("支払い済みの注文はエラーを投げる", async () => {
-    const order = makeOrder({ status: "paid" });
+    // 状態は決済単位からロールアップされるため、全明細が支払い済みの決済単位に属する注文にする
+    const order = makeOrder({
+      settlements: [makeSettlement({ status: "paid", paidAt: new Date() })],
+    });
+    expect(order.status.value).toBe("paid");
     const orderRepo = makeOrderRepo(order);
 
     const result = cancelOrder({ orderId: order.id }, { orderRepo });

@@ -385,18 +385,38 @@ describe("Order", () => {
     });
   });
 
-  // 保存されている状態とロールアップの結果の扱い: DBからの復元（Order.of）ではDBの値を正とし、
-  // 食い違っても検証・補正しない（既存データで画面が開けなくなるのを避ける）。
-  // ファクトリ（place）・applySettlementは常にロールアップの結果を使う
+  // 保存されている状態（orders.status）は正のデータではなく、決済単位・明細から算出するキャッシュ
+  // （docs/domain/settlement.md「orders.statusのロールアップ算出」）。そのため Order.of（DBからの復元を含む）は
+  // 常にロールアップの結果を状態にする。注文自体のキャンセルだけは決済単位から算出できないため、保存されている値を使う
   describe("保存されている状態とロールアップの結果", () => {
-    it("Order.ofは、ロールアップの結果と食い違う状態もそのまま保持する", () => {
+    it("Order.ofは、保存されている状態がロールアップの結果と食い違えば、ロールアップの結果にする（paid → processing）", () => {
       const order = makeOrder({
         status: OrderStatus.of("paid"),
         items: [makeItem({ id: "i1", settlementId: "s1" })],
         settlements: [makeSettlement({ id: "s1", status: "pending_payment" })],
       });
       expect(order.rollupStatus().value).toBe("processing");
+      expect(order.status.value).toBe("processing");
+    });
+
+    it("Order.ofは、全明細が支払い済みの決済単位に属していればpaidにする（processing → paid）", () => {
+      const order = makeOrder({
+        status: OrderStatus.of("processing"),
+        items: [makeItem({ id: "i1", settlementId: "s1" })],
+        settlements: [
+          makeSettlement({ id: "s1", status: "paid", paidAt: new Date() }),
+        ],
+      });
       expect(order.status.value).toBe("paid");
+    });
+
+    it("Order.ofは、注文自体がキャンセル済みなら、決済単位に関わらずcancelledのまま", () => {
+      const order = makeOrder({
+        status: OrderStatus.of("cancelled"),
+        items: [makeItem({ id: "i1", settlementId: "s1" })],
+        settlements: [makeSettlement({ id: "s1", status: "pending_payment" })],
+      });
+      expect(order.status.value).toBe("cancelled");
     });
 
     it("applySettlementは、保存されていた状態に関わらずロールアップの結果にする", () => {
@@ -419,15 +439,24 @@ describe("Order", () => {
     });
 
     it("limit_exceeded はキャンセル可能", () => {
-      expect(
-        makeOrder({ status: OrderStatus.of("limit_exceeded") }).canCancel()
-      ).toBe(true);
+      const order = makeOrder({
+        settlements: [
+          makeSettlement({ flow: "invoice", status: "limit_exceeded" }),
+        ],
+      });
+      expect(order.status.value).toBe("limit_exceeded");
+      expect(order.canCancel()).toBe(true);
     });
 
     it("paid はキャンセル不可", () => {
-      expect(makeOrder({ status: OrderStatus.of("paid") }).canCancel()).toBe(
-        false
-      );
+      const order = makeOrder({
+        items: [makeItem({ id: "i1", settlementId: "s1" })],
+        settlements: [
+          makeSettlement({ id: "s1", status: "paid", paidAt: new Date() }),
+        ],
+      });
+      expect(order.status.value).toBe("paid");
+      expect(order.canCancel()).toBe(false);
     });
 
     it("cancelled はキャンセル不可", () => {
@@ -490,7 +519,7 @@ describe("Order", () => {
 
     it("キャンセル不可の注文はOrderNotCancellableErrorを投げる", () => {
       expect(() =>
-        makeOrder({ status: OrderStatus.of("paid") }).cancel(new Date())
+        makeOrder({ status: OrderStatus.of("cancelled") }).cancel(new Date())
       ).toThrow(OrderNotCancellableError);
     });
 
