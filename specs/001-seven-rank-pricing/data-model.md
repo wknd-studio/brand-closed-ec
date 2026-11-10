@@ -28,7 +28,7 @@ const MONTHLY_LIMITS: Record<MemberRankValue, number> = {
 };
 ```
 
-`MemberRank`クラス自体のpublic API（`of()`, `getMonthlyLimit()`, `canAccess()`, `isHigherThan()`, `equals()`）は変更しない。値のセットのみ7段階に置き換える。
+`MemberRank`クラス自体のpublic API（`of()`, `getMonthlyLimit()`, `canAccess()`, `isHigherThan()`, `equals()`）は変更しない。値のセットのみ7段階に置き換える。なお `equals()` はどこからも使われていなかったため、後に #538 で削除した。
 
 ## 依存先の変更（重複解消）
 
