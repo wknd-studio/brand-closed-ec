@@ -693,6 +693,12 @@ describe("SupabaseOrderRepository", () => {
           makeOrder({
             id: "00000000-0000-0000-0000-0000000006f1",
             userId: NO_ORDER_USER_ID,
+            items: [
+              makeItem("00000000-0000-0000-0000-0000000006f2", {
+                paymentTiming: "after_order",
+              }),
+            ],
+            settlements: [],
           })
         )
       ).rejects.toThrow("Order保存に失敗");
