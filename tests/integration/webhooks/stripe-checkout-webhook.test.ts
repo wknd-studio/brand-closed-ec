@@ -162,7 +162,7 @@ beforeAll(async () => {
       productRepo,
       paymentGateway,
       notificationService,
-      errorReporter: { captureException: vi.fn() },
+      errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
     }
   );
 });
