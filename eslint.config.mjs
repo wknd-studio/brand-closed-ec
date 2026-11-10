@@ -144,6 +144,15 @@ const appSidePatterns = [
   },
 ];
 
+// 親ディレクトリへの相対 import。group（gitignore 形式）の ../* は ./../x や ./x/../../y に当たらないため、
+// パスのどこかに .. の区切りがあるものを正規表現で当てる
+const PARENT_RELATIVE = "(^|/)\\.\\.(/|$)";
+
+const appSideRelativePattern = {
+  regex: PARENT_RELATIVE,
+  message: `../ で src/repositories/・src/infrastructure/・src/app/ に出られるため、src/components/・src/lib/ では親ディレクトリへの相対 import は使わず @/components/...・@/lib/... のように書く。${APP_SIDE_DOC}`,
+};
+
 // 層の許可リストの対象のファイル。middleware は1ファイル
 const layerFile = ({ layer, file }) => file ?? `src/${layer}/**`;
 
@@ -172,11 +181,11 @@ function layerImportsConfig({ layer, file, allow, external, hint }) {
             },
             file
               ? {
-                  group: ["./*", "../*"],
+                  regex: "^\\.",
                   message: `相対 import で層の外に出られるため、相対 import は使わず @/composition/... のように書く。${message}`,
                 }
               : {
-                  group: ["../*"],
+                  regex: PARENT_RELATIVE,
                   message: `../ で層の外に出られるため、親ディレクトリへの相対 import は使わず @/${layer}/... のように書く。${message}`,
                 },
             ...(external
@@ -258,6 +267,7 @@ const eslintConfig = defineConfig([
             ...domainConstantPatterns,
             ...clientPatterns,
             ...appSidePatterns,
+            appSideRelativePattern,
           ],
         },
       ],
