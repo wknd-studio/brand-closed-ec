@@ -1,9 +1,9 @@
 import type { User } from "@/domain/entities/user";
 import type { UserRepository } from "@/repositories/user-repository";
-import type { SelfServiceRank } from "@/repositories/onboarding-checkout-gateway";
+import type { SelfServiceRankValue } from "@/domain/value-objects/member-rank";
 
 export type ResolveOnboardingCheckoutResult =
-  | { user: User; rank: SelfServiceRank }
+  | { user: User; rank: SelfServiceRankValue }
   | { redirectTo: string };
 
 export type ResolveOnboardingCheckoutDeps = {
@@ -28,8 +28,8 @@ export async function resolveOnboardingCheckout(
     return RESTART_ONBOARDING;
   }
 
-  const rank = user.rank.value;
-  if (rank === "enterprise") return RESTART_ONBOARDING;
+  const { rank } = user;
+  if (!rank.isSelfService()) return RESTART_ONBOARDING;
 
-  return { user, rank };
+  return { user, rank: rank.value };
 }

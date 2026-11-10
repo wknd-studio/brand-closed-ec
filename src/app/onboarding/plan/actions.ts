@@ -7,7 +7,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { selectPlan as selectPlanUseCase } from "@/composition/onboarding";
 import {
   MemberRank,
-  type MemberRankValue,
+  type SelfServiceRankValue,
 } from "@/domain/value-objects/member-rank";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
@@ -61,7 +61,7 @@ export async function selectPlan(
       formData.get("invoiceRegistrationNumber") ?? ""
     ),
   };
-  const plan = values.plan as MemberRankValue;
+  const plan = values.plan as SelfServiceRankValue;
 
   if (!VALID_PLANS.includes(plan)) {
     return { error: "無効なプランです", values };

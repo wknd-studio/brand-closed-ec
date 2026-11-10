@@ -1,13 +1,10 @@
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
-
-// enterpriseは個別契約のためセルフサービスの決済対象にしない（FR-006）
-export type SelfServiceRank = Exclude<MemberRankValue, "enterprise">;
+import type { SelfServiceRankValue } from "@/domain/value-objects/member-rank";
 
 export type OnboardingCheckoutSessionInput = {
   userId: string;
   clerkUserId: string;
   stripeCustomerId: string;
-  rank: SelfServiceRank;
+  rank: SelfServiceRankValue;
 };
 
 export interface OnboardingCheckoutGateway {
