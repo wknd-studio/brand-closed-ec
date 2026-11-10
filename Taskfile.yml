@@ -64,10 +64,12 @@ tasks:
       - bash scripts/with-worktree-db.sh pnpm test:integration
 
   check:
-    desc: push・PR作成前の完了チェック（typecheck → lint → ユニットテスト → 統合テスト）。どれかが失敗すると中断する
+    desc: push・PR作成前の完了チェック（typecheck → lint・Query Service の形 → ユニットテスト → 統合テスト）。どれかが失敗すると中断する
     cmds:
       - pnpm typecheck
       - pnpm lint
+      # Query Service の形（命名・実装・組み立て・統合テスト）。#582
+      - pnpm -s tsx scripts/ci/query-service-shape.ts
       - pnpm test
       - task: test:integration
 

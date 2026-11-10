@@ -55,6 +55,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm format:check
+      # Query Service の形（命名・実装・組み立て・統合テスト）。scripts/ci/query-service-shape.ts（#582）
+      - run: pnpm -s tsx scripts/ci/query-service-shape.ts
 
   schema-types-drift:
     name: Schema Types Drift
