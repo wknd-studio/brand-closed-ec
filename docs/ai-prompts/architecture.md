@@ -232,7 +232,9 @@ use-case の中に `if (user.rankCode === "gold" && ...)` のような判定を�
 
 エンティティの状態は、意図を表すメソッド（`OrderSettlement.markPaid()`・`attachCheckoutSession()`・`User.withdraw()`・`selectPlan()`・`Address.update()`・`makeDefault()` 等）で変える。各メソッドがその変更に必要な検証（状態遷移・不変条件）を行う。
 
-汎用の `with(overrides)` を domain の外に出さない（`private` にする）。`settlement.with({ status: "paid" })` のように、ガードを通らずに任意の項目を書き換えられてしまうため（#589）。use-case で新しい書き換えが必要になったら、`with` を public に戻さず、エンティティにメソッドを足す。DBの行からの復元やテストの組み立ては `of` を使う（`Order.of({ ...order, items })` のように既存のエンティティを広げてよい。`of` はコンストラクタの不変条件を検査する）。
+汎用の `with(overrides)` を domain の外に出さない（`private` にする）。`settlement.with({ status: "paid" })` のように、ガードを通らずに任意の項目を書き換えられてしまうため（#589）。use-case で新しい書き換えが必要になったら、`with` を public に戻さず、エンティティにメソッドを足す。
+
+エンティティの `of` は、DBの行からの復元（リポジトリ）とテストの組み立てにだけ使う。`of` は正しい状態なら何でも作れるため、`OrderSettlement.of({ ...settlement, status: "paid" })` のように既存のエンティティを広げて作り直すと、`with` と同じくガードを迂回できる。コンストラクタの不変条件（法人なら会社名が必須等）は検査するが、状態遷移（`cancelled → paid` 等）は前の状態を知らないため検査できない。use-case は既存のエンティティを `of` で作り直さず、新規作成は初期状態しか作れないファクトリ（`Order.place` 等）を使う（`User`・`Address` の新規作成はまだ `of` を使っており、ファクトリへの置き換えと、`of` を使える場所の lint での制限は #635 で行う）。
 
 ## 外側の関心事はポート経由
 
