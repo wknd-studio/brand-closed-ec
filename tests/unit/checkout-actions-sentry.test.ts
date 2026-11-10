@@ -95,6 +95,22 @@ describe("placeOrder Server Action - Sentry例外送信", () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
+  it("要相談商品のエラーは会員に分かる文言を返し、Sentry.captureExceptionを呼ばない", async () => {
+    const { NegotiableProductNotOrderableError } =
+      await import("@/domain/errors/negotiable-product-not-orderable-error");
+    vi.mocked(placeOrderUseCase).mockRejectedValue(
+      new NegotiableProductNotOrderableError("prod-2", "交渉商品")
+    );
+
+    const result = await placeOrder("addr-1", "addr-1");
+
+    expect(result).toEqual({
+      error:
+        "「交渉商品」は現在ご注文いただけません。カートから削除してから注文してください",
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
   it("Sentry.startSpanでラップして実行する", async () => {
     vi.mocked(placeOrderUseCase).mockResolvedValue({
       redirectUrl: "https://checkout.stripe.com/cs_1",

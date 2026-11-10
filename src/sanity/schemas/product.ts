@@ -54,6 +54,15 @@ export function validatePaymentTiming(
   return true;
 }
 
+// 要相談商品は Ver1 では作成できない（docs/domain/catalog.md）。Ver2 で戻すときに
+// 既存データの扱いが要らないよう、フィールドは消さずにONでの保存を拒否する
+export function validateIsNegotiable(
+  isNegotiable: boolean | undefined
+): string | true {
+  if (isNegotiable) return "要相談商品は現在扱っていません。OFFにしてください";
+  return true;
+}
+
 export const product = defineType({
   name: "product",
   title: "商品",
@@ -124,9 +133,15 @@ export const product = defineType({
       name: "is_negotiable",
       title: "要相談商品",
       description:
-        "ONの場合、価格は個別見積もりとなりInvoiceフローで処理されます",
+        "要相談商品は現在扱っていません。ONのままでは保存できないため、OFFにしてください",
       type: "boolean",
       initialValue: false,
+      // 古いデータでONのまま残っている商品だけ表示し、OFFに戻せるようにする
+      hidden: ({ value }) => value !== true,
+      validation: (r) =>
+        r.custom((isNegotiable) =>
+          validateIsNegotiable(isNegotiable as boolean | undefined)
+        ),
     }),
     defineField({
       name: "payment_timing",

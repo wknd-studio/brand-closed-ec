@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { placeOrder, type PlaceOrderInput } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { Money } from "@/domain/value-objects/money";
 import {
   makeUser,
@@ -70,44 +71,44 @@ describe("placeOrder", () => {
     expect(lastSaved.settlements[0].stripeCheckoutSessionId).toBe("sess_1");
   });
 
-  it("交渉商品を含む場合はinvoiceフローで invoice-complete URLを返す", async () => {
+  it("要相談の商品を含むカートはNegotiableProductNotOrderableErrorになり、注文も決済単位も作られない", async () => {
+    // Ver1 では要相談商品を扱わない（docs/domain/catalog.md・#608）。Sanity に古いデータが
+    // 残っていた場合に、単価0円の明細・月次上限の対象外の注文が作られないようにする
     const deps = {
       userRepo: makeUserRepo(),
       orderRepo: makeOrderRepo(),
       addressRepo: makeAddressRepo(),
-      productRepo: makeProductRepo([negotiableProduct]),
+      productRepo: makeProductRepo([fixedProduct, negotiableProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
     };
 
-    const result = await placeOrder(
+    const promise = placeOrder(
       {
         ...baseInput,
         cartItems: [
+          { sanityProductId: "prod-1", quantity: 1, productName: "固定商品" },
           { sanityProductId: "prod-2", quantity: 1, productName: "交渉商品" },
         ],
       },
       deps
     );
 
-    expect(result.redirectUrl).toContain("/order/invoice-complete");
-    expect(deps.orderRepo.saveNewOrderWithLimitCheck).toHaveBeenCalledTimes(1);
+    await expect(promise).rejects.toBeInstanceOf(
+      NegotiableProductNotOrderableError
+    );
+    await expect(promise).rejects.toMatchObject({
+      productId: "prod-2",
+      productName: "交渉商品",
+    });
+    expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
     expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
-    expect(deps.notificationService.sendOrderConfirming).toHaveBeenCalled();
+    expect(deps.notificationService.sendOrderConfirming).not.toHaveBeenCalled();
     expect(
       deps.notificationService.sendOrderOperatorNotification
-    ).toHaveBeenCalled();
-
-    // after_orderの明細は決済単位を作らず、settlement_id=NULLのまま対応待ちになる
-    const saved = vi.mocked(deps.orderRepo.saveNewOrderWithLimitCheck).mock
-      .calls[0][0];
-    expect(saved.settlements).toEqual([]);
-    expect(saved.items[0]).toMatchObject({
-      paymentTiming: "after_order",
-      settlementId: null,
-    });
+    ).not.toHaveBeenCalled();
   });
 
   it("after_orderの固定価格商品のみの場合も決済単位を作らずinvoice-completeへ進む", async () => {
@@ -529,16 +530,12 @@ describe("placeOrder", () => {
     });
     expect(saved.items[0]?.unitPriceSnapshot.amount).toBe(100_000);
   });
-  it("月次上限チェック込みの保存には、要相談を除いた注文の固定額の合計を渡す", async () => {
+  it("月次上限チェック込みの保存には、注文の固定額の合計を渡す", async () => {
     const deps = {
       userRepo: makeUserRepo(),
       orderRepo: makeOrderRepo(),
       addressRepo: makeAddressRepo(),
-      productRepo: makeProductRepo([
-        fixedProduct,
-        negotiableProduct,
-        afterOrderFixedProduct,
-      ]),
+      productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
@@ -549,7 +546,6 @@ describe("placeOrder", () => {
         ...baseInput,
         cartItems: [
           { sanityProductId: "prod-1", quantity: 2, productName: "固定商品" },
-          { sanityProductId: "prod-2", quantity: 1, productName: "交渉商品" },
           {
             sanityProductId: "prod-3",
             quantity: 1,
@@ -563,7 +559,7 @@ describe("placeOrder", () => {
     const [saved, , , fixedTotal] = vi.mocked(
       deps.orderRepo.saveNewOrderWithLimitCheck
     ).mock.calls[0];
-    // 固定商品100,000×2 + 後払い固定商品50,000（交渉商品は含めない）
+    // 固定商品100,000×2 + 後払い固定商品50,000
     expect(fixedTotal.amount).toBe(250_000);
     expect(saved.getFixedTotal().amount).toBe(250_000);
   });

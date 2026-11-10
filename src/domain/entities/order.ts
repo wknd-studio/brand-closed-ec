@@ -8,6 +8,7 @@ import { OrderSettlement } from "./order-settlement";
 import type { User } from "./user";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
+import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
 
@@ -78,10 +79,19 @@ export class Order {
    * 新しい注文を作る（docs/domain/settlement.md「注文と決済単位」）。
    * 注文は常に1回のチェックアウト操作＝1件。支払いタイミングが混在していても分割しない。
    * - at_order: 注文確定と同時にCheckoutの決済単位を作り、明細を紐付ける。金額はその明細の小計の合計
-   * - after_order（要相談を含む）: 決済単位は作らない（settlementId=NULL）。運営者の「請求作成」で後から紐付く
+   * - after_order: 決済単位は作らない（settlementId=NULL）。運営者の「請求作成」で後から紐付く
    */
   static place(props: PlaceOrderProps): Order {
     const { user, cartItems, generateId } = props;
+    // 要相談商品は Ver1 では扱わない（docs/domain/catalog.md）。価格が後で決まる前提の
+    // 月次上限の判定・請求作成が無いため、単価0円の明細を作らせない
+    const negotiable = cartItems.find((c) => c.isNegotiable);
+    if (negotiable) {
+      throw new NegotiableProductNotOrderableError(
+        negotiable.sanityProductId,
+        negotiable.productName
+      );
+    }
     const { atOrderItems, afterOrderItems } =
       splitCartByPaymentTiming(cartItems);
 

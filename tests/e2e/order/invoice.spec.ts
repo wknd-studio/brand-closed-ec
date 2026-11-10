@@ -4,6 +4,8 @@ import type { Database } from "@/types/database.types";
 import { test, expect, withWorkerSuffix } from "../helpers/test-member";
 import { clickAddToCart } from "../helpers/cart";
 
+// 要相談商品は Ver1 では扱わない（docs/domain/catalog.md・#608）。Sanity Studio では
+// ONにできないが、古いデータとして残っていた場合に注文できないことを確かめる。
 // 既存シードデータには要相談商品（is_negotiable: true）が1件も存在しないため、
 // テスト専用のブランド・商品を固定の明示的なIDで作成する。
 // delete(id)は指定したIDの行のみを削除する操作のため、既存データに影響しない
@@ -33,7 +35,7 @@ function supabaseAdmin() {
   );
 }
 
-test.describe("要相談商品の見積依頼フロー", () => {
+test.describe("要相談商品は注文できない", () => {
   test.beforeAll(async () => {
     const client = sanityWriteClient();
     await client.createOrReplace({
@@ -60,7 +62,7 @@ test.describe("要相談商品の見積依頼フロー", () => {
     await client.delete(TEST_BRAND_ID);
   });
 
-  test("要相談商品をカートに追加して注文確定すると、Stripeへ遷移せず確認完了画面へ遷移する", async ({
+  test("要相談商品をカートに入れて注文確定すると、エラーが表示され、注文は作られない", async ({
     page,
     member,
   }) => {
@@ -72,18 +74,12 @@ test.describe("要相談商品の見積依頼フロー", () => {
     await brandLink.click();
     await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}$`));
 
-    // ブランドの商品一覧ページで価格が「要相談」と表示されることを確認
-    await expect(page.getByText("価格要相談").first()).toBeVisible();
-
     const productLink = page
       .locator(`a[href^="/shop/${TEST_BRAND_NAME}/"]`)
       .first();
     await expect(productLink).toBeVisible();
     await productLink.click();
     await expect(page).toHaveURL(new RegExp(`/shop/${TEST_BRAND_NAME}/[^/]+$`));
-
-    // 商品詳細ページでも価格が「要相談」と表示されることを確認
-    await expect(page.getByText("価格要相談").first()).toBeVisible();
 
     await clickAddToCart(page);
 
@@ -119,9 +115,6 @@ test.describe("要相談商品の見積依頼フロー", () => {
 
     await page.goto("/order/checkout");
     await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
-    await expect(
-      page.getByText("価格要相談", { exact: true }).first()
-    ).toBeVisible();
 
     await page
       .getByRole("radio", { name: /テスト 次郎/ })
@@ -130,27 +123,17 @@ test.describe("要相談商品の見積依頼フロー", () => {
 
     await page.getByRole("button", { name: "注文を確定する" }).click();
 
-    // Stripe Checkout画面へは遷移せず、確認完了画面へ遷移する
-    await expect(page).toHaveURL(/\/order\/invoice-complete/, {
-      timeout: 15000,
-    });
     await expect(
-      page.getByRole("heading", { name: "ご注文ありがとうございます" })
-    ).toBeVisible();
-
-    // 後払い（after_order）の明細は決済単位を作らず、settlement_id=NULLのまま
-    // 運営者の請求作成を待つ。注文自体は対応中（processing）
-    const { data: order } = await supabaseAdmin()
-      .from("orders")
-      .select(
-        "status, order_settlements(id), order_items(payment_timing, settlement_id)"
+      page.getByText(
+        `「${TEST_PRODUCT_NAME}」は現在ご注文いただけません。カートから削除してから注文してください`
       )
-      .eq("user_id", userId)
-      .single();
-    expect(order?.status).toBe("processing");
-    expect(order?.order_settlements).toEqual([]);
-    expect(order?.order_items).toEqual([
-      { payment_timing: "after_order", settlement_id: null },
-    ]);
+    ).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/\/order\/checkout$/);
+
+    const { data: orders } = await supabaseAdmin()
+      .from("orders")
+      .select("id")
+      .eq("user_id", userId);
+    expect(orders).toEqual([]);
   });
 });

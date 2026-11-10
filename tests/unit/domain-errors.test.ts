@@ -6,6 +6,7 @@ import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
+import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 
 describe("DomainError", () => {
   it("Error を継承している", () => {
@@ -116,6 +117,16 @@ describe("ProductPriceNotSetError", () => {
   it("name が ProductPriceNotSetError", () => {
     const err = new ProductPriceNotSetError("prod-001", "standard");
     expect(err.name).toBe("ProductPriceNotSetError");
+  });
+});
+
+describe("NegotiableProductNotOrderableError", () => {
+  it("DomainError を継承し、商品IDと商品名を保持する", () => {
+    const err = new NegotiableProductNotOrderableError("prod-001", "交渉商品");
+    expect(err).toBeInstanceOf(DomainError);
+    expect(err.productId).toBe("prod-001");
+    expect(err.productName).toBe("交渉商品");
+    expect(err.name).toBe("NegotiableProductNotOrderableError");
   });
 });
 
