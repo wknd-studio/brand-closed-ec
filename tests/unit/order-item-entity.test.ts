@@ -70,4 +70,19 @@ describe("OrderItem", () => {
       ).toBe(false);
     });
   });
+
+  describe("isAfterOrder()", () => {
+    // 注文完了画面の「今回のお支払い」と「後払い（請求書）」の振り分けの正
+    it("注文確定時のスナップショットが after_order の明細は true", () => {
+      expect(makeItem({ paymentTiming: "after_order" }).isAfterOrder()).toBe(
+        true
+      );
+    });
+
+    it("at_order の明細は false", () => {
+      expect(makeItem({ paymentTiming: "at_order" }).isAfterOrder()).toBe(
+        false
+      );
+    });
+  });
 });
