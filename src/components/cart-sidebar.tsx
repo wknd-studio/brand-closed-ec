@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useCart } from "@/components/cart/cart-provider";
-import { calcCartFixedTotal } from "@/lib/cart/cookie";
+import { sumCartFixedTotal } from "@/domain/services/cart-limit";
 import { groupCartItemsByPaymentTiming, type CartItem } from "@/lib/cart/types";
 
 type ItemRowProps = {
@@ -183,7 +183,7 @@ export default function CartSidebar() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const items = cart.items;
-  const cartFixedTotal = calcCartFixedTotal(cart);
+  const cartFixedTotal = sumCartFixedTotal(cart.items);
   const remaining = monthlyLimit - totalUsed;
   const groups = groupCartItemsByPaymentTiming(items);
 

@@ -13,9 +13,12 @@ import {
   updateQuantity,
   removeItem,
   clearCart,
-  calcCartFixedTotal,
-  calcItemUpdateError,
 } from "@/lib/cart/cookie";
+import {
+  sumCartFixedTotal,
+  canAddToCart,
+  canChangeCartQuantity,
+} from "@/domain/services/cart-limit";
 import type { Cart, CartItem } from "@/lib/cart/types";
 
 type CartContextValue = {
@@ -66,16 +69,18 @@ export function CartProvider({
 
   const addToCart = useCallback(
     (item: Omit<CartItem, "quantity">, quantity = 1): { error?: string } => {
-      if (item.unitPrice !== null) {
-        const cartTotal = calcCartFixedTotal(cart);
-        if (
-          confirmedAmount + cartTotal + item.unitPrice * quantity >
-          monthlyLimit
-        ) {
-          return {
-            error: `月間仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため追加できません`,
-          };
-        }
+      if (
+        !canAddToCart({
+          lines: cart.items,
+          unitPrice: item.unitPrice,
+          quantity,
+          confirmedAmount,
+          monthlyLimit,
+        })
+      ) {
+        return {
+          error: `月間仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため追加できません`,
+        };
       }
       updateCart(addItem(cart, item, quantity));
       return {};
@@ -85,14 +90,19 @@ export function CartProvider({
 
   const updateItemQuantity = useCallback(
     (productId: string, quantity: number): { error?: string } => {
-      const error = calcItemUpdateError({
-        cart,
-        productId,
-        newQuantity: quantity,
-        confirmedAmount,
-        monthlyLimit,
-      });
-      if (error) return { error };
+      if (
+        !canChangeCartQuantity({
+          lines: cart.items,
+          productId,
+          newQuantity: quantity,
+          confirmedAmount,
+          monthlyLimit,
+        })
+      ) {
+        return {
+          error: `月間仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため変更できません`,
+        };
+      }
       updateCart(updateQuantity(cart, productId, quantity));
       return {};
     },
@@ -110,7 +120,7 @@ export function CartProvider({
     updateCart(clearCart());
   }, [updateCart]);
 
-  const totalUsed = confirmedAmount + calcCartFixedTotal(cart);
+  const totalUsed = confirmedAmount + sumCartFixedTotal(cart.items);
 
   return (
     <CartContext.Provider
