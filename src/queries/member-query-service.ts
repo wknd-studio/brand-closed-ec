@@ -43,4 +43,6 @@ export interface MemberQueryService {
   findMemberLayout(clerkUserId: string): Promise<MemberLayoutDto | null>;
   // 決済完了画面の入会の確定。退会済み・存在しない会員は false
   findOnboardingCompleted(clerkUserId: string): Promise<boolean>;
+  // 商品画面の価格を決めるランク。退会済み・存在しない会員は null
+  findMemberRank(clerkUserId: string): Promise<MemberRank | null>;
 }
