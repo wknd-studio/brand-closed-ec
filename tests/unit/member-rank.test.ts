@@ -91,6 +91,20 @@ describe("MemberRank", () => {
     );
   });
 
+  describe("allRanks()", () => {
+    it("個別契約のenterpriseを含む全ランク（下位から順）", () => {
+      expect(MemberRank.allRanks()).toEqual([
+        "starter",
+        "basic",
+        "standard",
+        "pro",
+        "advanced",
+        "premium",
+        "enterprise",
+      ]);
+    });
+  });
+
   describe("selfServiceRanks()", () => {
     it("セルフサービスで選べるのは、個別契約のenterpriseを除くランク（下位から順）", () => {
       expect(MemberRank.selfServiceRanks()).toEqual([
