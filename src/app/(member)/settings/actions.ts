@@ -1,9 +1,11 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { requireAuth } from "@/lib/auth/current-user";
 import { revalidatePath } from "next/cache";
 import { withdraw } from "@/composition/member";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { DomainError } from "@/domain/errors/domain-error";
 import {
   createAddress,
   updateAddress,
@@ -14,6 +16,7 @@ import type { AddressType } from "@/domain/entities/address";
 
 type ActionResult = { success: true } | { error: string };
 
+// 住所の操作の catch では、業務ルールの違反（DomainError）は入力に起因する想定内の失敗のため Sentry には送らない
 export async function setDefaultAddressAction(
   addressId: string,
   type: AddressType
@@ -25,7 +28,9 @@ export async function setDefaultAddressAction(
     await setDefaultAddress({ clerkUserId: userId, addressId, type });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (err) {
+    if (!(err instanceof DomainError))
+      Sentry.captureException(err, { tags: { useCase: "setDefaultAddress" } });
     return { error: "デフォルト住所の更新に失敗しました" };
   }
 }
@@ -51,7 +56,9 @@ export async function createAddressAction(
     });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (err) {
+    if (!(err instanceof DomainError))
+      Sentry.captureException(err, { tags: { useCase: "createAddress" } });
     return { error: "住所の登録に失敗しました" };
   }
 }
@@ -77,7 +84,9 @@ export async function updateAddressAction(
     });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (err) {
+    if (!(err instanceof DomainError))
+      Sentry.captureException(err, { tags: { useCase: "updateAddress" } });
     return { error: "住所の更新に失敗しました" };
   }
 }
@@ -92,7 +101,9 @@ export async function deleteAddressAction(
     await deleteAddress({ addressId });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (err) {
+    if (!(err instanceof DomainError))
+      Sentry.captureException(err, { tags: { useCase: "deleteAddress" } });
     return { error: "住所の削除に失敗しました" };
   }
 }
@@ -110,6 +121,7 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
     if (err instanceof ActiveOrdersExistError) {
       return { error: "進行中の注文があるため退会できません" };
     }
+    Sentry.captureException(err, { tags: { useCase: "withdraw" } });
     return { error: "退会処理に失敗しました" };
   }
 }

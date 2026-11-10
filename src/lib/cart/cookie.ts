@@ -9,6 +9,7 @@ export function parseCart(raw: string | undefined): Cart {
     const parsed = JSON.parse(decodeURIComponent(raw));
     if (!parsed || !Array.isArray(parsed.items)) return { items: [] };
     return parsed as Cart;
+    // eslint-disable-next-line no-restricted-syntax -- 壊れたCookieは空のカートとして扱う想定内の失敗
   } catch {
     return { items: [] };
   }

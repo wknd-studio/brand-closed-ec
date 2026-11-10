@@ -18,15 +18,12 @@ async function requireAdmin(): Promise<{ error: string } | null> {
 // Clerkの4xx(重複招待・存在しないエントリ等)は管理者の操作に起因する想定内の失敗のため、
 // Sentryには送らずメッセージだけ返す。それ以外(5xx・429・通信障害等)は送る。
 // メールアドレスは個人情報のためextraに含めない
-function reportUnexpected(
-  err: unknown,
-  action: string,
-  extra?: Record<string, unknown>
-) {
-  if (isClerkAPIResponseError(err) && err.status < 500 && err.status !== 429)
-    return;
-  Sentry.captureException(err, { tags: { action }, extra });
-  console.error(`[${action}] 予期しないエラー:`, err);
+function isUnexpected(err: unknown): boolean {
+  return !(
+    isClerkAPIResponseError(err) &&
+    err.status < 500 &&
+    err.status !== 429
+  );
 }
 
 // エントリを1件取得するAPIは無いため一覧をIDで絞り、queryは部分一致のため完全一致で絞る
@@ -67,7 +64,13 @@ export async function approveWaitlistEntry(
       templateSlug: "waitlist_invitation",
     });
   } catch (err: unknown) {
-    reportUnexpected(err, "approveWaitlistEntry", { waitlistEntryId });
+    if (isUnexpected(err)) {
+      Sentry.captureException(err, {
+        tags: { action: "approveWaitlistEntry" },
+        extra: { waitlistEntryId },
+      });
+      console.error("[approveWaitlistEntry] 予期しないエラー:", err);
+    }
     const message = err instanceof Error ? err.message : "承認に失敗しました";
     return { error: message };
   }
@@ -104,7 +107,13 @@ export async function rejectWaitlistEntry(
     }
     await clerk.waitlistEntries.reject(waitlistEntryId);
   } catch (err: unknown) {
-    reportUnexpected(err, "rejectWaitlistEntry", { waitlistEntryId });
+    if (isUnexpected(err)) {
+      Sentry.captureException(err, {
+        tags: { action: "rejectWaitlistEntry" },
+        extra: { waitlistEntryId },
+      });
+      console.error("[rejectWaitlistEntry] 予期しないエラー:", err);
+    }
     const message = err instanceof Error ? err.message : "却下に失敗しました";
     return { error: message };
   }
