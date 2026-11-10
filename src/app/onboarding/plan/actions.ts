@@ -5,8 +5,10 @@ import * as Sentry from "@sentry/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth/current-user";
 import { selectPlan as selectPlanUseCase } from "@/composition/onboarding";
-import { RANK_ORDER } from "@/domain/value-objects/member-rank";
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import {
+  MemberRank,
+  type MemberRankValue,
+} from "@/domain/value-objects/member-rank";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
 import { InvalidInvoiceRegistrationNumberError } from "@/domain/errors/invalid-invoice-registration-number-error";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
@@ -16,10 +18,7 @@ import {
   type RequiredProfileField,
 } from "@/domain/errors/missing-required-profile-fields-error";
 
-// ENTERPRISEは個別契約のためセルフサービスの選択肢から除外する（FR-006）
-const VALID_PLANS: MemberRankValue[] = RANK_ORDER.filter(
-  (rank) => rank !== "enterprise"
-);
+const VALID_PLANS = MemberRank.selfServiceRanks();
 
 const REQUIRED_FIELD_MESSAGES: Record<RequiredProfileField, string> = {
   lastName: "姓を入力してください",

@@ -44,6 +44,46 @@ const LAYER_IMPORTS = [
   },
 ];
 
+// domain の内部の定数（#442）。ルールの正になっている定数を domain の外で使うと、ルールのコピーが生まれる
+// （実例: RANK_ORDER でランクの判定を再実装していた #445）。domain の外からは値オブジェクトのメソッドを使う。
+// src/domain/ で export している定数がすべて並んでいることは tests/unit/lint/layer-imports.test.ts が確かめる
+const DOMAIN_CONSTANT_DOC =
+  "docs/ai-prompts/architecture.md の「依存してよい方向」を参照（#442）";
+
+const DOMAIN_CONSTANTS = [
+  {
+    module: "domain/value-objects/member-rank",
+    names: ["RANK_ORDER"],
+    use: "ランクの比較・一覧は MemberRank.of()・canAccess()・accessibleRanks()・isHigherThan()・selfServiceRanks() を使う。",
+  },
+  {
+    module: "domain/value-objects/approval-status",
+    names: ["APPROVAL_STATUS_VALUES"],
+    use: "値の検証・判定は ApprovalStatus.of()・isPending()・isDecided() を使う。",
+  },
+  {
+    module: "domain/value-objects/member-type",
+    names: ["MEMBER_TYPES"],
+    use: "値の検証・判定は MemberType.of()・isCorporate() を使う。",
+  },
+  {
+    module: "domain/value-objects/order-status",
+    names: ["ORDER_STATUS_VALUES"],
+    use: "値の検証・判定は OrderStatus.of()・isTerminal()・isCancellable() を使う。",
+  },
+];
+
+// no-restricted-imports の patterns に足す。flat config では同じルールのブロックが後勝ちで置き換わるため、
+// 層ごとのブロックにも、それ以外の src/ のブロックにも同じものを入れる
+const domainConstantPatterns = DOMAIN_CONSTANTS.map(
+  ({ module, names, use }) => ({
+    // @/domain/... と相対パス（../../domain/...）の両方
+    group: [`**/${module}`],
+    importNames: names,
+    message: `${names.join("・")} は domain の内部の定数なので、domain の外で使わない。${use}${DOMAIN_CONSTANT_DOC}`,
+  })
+);
+
 function layerImportsConfig({ layer, allow, external, hint }) {
   const allowed = [layer, ...allow];
   const allowedText = [
@@ -78,6 +118,7 @@ function layerImportsConfig({ layer, allow, external, hint }) {
                     message: `src/${layer}/ では外部SDK（@supabase/*・stripe・@clerk/*・@sentry/*・next/*・react 等）を import しない。${message}`,
                   },
                 ]),
+            ...(layer === "domain" ? [] : domainConstantPatterns),
           ],
         },
       ],
@@ -120,6 +161,13 @@ const eslintConfig = defineConfig([
   ]),
   ...storybook.configs["flat/recommended"],
   ...LAYER_IMPORTS.map(layerImportsConfig),
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: LAYER_IMPORTS.map(({ layer }) => `src/${layer}/**`),
+    rules: {
+      "no-restricted-imports": ["error", { patterns: domainConstantPatterns }],
+    },
+  },
   // E2Eでnetworkidleを待たない（#519）。Next.jsのprefetch・Clerkのトークン更新等で
   // 通信が途切れず、上限なしで待ち続けてテストのタイムアウトになることがある。
   // 次に操作する要素の表示（toBeVisible）や遷移（toHaveURL）を待つ

@@ -46,7 +46,7 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 - `src/types/`（DB の型）を使ってよいのは infrastructure だけ。DB の行の形を infrastructure の外に漏らさず、domain・DTO に変換して渡す
 - use-case から Query Service は使わない。書き込みの判断に要るデータは repository から集約として取る（読み取りと書き込みのモデルを混ぜないため）
 - app・components・lib から repositories・infrastructure は使わない（#441）
-- domain の内部の定数（ルールの正になっている `RANK_ORDER` 等）は domain の外で使わない。外からは value object・entity のメソッドを使う（#442）
+- domain の内部の定数（ルールの正になっている `RANK_ORDER` 等）は domain の外で使わない。外からは value object・entity のメソッドを使う（#442）。lint では、`src/domain/` 以外の `src/` から `src/domain/` で export している定数を import するとエラーにする。定数を新しく export したら `eslint.config.mjs` の `DOMAIN_CONSTANTS` に足す（足し忘れると `tests/unit/lint/layer-imports.test.ts` が落ちる）。tests・scripts は対象外
 
 ## 書き込みと読み取り（CQRS）
 
