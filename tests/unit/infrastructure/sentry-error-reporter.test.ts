@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
+  captureMessage: vi.fn(),
 }));
 
 import * as Sentry from "@sentry/nextjs";
@@ -33,5 +34,26 @@ describe("SentryErrorReporter.captureException", () => {
     new SentryErrorReporter().captureException(error);
 
     expect(Sentry.captureException).toHaveBeenCalledWith(error, undefined);
+  });
+});
+
+// GitHub issue #554
+describe("SentryErrorReporter.captureMessage", () => {
+  beforeEach(() => {
+    vi.mocked(Sentry.captureMessage).mockClear();
+  });
+
+  it("メッセージとlevel・tags・extraをそのままSentry.captureMessageに渡す", () => {
+    new SentryErrorReporter().captureMessage("要手動対応", {
+      level: "warning",
+      tags: { webhook: "clerk" },
+      extra: { clerkUserId: "clerk-1" },
+    });
+
+    expect(Sentry.captureMessage).toHaveBeenCalledWith("要手動対応", {
+      level: "warning",
+      tags: { webhook: "clerk" },
+      extra: { clerkUserId: "clerk-1" },
+    });
   });
 });

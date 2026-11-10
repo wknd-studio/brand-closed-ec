@@ -348,5 +348,6 @@ export function makeAdminMembershipRepo(
 export function makeErrorReporter(): ErrorReporter {
   return {
     captureException: vi.fn(),
+    captureMessage: vi.fn(),
   };
 }

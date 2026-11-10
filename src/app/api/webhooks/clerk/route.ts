@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { createUser } from "@/composition/onboarding";
-import { findMemberByClerkUserId } from "@/composition/member";
+import { detectMemberDeletedWithoutWithdrawal } from "@/composition/member";
 import {
   syncAdminMembership,
   removeAdminMembership,
@@ -79,19 +79,11 @@ export async function POST(req: Request) {
   if (event.type === "user.deleted") {
     const data = event.data as { id: string };
 
-    // 退会処理（withdraw.ts）を通らずにClerkアカウントが消えると、課金が続き会員も有効なまま残る。
-    // 解約の判断は業務判断を伴うため自動で退会扱いにはせず、運営者に通知だけする（#531）
-    const user = await findMemberByClerkUserId(data.id);
-    if (user) {
-      Sentry.captureMessage(
-        "退会処理を通らずにClerkアカウントが削除されました。Stripeのサブスクを解約し、users.deleted_atを設定してください",
-        {
-          level: "error",
-          tags: { webhook: "clerk", eventType: event.type },
-          extra: { clerkUserId: data.id, userId: user.id, svixId },
-        }
-      );
-    }
+    // 退会処理を通らずに消えた会員がいれば運営者に通知する（#531）
+    await detectMemberDeletedWithoutWithdrawal({
+      clerkUserId: data.id,
+      svixId,
+    });
   }
 
   if (

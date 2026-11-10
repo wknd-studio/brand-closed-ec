@@ -135,7 +135,7 @@ describe("placeOrder（実DB・7ランクのスナップショット）", () => 
         productRepo,
         paymentGateway,
         notificationService,
-        errorReporter: { captureException: vi.fn() },
+        errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
       }
     );
 
@@ -274,7 +274,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         productRepo,
         paymentGateway,
         notificationService,
-        errorReporter: { captureException: vi.fn() },
+        errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
       }
     );
 
@@ -357,7 +357,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         productRepo,
         paymentGateway,
         notificationService,
-        errorReporter: { captureException: vi.fn() },
+        errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
       }
     );
 
@@ -403,7 +403,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         productRepo,
         paymentGateway,
         notificationService,
-        errorReporter: { captureException: vi.fn() },
+        errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
       }
     );
 
