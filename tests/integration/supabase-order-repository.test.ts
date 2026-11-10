@@ -585,7 +585,9 @@ describe("SupabaseOrderRepository", () => {
         clientAs("clerk_test_order_infra")
       );
 
-      await expect(memberRepo.delete(ORDER_ID)).rejects.toThrow();
+      await expect(memberRepo.delete(ORDER_ID)).rejects.toThrow(
+        /permission denied for function delete_order/
+      );
 
       expect(await repo.findById(ORDER_ID)).not.toBeNull();
     });
