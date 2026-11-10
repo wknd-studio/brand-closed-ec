@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AddressRepository } from "@/repositories/address-repository";
-import { Address } from "@/domain/entities/address";
+import { Address, reconstituteAddress } from "@/domain/entities/address";
 import type { AddressType } from "@/domain/entities/address";
 
 type AddressRow = {
@@ -19,7 +19,7 @@ type AddressRow = {
 };
 
 function toAddress(row: AddressRow): Address {
-  return Address.of({
+  return reconstituteAddress({
     id: row.id,
     type: row.type as AddressType,
     isDefault: row.is_default,

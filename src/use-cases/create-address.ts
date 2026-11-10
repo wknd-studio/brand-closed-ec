@@ -31,20 +31,21 @@ export async function createAddress(
   if (!user) throw new Error("ユーザーが見つかりません");
 
   const count = await addressRepo.countByUserIdAndType(user.id, input.type);
-  const isDefault = count === 0;
 
-  const address = Address.of({
+  const address = Address.create({
     id: crypto.randomUUID(),
     type: input.type,
-    isDefault,
-    recipientLastName: input.recipientLastName,
-    recipientFirstName: input.recipientFirstName,
-    postalCode: input.postalCode,
-    prefecture: input.prefecture,
-    city: input.city,
-    addressLine1: input.addressLine1,
-    addressLine2: input.addressLine2 ?? "",
-    phoneNumber: input.phoneNumber,
+    content: {
+      recipientLastName: input.recipientLastName,
+      recipientFirstName: input.recipientFirstName,
+      postalCode: input.postalCode,
+      prefecture: input.prefecture,
+      city: input.city,
+      addressLine1: input.addressLine1,
+      addressLine2: input.addressLine2 ?? "",
+      phoneNumber: input.phoneNumber,
+    },
+    isFirstOfType: count === 0,
   });
 
   await addressRepo.save(address, user.id);

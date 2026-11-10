@@ -20,7 +20,14 @@ interface AddressProps extends AddressContent {
   isDefault: boolean;
 }
 
+// 復元の入口（reconstituteAddress）から private コンストラクタを使うため、static ブロックで受け取る
+let construct: (props: AddressProps) => Address;
+
 export class Address {
+  static {
+    construct = (props) => new Address(props);
+  }
+
   readonly id: string;
   readonly type: AddressType;
   readonly isDefault: boolean;
@@ -47,12 +54,32 @@ export class Address {
     this.phoneNumber = props.phoneNumber;
   }
 
-  static of(props: AddressProps): Address {
-    return new Address(props);
+  /** 新しい住所を作る。同じ種別の最初の住所は既定の住所にする */
+  static create(params: {
+    id: string;
+    type: AddressType;
+    content: AddressContent;
+    isFirstOfType: boolean;
+  }): Address {
+    const { content } = params;
+    // 構造的部分型でより広いオブジェクトが渡されても、既定かどうかを上書きしないよう項目を取り出す
+    return new Address({
+      id: params.id,
+      type: params.type,
+      isDefault: params.isFirstOfType,
+      recipientLastName: content.recipientLastName,
+      recipientFirstName: content.recipientFirstName,
+      postalCode: content.postalCode,
+      prefecture: content.prefecture,
+      city: content.city,
+      addressLine1: content.addressLine1,
+      addressLine2: content.addressLine2,
+      phoneNumber: content.phoneNumber,
+    });
   }
 
   private with(overrides: Partial<AddressProps>): Address {
-    return Address.of({
+    return new Address({
       id: this.id,
       type: this.type,
       isDefault: this.isDefault,
@@ -100,4 +127,12 @@ export class Address {
       phoneNumber: this.phoneNumber,
     });
   }
+}
+
+/**
+ * DBの行からの復元とテストの組み立てにだけ使う（src/infrastructure・src/domain の外からの import は lint で禁止。#635）。
+ * 新規作成は Address.create()、書き換えは update()・makeDefault() を使う
+ */
+export function reconstituteAddress(props: AddressProps): Address {
+  return construct(props);
 }

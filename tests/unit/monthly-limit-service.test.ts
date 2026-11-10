@@ -3,12 +3,12 @@ import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
-import { User } from "@/domain/entities/user";
+import { User, reconstituteUser } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 
 function makeUser(rankValue: string): User {
-  return User.of({
+  return reconstituteUser({
     id: "user-1",
     clerkUserId: "clerk-1",
     email: "test@example.com",

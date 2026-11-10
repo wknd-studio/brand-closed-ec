@@ -9,9 +9,9 @@ import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import { Money } from "@/domain/value-objects/money";
-import { Order } from "@/domain/entities/order";
-import { OrderItem } from "@/domain/entities/order-item";
-import { OrderSettlement } from "@/domain/entities/order-settlement";
+import { reconstituteOrder } from "@/domain/entities/order";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { getStripe } from "@/infrastructure/stripe/client";
 import { POST } from "@/app/api/webhooks/stripe/route";
 
@@ -149,7 +149,7 @@ beforeAll(async () => {
   // 運営者の「請求作成」（issue #224で実装予定）に相当する状態を、リポジトリ経由で直接作る:
   // invoice決済単位（invoice_sent・stripe_invoice_idあり）を作成し、明細を紐付ける
   const placed = await orderRepo.findById(order!.id);
-  const settlement = OrderSettlement.of({
+  const settlement = reconstituteOrderSettlement({
     id: crypto.randomUUID(),
     orderId: placed!.id,
     flow: "invoice",
@@ -162,11 +162,11 @@ beforeAll(async () => {
   });
   // 明細は注文の決済単位にしか紐付けられない（注文の不変条件）ため、決済単位を加えてから紐付ける
   await orderRepo.save(
-    Order.of({
+    reconstituteOrder({
       ...placed!,
       settlements: [...placed!.settlements, settlement],
       items: placed!.items.map((i) =>
-        OrderItem.of({ ...i, settlementId: settlement.id })
+        reconstituteOrderItem({ ...i, settlementId: settlement.id })
       ),
     })
   );

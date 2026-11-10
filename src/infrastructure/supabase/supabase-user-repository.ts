@@ -1,7 +1,7 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { UserRepository } from "@/repositories/user-repository";
-import { User } from "@/domain/entities/user";
+import { User, reconstituteUser } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
@@ -27,7 +27,7 @@ type UserRow = {
 };
 
 function toUser(row: UserRow): User {
-  return User.of({
+  return reconstituteUser({
     id: row.id,
     clerkUserId: row.clerk_user_id,
     email: row.email,

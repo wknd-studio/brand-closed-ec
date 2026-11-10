@@ -4,12 +4,17 @@ import type {
   OrderRepository,
   OrderWithUser,
 } from "@/repositories/order-repository";
-import { Order } from "@/domain/entities/order";
-import { OrderItem, type PaymentTiming } from "@/domain/entities/order-item";
+import { Order, reconstituteOrder } from "@/domain/entities/order";
+import {
+  OrderItem,
+  type PaymentTiming,
+  reconstituteOrderItem,
+} from "@/domain/entities/order-item";
 import {
   OrderSettlement,
   type SettlementFlow,
   type SettlementStatus,
+  reconstituteOrderSettlement,
 } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
@@ -136,7 +141,7 @@ function toAddressSnapshot(json: Json): AddressSnapshot {
 }
 
 export function toOrderItem(row: OrderItemRow): OrderItem {
-  return OrderItem.of({
+  return reconstituteOrderItem({
     id: row.id,
     sanityProductId: row.sanity_product_id,
     productNameSnapshot: row.product_name_snapshot,
@@ -153,7 +158,7 @@ export function toOrderItem(row: OrderItemRow): OrderItem {
 }
 
 function toOrderSettlement(row: OrderSettlementRow): OrderSettlement {
-  return OrderSettlement.of({
+  return reconstituteOrderSettlement({
     id: row.id,
     orderId: row.order_id,
     flow: row.flow as SettlementFlow,
@@ -167,7 +172,7 @@ function toOrderSettlement(row: OrderSettlementRow): OrderSettlement {
 }
 
 function toOrder(row: OrderRow): Order {
-  return Order.of({
+  return reconstituteOrder({
     id: row.id,
     userId: row.user_id,
     status: OrderStatus.of(row.status),

@@ -3,8 +3,15 @@ import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { CartItem } from "@/domain/value-objects/cart-item";
-import { OrderItem, type PaymentTiming } from "./order-item";
-import { OrderSettlement } from "./order-settlement";
+import {
+  OrderItem,
+  reconstituteOrderItem,
+  type PaymentTiming,
+} from "./order-item";
+import {
+  OrderSettlement,
+  reconstituteOrderSettlement,
+} from "./order-settlement";
 import type { User } from "./user";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
@@ -38,7 +45,14 @@ interface PlaceOrderProps {
   generateId: () => string;
 }
 
+// 復元の入口（reconstituteOrder）から private な build を使うため、static ブロックで受け取る
+let restore: (props: OrderProps) => Order;
+
 export class Order {
+  static {
+    restore = (props) => Order.build(props);
+  }
+
   readonly id: string;
   readonly userId: string;
   readonly status: OrderStatus;
@@ -64,12 +78,12 @@ export class Order {
   }
 
   /**
-   * DBからの復元を含め、注文を組み立てる。不変条件が破れていればInvalidOrderErrorを投げる。
+   * 注文を組み立てる（復元・新規作成・書き換えの共通）。不変条件が破れていればInvalidOrderErrorを投げる。
    * statusは正のデータではなく決済単位・明細から算出するキャッシュのため（docs/domain/settlement.md）、
    * 渡された値に関わらずrollupStatus()の結果にする。注文自体のキャンセル（cancelled）だけは
    * 決済単位から算出できないため、渡された値を使う（rollupStatus()がそう扱う）
    */
-  static of(props: OrderProps): Order {
+  private static build(props: OrderProps): Order {
     Order.assertInvariants(props);
     const order = new Order(props);
     return new Order({ ...props, status: order.rollupStatus() });
@@ -98,7 +112,7 @@ export class Order {
     const orderId = generateId();
     const settlement =
       atOrderItems.length > 0
-        ? OrderSettlement.of({
+        ? reconstituteOrderSettlement({
             id: generateId(),
             orderId,
             flow: "checkout",
@@ -117,7 +131,7 @@ export class Order {
       settlementId: string | null
     ): OrderItem[] =>
       items.map((c) =>
-        OrderItem.of({
+        reconstituteOrderItem({
           id: generateId(),
           sanityProductId: c.sanityProductId,
           productNameSnapshot: c.productName,
@@ -130,7 +144,7 @@ export class Order {
         })
       );
 
-    const order = Order.of({
+    const order = Order.build({
       id: orderId,
       userId: user.id,
       status: OrderStatus.of("processing"),
@@ -173,7 +187,7 @@ export class Order {
   }
 
   private with(overrides: Partial<OrderProps>): Order {
-    return Order.of({ ...this.toProps(), ...overrides });
+    return Order.build({ ...this.toProps(), ...overrides });
   }
 
   private toProps(): OrderProps {
@@ -282,7 +296,7 @@ export class Order {
     return this.items.filter((item) => item.settlementId === settlement.id);
   }
 
-  /** 決済単位を差し替え（無ければ追加）した注文を返す。statusはOrder.ofがロールアップし直す */
+  /** 決済単位を差し替え（無ければ追加）した注文を返す。statusはbuildがロールアップし直す */
   applySettlement(settlement: OrderSettlement): Order {
     const exists = this.settlements.some((s) => s.id === settlement.id);
     const settlements = exists
@@ -290,4 +304,12 @@ export class Order {
       : [...this.settlements, settlement];
     return this.with({ settlements });
   }
+}
+
+/**
+ * DBの行からの復元とテストの組み立てにだけ使う（src/infrastructure・src/domain の外からの import は lint で禁止。#635）。
+ * 新規作成は Order.place()、書き換えは cancel()・applySettlement() を使う
+ */
+export function reconstituteOrder(props: OrderProps): Order {
+  return restore(props);
 }

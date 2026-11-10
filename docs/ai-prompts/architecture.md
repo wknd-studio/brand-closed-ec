@@ -234,7 +234,19 @@ use-case の中に `if (user.rankCode === "gold" && ...)` のような判定を�
 
 汎用の `with(overrides)` を domain の外に出さない（`private` にする）。`settlement.with({ status: "paid" })` のように、ガードを通らずに任意の項目を書き換えられてしまうため（#589）。use-case で新しい書き換えが必要になったら、`with` を public に戻さず、エンティティにメソッドを足す。
 
-エンティティの `of` は、DBの行からの復元（リポジトリ）とテストの組み立てにだけ使う。`of` は正しい状態なら何でも作れるため、`OrderSettlement.of({ ...settlement, status: "paid" })` のように既存のエンティティを広げて作り直すと、`with` と同じくガードを迂回できる。コンストラクタの不変条件（法人なら会社名が必須等）は検査するが、状態遷移（`cancelled → paid` 等）は前の状態を知らないため検査できない。use-case は既存のエンティティを `of` で作り直さず、新規作成は初期状態しか作れないファクトリ（`Order.place` 等）を使う（`User`・`Address` の新規作成はまだ `of` を使っており、ファクトリへの置き換えと、`of` を使える場所の lint での制限は #635 で行う）。
+エンティティの作り方は、新規作成と復元で入口を分ける（#635）。
+
+| 用途               | 入口                                                                                                                                                        | 使ってよい場所                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 新規作成           | 初期状態しか作れないファクトリ（`Order.place()`・`User.register()`・`Address.create()`）                                                                    | どこでも（use-case から呼ぶ）                              |
+| 復元（DBから読む） | エンティティのファイルが export する `reconstituteOrder`・`reconstituteOrderSettlement`・`reconstituteOrderItem`・`reconstituteUser`・`reconstituteAddress` | `src/infrastructure/`（リポジトリ）・`src/domain/`・テスト |
+| 書き換え           | 意図を表すメソッド（上記）                                                                                                                                  | どこでも                                                   |
+
+復元の入口は正しい状態なら何でも作れるため、`reconstituteOrderSettlement({ ...settlement, status: "paid" })` のように既存のエンティティを広げて作り直すと、`with` と同じくガードを迂回できる。コンストラクタの不変条件（法人なら会社名が必須等）は検査するが、状態遷移（`cancelled → paid` 等）は前の状態を知らないため検査できない。そのため `reconstitute*` を `src/infrastructure/`・`src/domain/` の外（use-cases・app・queries・composition 等）で import すると lint（`no-restricted-imports`）が失敗する。TypeScript には「リポジトリからだけ呼べる」と書く仕組みが無いため、呼び出しの形ではなく import を制限している。
+
+- 新しいエンティティを足すときは、エンティティに `static of` を置かず、private コンストラクタを static ブロックで受け取った `reconstitute<エンティティ名>` 関数を export する（`src/domain/entities/user.ts` 等と同じ形）。`eslint.config.mjs` の `RECONSTITUTORS` にも足す（足し忘れると `tests/unit/lint/layer-imports.test.ts` が失敗する）
+- use-case で新規作成が必要になったら、`reconstitute*` を使わず、エンティティに初期状態しか作れないファクトリを足す。初期状態に申込内容等を入れるなら、ファクトリの後に意図を表すメソッドを呼ぶ（未登録の会員のプラン選択は `User.register(...).selectPlan(...)`）
+- 値オブジェクト（`Money.of` 等）の `of` は対象外。前の状態を持たず、作るたびに値を検証すれば済むため
 
 ## 外側の関心事はポート経由
 

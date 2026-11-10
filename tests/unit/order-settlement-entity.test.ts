@@ -1,17 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
-  OrderSettlement,
   isAllowedSettlementTransition,
   type SettlementStatus,
+  reconstituteOrderSettlement,
 } from "@/domain/entities/order-settlement";
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 import { CheckoutSessionNotAttachableError } from "@/domain/errors/checkout-session-not-attachable-error";
 import { Money } from "@/domain/value-objects/money";
 
 function makeSettlement(
-  overrides: Partial<Parameters<typeof OrderSettlement.of>[0]> = {}
+  overrides: Partial<Parameters<typeof reconstituteOrderSettlement>[0]> = {}
 ) {
-  return OrderSettlement.of({
+  return reconstituteOrderSettlement({
     id: "settlement-001",
     orderId: "order-001",
     flow: "checkout",

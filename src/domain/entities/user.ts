@@ -42,7 +42,23 @@ export interface PlanApplication {
   invoiceRegistrationNumber: InvoiceRegistrationNumber | null;
 }
 
+/** 会員登録（Clerkのユーザー作成）時に分かっている項目 */
+export interface UserRegistration {
+  id: string;
+  clerkUserId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+// 復元の入口（reconstituteUser）から private コンストラクタを使うため、static ブロックで受け取る
+let construct: (props: UserProps) => User;
+
 export class User {
+  static {
+    construct = (props) => new User(props);
+  }
+
   readonly id: string;
   readonly clerkUserId: string;
   readonly email: string;
@@ -89,8 +105,26 @@ export class User {
     this.initialFeePaidRank = props.initialFeePaidRank ?? null;
   }
 
-  static of(props: UserProps): User {
-    return new User(props);
+  /**
+   * 新しい会員を作る。入会手続き前の初期状態（starter・個人・未入会）で、電話番号・Stripe Customer・
+   * 請求基準日は持たない。プランの申込内容は selectPlan() で入れる
+   */
+  static register(registration: UserRegistration): User {
+    // 構造的部分型でより広いオブジェクトが渡されても、初期状態の項目を上書きしないよう項目を取り出す
+    return new User({
+      id: registration.id,
+      clerkUserId: registration.clerkUserId,
+      email: registration.email,
+      firstName: registration.firstName,
+      lastName: registration.lastName,
+      phoneNumber: null,
+      profileCompletedAt: null,
+      rank: MemberRank.of("starter"),
+      billingAnchorDay: null,
+      onboardingCompleted: false,
+      deletedAt: null,
+      stripeCustomerId: null,
+    });
   }
 
   private with(overrides: Partial<UserProps>): User {
@@ -179,4 +213,12 @@ export class User {
       this.firstName !== "" && this.lastName !== "" && this.phoneNumber !== null
     );
   }
+}
+
+/**
+ * DBの行からの復元とテストの組み立てにだけ使う（src/infrastructure・src/domain の外からの import は lint で禁止。#635）。
+ * 正しい状態なら何でも作れるため、既存の会員を広げて作り直すと selectPlan()・withdraw() の検査を迂回できる
+ */
+export function reconstituteUser(props: UserProps): User {
+  return construct(props);
 }

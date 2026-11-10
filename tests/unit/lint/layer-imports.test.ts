@@ -506,6 +506,130 @@ describe("domain の内部の定数は domain の外で import できない（#4
   });
 });
 
+// エンティティの復元の入口（#635）。正しい状態なら何でも作れるため、既存のエンティティを広げて作り直すと
+// 状態遷移のガードを迂回できる。DBからの復元（infrastructure）・domain・テストだけで使う
+
+const RECONSTITUTORS = [
+  ["reconstituteOrder", "@/domain/entities/order"],
+  ["reconstituteOrderSettlement", "@/domain/entities/order-settlement"],
+  ["reconstituteOrderItem", "@/domain/entities/order-item"],
+  ["reconstituteUser", "@/domain/entities/user"],
+  ["reconstituteAddress", "@/domain/entities/address"],
+] as const;
+
+const OUTSIDE_RECONSTITUTION = [
+  "src/app/sample.tsx",
+  "src/app/api/sample/route.ts",
+  "src/components/sample.tsx",
+  "src/lib/sample.ts",
+  "src/sanity/sample.ts",
+  "src/composition/sample.ts",
+  "src/emails/sample.tsx",
+  "src/middleware.ts",
+  "src/repositories/sample.ts",
+  "src/queries/sample.ts",
+  "src/use-cases/sample.ts",
+];
+
+describe("エンティティの復元の入口は infrastructure・domain・テストの外で import できない（#635）", () => {
+  describe.each(OUTSIDE_RECONSTITUTION)("%s", (file) => {
+    it.each(RECONSTITUTORS)(
+      "%s を import すると、新規作成のファクトリ・意図を表すメソッドを使う直し方と architecture.md のパスを含むエラーになる",
+      async (name, path) => {
+        const messages = await restrictedImportMessages(
+          file,
+          `import { ${name} } from "${path}";\nexport default ${name};\n`
+        );
+        expect(messages).toHaveLength(1);
+        expect(messages[0].severity).toBe(2);
+        expect(messages[0].message).toContain("ファクトリ");
+        expect(messages[0].message).toContain("メソッド");
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+  });
+
+  it.each([
+    `import { reconstituteUser } from "../../domain/entities/user";\nexport default reconstituteUser;\n`,
+    `import * as user from "@/domain/entities/user";\nexport default user;\n`,
+    `export { reconstituteUser } from "@/domain/entities/user";\n`,
+  ])(
+    "相対パス・namespace import・re-export でも禁止される: %s",
+    async (code) => {
+      const messages = await restrictedImportMessages(
+        "src/composition/orders/sample.ts",
+        code
+      );
+      expect(messages).toHaveLength(1);
+    }
+  );
+
+  it.each(OUTSIDE_RECONSTITUTION)(
+    "%s からエンティティのクラス・型は import してよい",
+    async (file) => {
+      const messages = await restrictedImportMessages(
+        file,
+        `import { User, type PlanApplication } from "@/domain/entities/user";\nexport type U = [User, PlanApplication];\n`
+      );
+      expect(messages).toEqual([]);
+    }
+  );
+
+  it.each([
+    "src/infrastructure/supabase/sample.ts",
+    "src/domain/entities/sample.ts",
+    "tests/unit/sample.test.ts",
+    "tests/integration/sample.test.ts",
+  ])("%s では復元の入口を import してよい", async (file) => {
+    const code = RECONSTITUTORS.map(
+      ([name, path]) => `import { ${name} } from "${path}";`
+    ).join("\n");
+    const messages = await restrictedImportMessages(
+      file,
+      `${code}\nexport default [${RECONSTITUTORS.map(([n]) => n).join(", ")}];\n`
+    );
+    expect(messages).toEqual([]);
+  });
+
+  it("src/domain/entities/ で export している復元の入口は、すべて禁止の対象になっている", async () => {
+    const exported = readdirSync("src/domain/entities")
+      .filter((file) => file.endsWith(".ts"))
+      .flatMap((file) =>
+        [
+          ...readFileSync(`src/domain/entities/${file}`, "utf8").matchAll(
+            /^export (?:function|const) (reconstitute\w*)/gm
+          ),
+        ].map(([, name]) => ({
+          name,
+          path: `@/domain/entities/${file.replace(/\.ts$/, "")}`,
+        }))
+      );
+    expect(exported.map((e) => e.name).sort()).toEqual(
+      RECONSTITUTORS.map(([name]) => name).sort()
+    );
+    for (const { name, path } of exported) {
+      const messages = await restrictedImportMessages(
+        "src/use-cases/sample.ts",
+        `import { ${name} } from "${path}";\nexport default ${name};\n`
+      );
+      expect(messages, `${name} が禁止されていない`).toHaveLength(1);
+    }
+  });
+
+  it("エンティティに public な static of が残っていない（復元は reconstitute* だけ）", () => {
+    for (const file of readdirSync("src/domain/entities")) {
+      if (
+        !RECONSTITUTORS.some(([, p]) =>
+          p.endsWith(`/${file.replace(/\.ts$/, "")}`)
+        )
+      )
+        continue;
+      const src = readFileSync(`src/domain/entities/${file}`, "utf8");
+      expect(src, file).not.toMatch(/^\s*(public\s+)?static of\(/m);
+    }
+  });
+});
+
 // DB・外部サービスのクライアントは src/infrastructure/ の中だけで使う（#440）。
 // repository を通さない直接クエリが、業務ルールのコピーと食い違いを生んだ（#444）
 

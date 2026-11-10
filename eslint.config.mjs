@@ -99,6 +99,31 @@ const domainConstantPatterns = DOMAIN_CONSTANTS.map(
   })
 );
 
+// エンティティの復元の入口（#635）。正しい状態なら何でも作れるため、OrderSettlement の復元に { ...settlement, status: "paid" } を
+// 渡すように既存のエンティティを広げて作り直すと、状態遷移の検査（markPaid() 等）を迂回できる。DBからの復元（src/infrastructure/）・
+// domain・テストだけで使う。src/domain/entities/ で export している reconstitute* がすべて並んでいることは
+// tests/unit/lint/layer-imports.test.ts が確かめる
+const RECONSTITUTION_DOC =
+  "docs/ai-prompts/architecture.md の「エンティティの状態は意図を表すメソッドで変える」を参照（#635）";
+
+const RECONSTITUTORS = [
+  { module: "domain/entities/order", name: "reconstituteOrder" },
+  {
+    module: "domain/entities/order-settlement",
+    name: "reconstituteOrderSettlement",
+  },
+  { module: "domain/entities/order-item", name: "reconstituteOrderItem" },
+  { module: "domain/entities/user", name: "reconstituteUser" },
+  { module: "domain/entities/address", name: "reconstituteAddress" },
+];
+
+const reconstitutionPatterns = RECONSTITUTORS.map(({ module, name }) => ({
+  // @/domain/... と相対パス（../../domain/...）の両方
+  group: [`**/${module}`],
+  importNames: [name],
+  message: `${name} はDBからの復元用なので、src/infrastructure/・src/domain/ の外で使わない。新規作成は初期状態しか作れないファクトリ（Order.place()・User.register()・Address.create() 等）を、書き換えは意図を表すメソッド（markPaid()・selectPlan()・update() 等）を使う。${RECONSTITUTION_DOC}`,
+}));
+
 // DB・外部サービスのクライアントは src/infrastructure/ の中だけで使う（#440）。repository を通さない直接クエリが、
 // 業務ルールのコピーと食い違いを生んだ（#444）。domain・repositories・queries・use-cases は、層の許可リストで
 // 外部SDKをすでに禁止しているので、それ以外の src/ に足す。既存の違反は eslint-suppressions.json に記録している
@@ -221,6 +246,9 @@ function layerImportsConfig({ layer, file, allow, external, hint }) {
                   },
                 ]),
             ...(layer === "domain" ? [] : domainConstantPatterns),
+            ...(layer === "domain" || layer === "infrastructure"
+              ? []
+              : reconstitutionPatterns),
             // 外部SDKを許す層のうち、DB・外部サービスのクライアントを使ってよいのは infrastructure だけ（#440）
             ...(external && layer !== "infrastructure" ? clientPatterns : []),
           ],
@@ -276,7 +304,13 @@ const eslintConfig = defineConfig([
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [...domainConstantPatterns, ...clientPatterns] },
+        {
+          patterns: [
+            ...domainConstantPatterns,
+            ...reconstitutionPatterns,
+            ...clientPatterns,
+          ],
+        },
       ],
     },
   },
@@ -288,6 +322,7 @@ const eslintConfig = defineConfig([
         {
           patterns: [
             ...domainConstantPatterns,
+            ...reconstitutionPatterns,
             ...clientPatterns,
             ...appSidePatterns,
             appSideRelativePattern,
@@ -300,7 +335,10 @@ const eslintConfig = defineConfig([
   {
     files: ["src/sanity/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": ["error", { patterns: domainConstantPatterns }],
+      "no-restricted-imports": [
+        "error",
+        { patterns: [...domainConstantPatterns, ...reconstitutionPatterns] },
+      ],
     },
   },
   {

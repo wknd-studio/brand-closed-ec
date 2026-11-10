@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { OrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { Money } from "@/domain/value-objects/money";
 
-function makeItem(overrides: Partial<Parameters<typeof OrderItem.of>[0]> = {}) {
-  return OrderItem.of({
+function makeItem(
+  overrides: Partial<Parameters<typeof reconstituteOrderItem>[0]> = {}
+) {
+  return reconstituteOrderItem({
     id: "item-001",
     sanityProductId: "prod-001",
     productNameSnapshot: "テスト商品",

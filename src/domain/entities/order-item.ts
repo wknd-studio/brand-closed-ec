@@ -16,7 +16,14 @@ interface OrderItemProps {
   settlementId: string | null;
 }
 
+// 復元の入口（reconstituteOrderItem）から private コンストラクタを使うため、static ブロックで受け取る
+let construct: (props: OrderItemProps) => OrderItem;
+
 export class OrderItem {
+  static {
+    construct = (props) => new OrderItem(props);
+  }
+
   readonly id: string;
   readonly sanityProductId: string;
   readonly productNameSnapshot: string;
@@ -39,10 +46,6 @@ export class OrderItem {
     this.settlementId = props.settlementId;
   }
 
-  static of(props: OrderItemProps): OrderItem {
-    return new OrderItem(props);
-  }
-
   getSubtotal(): Money {
     if (this.isNegotiable) {
       if (!this.negotiatedUnitPrice) return Money.zero();
@@ -60,4 +63,11 @@ export class OrderItem {
     if (!this.isNegotiable) return true;
     return this.negotiatedUnitPrice !== null;
   }
+}
+
+/**
+ * DBの行からの復元・注文の組み立て（domain）・テストにだけ使う（src/infrastructure・src/domain の外からの import は lint で禁止。#635）
+ */
+export function reconstituteOrderItem(props: OrderItemProps): OrderItem {
+  return construct(props);
 }
