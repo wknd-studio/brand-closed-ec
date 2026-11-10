@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/infrastructure/supabase/server";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { catalogQueryService } from "@/composition/catalog-query";
-import { MemberRank } from "@/domain/value-objects/member-rank";
+import { findShopMemberRank } from "../member-rank";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ProductGrid from "./product-grid";
@@ -17,11 +15,7 @@ export default async function BrandProductsPage({
   const brand = decodeURIComponent(encodedBrand);
 
   const { userId } = await requireAuth();
-  const supabase = await createServerClient();
-  const userRepo = new SupabaseUserRepository(supabase);
-
-  const user = await userRepo.findByClerkUserId(userId!);
-  const rank = user?.rank ?? MemberRank.of("starter");
+  const rank = await findShopMemberRank(userId!);
   const [{ products, total }, theme] = await Promise.all([
     catalogQueryService().findProducts({ rank, brand }),
     fetchBrandTheme(brand),

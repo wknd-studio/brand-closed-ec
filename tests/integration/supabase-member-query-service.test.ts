@@ -412,6 +412,27 @@ describe("SupabaseMemberQueryService.findMemberLayout", () => {
   });
 });
 
+describe("SupabaseMemberQueryService.findMemberRank", () => {
+  it("会員のランクを返す", async () => {
+    expect((await queryService.findMemberRank(CLERK_USER))?.value).toBe(
+      "advanced"
+    );
+    expect((await queryService.findMemberRank(CLERK_OTHER_USER))?.value).toBe(
+      "basic"
+    );
+  });
+
+  it("存在しない会員は null", async () => {
+    expect(
+      await queryService.findMemberRank("clerk_test_not_exists")
+    ).toBeNull();
+  });
+
+  it("退会済みの会員は null", async () => {
+    expect(await queryService.findMemberRank(CLERK_WITHDRAWN_USER)).toBeNull();
+  });
+});
+
 describe("SupabaseMemberQueryService.findOnboardingCompleted", () => {
   it("入会が確定した会員は true", async () => {
     expect(await queryService.findOnboardingCompleted(CLERK_USER)).toBe(true);
@@ -438,7 +459,7 @@ describe("SupabaseMemberQueryService.findOnboardingCompleted", () => {
 
 // page・layout・Server Action が使う組み立て。ログイン中の会員のトークンで RLS を効かせたクライアントでも取得できること
 describe("memberQueryService（composition。RLS 付きのクライアント）", () => {
-  it("ログイン中の会員の設定・お気に入り・レイアウト・入会の確定を取得できる", async () => {
+  it("ログイン中の会員の設定・お気に入り・レイアウト・入会の確定・ランクを取得できる", async () => {
     getToken.mockResolvedValue(signTestJwt(CLERK_USER));
     const rlsQueryService = await memberQueryService();
 
@@ -455,6 +476,9 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
     });
     expect(await rlsQueryService.findOnboardingCompleted(CLERK_USER)).toBe(
       true
+    );
+    expect((await rlsQueryService.findMemberRank(CLERK_USER))?.value).toBe(
+      "advanced"
     );
   });
 
@@ -477,5 +501,6 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
     expect(await rlsQueryService.findOnboardingCompleted(CLERK_USER)).toBe(
       false
     );
+    expect(await rlsQueryService.findMemberRank(CLERK_USER)).toBeNull();
   });
 });
