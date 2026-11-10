@@ -29,16 +29,17 @@ export class SupabaseAdminMembershipRepository implements AdminMembershipReposit
   async findByAdminUserId(
     adminUserId: string
   ): Promise<AdminMembership | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("admin_memberships")
       .select(SELECT_FIELDS)
       .eq("admin_user_id", adminUserId)
       .maybeSingle();
+    if (error) throw error;
     return data ? toAdminMembership(data as AdminMembershipRow) : null;
   }
 
   async save(membership: AdminMembership): Promise<void> {
-    await this.db.from("admin_memberships").upsert(
+    const { error } = await this.db.from("admin_memberships").upsert(
       {
         id: membership.id,
         admin_user_id: membership.adminUserId,
@@ -46,12 +47,14 @@ export class SupabaseAdminMembershipRepository implements AdminMembershipReposit
       },
       { onConflict: "admin_user_id" }
     );
+    if (error) throw error;
   }
 
   async deleteByAdminUserId(adminUserId: string): Promise<void> {
-    await this.db
+    const { error } = await this.db
       .from("admin_memberships")
       .delete()
       .eq("admin_user_id", adminUserId);
+    if (error) throw error;
   }
 }

@@ -265,31 +265,34 @@ export class SupabaseOrderRepository implements OrderRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findById(id: string): Promise<Order | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("orders")
       .select(ORDER_SELECT)
       .eq("id", id)
-      .single();
+      .maybeSingle();
+    if (error) throw new Error(`Order取得に失敗: ${error.message}`);
     return data ? toOrder(data as unknown as OrderRow) : null;
   }
 
   async findByStripeCheckoutSessionId(
     sessionId: string
   ): Promise<Order | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("order_settlements")
       .select("order_id")
       .eq("stripe_checkout_session_id", sessionId)
       .maybeSingle();
+    if (error) throw new Error(`Order取得に失敗: ${error.message}`);
     return data ? this.findById(data.order_id) : null;
   }
 
   async findByStripeInvoiceId(invoiceId: string): Promise<Order | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("order_settlements")
       .select("order_id")
       .eq("stripe_invoice_id", invoiceId)
       .maybeSingle();
+    if (error) throw new Error(`Order取得に失敗: ${error.message}`);
     return data ? this.findById(data.order_id) : null;
   }
 
@@ -350,11 +353,12 @@ export class SupabaseOrderRepository implements OrderRepository {
   }
 
   async findActiveOrdersWithUser(): Promise<OrderWithUser[]> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("orders")
       .select(ORDER_WITH_USER_SELECT)
       .in("status", ["processing", "limit_exceeded", "paid"])
       .order("created_at", { ascending: true });
+    if (error) throw new Error(`Order取得に失敗: ${error.message}`);
 
     return (data ?? []).map((row) =>
       toOrderWithUser(row as unknown as OrderWithUserRow)
@@ -362,11 +366,12 @@ export class SupabaseOrderRepository implements OrderRepository {
   }
 
   async findByIdWithUser(orderId: string): Promise<OrderWithUser | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("orders")
       .select(ORDER_WITH_USER_SELECT)
       .eq("id", orderId)
-      .single();
+      .maybeSingle();
+    if (error) throw new Error(`Order取得に失敗: ${error.message}`);
 
     return data ? toOrderWithUser(data as unknown as OrderWithUserRow) : null;
   }

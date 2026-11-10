@@ -123,6 +123,28 @@ const clientSyntaxRule = [
   },
 ];
 
+// supabase-js の結果の error を捨てない（#614）。supabase-js は失敗しても例外を投げず { data: null, error } を返すため、
+// error を見ないと、書き込みの失敗（RLSの拒否・制約違反）が成功扱いに、読み取りの失敗が「見つからない」「0件」に化ける。
+// クエリ（.from("...")・.rpc(...)）を await した結果は、error を含めて分割代入させる。
+// 取り出した error を使っていないことは @typescript-eslint/no-unused-vars が検出する
+const SUPABASE_ERROR_DOC =
+  "const { data, error } = await ...; if (error) throw error; のように error を取り出して投げる（#614）";
+
+const SUPABASE_QUERY =
+  ":matches(CallExpression[callee.property.name='rpc'], CallExpression[callee.property.name='from'][arguments.0.type=/^(Literal|TemplateLiteral)$/]:not([callee.object.name=/^(Array|Buffer)$/]))";
+
+const supabaseErrorSyntaxRule = [
+  "error",
+  {
+    selector: `AwaitExpression:has(${SUPABASE_QUERY}):not(VariableDeclarator[id.type='ObjectPattern'] > AwaitExpression.init)`,
+    message: `supabase-js のクエリの結果を捨てたり、変数でそのまま受けたりしない。失敗しても例外にならず error が返るだけなので、成功扱いになる。${SUPABASE_ERROR_DOC}`,
+  },
+  {
+    selector: `VariableDeclarator[id.type='ObjectPattern']:not(:has(> ObjectPattern:has(> Property[key.name='error']))) > AwaitExpression.init:has(${SUPABASE_QUERY})`,
+    message: `supabase-js のクエリの結果から data・count だけを取り出さない。失敗すると data が null・count が null になり、「見つからない」「0件」に化ける。${SUPABASE_ERROR_DOC}`,
+  },
+];
+
 // app から使われる側の components・lib（#441）。repository・infrastructure を使うと page に読み取りが戻り、
 // app を使うと依存が循環する。表の許可リストより緩い、禁止リストの形で入れている
 const APP_SIDE_DOC =
@@ -285,6 +307,12 @@ const eslintConfig = defineConfig([
     ignores: ["src/infrastructure/**", "src/sanity/**"],
     rules: {
       "no-restricted-syntax": clientSyntaxRule,
+    },
+  },
+  {
+    files: ["src/infrastructure/supabase/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": supabaseErrorSyntaxRule,
     },
   },
   // E2Eでnetworkidleを待たない（#519）。Next.jsのprefetch・Clerkのトークン更新等で
