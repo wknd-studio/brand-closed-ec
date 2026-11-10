@@ -48,6 +48,19 @@ describe("createAddress", () => {
     expect(saved.isDefault).toBe(false);
   });
 
+  it("addressLine2が無い（null）場合は空文字で保存する", async () => {
+    const userRepo = makeUserRepo();
+    const addressRepo = makeAddressRepo();
+
+    await createAddress(
+      { ...baseInput, addressLine2: null },
+      { userRepo, addressRepo }
+    );
+
+    const saved = vi.mocked(addressRepo.save).mock.calls[0][0];
+    expect(saved.addressLine2).toBe("");
+  });
+
   it("addressRepo.saveにsupabase userIdを渡す", async () => {
     const userRepo = makeUserRepo();
     const addressRepo = makeAddressRepo();

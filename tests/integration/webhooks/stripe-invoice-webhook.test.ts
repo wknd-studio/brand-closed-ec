@@ -9,6 +9,7 @@ import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
 import { Money } from "@/domain/value-objects/money";
+import { OrderItem } from "@/domain/entities/order-item";
 import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { getStripe } from "@/infrastructure/stripe/client";
 import { POST } from "@/app/api/webhooks/stripe/route";
@@ -162,7 +163,7 @@ beforeAll(async () => {
     placed!
       .with({
         items: placed!.items.map((i) =>
-          i.with({ settlementId: settlement.id })
+          OrderItem.of({ ...i, settlementId: settlement.id })
         ),
       })
       .applySettlement(settlement)

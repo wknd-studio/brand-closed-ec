@@ -147,6 +147,23 @@ describe("Order", () => {
       expect(cancelled.settlements[0]?.cancelledAt).toBe(at);
     });
 
+    it("すでにキャンセル済みの決済単位は、キャンセル日時を上書きせずそのまま残す", () => {
+      const earlier = new Date(2026, 8, 1);
+      const alreadyCancelled = makeSettlement({
+        id: "s2",
+        status: "cancelled",
+        cancelledAt: earlier,
+      });
+      const order = makeOrder({
+        settlements: [makeSettlement({ id: "s1" }), alreadyCancelled],
+      });
+
+      const cancelled = order.cancel(new Date(2026, 8, 21));
+
+      expect(cancelled.settlements[1]).toBe(alreadyCancelled);
+      expect(cancelled.settlements[1]?.cancelledAt).toBe(earlier);
+    });
+
     it("キャンセル不可の注文はエラー", () => {
       expect(() =>
         makeOrder({ status: OrderStatus.of("paid") }).cancel(new Date())

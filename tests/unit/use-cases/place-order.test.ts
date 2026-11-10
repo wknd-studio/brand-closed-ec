@@ -16,6 +16,7 @@ import {
   negotiableProduct,
   afterOrderFixedProduct,
   makeErrorReporter,
+  makeAddress,
 } from "./helpers";
 
 const baseInput = {
@@ -238,7 +239,7 @@ describe("placeOrder", () => {
         },
         deps
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow("商品が見つかりません");
     expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
   });
 
@@ -445,5 +446,87 @@ describe("placeOrder", () => {
 
     expect(result.redirectUrl).toBe("https://stripe.com/pay/sess_1");
     expect(deps.paymentGateway.createCheckoutSession).toHaveBeenCalled();
+  });
+
+  describe("注文の前提が揃っていない場合は、何も保存せずエラーにする", () => {
+    const makeDeps = () => ({
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+    });
+
+    it("会員が見つからない", async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.userRepo.findByClerkUserId).mockResolvedValue(null);
+
+      await expect(placeOrder(baseInput, deps)).rejects.toThrow(
+        "ユーザーが見つかりません"
+      );
+      expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
+    });
+
+    it("カートが空", async () => {
+      const deps = makeDeps();
+
+      await expect(
+        placeOrder({ ...baseInput, cartItems: [] }, deps)
+      ).rejects.toThrow("カートに商品がありません");
+      expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
+    });
+
+    it.each(["shipping-addr", "billing-addr"])(
+      "住所（%s）が見つからない",
+      async (missingId) => {
+        const deps = makeDeps();
+        vi.mocked(deps.addressRepo.findById).mockImplementation((id) =>
+          Promise.resolve(
+            id === missingId
+              ? null
+              : makeAddress(id.startsWith("billing") ? "billing" : "shipping")
+          )
+        );
+
+        await expect(placeOrder(baseInput, deps)).rejects.toThrow(
+          "住所が見つかりません"
+        );
+        expect(
+          deps.orderRepo.saveNewOrderWithLimitCheck
+        ).not.toHaveBeenCalled();
+      }
+    );
+  });
+
+  it("明細の商品名・単価はサーバー側ProductSnapshotの値を使い、カートの商品名は使わない（カート改竄対策）", async () => {
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+    };
+
+    await placeOrder(
+      {
+        ...baseInput,
+        cartItems: [
+          { sanityProductId: "prod-1", quantity: 2, productName: "偽装商品名" },
+        ],
+      },
+      deps
+    );
+
+    const saved = vi.mocked(deps.orderRepo.saveNewOrderWithLimitCheck).mock
+      .calls[0][0];
+    expect(saved.items[0]).toMatchObject({
+      productNameSnapshot: "固定商品",
+      quantity: 2,
+    });
+    expect(saved.items[0]?.unitPriceSnapshot.amount).toBe(100_000);
   });
 });

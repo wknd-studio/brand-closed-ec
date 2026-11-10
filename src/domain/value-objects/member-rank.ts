@@ -60,8 +60,4 @@ export class MemberRank {
   isHigherThan(other: MemberRank): boolean {
     return RANK_ORDER.indexOf(this.value) > RANK_ORDER.indexOf(other.value);
   }
-
-  equals(other: MemberRank): boolean {
-    return this.value === other.value;
-  }
 }
