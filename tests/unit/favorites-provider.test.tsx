@@ -74,8 +74,8 @@ describe("FavoritesProvider", () => {
 
   it("Provider の外で useFavorites を使うとエラーになる", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() =>
-      act(() => root.render(<Probe onRender={() => {}} />))
-    ).toThrow("useFavorites must be used within FavoritesProvider");
+    expect(() => act(() => root.render(<Probe onRender={() => {}} />))).toThrow(
+      "useFavorites must be used within FavoritesProvider"
+    );
   });
 });
