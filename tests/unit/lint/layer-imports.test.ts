@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 
 import { ESLint, type Linter } from "eslint";
 import { describe, it, expect } from "vitest";
@@ -299,4 +299,107 @@ describe("architecture.md の「依存してよい方向」の表と lint の許
       });
     }
   );
+});
+
+// domain の内部の定数（#442）。ルールの正になっている定数を domain の外で使うと、
+// ルールのコピーが生まれる（実例: RANK_ORDER でランクの判定を再実装していた #445）
+
+const DOMAIN_CONSTANTS = [
+  ["RANK_ORDER", "@/domain/value-objects/member-rank", "MemberRank."],
+  [
+    "APPROVAL_STATUS_VALUES",
+    "@/domain/value-objects/approval-status",
+    "ApprovalStatus.",
+  ],
+  ["MEMBER_TYPES", "@/domain/value-objects/member-type", "MemberType."],
+  [
+    "ORDER_STATUS_VALUES",
+    "@/domain/value-objects/order-status",
+    "OrderStatus.",
+  ],
+] as const;
+
+const OUTSIDE_DOMAIN = [
+  "src/app/sample.tsx",
+  "src/components/sample.tsx",
+  "src/lib/sample.ts",
+  "src/sanity/sample.ts",
+  "src/middleware.ts",
+  "src/repositories/sample.ts",
+  "src/queries/sample.ts",
+  "src/use-cases/sample.ts",
+  "src/infrastructure/supabase/sample.ts",
+];
+
+describe("domain の内部の定数は domain の外で import できない（#442）", () => {
+  describe.each(OUTSIDE_DOMAIN)("%s", (file) => {
+    it.each(DOMAIN_CONSTANTS)(
+      "%s を import すると、代わりに使うメソッドと architecture.md のパスを含むエラーになる",
+      async (name, path, methods) => {
+        const messages = await restrictedImportMessages(
+          file,
+          `import { ${name} } from "${path}";\nexport default ${name};\n`
+        );
+        expect(messages).toHaveLength(1);
+        expect(messages[0].severity).toBe(2);
+        expect(messages[0].message).toContain(methods);
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+  });
+
+  it.each([
+    `import { RANK_ORDER } from "../../domain/value-objects/member-rank";\nexport default RANK_ORDER;\n`,
+    `import * as rank from "@/domain/value-objects/member-rank";\nexport default rank;\n`,
+    `export { RANK_ORDER } from "@/domain/value-objects/member-rank";\n`,
+  ])(
+    "相対パス・namespace import・re-export でも禁止される: %s",
+    async (code) => {
+      const messages = await restrictedImportMessages(
+        "src/app/onboarding/sample.tsx",
+        code
+      );
+      expect(messages).toHaveLength(1);
+    }
+  );
+
+  it.each(OUTSIDE_DOMAIN)(
+    "%s から値オブジェクト・型は import してよい",
+    async (file) => {
+      const messages = await restrictedImportMessages(
+        file,
+        `import { MemberRank, type MemberRankValue } from "@/domain/value-objects/member-rank";\nexport const r: MemberRankValue = MemberRank.of("basic").value;\n`
+      );
+      expect(messages).toEqual([]);
+    }
+  );
+
+  it("domain の中では定数を import してよい", async () => {
+    const messages = await restrictedImportMessages(
+      "src/domain/entities/sample.ts",
+      `import { RANK_ORDER } from "@/domain/value-objects/member-rank";\nexport default RANK_ORDER;\n`
+    );
+    expect(messages).toEqual([]);
+  });
+
+  it("src/domain/ で export している定数は、すべて禁止の対象になっている", async () => {
+    const exported = globSync("src/domain/**/*.ts").flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(/^export const (\w+)/gm)].map(
+        ([, name]) => ({
+          name,
+          path: `@/${file.replace(/^src\//, "").replace(/\.ts$/, "")}`,
+        })
+      )
+    );
+    expect(exported.map((e) => e.name).sort()).toEqual(
+      DOMAIN_CONSTANTS.map(([name]) => name).sort()
+    );
+    for (const { name, path } of exported) {
+      const messages = await restrictedImportMessages(
+        "src/app/sample.tsx",
+        `import { ${name} } from "${path}";\nexport default ${name};\n`
+      );
+      expect(messages, `${name} が禁止されていない`).toHaveLength(1);
+    }
+  });
 });
