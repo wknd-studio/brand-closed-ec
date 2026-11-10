@@ -319,6 +319,23 @@ describe("Order", () => {
   // 退会ブロック判定用（issue #208・#268）。docs/domain/membership.md参照。
   // orders.statusは決済前(pre-payment)も支払い済み(paid)も同じ値になりうるため、
   // 決済単位の未解決状態（請求済み未払い・上限超過で運営者対応待ち）でのみ判定する
+  describe("isCancelled()", () => {
+    it("注文がキャンセル済みならtrue", () => {
+      expect(
+        makeOrder({ status: OrderStatus.of("cancelled") }).isCancelled()
+      ).toBe(true);
+    });
+
+    it.each(["processing", "limit_exceeded", "paid"])(
+      "%sならfalse",
+      (status) => {
+        expect(
+          makeOrder({ status: OrderStatus.of(status) }).isCancelled()
+        ).toBe(false);
+      }
+    );
+  });
+
   describe("hasUnresolvedSettlement()", () => {
     it("invoice_sentの決済単位があればtrue", () => {
       const order = makeOrder({

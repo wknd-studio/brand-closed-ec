@@ -19,12 +19,15 @@ const supabase = createClient<Database>(
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000020";
 const OTHER_USER_ID = "00000000-0000-0000-0000-000000000021";
+// users に存在しない会員ID（注文が無い会員として使う）
+const NO_ORDER_USER_ID = "00000000-0000-0000-0000-000000000029";
 const ORDER_ID = "00000000-0000-0000-0000-000000000001";
 const ORDER_ID_2 = "00000000-0000-0000-0000-000000000002";
 const ORDER_ID_3 = "00000000-0000-0000-0000-000000000003";
 const CANCELLED_ORDER_ID = "00000000-0000-0000-0000-000000000004";
 const ORDER_INVOICE_SENT_ID = "00000000-0000-0000-0000-000000000005";
 const ORDER_LIMIT_EXCEEDED_ID = "00000000-0000-0000-0000-000000000006";
+const OTHER_USER_ORDER_ID = "00000000-0000-0000-0000-000000000007";
 const SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a1";
 const SETTLEMENT_ID_3 = "00000000-0000-0000-0000-0000000000a3";
 const CANCELLED_ORDER_SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a4";
@@ -40,6 +43,7 @@ const ALL_ORDER_IDS = [
   CANCELLED_ORDER_ID,
   ORDER_INVOICE_SENT_ID,
   ORDER_LIMIT_EXCEEDED_ID,
+  OTHER_USER_ORDER_ID,
 ];
 
 const snapshotProps = {
@@ -361,11 +365,10 @@ describe("SupabaseOrderRepository", () => {
     });
   });
 
-  // 退会ブロック判定用（issue #208・#268）。docs/domain/membership.md参照。
-  // orders.statusは決済前・支払い済みが同じ値になりうるため、決済単位の
-  // 未解決状態（invoice_sent・limit_exceeded）でのみ「アクティブ」を判定する
-  describe("findActiveByUserId()", () => {
-    it("invoice_sent・limit_exceededの決済単位を持つ注文のみ含む（決済前・支払い済み・キャンセル済みは含まない）", async () => {
+  // 退会の判定用（#587）。どの注文が退会を止めるかは User.withdraw() が判定するため、
+  // repository は会員の注文を状態で絞らずにすべて返す
+  describe("findByUserId()", () => {
+    it("会員の注文を状態に関わらずすべて返し、他の会員の注文は含まない", async () => {
       await repo.save(
         makeOrder({
           id: ORDER_INVOICE_SENT_ID,
@@ -408,19 +411,39 @@ describe("SupabaseOrderRepository", () => {
         })
       );
 
-      const orders = await repo.findActiveByUserId(TEST_USER_ID);
-      const ids = orders.map((o) => o.id);
+      await repo.save(
+        makeOrder({
+          id: OTHER_USER_ORDER_ID,
+          userId: OTHER_USER_ID,
+          items: [
+            makeItem("00000000-0000-0000-0000-000000000037", {
+              paymentTiming: "after_order",
+            }),
+          ],
+          settlements: [],
+        })
+      );
 
-      expect(ids).toContain(ORDER_INVOICE_SENT_ID);
-      expect(ids).toContain(ORDER_LIMIT_EXCEEDED_ID);
-      // ORDER_ID: 決済単位はこの時点でpaid（「save() — 更新」テストで支払い済みに更新済み）
-      expect(ids).not.toContain(ORDER_ID);
-      // ORDER_ID_2: 決済単位未作成（後払い未請求）
-      expect(ids).not.toContain(ORDER_ID_2);
-      // ORDER_ID_3: 決済単位がキャンセル済み
-      expect(ids).not.toContain(ORDER_ID_3);
-      // CANCELLED_ORDER_ID: 注文自体がキャンセル済み
-      expect(ids).not.toContain(CANCELLED_ORDER_ID);
+      const orders = await repo.findByUserId(TEST_USER_ID);
+      const ids = orders.map((o) => o.id).sort();
+
+      // 支払い済み・後払い未請求・決済単位キャンセル済み・注文キャンセル済み・
+      // 請求済み未払い・上限超過の注文をすべて含む
+      expect(ids).toEqual(
+        [
+          ORDER_ID,
+          ORDER_ID_2,
+          ORDER_ID_3,
+          CANCELLED_ORDER_ID,
+          ORDER_INVOICE_SENT_ID,
+          ORDER_LIMIT_EXCEEDED_ID,
+        ].sort()
+      );
+      expect(orders.every((o) => o.userId === TEST_USER_ID)).toBe(true);
+    });
+
+    it("注文が無い会員は空配列", async () => {
+      expect(await repo.findByUserId(NO_ORDER_USER_ID)).toEqual([]);
     });
   });
 

@@ -11,6 +11,7 @@ import {
   makeAccountGateway,
   makeUser,
   makeOrder,
+  makeSettlement,
   makeErrorReporter,
 } from "./helpers";
 
@@ -34,10 +35,12 @@ describe("withdraw", () => {
     ).rejects.toThrow("ユーザーが見つかりません");
   });
 
-  it("進行中の注文がある場合は ActiveOrdersExistError をthrowする", async () => {
+  it("会員の注文に未解決の決済単位を持つものがある場合は ActiveOrdersExistError をthrowし、保存しない", async () => {
     const userRepo = makeUserRepo();
     const orderRepo = makeOrderRepo();
-    vi.mocked(orderRepo.findActiveByUserId).mockResolvedValue([makeOrder()]);
+    vi.mocked(orderRepo.findByUserId).mockResolvedValue([
+      makeOrder({ settlements: [makeSettlement({ status: "invoice_sent" })] }),
+    ]);
 
     await expect(
       withdraw(
@@ -52,6 +55,38 @@ describe("withdraw", () => {
         }
       )
     ).rejects.toThrow(ActiveOrdersExistError);
+    expect(userRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("会員の注文が退会を止めないもの（決済前・キャンセル済み）だけなら退会する", async () => {
+    const userRepo = makeUserRepo();
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.findByUserId).mockResolvedValue([
+      makeOrder({
+        settlements: [makeSettlement({ status: "pending_payment" })],
+      }),
+      makeOrder({
+        status: "cancelled",
+        settlements: [makeSettlement({ status: "limit_exceeded" })],
+      }),
+    ]);
+
+    await withdraw(
+      { clerkUserId: "clerk-1" },
+      {
+        userRepo,
+        orderRepo,
+        subscriptionRepo: makeSubscriptionRepo(null),
+        subscriptionGateway: makeSubscriptionGateway(),
+        accountGateway: makeAccountGateway(),
+        errorReporter: makeErrorReporter(),
+      }
+    );
+
+    expect(orderRepo.findByUserId).toHaveBeenCalledWith(
+      vi.mocked(userRepo.save).mock.calls[0][0].id
+    );
+    expect(vi.mocked(userRepo.save).mock.calls[0][0].deletedAt).not.toBeNull();
   });
 
   it("有料会員: Supabase論理削除 → Stripe解約 → Clerk ban を順に実行する", async () => {
