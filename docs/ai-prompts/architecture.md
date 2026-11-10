@@ -65,7 +65,7 @@ repository を通さない直接クエリは、domain や repository にある�
 - 1画面（または1つの用途）に1メソッドを基本にする。複数の画面で同じ形が要るときだけ共通にする
 - **会員のデータの絞り込み**: 会員のデータを返すメソッドは、引数に会員（`clerkUserId`）を必須にし、実装のクエリでその会員の行だけに絞る。URL から来たID（`session_id`・`order_id` 等）だけで取らない。他の会員の行・存在しない行・画面の対象外の行は `null` を返し、page は `null` なら redirect する
 - **命名**: interface は `<対象>QueryService`、メソッドは `find<画面・用途>`、DTO は `<画面・用途>Dto`。実装は `Supabase<対象>QueryService`（Sanity なら `src/infrastructure/sanity/sanity-<対象>-query-service.ts` の `Sanity<対象>QueryService`）
-- **形は CI で検査している**（#582）: 命名・interface を `implements` した実装・interface の型で返す組み立て（`src/composition/<対象>-query.ts`）・統合テスト（メソッドごとにメソッド名を含む `describe` があり、その中に3つ以上のテスト）を `scripts/ci/query-service-shape.ts` が確かめ、`task check` と CI（Deploy の Lint ジョブ）で走る。違反すると、足りないものと直し方が出る
+- **形は CI で検査している**（#582）: ファイル名に合った interface（`<対象>QueryService`）・実装・組み立て（`src/composition/<対象>-query.ts`）・統合テストがそろっていること、統合テストに interface のメソッドごとにメソッド名を含む `describe` があり、その中に3つ以上のテストがあることを `scripts/ci/query-service-shape.ts` が確かめ、`task check` と CI（Deploy の Lint ジョブ）で走る。import の向きは ESLint の層のルール、型の整合は tsc が見る。メソッド・DTO・クラスの命名の細かい規則は検査しない
   - **レビューで見るのは業務の判定だけ**: 検査を満たした Query Service は PR Diff Summary に見るファイル（実装）が出る。人間は、実装の中でランクによる表示制限・ランク別価格の選択などを domain を呼んで行っているかだけを見る。テストの中身が3つの観点を確かめているかは機械では判定できないため、spec-reviewer と層ごとのカバレッジ検査（#455）に任せる
   - RLS の無いもの（Sanity 等）は、「他の会員のデータを取得できない」を別の観点（例: 閲覧できないランクの商品が返らない）に置き換え、テストの置き場所とあわせて `scripts/ci/query-service-shape.config.ts` にファイルごとに書く（high-risk として人間がレビューする）
 
