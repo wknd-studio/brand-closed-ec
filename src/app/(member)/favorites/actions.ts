@@ -2,11 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
-import { addFavorite } from "@/use-cases/add-favorite";
-import { removeFavorite } from "@/use-cases/remove-favorite";
+import { addFavorite, removeFavorite } from "@/composition/favorite";
 
 export async function addFavoriteAction(
   sanityProductId: string
@@ -14,14 +10,7 @@ export async function addFavoriteAction(
   const { userId } = await requireAuth();
   if (!userId) return;
 
-  const supabase = createAdminClient();
-  await addFavorite(
-    { clerkUserId: userId, sanityProductId },
-    {
-      userRepo: new SupabaseUserRepository(supabase),
-      favoriteRepo: new SupabaseFavoriteRepository(supabase),
-    }
-  );
+  await addFavorite({ clerkUserId: userId, sanityProductId });
   revalidatePath("/favorites");
 }
 
@@ -31,13 +20,6 @@ export async function removeFavoriteAction(
   const { userId } = await requireAuth();
   if (!userId) return;
 
-  const supabase = createAdminClient();
-  await removeFavorite(
-    { clerkUserId: userId, sanityProductId },
-    {
-      userRepo: new SupabaseUserRepository(supabase),
-      favoriteRepo: new SupabaseFavoriteRepository(supabase),
-    }
-  );
+  await removeFavorite({ clerkUserId: userId, sanityProductId });
   revalidatePath("/favorites");
 }

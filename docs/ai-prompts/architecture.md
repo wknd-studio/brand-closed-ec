@@ -71,6 +71,35 @@ repository を通さない直接クエリは、domain や repository にある�
 - composition はサーバー側（Server Action・Route Handler・Server Component・middleware）からだけ使う。Client Component から import しない。use-case の依存（deps）を束ねた関数や、Query Service のインスタンスを返す
 - composition に条件分岐を持つのは、環境による実装の差し替え（E2Eで外部送信を止める等）だけにする
 
+### 組み立て関数の形
+
+ファイルは機能ごと（`src/composition/address.ts`・`order.ts`・`onboarding.ts` 等）に分ける。各ファイルは、**use-case と同じ名前・同じ入力で、`deps` だけを省いた関数**を export する（#449）。
+
+```ts
+// src/composition/member.ts
+export function withdraw(input: WithdrawInput) {
+  // Supabase のクライアントは呼び出しごとに1回作り、同じ組み立ての repository で共有する
+  const supabase = createAdminClient();
+  return withdrawUseCase(input, {
+    userRepo: new SupabaseUserRepository(supabase),
+    orderRepo: new SupabaseOrderRepository(supabase),
+    subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
+    subscriptionGateway: new StripeSubscriptionGateway(),
+    accountGateway: new ClerkAccountGateway(),
+    errorReporter: new SentryErrorReporter(),
+  });
+}
+
+// src/app/(member)/settings/actions.ts
+import { withdraw } from "@/composition/member";
+await withdraw({ clerkUserId: userId });
+```
+
+- 実装はモジュールの読み込み時ではなく、関数の呼び出しのたびに生成する（環境変数の無いビルド時・テストで読み込んでも失敗しないため）
+- 同じ組み立てを複数の use-case で使うときは、ファイルの中に `deps` を作る関数を置いて共有してよい（例: `src/composition/order-payment.ts` の `paidOrderDeps`）
+- 入口から使われないものを同じファイルに入れない。Webhook の route が `src/composition/order.ts`（注文の作成。Sanity を使う）を読み込まないよう、決済完了の組み立ては `src/composition/order-payment.ts` に分けている
+- Webhook の署名検証など、use-case を通さずに Route Handler の入口で使う外部の操作は、関数として `src/infrastructure/` に置き（例: `src/infrastructure/stripe/stripe-webhook.ts`）、composition から re-export する（`src/composition/stripe-webhook.ts`）
+
 ## 外部サービスのクライアント
 
 Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastructure/` に置く（`src/infrastructure/supabase/server.ts`・`server-admin.ts`・`src/infrastructure/sanity/client.ts`・`src/infrastructure/stripe/client.ts`・`src/infrastructure/resend/client.ts`）。クライアントを使ってよいのは `src/infrastructure/` の中だけ（#440）。

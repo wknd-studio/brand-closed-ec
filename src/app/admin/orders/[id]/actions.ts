@@ -2,9 +2,7 @@
 
 import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
-import { cancelOrder as cancelOrderUseCase } from "@/use-cases/cancel-order";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { cancelOrder as cancelOrderUseCase } from "@/composition/order";
 
 type ActionResult = { error: string };
 
@@ -24,10 +22,7 @@ export async function cancelOrder(
   if (authError) return authError;
 
   try {
-    await cancelOrderUseCase(
-      { orderId },
-      { orderRepo: new SupabaseOrderRepository(createAdminClient()) }
-    );
+    await cancelOrderUseCase({ orderId });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "キャンセルに失敗しました";
