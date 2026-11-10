@@ -16,6 +16,7 @@ import {
 } from "@/use-cases/cancel-order";
 
 export function placeOrder(input: PlaceOrderInput) {
+  // 注文の保存（place_order_with_limit_check・補償削除の delete_order）は anon・authenticated から実行権限を外した関数のため admin で組み立てる。住所の持ち主は use-case で確かめる
   const supabase = createAdminClient();
   return placeOrderUseCase(input, {
     userRepo: new SupabaseUserRepository(supabase),

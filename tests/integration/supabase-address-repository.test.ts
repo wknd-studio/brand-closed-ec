@@ -159,6 +159,17 @@ describe("SupabaseAddressRepository（service role）", () => {
     expect(await repo.findById(ADDRESS_A1_ID)).toBeNull();
   });
 
+  it("findByIdAndUserIdはその会員の住所なら返し、他の会員の住所・存在しない住所はnullを返す", async () => {
+    const address = buildAddress(ADDRESS_A1_ID, "shipping");
+    await repo.save(address, USER_A_ID);
+
+    expect(await repo.findByIdAndUserId(ADDRESS_A1_ID, USER_A_ID)).toEqual(
+      address
+    );
+    expect(await repo.findByIdAndUserId(ADDRESS_A1_ID, USER_B_ID)).toBeNull();
+    expect(await repo.findByIdAndUserId(ADDRESS_A2_ID, USER_A_ID)).toBeNull();
+  });
+
   it("findByUserIdはその会員の住所だけを既定の住所を先頭にして返す", async () => {
     await repo.save(buildAddress(ADDRESS_A1_ID, "shipping"), USER_A_ID);
     await repo.save(

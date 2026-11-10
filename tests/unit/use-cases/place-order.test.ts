@@ -507,7 +507,7 @@ describe("placeOrder", () => {
       "住所（%s）が見つからない",
       async (missingId) => {
         const deps = makeDeps();
-        vi.mocked(deps.addressRepo.findById).mockImplementation((id) =>
+        vi.mocked(deps.addressRepo.findByIdAndUserId).mockImplementation((id) =>
           Promise.resolve(
             id === missingId
               ? null
@@ -523,6 +523,31 @@ describe("placeOrder", () => {
         ).not.toHaveBeenCalled();
       }
     );
+  });
+
+  it("配送先・請求先の住所は、注文する会員の住所に絞って取る（他の会員の住所IDを指定させない。#619）", async () => {
+    const user = makeUser();
+    const addressRepo = makeAddressRepo();
+
+    await placeOrder(baseInput, {
+      userRepo: makeUserRepo(user),
+      orderRepo: makeOrderRepo(),
+      addressRepo,
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+    });
+
+    expect(addressRepo.findByIdAndUserId).toHaveBeenCalledWith(
+      "shipping-addr",
+      user.id
+    );
+    expect(addressRepo.findByIdAndUserId).toHaveBeenCalledWith(
+      "billing-addr",
+      user.id
+    );
+    expect(addressRepo.findById).not.toHaveBeenCalled();
   });
 
   it("明細の商品名・単価はサーバー側ProductSnapshotの値を使い、カートの商品名は使わない（カート改竄対策）", async () => {

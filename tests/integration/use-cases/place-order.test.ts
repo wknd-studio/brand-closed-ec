@@ -418,3 +418,141 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
     ]);
   });
 });
+
+const OWNER_TEST_USER_ID = "00000000-0000-0000-0000-000000000619";
+const OWNER_TEST_CLERK_ID = "clerk_test_place_order_address_owner";
+const OTHER_TEST_USER_ID = "00000000-0000-0000-0000-00000000061a";
+const OTHER_TEST_CLERK_ID = "clerk_test_place_order_address_other";
+const OWNER_ADDRESS_ID = "00000000-0000-0000-0000-00000000061b";
+const OTHER_ADDRESS_ID = "00000000-0000-0000-0000-00000000061c";
+
+async function cleanupOwnerUsers() {
+  const userIds = [OWNER_TEST_USER_ID, OTHER_TEST_USER_ID];
+  const { data: orders } = await supabase
+    .from("orders")
+    .select("id")
+    .in("user_id", userIds);
+  const orderIds = orders?.map((o) => o.id) ?? [];
+  if (orderIds.length > 0) {
+    await supabase.from("order_items").delete().in("order_id", orderIds);
+    await supabase.from("order_settlements").delete().in("order_id", orderIds);
+    await supabase.from("orders").delete().in("id", orderIds);
+  }
+  await supabase.from("addresses").delete().in("user_id", userIds);
+  await supabase.from("users").delete().in("id", userIds);
+}
+
+describe("placeOrder（実DB・住所の持ち主。#619）", () => {
+  beforeAll(async () => {
+    await cleanupOwnerUsers();
+    for (const [userId, clerkId, addressId, addressLine1] of [
+      [
+        OWNER_TEST_USER_ID,
+        OWNER_TEST_CLERK_ID,
+        OWNER_ADDRESS_ID,
+        "注文者の住所1-1",
+      ],
+      [
+        OTHER_TEST_USER_ID,
+        OTHER_TEST_CLERK_ID,
+        OTHER_ADDRESS_ID,
+        "他の会員の住所2-2",
+      ],
+    ]) {
+      const { error: userError } = await supabase.from("users").insert({
+        id: userId,
+        clerk_user_id: clerkId,
+        email: `${clerkId}@example.com`,
+        first_name: "テスト",
+        last_name: "太郎",
+        rank_code: "advanced",
+        onboarding_completed: true,
+        billing_anchor_day: 1,
+      });
+      if (userError) throw userError;
+      const { error: addressError } = await supabase.from("addresses").insert({
+        id: addressId,
+        user_id: userId,
+        type: "shipping",
+        recipient_last_name: "テスト",
+        recipient_first_name: "太郎",
+        postal_code: "100-0001",
+        prefecture: "東京都",
+        city: "千代田区",
+        address_line1: addressLine1,
+        phone_number: "03-1234-5678",
+        is_default: true,
+      });
+      if (addressError) throw addressError;
+    }
+  });
+
+  afterAll(async () => {
+    await cleanupOwnerUsers();
+  });
+
+  function placeOrderWith(shippingAddressId: string, billingAddressId: string) {
+    const { productRepo, paymentGateway, notificationService } = makeDeps();
+    return placeOrder(
+      {
+        clerkUserId: OWNER_TEST_CLERK_ID,
+        cartItems: [
+          {
+            sanityProductId: "prod-test",
+            quantity: 1,
+            productName: "テスト商品",
+          },
+        ],
+        shippingAddressId,
+        billingAddressId,
+        baseUrl: "http://localhost:3000",
+      },
+      {
+        userRepo: new SupabaseUserRepository(supabase),
+        orderRepo: new SupabaseOrderRepository(supabase),
+        addressRepo: new SupabaseAddressRepository(supabase),
+        productRepo,
+        paymentGateway,
+        notificationService,
+        errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+      }
+    );
+  }
+
+  async function countOwnerOrders() {
+    const { count } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", OWNER_TEST_USER_ID);
+    return count ?? 0;
+  }
+
+  it.each([
+    ["配送先", OTHER_ADDRESS_ID, OWNER_ADDRESS_ID],
+    ["請求先", OWNER_ADDRESS_ID, OTHER_ADDRESS_ID],
+  ])(
+    "他の会員の住所を%sに指定すると「住所が見つかりません」で止まり、注文は保存されない",
+    async (_label, shippingAddressId, billingAddressId) => {
+      await expect(
+        placeOrderWith(shippingAddressId, billingAddressId)
+      ).rejects.toThrow("住所が見つかりません");
+      expect(await countOwnerOrders()).toBe(0);
+    }
+  );
+
+  it("自分の住所を指定すれば注文が保存され、その住所がスナップショットに入る", async () => {
+    await placeOrderWith(OWNER_ADDRESS_ID, OWNER_ADDRESS_ID);
+
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("shipping_address_snapshot, billing_address_snapshot")
+      .eq("user_id", OWNER_TEST_USER_ID);
+    expect(orders).toHaveLength(1);
+    expect(orders?.[0].shipping_address_snapshot).toMatchObject({
+      addressLine1: "注文者の住所1-1",
+    });
+    expect(orders?.[0].billing_address_snapshot).toMatchObject({
+      addressLine1: "注文者の住所1-1",
+    });
+  });
+});

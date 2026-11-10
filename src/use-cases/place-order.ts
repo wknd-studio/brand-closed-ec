@@ -72,9 +72,12 @@ export async function placeOrder(
   // 月次上限チェックはカート全体（at_order・after_order両方）の合計に対して1回だけ判定する
   checkMonthlyLimit(user, cartItems, Money.of(confirmedAmount));
 
+  // 住所IDは画面から送られるため、注文する会員の住所に絞って取る。注文は admin
+  // クライアントで組み立てる（RLS が効かない）ので、IDだけで取ると他の会員の住所が
+  // 注文のスナップショットに入ってしまう（#619）
   const [shippingAddress, billingAddress] = await Promise.all([
-    addressRepo.findById(input.shippingAddressId),
-    addressRepo.findById(input.billingAddressId),
+    addressRepo.findByIdAndUserId(input.shippingAddressId, user.id),
+    addressRepo.findByIdAndUserId(input.billingAddressId, user.id),
   ]);
   if (!shippingAddress || !billingAddress)
     throw new Error("住所が見つかりません");

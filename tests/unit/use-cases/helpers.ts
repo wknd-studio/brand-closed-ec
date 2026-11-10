@@ -207,14 +207,13 @@ export function makeOrderRepo(order?: Order): OrderRepository {
 }
 
 export function makeAddressRepo(): AddressRepository {
+  const findAddress = (id: string) =>
+    Promise.resolve(
+      makeAddress(id.startsWith("billing") ? "billing" : "shipping")
+    );
   return {
-    findById: vi
-      .fn()
-      .mockImplementation((id: string) =>
-        Promise.resolve(
-          makeAddress(id.startsWith("billing") ? "billing" : "shipping")
-        )
-      ),
+    findById: vi.fn().mockImplementation(findAddress),
+    findByIdAndUserId: vi.fn().mockImplementation(findAddress),
     findByUserId: vi.fn().mockResolvedValue([]),
     countByUserIdAndType: vi.fn().mockResolvedValue(0),
     save: vi.fn().mockResolvedValue(undefined),
