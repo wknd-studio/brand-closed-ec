@@ -56,7 +56,7 @@ export type QueryServiceReport = {
 export type SourceReader = {
   /** リポジトリのルートからのパス。無ければ null */
   read(file: string): string | null;
-  /** dir の直下のファイル（リポジトリのルートからのパス） */
+  /** dir の配下のファイル（サブディレクトリも含む。リポジトリのルートからのパス） */
   list(dir: string): string[];
 };
 
@@ -64,7 +64,7 @@ export function memoryReader(files: Record<string, string>): SourceReader {
   return {
     read: (file) => files[file] ?? null,
     list: (dir) =>
-      Object.keys(files).filter((file) => path.posix.dirname(file) === dir),
+      Object.keys(files).filter((file) => file.startsWith(`${dir}/`)),
   };
 }
 
@@ -78,13 +78,20 @@ export function fileSystemReader(root: string): SourceReader {
       }
     },
     list(dir) {
-      try {
-        return readdirSync(path.join(root, dir), { withFileTypes: true })
-          .filter((entry) => entry.isFile())
-          .map((entry) => `${dir}/${entry.name}`);
-      } catch {
-        return [];
-      }
+      const walk = (current: string): string[] => {
+        try {
+          return readdirSync(path.join(root, current), {
+            withFileTypes: true,
+          }).flatMap((entry) => {
+            const file = `${current}/${entry.name}`;
+            if (entry.isDirectory()) return walk(file);
+            return entry.isFile() ? [file] : [];
+          });
+        } catch {
+          return [];
+        }
+      };
+      return walk(dir);
     },
   };
 }
@@ -115,6 +122,29 @@ function imports(source: ts.SourceFile) {
         ? decl.importClause.namedBindings.elements.map((e) => e.name.text)
         : [],
   }));
+}
+
+/** import・再エクスポート（export … from）・import 型（import("…")）が参照するモジュール */
+function referencedModules(source: ts.SourceFile): string[] {
+  const modules: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      modules.push(node.moduleSpecifier.text);
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal)
+    ) {
+      modules.push(node.argument.literal.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return modules;
 }
 
 function importsInterface(
@@ -264,10 +294,10 @@ function checkQuery(
   const report = (message: string, fix: string) =>
     violations.push({ file, message, fix });
 
-  for (const i of imports(source)) {
-    if (!i.from.startsWith("@/domain/")) {
+  for (const from of referencedModules(source)) {
+    if (!from.startsWith("@/domain/")) {
       report(
-        `domain 以外（${i.from}）を import している`,
+        `domain 以外（${from}）を import している`,
         "interface と DTO は domain の型だけで書く。DBの行の型等は実装（src/infrastructure/）で DTO に変換する"
       );
     }
@@ -394,32 +424,55 @@ function checkComposition(
   violations: Violation[]
 ) {
   const source = parse(file, text);
-  const returnsInterface = (type: ts.TypeNode | undefined) => {
+  // 戻り値の型の名前（Promise<X> は X）。型を書いていなければ null
+  const returnTypeName = (type: ts.TypeNode | undefined) => {
     const inner = promiseArgument(type) ?? type;
-    return (
-      !!inner &&
-      ts.isTypeReferenceNode(inner) &&
-      inner.typeName.getText() === interfaceName
-    );
+    return inner && ts.isTypeReferenceNode(inner)
+      ? inner.typeName.getText()
+      : null;
   };
   const exportedFunctions = source.statements.flatMap(
-    (statement): ts.SignatureDeclaration[] => {
+    (statement): { name: string; returns: string | null }[] => {
       if (ts.isFunctionDeclaration(statement) && isExported(statement)) {
-        return [statement];
+        return [
+          {
+            name: statement.name?.text ?? "default",
+            returns: returnTypeName(statement.type),
+          },
+        ];
       }
       if (ts.isVariableStatement(statement) && isExported(statement)) {
-        return statement.declarationList.declarations
-          .map((d) => d.initializer)
-          .filter(
-            (init): init is ts.ArrowFunction | ts.FunctionExpression =>
-              !!init &&
-              (ts.isArrowFunction(init) || ts.isFunctionExpression(init))
-          );
+        return statement.declarationList.declarations.flatMap((d) =>
+          d.initializer &&
+          (ts.isArrowFunction(d.initializer) ||
+            ts.isFunctionExpression(d.initializer))
+            ? [
+                {
+                  name: d.name.getText(),
+                  returns: returnTypeName(d.initializer.type),
+                },
+              ]
+            : []
+        );
       }
       return [];
     }
   );
-  if (!exportedFunctions.some((fn) => returnsInterface(fn.type))) {
+  // 実装のクラスの型で返す関数を別に export すると、app が実装に依存できてしまう
+  const returnsImplementation = exportedFunctions.filter(
+    (fn) => fn.returns !== interfaceName && fn.returns?.endsWith("QueryService")
+  );
+  for (const fn of returnsImplementation) {
+    violations.push({
+      file,
+      message: `${fn.name} が interface ではなく ${fn.returns} の型で返している`,
+      fix: `戻り値の型を ${interfaceName}（または Promise<${interfaceName}>）にする`,
+    });
+  }
+  if (
+    returnsImplementation.length === 0 &&
+    !exportedFunctions.some((fn) => fn.returns === interfaceName)
+  ) {
     violations.push({
       file,
       message: `interface の型（${interfaceName} または Promise<${interfaceName}>）を戻り値の型に書いた、export した関数が無い`,
@@ -471,14 +524,15 @@ export function checkQueryServices(
   const reports = queryFiles.map((query): QueryServiceReport => {
     const violations: Violation[] = [];
     const empty = { implementation: null, composition: null, test: null };
+    // サブディレクトリに置いたものは、実装・組み立て・テストと対応が付かないので違反にする
     const match = /^([a-z0-9]+(?:-[a-z0-9]+)*)-query-service\.ts$/.exec(
-      path.posix.basename(query)
+      path.posix.relative(QUERY_DIR, query)
     );
     if (!match) {
       violations.push({
         file: query,
         message:
-          "ファイル名が <対象>-query-service.ts（<対象> はケバブケース）ではない",
+          "src/queries 直下の <対象>-query-service.ts（<対象> はケバブケース）ではない",
         fix: "src/queries/member-order-query-service.ts のような名前にリネームする",
       });
       return { query, ...empty, violations };
