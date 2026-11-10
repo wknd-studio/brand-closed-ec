@@ -17,7 +17,7 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 | `src/infrastructure/` | ポートと Query Service の実装、外部サービスのクライアント生成、DBの行・外部APIのレスポンスと domain の間の変換（mapper）                                   | 業務ルールの判定（domain を呼んで使う）。手順（→ use-case）                                |
 | `src/composition/`    | 組み立て。repository・gateway・Query Service の実装を生成し、use-case に注入して返す                                                                       | 業務ルール・手順・クエリ                                                                   |
 | `src/app/`            | Next.js のルーティング（page・layout・Route Handler・Server Action）。入力の受け取り・認証済みユーザーの取得・composition が返すものの呼び出し・画面の表示 | 業務判断。DB・外部SDKの直接利用。repository・infrastructure の直接利用                     |
-| `src/components/`     | UI部品。props で受け取った DTO を表示する                                                                                                                  | データの取得・書き込み。業務判断                                                           |
+| `src/components/`     | UI部品。props で受け取った DTO を表示する。業務の状態を持つ Client Component（Provider 等。Server Action は props で受け取って呼ぶ）                       | データの取得・書き込みを自分で行うこと（Server Action の import を含む）。業務判断         |
 | `src/lib/`            | 業務を知らない共通部品（「src/lib に置くもの・置かないもの」を参照）                                                                                       | DBアクセス・業務ルール・組み立て・Server Action                                            |
 | `src/emails/`         | メールテンプレート（React Email）。props を表示するだけ                                                                                                    | 送信処理（→ `src/infrastructure/resend/`）。データの取得                                   |
 | `src/types/`          | 生成物（`database.types.ts`。`supabase gen types` で作る DB の型）                                                                                         | 手で書く型（各層の中に置く）                                                               |
@@ -174,6 +174,7 @@ use-case の中に `if (user.rankCode === "gold" && ...)` のような判定を�
 
 - ルーティング・入力の受け取り・表示 → `src/app/`（Server Action は `src/app/**/actions.ts`）
 - UI部品 → `src/components/`
+- 業務の状態を持つ Client Component（お気に入りの `FavoritesProvider` 等）→ `src/components/`。Server Action は自分で import せず、Server Component（layout・page）から props で受け取る（例: `src/app/(member)/layout.tsx` → `src/components/favorites/favorites-provider.tsx`。#548）
 - メールの見た目 → `src/emails/`
 - 業務を知らない共通部品 → `src/lib/`
 

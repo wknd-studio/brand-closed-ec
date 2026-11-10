@@ -7,10 +7,6 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import {
-  addFavoriteAction,
-  removeFavoriteAction,
-} from "@/app/(member)/favorites/actions";
 
 type FavoritesContextValue = {
   favoriteIds: Set<string>;
@@ -20,12 +16,17 @@ type FavoritesContextValue = {
 
 const FavoritesContext = createContext<FavoritesContextValue | null>(null);
 
+// Server Action は自分で import せず props で受け取る（依存の向きを app → components に保つため。#548）
 export function FavoritesProvider({
   children,
   initialFavoriteIds,
+  addFavorite,
+  removeFavorite,
 }: {
   children: ReactNode;
   initialFavoriteIds: string[];
+  addFavorite: (sanityProductId: string) => Promise<void>;
+  removeFavorite: (sanityProductId: string) => Promise<void>;
 }) {
   const [favoriteIds, setFavoriteIds] = useState(
     () => new Set(initialFavoriteIds)
@@ -46,10 +47,10 @@ export function FavoritesProvider({
         return next;
       });
       // 楽観的更新を先に反映し、サーバーへは投げっぱなしにする（失敗時は次回一覧取得で自然に補正される）
-      if (wasFavorited) void removeFavoriteAction(sanityProductId);
-      else void addFavoriteAction(sanityProductId);
+      if (wasFavorited) void removeFavorite(sanityProductId);
+      else void addFavorite(sanityProductId);
     },
-    [favoriteIds]
+    [favoriteIds, addFavorite, removeFavorite]
   );
 
   return (
