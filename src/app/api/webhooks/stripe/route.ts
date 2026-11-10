@@ -9,9 +9,9 @@ import { completeSubscriptionOnboarding } from "@/composition/onboarding";
 import {
   constructStripeWebhookEvent,
   isPaidRank,
+  processStripeWebhookEventOnce,
   retrieveOnboardingSubscription,
-  stripeWebhookEvents,
-  type StripeWebhookEventClaimResult,
+  type ProcessStripeWebhookEventOnceResult,
 } from "@/composition/stripe-webhook";
 
 /**
@@ -21,7 +21,10 @@ import {
  * 処理中の再送は正常系なのでSentryには送らない
  */
 function skippedResponse(
-  claim: Exclude<StripeWebhookEventClaimResult, "claimed">
+  claim: Extract<
+    ProcessStripeWebhookEventOnceResult,
+    { status: "skipped" }
+  >["claim"]
 ) {
   if (claim === "processed") {
     return NextResponse.json({ received: true, skipped: true });
@@ -30,6 +33,12 @@ function skippedResponse(
     { error: "イベントを処理中です。後で再送してください" },
     { status: 409 }
   );
+}
+
+/** 処理に失敗したイベントへの応答。2xx以外を返してStripeに再送させる */
+function failedResponse(logPrefix: string, error: unknown) {
+  console.error(logPrefix, error);
+  return NextResponse.json({ error: "処理に失敗しました" }, { status: 500 });
 }
 
 export async function POST(req: Request) {
@@ -57,35 +66,24 @@ export async function POST(req: Request) {
     const session = event.data.object;
 
     if (session.mode === "payment") {
-      const webhookEventRepo = stripeWebhookEvents();
-      // stripe_webhook_eventsによるDBレベルの冪等性チェック（issue #221）。
       // 処理中/処理済みの再送であればここでスキップし、後続のuse case側の
       // ステータスチェック（settlement.isPaid()）とあわせて二重の防御とする
-      const claim = await webhookEventRepo.claim({
-        eventId: event.id,
-        type: event.type,
-        payload: event,
-      });
-      if (claim !== "claimed") return skippedResponse(claim);
-
-      try {
-        await Sentry.startSpan(
-          { name: "markCheckoutOrderAsPaid", op: SPAN_OP.webhook },
-          () => markCheckoutOrderAsPaid({ stripeCheckoutSessionId: session.id })
-        );
-        await webhookEventRepo.markProcessed(event.id);
-      } catch (err) {
-        Sentry.captureException(err, {
+      const outcome = await processStripeWebhookEventOnce({
+        event: { eventId: event.id, type: event.type, payload: event },
+        process: () =>
+          Sentry.startSpan(
+            { name: "markCheckoutOrderAsPaid", op: SPAN_OP.webhook },
+            () =>
+              markCheckoutOrderAsPaid({ stripeCheckoutSessionId: session.id })
+          ),
+        failureReport: {
           tags: { webhook: "stripe", eventType: event.type },
           extra: { stripeCheckoutSessionId: session.id, eventId: event.id },
-        });
-        const message = err instanceof Error ? err.message : String(err);
-        await webhookEventRepo.markFailed(event.id, message);
-        console.error("[Checkout Webhook] 処理失敗:", err);
-        return NextResponse.json(
-          { error: "処理に失敗しました" },
-          { status: 500 }
-        );
+        },
+      });
+      if (outcome.status === "skipped") return skippedResponse(outcome.claim);
+      if (outcome.status === "failed") {
+        return failedResponse("[Checkout Webhook] 処理失敗:", outcome.error);
       }
     } else if (session.mode === "subscription") {
       const clerkUserId = session.metadata?.clerk_user_id;
@@ -129,81 +127,74 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true });
       }
 
-      const webhookEventRepo = stripeWebhookEvents();
-      // 同じイベントの再送はここでスキップし、同じサブスクリプションの別イベントは
-      // 入会確定のRPC（confirm_subscription_onboarding）の冪等性で防ぐ
-      const claim = await webhookEventRepo.claim({
-        eventId: event.id,
-        type: event.type,
-        payload: event,
-      });
-      if (claim !== "claimed") return skippedResponse(claim);
-
       const stripeCustomerId = session.customer as string;
       const stripeSubscriptionId = session.subscription as string;
 
-      try {
-        const {
-          status,
-          currentPeriodStart,
-          currentPeriodEnd,
-          subscriptionStartedAt,
-        } = await retrieveOnboardingSubscription(stripeSubscriptionId);
+      // 同じイベントの再送はここでスキップし、同じサブスクリプションの別イベントは
+      // 入会確定のRPC（confirm_subscription_onboarding）の冪等性で防ぐ
+      const outcome = await processStripeWebhookEventOnce({
+        event: { eventId: event.id, type: event.type, payload: event },
+        process: async () => {
+          const {
+            status,
+            currentPeriodStart,
+            currentPeriodEnd,
+            subscriptionStartedAt,
+          } = await retrieveOnboardingSubscription(stripeSubscriptionId);
 
-        const result = await Sentry.startSpan(
-          { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
-          () =>
-            completeSubscriptionOnboarding({
-              clerkUserId,
-              plan,
-              stripeCustomerId,
-              stripeSubscriptionId,
-              status,
-              currentPeriodStart,
-              currentPeriodEnd,
-              subscriptionStartedAt,
-            })
-        );
-
-        // 課金済みなのに記録されないサブスクリプション。再送しても成功しないため
-        // 200を返してイベントを処理済みにし、運営者が手動で返金・解約する
-        if (
-          result === "conflicting_subscription" ||
-          result === "member_not_found"
-        ) {
-          Sentry.captureMessage(
-            result === "member_not_found"
-              ? "退会済み、または未登録の会員の入会が届きました。手動で返金・解約してください"
-              : "入会済みの会員、または別の会員で記録済みのサブスクリプションの入会が届きました。手動で返金・解約してください",
-            {
-              level: "error",
-              tags: { webhook: "stripe", eventType: event.type },
-              extra: {
-                stripeCheckoutSessionId: session.id,
-                eventId: event.id,
+          const result = await Sentry.startSpan(
+            { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
+            () =>
+              completeSubscriptionOnboarding({
                 clerkUserId,
+                plan,
                 stripeCustomerId,
                 stripeSubscriptionId,
-              },
-            }
+                status,
+                currentPeriodStart,
+                currentPeriodEnd,
+                subscriptionStartedAt,
+              })
           );
-        }
-        await webhookEventRepo.markProcessed(event.id);
-      } catch (err) {
-        Sentry.captureException(err, {
+
+          // 課金済みなのに記録されないサブスクリプション。再送しても成功しないため
+          // 200を返してイベントを処理済みにし、運営者が手動で返金・解約する
+          if (
+            result === "conflicting_subscription" ||
+            result === "member_not_found"
+          ) {
+            Sentry.captureMessage(
+              result === "member_not_found"
+                ? "退会済み、または未登録の会員の入会が届きました。手動で返金・解約してください"
+                : "入会済みの会員、または別の会員で記録済みのサブスクリプションの入会が届きました。手動で返金・解約してください",
+              {
+                level: "error",
+                tags: { webhook: "stripe", eventType: event.type },
+                extra: {
+                  stripeCheckoutSessionId: session.id,
+                  eventId: event.id,
+                  clerkUserId,
+                  stripeCustomerId,
+                  stripeSubscriptionId,
+                },
+              }
+            );
+          }
+        },
+        failureReport: {
           tags: { webhook: "stripe", eventType: event.type },
           extra: {
             stripeCheckoutSessionId: session.id,
             eventId: event.id,
             clerkUserId,
           },
-        });
-        const message = err instanceof Error ? err.message : String(err);
-        await webhookEventRepo.markFailed(event.id, message);
-        console.error("[Stripe Webhook] サブスクリプション更新失敗:", err);
-        return NextResponse.json(
-          { error: "処理に失敗しました" },
-          { status: 500 }
+        },
+      });
+      if (outcome.status === "skipped") return skippedResponse(outcome.claim);
+      if (outcome.status === "failed") {
+        return failedResponse(
+          "[Stripe Webhook] サブスクリプション更新失敗:",
+          outcome.error
         );
       }
     }
@@ -211,32 +202,21 @@ export async function POST(req: Request) {
 
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
-    const webhookEventRepo = stripeWebhookEvents();
-    const claim = await webhookEventRepo.claim({
-      eventId: event.id,
-      type: event.type,
-      payload: event,
-    });
-    if (claim !== "claimed") return skippedResponse(claim);
-
-    try {
-      await Sentry.startSpan(
-        { name: "markInvoiceOrderAsPaid", op: SPAN_OP.webhook },
-        () => markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id })
-      );
-      await webhookEventRepo.markProcessed(event.id);
-    } catch (err) {
-      Sentry.captureException(err, {
+    const outcome = await processStripeWebhookEventOnce({
+      event: { eventId: event.id, type: event.type, payload: event },
+      process: () =>
+        Sentry.startSpan(
+          { name: "markInvoiceOrderAsPaid", op: SPAN_OP.webhook },
+          () => markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id })
+        ),
+      failureReport: {
         tags: { webhook: "stripe", eventType: event.type },
         extra: { stripeInvoiceId: invoice.id, eventId: event.id },
-      });
-      const message = err instanceof Error ? err.message : String(err);
-      await webhookEventRepo.markFailed(event.id, message);
-      console.error("[Invoice Webhook] 処理失敗:", err);
-      return NextResponse.json(
-        { error: "処理に失敗しました" },
-        { status: 500 }
-      );
+      },
+    });
+    if (outcome.status === "skipped") return skippedResponse(outcome.claim);
+    if (outcome.status === "failed") {
+      return failedResponse("[Invoice Webhook] 処理失敗:", outcome.error);
     }
   }
 

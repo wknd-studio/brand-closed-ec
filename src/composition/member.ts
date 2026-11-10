@@ -9,6 +9,10 @@ import {
   withdraw as withdrawUseCase,
   type WithdrawInput,
 } from "@/use-cases/withdraw";
+import {
+  detectMemberDeletedWithoutWithdrawal as detectMemberDeletedWithoutWithdrawalUseCase,
+  type DetectMemberDeletedWithoutWithdrawalInput,
+} from "@/use-cases/detect-member-deleted-without-withdrawal";
 
 export function withdraw(input: WithdrawInput) {
   const supabase = createAdminClient();
@@ -22,9 +26,11 @@ export function withdraw(input: WithdrawInput) {
   });
 }
 
-// Clerk Webhook（user.deleted）で、退会処理を通らずに消えた会員がいるかを確かめるのに使う
-export function findMemberByClerkUserId(clerkUserId: string) {
-  return new SupabaseUserRepository(createAdminClient()).findByClerkUserId(
-    clerkUserId
-  );
+export function detectMemberDeletedWithoutWithdrawal(
+  input: DetectMemberDeletedWithoutWithdrawalInput
+) {
+  return detectMemberDeletedWithoutWithdrawalUseCase(input, {
+    userRepo: new SupabaseUserRepository(createAdminClient()),
+    errorReporter: new SentryErrorReporter(),
+  });
 }
