@@ -1,7 +1,7 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import type { BrandThemeDto } from "@/queries/brand-theme-query-service";
-import { resolveBrandThemeCssVars } from "@/lib/brand-theme-style";
+import { resolveBrandThemeCssVars } from "@/components/brand-theme-style";
 
 export default function BrandThemeWrapper({
   theme,

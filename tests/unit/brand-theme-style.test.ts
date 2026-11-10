@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveBrandThemeCssVars } from "@/lib/brand-theme-style";
+import { resolveBrandThemeCssVars } from "@/components/brand-theme-style";
 import type { BrandThemeDto } from "@/queries/brand-theme-query-service";
 
 describe("resolveBrandThemeCssVars", () => {

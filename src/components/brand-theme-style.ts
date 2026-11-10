@@ -1,4 +1,4 @@
-import { resolveFontFamily } from "./brand-theme-fonts";
+import { resolveFontFamily } from "@/lib/brand-theme-fonts";
 import type { BrandThemeDto } from "@/queries/brand-theme-query-service";
 
 export function resolveBrandThemeCssVars(
