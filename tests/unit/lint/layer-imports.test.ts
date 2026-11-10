@@ -15,7 +15,7 @@ import { describe, it, expect } from "vitest";
 
 // 層の依存方向のlint（#439）の回帰テスト。実際の eslint.config.mjs を読み込み、
 // 各層のファイルとして違反するコードを lintText に渡してエラーになることを確かめる。
-// 後続の #441 等も、ここにケースを足す
+// app・middleware の許可リスト（#441）も同じ形で書く
 
 const RULE = "no-restricted-imports";
 const DOC = "docs/ai-prompts/architecture.md";
@@ -101,7 +101,40 @@ const forbidden: ForbiddenCase[] = [
       "../../use-cases/place-order",
     ],
   },
+  // app は composition が返す use-case・Query Service だけを使う（#441）
+  {
+    file: "src/app/(member)/sample/page.tsx",
+    imports: [
+      "@/use-cases/place-order",
+      "@/repositories/order-repository",
+      "@/infrastructure/supabase/server-admin",
+      "@/types/database.types",
+      "@/emails/order-confirmation",
+      "@/sanity/schemas",
+      "../../infrastructure/supabase/server-admin",
+    ],
+  },
+  {
+    file: "src/middleware.ts",
+    imports: [
+      "@/use-cases/place-order",
+      "@/repositories/order-repository",
+      "@/infrastructure/supabase/server-admin",
+      "@/components/ui/button",
+      "@/app/page",
+      "@/types/database.types",
+      "./infrastructure/supabase/server-admin",
+      "../x",
+    ],
+  },
 ];
+
+// エラーメッセージに出る、その層の名前（src/app/ 等。middleware は1ファイル）
+function scopeOf(file: string) {
+  return file === "src/middleware.ts"
+    ? "src/middleware.ts"
+    : `src/${file.split("/")[1]}/`;
+}
 
 describe("層の依存方向（no-restricted-imports）", () => {
   describe.each(forbidden)("$file", ({ file, imports }) => {
@@ -117,7 +150,7 @@ describe("層の依存方向（no-restricted-imports）", () => {
         expect(messages[0].message).toContain(DOC);
         // 直し方として、その層から import してよいものを示す
         expect(messages[0].message).toContain(
-          `src/${file.split("/")[1]}/ から import してよいのは`
+          `${scopeOf(file)} から import してよいのは`
         );
       }
     );
@@ -145,6 +178,8 @@ describe("層の依存方向（no-restricted-imports）", () => {
     "src/queries/sample.ts",
     "src/use-cases/sample.ts",
     "src/infrastructure/sample.ts",
+    "src/app/sample.tsx",
+    "src/middleware.ts",
   ])(
     "許可リストの形で書かれている: %s から、まだどこにも無い @/ のディレクトリは禁止される",
     async (file) => {
@@ -160,6 +195,30 @@ describe("層の依存方向（no-restricted-imports）", () => {
     const messages = await restrictedImportMessages(
       "src/repositories/sample.ts",
       `import x from "@/domain-extra/x";\nexport default x;\n`
+    );
+    expect(messages).toHaveLength(1);
+  });
+
+  it.each([
+    ["src/app/sample/page.tsx", "@/use-cases/place-order"],
+    ["src/middleware.ts", "@/use-cases/place-order"],
+  ])(
+    "%s から %s を直接 import すると、composition 経由で使う直し方を含むエラーになる",
+    async (file, path) => {
+      const messages = await restrictedImportMessages(
+        file,
+        `import x from "${path}";\nexport default x;\n`
+      );
+      expect(messages).toHaveLength(1);
+      expect(messages[0].message).toContain("@/composition");
+      expect(messages[0].message).toContain("Query Service");
+    }
+  );
+
+  it("app からは import type でも repository の型を使えない", async () => {
+    const messages = await restrictedImportMessages(
+      "src/app/sample/page.tsx",
+      `import type { OrderRepository } from "@/repositories/order-repository";\nexport type R = OrderRepository;\n`
     );
     expect(messages).toHaveLength(1);
   });
@@ -185,6 +244,22 @@ describe("層の依存方向（no-restricted-imports）", () => {
     ["src/infrastructure/supabase/sample.ts", "@/infrastructure/stripe/x"],
     ["src/infrastructure/supabase/sample.ts", "@supabase/supabase-js"],
     ["src/infrastructure/supabase/sample.ts", "./mapper"],
+    ["src/app/sample/page.tsx", "@/composition/orders"],
+    ["src/app/sample/page.tsx", "@/domain/value-objects/member-rank"],
+    ["src/app/sample/page.tsx", "@/queries/member-order-query-service"],
+    ["src/app/sample/page.tsx", "@/lib/utils"],
+    ["src/app/sample/page.tsx", "@/components/ui/button"],
+    ["src/app/sample/page.tsx", "@/app/(member)/settings/address-form"],
+    ["src/app/sample/page.tsx", "./actions"],
+    ["src/app/sample/page.tsx", "next/navigation"],
+    ["src/app/sample/page.tsx", "@clerk/nextjs/server"],
+    ["src/app/sample/page.tsx", "react"],
+    ["src/middleware.ts", "@/composition/member-status-query"],
+    ["src/middleware.ts", "@/domain/value-objects/member-rank"],
+    ["src/middleware.ts", "@/queries/member-status-query-service"],
+    ["src/middleware.ts", "@/lib/utils"],
+    ["src/middleware.ts", "@clerk/nextjs/server"],
+    ["src/middleware.ts", "next/server"],
   ])("%s から %s は import してよい", async (file, path) => {
     const messages = await restrictedImportMessages(
       file,
@@ -217,15 +292,18 @@ function parseDependencyTable(markdown: string): Map<string, Allowed> {
   const section = markdown.split(/^## 依存してよい方向$/m)[1].split(/^## /m)[0];
   const table = new Map<string, Allowed>();
   for (const line of section.split("\n")) {
-    const m = line.match(/^\|\s*`src\/([^/`]+)\/`\s*\|(.+)\|\s*$/);
+    // `src/app/` のようなディレクトリの層と、`src/middleware.ts` のような1ファイルの行
+    const m = line.match(/^\|\s*`src\/([^/`]+?)(\/)?`\s*\|(.+)\|\s*$/);
     if (!m) continue;
-    const [, layer, cell] = m;
+    const [, name, isDir, cell] = m;
+    const layer = isDir ? name : name.replace(/\.ts$/, "");
     // 括弧内は補足（「外部SDKは不可」等）なので読まない
     const body = cell.replace(/（[^）]*）/g, "");
     const tokens = body.split(/[・、\s]+|と/);
     table.set(layer, {
       layers: new Set([
-        layer,
+        // 同じ層の中は常に許可する（1ファイルの行には同じ層が無い）
+        ...(isDir ? [layer] : []),
         ...tokens.filter((t) => LAYER_NAMES.includes(t)),
       ]),
       external: /外部SDK|外部ライブラリ/.test(body),
@@ -247,8 +325,9 @@ function allowedFromLint(config: Linter.Config): Allowed | null {
       .group!.filter((g) => g.startsWith("!@/"))
       .map((g) => g.replace(/^!@\//, "").replace(/\/\*\*$/, ""))
   );
-  // 外部パッケージ（@/ と相対パス以外）を禁止するパターンがあるか
-  const external = !patterns.some((p) => p.regex !== undefined);
+  // 外部パッケージ（@/ と相対パス以外）をすべて禁止するパターンがあるか。
+  // DB・外部サービスのクライアントだけを禁止するパターン（#440）は数えない
+  const external = !patterns.some((p) => p.regex?.startsWith("^(?!@/"));
   return { layers, external };
 }
 
@@ -273,33 +352,35 @@ describe("architecture.md の「依存してよい方向」の表と lint の許
     "queries",
     "use-cases",
     "infrastructure",
+    "app",
+    "middleware",
   ];
 
-  // 後続issue（#440・#441 等）で層のブロックを足したら、ここにも足す（足し忘れると落ちる）
+  // lint の対象のファイル（middleware は1ファイル）
+  const fileOf = (layer: string) =>
+    layer === "middleware" ? "src/middleware.ts" : `src/${layer}/sample.ts`;
+
+  // 層のブロックを足したら、ここにも足す（足し忘れると落ちる）
   it("lint で許可リストが設定されている層は、突き合わせの対象の層と一致する", async () => {
     const configured: string[] = [];
-    for (const layer of LAYER_NAMES) {
-      const config = await eslint.calculateConfigForFile(
-        `src/${layer}/sample.ts`
-      );
+    for (const layer of [...LAYER_NAMES, "middleware"]) {
+      const config = await eslint.calculateConfigForFile(fileOf(layer));
       if (allowedFromLint(config)) configured.push(layer);
     }
     expect(configured.sort()).toEqual([...linted].sort());
   });
 
   it.each(linted)(
-    "src/%s/ の lint の許可リストは、表の行と一致する",
+    "%s の lint の許可リストは、表の行と一致する",
     async (layer) => {
-      const config = await eslint.calculateConfigForFile(
-        `src/${layer}/sample.ts`
-      );
+      const config = await eslint.calculateConfigForFile(fileOf(layer));
       const fromLint = allowedFromLint(config);
       expect(
         fromLint,
-        `src/${layer}/ に lint の許可リストが無い`
+        `${fileOf(layer)} に lint の許可リストが無い`
       ).not.toBeNull();
       const fromDoc = table.get(layer);
-      expect(fromDoc, `表に src/${layer}/ の行が無い`).toBeDefined();
+      expect(fromDoc, `表に ${layer} の行が無い`).toBeDefined();
       expect({
         layers: [...fromLint!.layers].sort(),
         external: fromLint!.external,
@@ -367,8 +448,9 @@ describe("domain の内部の定数は domain の外で import できない（#4
   ])(
     "相対パス・namespace import・re-export でも禁止される: %s",
     async (code) => {
+      // app では ../ そのものが禁止なので（#441）、相対 import を許す composition で確かめる
       const messages = await restrictedImportMessages(
-        "src/app/onboarding/sample.tsx",
+        "src/composition/orders/sample.ts",
         code
       );
       expect(messages).toHaveLength(1);
@@ -569,6 +651,77 @@ describe("DB・外部サービスのクライアントは src/infrastructure/ �
         ["no-restricted-imports", "no-restricted-syntax"].includes(m.ruleId!)
       )
     ).toEqual([]);
+  });
+});
+
+// components・lib は app から使われる側なので、repository・infrastructure・app を使わない（#441）
+
+describe("components・lib から repositories・infrastructure・app を使えない（#441）", () => {
+  const files = ["src/components/sample.tsx", "src/lib/sample.ts"];
+
+  describe.each(files)("%s", (file) => {
+    it.each([
+      "@/repositories/order-repository",
+      "@/infrastructure/sanity/client",
+      "@/infrastructure/supabase/server-admin",
+    ])(
+      "%s を import すると、直し方と architecture.md のパスを含むエラーになる",
+      async (path) => {
+        const messages = await restrictedImportMessages(
+          file,
+          `import x from "${path}";\nexport default x;\n`
+        );
+        expect(messages).toHaveLength(1);
+        expect(messages[0].severity).toBe(2);
+        expect(messages[0].message).toContain("Query Service");
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+
+    it("import type でも repository の型は使えない", async () => {
+      const messages = await restrictedImportMessages(
+        file,
+        `import type { OrderRepository } from "@/repositories/order-repository";\nexport type R = OrderRepository;\n`
+      );
+      expect(messages).toHaveLength(1);
+    });
+
+    it.each(["@/app/(member)/favorites/actions", "@/app/page"])(
+      "%s を import すると、Server Action を props で受け取る直し方を含むエラーになる",
+      async (path) => {
+        const messages = await restrictedImportMessages(
+          file,
+          `import x from "${path}";\nexport default x;\n`
+        );
+        expect(messages).toHaveLength(1);
+        expect(messages[0].severity).toBe(2);
+        expect(messages[0].message).toContain("props");
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+
+    it.each(["@/lib/utils", "@/infrastructure-extra/x", "@/application/x"])(
+      "%s は禁止されない（名前が前方一致するだけのものを含む）",
+      async (path) => {
+        const messages = await restrictedImportMessages(
+          file,
+          `import x from "${path}";\nexport default x;\n`
+        );
+        expect(messages).toEqual([]);
+      }
+    );
+  });
+
+  it.each([
+    "@/components/ui/button",
+    "@/domain/value-objects/member-rank",
+    "@/queries/member-order-query-service",
+  ])("src/components/ から %s は import してよい", async (path) => {
+    const messages = await restrictedImportMessages(
+      "src/components/sample.tsx",
+      `import x from "${path}";\nexport default x;\n`
+    );
+    expect(messages).toEqual([]);
   });
 });
 
