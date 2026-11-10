@@ -18,9 +18,11 @@ const SESSION_ID = "cs_test_a1B2c3";
 
 const findStripeCustomerId =
   vi.fn<(clerkUserId: string) => Promise<string | null>>();
-const queryService = new StripeOnboardingPaymentQueryService({
-  findStripeCustomerId,
-});
+// 有効なサブスクリプションの判定は、決済画面と同じ gateway（SDK だけをモック）で行う
+const queryService = new StripeOnboardingPaymentQueryService(
+  { findStripeCustomerId },
+  new StripeOnboardingCheckoutGateway()
+);
 
 function findPaymentCompleted(sessionId: string | null) {
   return queryService.findPaymentCompleted({
