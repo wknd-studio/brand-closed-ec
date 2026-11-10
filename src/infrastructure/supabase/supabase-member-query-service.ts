@@ -73,6 +73,18 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     };
   }
 
+  async findOnboardingCompleted(clerkUserId: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("users")
+      .select("onboarding_completed")
+      .eq("clerk_user_id", clerkUserId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (error) throw error;
+
+    return data?.onboarding_completed ?? false;
+  }
+
   private async findUserWithFavorites(clerkUserId: string) {
     const { data, error } = await this.db
       .from("users")

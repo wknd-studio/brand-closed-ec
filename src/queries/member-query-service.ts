@@ -41,4 +41,6 @@ export interface MemberQueryService {
   findFavorites(clerkUserId: string): Promise<FavoritesDto | null>;
   // 退会済み・存在しない会員は null。確定額は注文確定時の上限チェックと同じ集計
   findMemberLayout(clerkUserId: string): Promise<MemberLayoutDto | null>;
+  // 決済完了画面の入会の確定。退会済み・存在しない会員は false
+  findOnboardingCompleted(clerkUserId: string): Promise<boolean>;
 }
