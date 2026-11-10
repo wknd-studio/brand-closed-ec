@@ -78,34 +78,26 @@ export async function selectPlan(
     ? InvoiceRegistrationNumber.of(invoiceRegistrationNumberRaw)
     : null;
 
-  const user = existing
-    ? existing.selectPlan({
-        email: input.email,
-        firstName,
-        lastName,
-        phoneNumber,
-        rank: MemberRank.of(input.plan),
-        memberType,
-        companyName: companyName ?? null,
-        invoiceRegistrationNumber,
-      })
-    : User.of({
-        id: crypto.randomUUID(),
-        clerkUserId: input.clerkUserId,
-        email: input.email,
-        firstName,
-        lastName,
-        phoneNumber,
-        profileCompletedAt: null,
-        rank: MemberRank.of(input.plan),
-        billingAnchorDay: null,
-        onboardingCompleted: false,
-        deletedAt: null,
-        stripeCustomerId: null,
-        memberType,
-        companyName: companyName ?? null,
-        invoiceRegistrationNumber,
-      });
+  // 未登録の会員（Clerkの作成Webhookより先にプランを選択した）は、登録してから申込内容を入れる
+  const applicant =
+    existing ??
+    User.register({
+      id: crypto.randomUUID(),
+      clerkUserId: input.clerkUserId,
+      email: input.email,
+      firstName,
+      lastName,
+    });
+  const user = applicant.selectPlan({
+    email: input.email,
+    firstName,
+    lastName,
+    phoneNumber,
+    rank: MemberRank.of(input.plan),
+    memberType,
+    companyName: companyName ?? null,
+    invoiceRegistrationNumber,
+  });
 
   // 上の確認の後に入会のWebhookが入会済みにしていた場合は書かない（決済済みの会員を締め出さない）
   if (!(await userRepo.saveIfNotOnboarded(user))) {

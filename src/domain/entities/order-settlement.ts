@@ -46,11 +46,18 @@ interface OrderSettlementProps {
   cancelledAt: Date | null;
 }
 
+// 復元の入口（reconstituteOrderSettlement）から private コンストラクタを使うため、static ブロックで受け取る
+let construct: (props: OrderSettlementProps) => OrderSettlement;
+
 /**
  * 決済単位（1つのStripe Checkout Session、または1つのStripe Invoice）。
  * 1つの注文に複数存在しうる（docs/domain/settlement.md）
  */
 export class OrderSettlement {
+  static {
+    construct = (props) => new OrderSettlement(props);
+  }
+
   readonly id: string;
   readonly orderId: string;
   readonly flow: SettlementFlow;
@@ -71,10 +78,6 @@ export class OrderSettlement {
     this.amount = props.amount;
     this.paidAt = props.paidAt;
     this.cancelledAt = props.cancelledAt;
-  }
-
-  static of(props: OrderSettlementProps): OrderSettlement {
-    return new OrderSettlement(props);
   }
 
   private with(overrides: Partial<OrderSettlementProps>): OrderSettlement {
@@ -144,4 +147,14 @@ export class OrderSettlement {
     }
     return this.with({ ...overrides, status: to });
   }
+}
+
+/**
+ * DBの行からの復元・注文の組み立て（domain）・テストにだけ使う（src/infrastructure・src/domain の外からの import は lint で禁止。#635）。
+ * 正しい状態なら何でも作れるため、既存の決済単位を広げて作り直すと状態遷移の検査（markPaid()・cancel()）を迂回できる
+ */
+export function reconstituteOrderSettlement(
+  props: OrderSettlementProps
+): OrderSettlement {
+  return construct(props);
 }
