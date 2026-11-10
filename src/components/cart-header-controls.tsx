@@ -1,6 +1,6 @@
 "use client";
 
-import { useCart } from "@/lib/cart/context";
+import { useCart } from "@/components/cart/cart-provider";
 
 export default function CartHeaderControls() {
   const { cart, totalUsed, monthlyLimit, openCart } = useCart();

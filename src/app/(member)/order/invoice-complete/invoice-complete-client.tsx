@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { useCart } from "@/lib/cart/context";
+import { useCart } from "@/components/cart/cart-provider";
 
 type OrderItem = {
   id: string;

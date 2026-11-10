@@ -15,8 +15,8 @@ import {
   clearCart,
   calcCartFixedTotal,
   calcItemUpdateError,
-} from "./cookie";
-import type { Cart, CartItem } from "./types";
+} from "@/lib/cart/cookie";
+import type { Cart, CartItem } from "@/lib/cart/types";
 
 type CartContextValue = {
   cart: Cart;
