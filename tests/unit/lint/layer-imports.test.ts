@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 import { ESLint, type Linter } from "eslint";
 import { describe, it, expect } from "vitest";
@@ -383,13 +383,18 @@ describe("domain の内部の定数は domain の外で import できない（#4
   });
 
   it("src/domain/ で export している定数は、すべて禁止の対象になっている", async () => {
-    const exported = globSync("src/domain/**/*.ts").flatMap((file) =>
-      [...readFileSync(file, "utf8").matchAll(/^export const (\w+)/gm)].map(
-        ([, name]) => ({
-          name,
-          path: `@/${file.replace(/^src\//, "").replace(/\.ts$/, "")}`,
-        })
-      )
+    const files = readdirSync("src/domain", {
+      recursive: true,
+      encoding: "utf8",
+    })
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => `domain/${file.replace(/\.ts$/, "")}`);
+    const exported = files.flatMap((file) =>
+      [
+        ...readFileSync(`src/${file}.ts`, "utf8").matchAll(
+          /^export const (\w+)/gm
+        ),
+      ].map(([, name]) => ({ name, path: `@/${file}` }))
     );
     expect(exported.map((e) => e.name).sort()).toEqual(
       DOMAIN_CONSTANTS.map(([name]) => name).sort()
