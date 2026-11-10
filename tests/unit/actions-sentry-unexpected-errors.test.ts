@@ -45,6 +45,9 @@ import {
 import { withdraw } from "@/composition/member";
 import { cancelOrder as cancelOrderUseCase } from "@/composition/order";
 import { DomainError } from "@/domain/errors/domain-error";
+import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
+import { InvalidPostalCodeError } from "@/domain/errors/invalid-postal-code-error";
+import { MissingRequiredAddressFieldsError } from "@/domain/errors/missing-required-address-fields-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import {
@@ -108,6 +111,23 @@ describe.each(addressCases)("$useCase の Server Action", (c) => {
     vi.mocked(c.mock).mockRejectedValue(new OtherDomainError("業務ルール違反"));
 
     expect(await c.run()).toEqual({ error: c.error });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(
+  addressCases.filter((c) =>
+    ["createAddress", "updateAddress"].includes(c.useCase)
+  )
+)("$useCase の Server Action（住所の入力値の検証エラー）", (c) => {
+  it.each([
+    new MissingRequiredAddressFieldsError(["city"]),
+    new InvalidPostalCodeError("123"),
+    new InvalidPhoneNumberError("123"),
+  ])("%s は Sentry に送らない", async (err) => {
+    vi.mocked(c.mock).mockRejectedValue(err);
+
+    expect(await c.run()).not.toEqual({ error: c.error });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 });
