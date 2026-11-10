@@ -43,4 +43,6 @@ export interface MemberQueryService {
   findMemberLayout(clerkUserId: string): Promise<MemberLayoutDto | null>;
   // 決済完了画面の入会の確定。退会済み・存在しない会員は false
   findOnboardingCompleted(clerkUserId: string): Promise<boolean>;
+  // 決済完了画面の Stripe Customer。未作成・退会済み・存在しない会員は null
+  findStripeCustomerId(clerkUserId: string): Promise<string | null>;
 }
