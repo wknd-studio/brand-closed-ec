@@ -167,6 +167,23 @@ Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastr
 - 例外: `src/sanity/`（Sanity Studio）は Studio の中で Sanity のクライアントを使ってよい（「層構成の対象外」を参照）
 - Clerk の認証済みユーザーの取得（`auth()` を包んだ共通ヘルパー）は Next.js のリクエストに結びついた処理なので、`src/lib/auth/` に置く。Clerk の管理API（ユーザーの削除等）を呼ぶ処理は gateway として `src/infrastructure/clerk/` に置く
 
+## admin クライアントを使ってよい場合
+
+`createAdminClient()`（`src/infrastructure/supabase/server-admin.ts`。service role）は RLS を通らない。composition では、会員のクライアント（`createServerClient()`。ログイン中の会員のトークンで RLS が効く）で組み立てるのを基本にし、次のどれかに当たるときだけ admin を使う（#568）。
+
+1. **会員のセッションが無い入口**: Webhook（Stripe・Clerk）。署名を検証したイベントに含まれるID（Checkout Session・Invoice・Clerk の userId 等）で対象を取る
+2. **運営者の操作・画面**: 運営者は `users` の行を持たず、会員向けの own のポリシーでは他の会員の行が見えない。権限は app（admin の layout・Server Action）で `role === "admin"` を確かめる
+3. **会員本人の操作だが、会員のクライアントでは書けない・見えないもの**: 理由を composition に1行のコメントで書く
+   - 会員向けのポリシーが無いテーブルへの書き込み、または anon・authenticated から実行権限を外した関数（RPC）を使う（例: 注文の保存の `place_order_with_limit_check`）
+   - 退会済み（`deleted_at` あり）の行を見る・書く。`get_current_user_id()` は退会済みの会員を返さない（例: 退会の取り消し・退会済みの会員の再入会の拒否・middleware の退会の判定）
+   - `users` への書き込み。会員のトークンで `users` を書かせない（#621）
+   - `users` の行がまだ無い（入会の最初の保存）
+
+admin で会員本人の操作を組み立てるときは、RLS の代わりに use-case・Query Service で持ち主を確かめる。
+
+- 会員は、セッションの Clerk の userId（`requireAuth()`）で取る。画面から送られた会員ID・Clerk の userId を使わない
+- 画面から送られた他の集約のID（住所ID・注文ID等）は、その会員の持ち物であることを確かめてから使う（その repository だけ会員のクライアントで組み立ててもよい）。IDだけで取ると、他の会員の行を読み書きできてしまう（実例: 住所の書き込み #567、注文の住所 #619）
+
 ## src/lib に置くもの・置かないもの
 
 `src/lib` には、**業務を知らない**共通部品だけを置く。「この関数はこのサービスの業務（注文・会員・ランク等）を知っているか」で判断し、知っていれば `src/lib` ではない。
