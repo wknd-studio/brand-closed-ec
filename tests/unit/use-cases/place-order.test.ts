@@ -170,6 +170,30 @@ describe("placeOrder", () => {
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
   });
 
+  it("確定額の集計が失敗したときは、上限チェックを通さずOrderを作成しない（#597）", async () => {
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockRejectedValue(
+      new Error("確定額の集計に失敗")
+    );
+
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+    };
+
+    await expect(placeOrder(baseInput, deps)).rejects.toThrow(
+      "確定額の集計に失敗"
+    );
+    expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
+    expect(deps.orderRepo.save).not.toHaveBeenCalled();
+    expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
   it("支払いタイミングが混在するカートでも、合計で上限超過ならOrderが作成されない", async () => {
     const orderRepo = makeOrderRepo();
     vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockResolvedValue(

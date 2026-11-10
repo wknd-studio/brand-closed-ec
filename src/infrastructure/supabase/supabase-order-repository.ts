@@ -297,26 +297,32 @@ export class SupabaseOrderRepository implements OrderRepository {
     userId: string,
     period: MonthlyPeriod
   ): Promise<number> {
-    const { data: orders } = await this.db
+    // 失敗を「注文0件」として扱うと確定額が実際より少なくなり、上限の事前チェックや
+    // カートの残額表示を誤らせるため、エラーは例外にする（#597）
+    const { data: orders, error: ordersError } = await this.db
       .from("orders")
       .select("id")
       .eq("user_id", userId)
       .neq("status", "cancelled")
       .gte("created_at", period.start.toISOString())
       .lt("created_at", period.end.toISOString());
+    if (ordersError)
+      throw new Error(`確定額の集計に失敗: ${ordersError.message}`);
 
-    if (!orders || orders.length === 0) return 0;
+    if (orders.length === 0) return 0;
 
     const orderIds = orders.map((o) => o.id);
-    const { data: items } = await this.db
+    const { data: items, error: itemsError } = await this.db
       .from("order_items")
       .select(
         "unit_price_snapshot, quantity, order_settlements!order_items_settlement_id_fkey(status)"
       )
       .in("order_id", orderIds)
       .not("unit_price_snapshot", "is", null);
+    if (itemsError)
+      throw new Error(`確定額の集計に失敗: ${itemsError.message}`);
 
-    return (items ?? [])
+    return items
       .filter((i) => {
         const settlement = Array.isArray(i.order_settlements)
           ? i.order_settlements[0]
