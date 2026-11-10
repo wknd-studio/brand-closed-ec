@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
+import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { Order } from "@/domain/entities/order";
@@ -11,11 +12,56 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 
+// ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
+// 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
+const LOCAL_JWT_SECRET =
+  "super-secret-jwt-token-with-at-least-32-characters-long";
+
+function base64url(input: Buffer | string): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function signTestJwt(claims: Record<string, unknown>): string {
+  const header = { alg: "HS256", typ: "JWT" };
+  const payload = {
+    role: "authenticated",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...claims,
+  };
+  const headerPart = base64url(JSON.stringify(header));
+  const payloadPart = base64url(JSON.stringify(payload));
+  const signature = createHmac("sha256", LOCAL_JWT_SECRET)
+    .update(`${headerPart}.${payloadPart}`)
+    .digest();
+  return `${headerPart}.${payloadPart}.${base64url(signature)}`;
+}
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  supabaseUrl,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 );
+
+// 会員のセッションと同じく、会員のトークンで呼ぶクライアント
+function clientAs(clerkUserId: string) {
+  return createClient<Database>(
+    supabaseUrl,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: { persistSession: false },
+      global: {
+        headers: {
+          Authorization: `Bearer ${signTestJwt({ sub: clerkUserId })}`,
+        },
+      },
+    }
+  );
+}
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000020";
 const OTHER_USER_ID = "00000000-0000-0000-0000-000000000021";
@@ -28,11 +74,17 @@ const CANCELLED_ORDER_ID = "00000000-0000-0000-0000-000000000004";
 const ORDER_INVOICE_SENT_ID = "00000000-0000-0000-0000-000000000005";
 const ORDER_LIMIT_EXCEEDED_ID = "00000000-0000-0000-0000-000000000006";
 const OTHER_USER_ORDER_ID = "00000000-0000-0000-0000-000000000007";
+const DELETE_FAIL_ORDER_ID = "00000000-0000-0000-0000-000000000008";
+// DELETE_FAIL_ORDER_ID の決済単位を参照する明細を持つ、別の注文
+const BLOCKER_ORDER_ID = "00000000-0000-0000-0000-000000000009";
 const SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a1";
 const SETTLEMENT_ID_3 = "00000000-0000-0000-0000-0000000000a3";
 const CANCELLED_ORDER_SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a4";
 const SETTLEMENT_ID_5 = "00000000-0000-0000-0000-0000000000a5";
 const SETTLEMENT_ID_6 = "00000000-0000-0000-0000-0000000000a6";
+const DELETE_FAIL_SETTLEMENT_ID = "00000000-0000-0000-0000-0000000000a8";
+const DELETE_FAIL_ITEM_ID = "00000000-0000-0000-0000-000000000038";
+const BLOCKER_ITEM_ID = "00000000-0000-0000-0000-000000000039";
 const STRIPE_SESSION_ID = "cs_test_infra_001";
 const STRIPE_INVOICE_ID = "in_test_infra_001";
 
@@ -44,6 +96,8 @@ const ALL_ORDER_IDS = [
   ORDER_INVOICE_SENT_ID,
   ORDER_LIMIT_EXCEEDED_ID,
   OTHER_USER_ORDER_ID,
+  DELETE_FAIL_ORDER_ID,
+  BLOCKER_ORDER_ID,
 ];
 
 const snapshotProps = {
@@ -462,6 +516,78 @@ describe("SupabaseOrderRepository", () => {
         .select("id")
         .eq("order_id", ORDER_ID_3);
       expect(items).toEqual([]);
+    });
+
+    describe("途中で失敗したとき", () => {
+      beforeAll(async () => {
+        await repo.save(
+          makeOrder({
+            id: DELETE_FAIL_ORDER_ID,
+            items: [
+              makeItem(DELETE_FAIL_ITEM_ID, {
+                settlementId: DELETE_FAIL_SETTLEMENT_ID,
+              }),
+            ],
+            settlements: [
+              makeSettlement({
+                id: DELETE_FAIL_SETTLEMENT_ID,
+                orderId: DELETE_FAIL_ORDER_ID,
+                stripeCheckoutSessionId: "cs_test_infra_delete_fail",
+              }),
+            ],
+          })
+        );
+        // 別の注文の明細が DELETE_FAIL_ORDER_ID の決済単位を参照しているため、
+        // 明細の削除のあと、決済単位の削除が外部キーで失敗する
+        const { error: orderError } = await supabase.from("orders").insert({
+          id: BLOCKER_ORDER_ID,
+          user_id: TEST_USER_ID,
+          status: "processing",
+          shipping_address_snapshot: snapshotProps,
+          billing_address_snapshot: snapshotProps,
+          rank_at_order: "basic",
+          monthly_limit_at_order: 1_000_000,
+        });
+        if (orderError) throw orderError;
+        const { error: itemError } = await supabase.from("order_items").insert({
+          id: BLOCKER_ITEM_ID,
+          order_id: BLOCKER_ORDER_ID,
+          sanity_product_id: "prod-001",
+          product_name_snapshot: "テスト商品",
+          unit_price_snapshot: 50_000,
+          quantity: 1,
+          is_negotiable: false,
+          payment_timing: "at_order",
+          settlement_id: DELETE_FAIL_SETTLEMENT_ID,
+        });
+        if (itemError) throw itemError;
+      });
+
+      it("例外を投げ、明細・決済単位・注文のどれも消えていない", async () => {
+        await expect(repo.delete(DELETE_FAIL_ORDER_ID)).rejects.toThrow();
+
+        const { data: items } = await supabase
+          .from("order_items")
+          .select("id")
+          .eq("order_id", DELETE_FAIL_ORDER_ID);
+        expect(items).toEqual([{ id: DELETE_FAIL_ITEM_ID }]);
+        const { data: settlements } = await supabase
+          .from("order_settlements")
+          .select("id")
+          .eq("order_id", DELETE_FAIL_ORDER_ID);
+        expect(settlements).toEqual([{ id: DELETE_FAIL_SETTLEMENT_ID }]);
+        expect(await repo.findById(DELETE_FAIL_ORDER_ID)).not.toBeNull();
+      });
+    });
+
+    it("会員のトークンからは呼べず、例外を投げて何も消さない", async () => {
+      const memberRepo = new SupabaseOrderRepository(
+        clientAs("clerk_test_order_infra")
+      );
+
+      await expect(memberRepo.delete(ORDER_ID)).rejects.toThrow();
+
+      expect(await repo.findById(ORDER_ID)).not.toBeNull();
     });
   });
 });
