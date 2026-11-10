@@ -11,6 +11,8 @@ import {
   updateAddressAction,
   type AddressFormResult,
 } from "./actions";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { RequiredAddressField } from "@/domain/errors/missing-required-address-fields-error";
 
 type AddressDto = {
@@ -79,6 +81,11 @@ const PREFECTURES = [
   "沖縄県",
 ];
 
+const PREFECTURE_OPTIONS = [
+  { value: "", label: "選択してください" },
+  ...PREFECTURES.map((p) => ({ value: p, label: p })),
+];
+
 async function fetchAddressByZipcode(zipcode: string): Promise<{
   prefecture: string;
   city: string;
@@ -101,9 +108,6 @@ async function fetchAddressByZipcode(zipcode: string): Promise<{
     return null;
   }
 }
-
-const INPUT_CLASS =
-  "w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 aria-invalid:border-danger";
 
 function FieldError({
   field,
@@ -165,13 +169,8 @@ export default function AddressForm(props: Props) {
     }
   }
 
-  function invalidProps(field: RequiredAddressField) {
-    return {
-      "aria-invalid": !!fieldErrors?.[field],
-      "aria-describedby": fieldErrors?.[field]
-        ? `address-${field}-error`
-        : undefined,
-    };
+  function describedBy(field: RequiredAddressField) {
+    return fieldErrors?.[field] ? `address-${field}-error` : undefined;
   }
 
   return (
@@ -189,23 +188,25 @@ export default function AddressForm(props: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs text-gray-500">姓</label>
-              <input
+              <Input
                 name="recipient_last_name"
                 defaultValue={addr?.recipientLastName ?? ""}
                 required
-                {...invalidProps("recipientLastName")}
-                className={INPUT_CLASS}
+                error={fieldErrors?.recipientLastName}
+                aria-describedby={describedBy("recipientLastName")}
+                className="w-full"
               />
               <FieldError field="recipientLastName" fieldErrors={fieldErrors} />
             </div>
             <div>
               <label className="mb-1 block text-xs text-gray-500">名</label>
-              <input
+              <Input
                 name="recipient_first_name"
                 defaultValue={addr?.recipientFirstName ?? ""}
                 required
-                {...invalidProps("recipientFirstName")}
-                className={INPUT_CLASS}
+                error={fieldErrors?.recipientFirstName}
+                aria-describedby={describedBy("recipientFirstName")}
+                className="w-full"
               />
               <FieldError
                 field="recipientFirstName"
@@ -217,7 +218,7 @@ export default function AddressForm(props: Props) {
           <div>
             <label className="mb-1 block text-xs text-gray-500">郵便番号</label>
             <div className="relative">
-              <input
+              <Input
                 name="postal_code"
                 defaultValue={addr?.postalCode ?? ""}
                 required
@@ -226,8 +227,9 @@ export default function AddressForm(props: Props) {
                 title="7桁の数字（例: 150-0001）"
                 placeholder="1500001"
                 onChange={(e) => handleZipcodeChange(e.target.value)}
-                {...invalidProps("postalCode")}
-                className={INPUT_CLASS}
+                error={fieldErrors?.postalCode}
+                aria-describedby={describedBy("postalCode")}
+                className="w-full"
               />
               {zipcodeLoading && (
                 <span className="absolute right-3 top-2 text-xs text-gray-400">
@@ -240,33 +242,29 @@ export default function AddressForm(props: Props) {
 
           <div>
             <label className="mb-1 block text-xs text-gray-500">都道府県</label>
-            <select
+            <Select
               name="prefecture"
               value={prefecture}
               onChange={(e) => setPrefecture(e.target.value)}
               required
-              {...invalidProps("prefecture")}
-              className={INPUT_CLASS}
-            >
-              <option value="">選択してください</option>
-              {PREFECTURES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+              error={fieldErrors?.prefecture}
+              aria-describedby={describedBy("prefecture")}
+              className="w-full"
+              options={PREFECTURE_OPTIONS}
+            />
             <FieldError field="prefecture" fieldErrors={fieldErrors} />
           </div>
 
           <div>
             <label className="mb-1 block text-xs text-gray-500">市区町村</label>
-            <input
+            <Input
               name="city"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               required
-              {...invalidProps("city")}
-              className={INPUT_CLASS}
+              error={fieldErrors?.city}
+              aria-describedby={describedBy("city")}
+              className="w-full"
             />
             <FieldError field="city" fieldErrors={fieldErrors} />
           </div>
@@ -275,13 +273,14 @@ export default function AddressForm(props: Props) {
             <label className="mb-1 block text-xs text-gray-500">
               番地・建物名
             </label>
-            <input
+            <Input
               name="address_line1"
               value={addressLine1}
               onChange={(e) => setAddressLine1(e.target.value)}
               required
-              {...invalidProps("addressLine1")}
-              className={INPUT_CLASS}
+              error={fieldErrors?.addressLine1}
+              aria-describedby={describedBy("addressLine1")}
+              className="w-full"
             />
             <FieldError field="addressLine1" fieldErrors={fieldErrors} />
           </div>
@@ -290,16 +289,17 @@ export default function AddressForm(props: Props) {
             <label className="mb-1 block text-xs text-gray-500">
               建物名・部屋番号（任意）
             </label>
-            <input
+            <Input
               name="address_line2"
               defaultValue={addr?.addressLine2 ?? ""}
-              className={INPUT_CLASS}
+              className="w-full"
             />
           </div>
 
           <div>
             <label className="mb-1 block text-xs text-gray-500">電話番号</label>
-            <input
+            <Input
+              type="tel"
               name="phone_number"
               defaultValue={addr?.phoneNumber ?? ""}
               required
@@ -307,13 +307,14 @@ export default function AddressForm(props: Props) {
               pattern="-*0(?:-*\d){9,10}-*"
               title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
               placeholder="09012345678"
-              {...invalidProps("phoneNumber")}
-              className={INPUT_CLASS}
+              error={fieldErrors?.phoneNumber}
+              aria-describedby={describedBy("phoneNumber")}
+              className="w-full"
             />
             <FieldError field="phoneNumber" fieldErrors={fieldErrors} />
           </div>
 
-          {formError && <p className="text-xs text-red-600">{formError}</p>}
+          {formError && <p className="text-xs text-danger">{formError}</p>}
 
           <div className="flex gap-2 pt-2">
             <button
