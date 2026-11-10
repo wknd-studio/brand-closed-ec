@@ -10,6 +10,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { getStripe } from "@/infrastructure/stripe/client";
 
@@ -21,6 +22,34 @@ import { getStripe } from "@/infrastructure/stripe/client";
  * 返した値（リダイレクト先・Stripeに作らせたセッション・Webhookの応答）を次の段階に渡す
  */
 
+// ローカル開発用Supabase CLIが固定で発行するJWTシークレット（supabase-server-client.test.ts と同じ）。
+// 決済完了画面は会員のトークンで RLS を効かせて入会状態を読むため、Clerk の getToken の代わりに使う
+const LOCAL_JWT_SECRET =
+  "super-secret-jwt-token-with-at-least-32-characters-long";
+
+function base64url(input: Buffer | string): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function signTestJwt(sub: string): string {
+  const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = base64url(
+    JSON.stringify({
+      role: "authenticated",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      sub,
+    })
+  );
+  const signature = createHmac("sha256", LOCAL_JWT_SECRET)
+    .update(`${header}.${payload}`)
+    .digest();
+  return `${header}.${payload}.${base64url(signature)}`;
+}
+
 // ログイン中の会員（Clerk）と、Clerkのmetadata更新（外部API）を差し替える
 const clerk = vi.hoisted(() => ({
   currentUserId: null as string | null,
@@ -28,7 +57,11 @@ const clerk = vi.hoisted(() => ({
   updateUserMetadata: vi.fn(),
 }));
 vi.mock("@clerk/nextjs/server", () => ({
-  auth: async () => ({ userId: clerk.currentUserId }),
+  auth: async () => ({
+    userId: clerk.currentUserId,
+    getToken: async () =>
+      clerk.currentUserId ? signTestJwt(clerk.currentUserId) : null,
+  }),
   currentUser: async () => ({
     emailAddresses: [{ emailAddress: `${clerk.currentUserId}@example.com` }],
   }),

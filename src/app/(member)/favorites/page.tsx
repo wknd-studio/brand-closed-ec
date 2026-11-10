@@ -1,26 +1,15 @@
 import { requireAuth } from "@/lib/auth/current-user";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
+import { memberQueryService } from "@/composition/member-query";
 import { catalogQueryService } from "@/composition/catalog-query";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import FavoriteListCard from "./favorite-list-card";
 
 export default async function FavoritesPage() {
   const { userId } = await requireAuth();
-  const supabase = createAdminClient();
-  const userRepo = new SupabaseUserRepository(supabase);
-
-  const user = await userRepo.findByClerkUserId(userId!);
-
-  const favoriteSanityProductIds = user
-    ? await new SupabaseFavoriteRepository(
-        supabase
-      ).findSanityProductIdsByUserId(user.id)
-    : [];
+  const favorites = await (await memberQueryService()).findFavorites(userId!);
   const items = await catalogQueryService().findFavoriteProducts({
-    rank: user?.rank ?? MemberRank.of("starter"),
-    productIds: favoriteSanityProductIds,
+    rank: favorites?.rank ?? MemberRank.of("starter"),
+    productIds: favorites?.favoriteProductIds ?? [],
   });
 
   return (
