@@ -1,9 +1,7 @@
 import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
-import { MemberRank } from "@/domain/value-objects/member-rank";
 import { Order } from "@/domain/entities/order";
-import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
@@ -62,31 +60,9 @@ export async function placeOrder(
   const productIds = input.cartItems.map((c) => c.sanityProductId);
   const products = await productRepo.findByIds(productIds, user.rank.value);
 
-  // カート情報は会員のブラウザ側で保持・改竄されうるため、価格・支払いタイミング等の
-  // 判断材料としては使わず、ここで商品IDごとにサーバー側の商品情報の実在性・アクセス権限を検証する。
-  // paymentTimingの分割判定も必ずサーバー側で取得したProductSnapshotの値のみを根拠にする。
-  // クライアント入力（cartItems）にpaymentTimingが含まれていても一切参照しない（研究文書 決定9）
-  const cartItems = input.cartItems.map((c) => {
-    const product = products.find(
-      (p) => p.sanityProductId === c.sanityProductId
-    );
-    if (!product) throw new Error("商品が見つかりません");
-    if (!user.rank.canAccess(MemberRank.of(product.minRank))) {
-      throw new ProductNotAccessibleError(
-        product.sanityProductId,
-        user.rank.value,
-        product.minRank
-      );
-    }
-    return CartItem.of({
-      sanityProductId: c.sanityProductId,
-      productName: product.productName,
-      quantity: c.quantity,
-      unitPrice: product.isNegotiable ? Money.zero() : product.unitPrice,
-      isNegotiable: product.isNegotiable,
-      paymentTiming: product.paymentTiming,
-    });
-  });
+  // 価格・支払いタイミング等はカートの値を使わず、サーバー側の商品情報から明細を作る。
+  // 商品の実在性・ランクによるアクセス権限の検証もCartItem.fromProductsが行う
+  const cartItems = CartItem.fromProducts(input.cartItems, products, user.rank);
 
   const period = user.getMonthlyPeriod();
   const confirmedAmount = await orderRepo.sumConfirmedAmountByUserId(
