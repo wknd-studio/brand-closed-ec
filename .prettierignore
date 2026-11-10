@@ -6,3 +6,5 @@ dist/
 .claude/skills/
 # .git/info/exclude で無視しているためPrettierが自動で除外しない
 .claude/worktrees/
+# ESLint の bulk suppressions が書き出す形式のまま扱う（--suppress-rule のたびに書き直されるため）
+eslint-suppressions.json
