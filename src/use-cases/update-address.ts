@@ -25,7 +25,7 @@ export async function updateAddress(
   const address = await addressRepo.findById(input.addressId);
   if (!address) throw new Error("住所が見つかりません");
 
-  const updated = address.with({
+  const updated = address.update({
     recipientLastName: input.recipientLastName,
     recipientFirstName: input.recipientFirstName,
     postalCode: input.postalCode,

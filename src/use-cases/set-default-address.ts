@@ -26,5 +26,5 @@ export async function setDefaultAddress(
   if (!address) throw new Error("住所が見つかりません");
 
   await addressRepo.clearDefault(user.id, input.type);
-  await addressRepo.update(address.with({ isDefault: true }));
+  await addressRepo.update(address.makeDefault());
 }
