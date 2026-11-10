@@ -215,10 +215,14 @@ describe("AddressForm", () => {
     it.each([
       ["09012345678", true],
       ["03-1234-5678", true],
+      // PhoneNumber はハイフンをすべて除いてから判定するため、ハイフンの位置・数は問わない
+      ["090--1234-5678", true],
+      ["-09012345678-", true],
       ["12345", false],
       ["9012345678", false],
       ["090-1234-56789", false],
       ["090abcd5678", false],
+      ["-", false],
     ])("電話番号 %s → %s", (value, expected) => {
       render();
       expect(accepts("phone_number", value)).toBe(expected);

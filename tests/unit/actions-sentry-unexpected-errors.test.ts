@@ -127,7 +127,7 @@ describe.each(
   ])("%s は Sentry に送らない", async (err) => {
     vi.mocked(c.mock).mockRejectedValue(err);
 
-    expect(await c.run()).not.toEqual({ error: c.error });
+    expect(await c.run()).toHaveProperty("fieldErrors");
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 });
