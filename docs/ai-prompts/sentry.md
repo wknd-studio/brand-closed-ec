@@ -8,7 +8,7 @@ Next.jsの`instrumentation.ts`の`onRequestError`フック（`Sentry.captureRequ
 
 一方、`try/catch`で例外を捕まえて`console.error`だけで処理を終え、正常系のような戻り値（`NextResponse.json({...}, {status: 500})`等）を返している箇所は、この自動キャプチャの対象外になる。**catchブロックを書く＝Sentryへの自動送信を自分で無効化している**という理解を持つこと。
 
-そのため、想定外の例外をcatchするすべての箇所で、`console.error`に加えて`Sentry.captureException`を呼ぶ。
+そのため、想定外の例外をcatchするすべての箇所で、`console.error`に加えて`Sentry.captureException`を呼ぶ。`src/` の catch 節で `captureException`（`Sentry`・`ErrorReporter`）の呼び出しも `throw` も無いものは lint で禁止済み（#310）。
 
 ```ts
 import * as Sentry from "@sentry/nextjs";
@@ -28,6 +28,8 @@ try {
 ### 送らなくてよい例外
 
 「クライアントの入力ミス」「署名検証失敗」のような**正常系の一部**として扱っているエラーパスは送らない。Sentryはアプリのバグ・想定外の障害を追うためのものであり、期待された400エラーで埋めると本当に重要なエラーが埋もれる。
+
+catch 節ごと送らないときは、`// eslint-disable-next-line no-restricted-syntax -- <送らない理由>` で lint から外す。一部の例外だけ送らないときは、`if (err instanceof DomainError) return ...` のように分けてから `Sentry.captureException` を呼ぶ（lint は catch の中に呼び出しがあるかだけを見るため、送る処理を別の関数に包むと通らない）。
 
 参考実装: `src/app/api/webhooks/stripe/route.ts`（署名検証失敗の400パスは送らない。catchブロック内の例外のみ送る）
 
@@ -52,7 +54,7 @@ use-cases は `@sentry/nextjs` を import しない（`docs/ai-prompts/architect
 
 Sentryは「現在アクティブなリクエストのスコープ」を自動的に分離する仕組みを持っており、通常のリクエスト処理中（Server Action・Route Handler・Server Component）であれば、`setUser()`はどこで呼んでもそのリクエストだけに閉じる。**Server Actionごとに毎回書く必要はない**。
 
-ただし`src/middleware.ts`だけは例外。Next.jsのmiddlewareは実行コンテキストとして最初から独立しており、middleware内で`Sentry.setUser()`を呼んでも、後続の実際のServer Action・Route Handlerには一切引き継がれない（[Sentry公式ブログ](https://blog.sentry.io/2023/02/21/support-for-next-js-middleware-and-edge-routes/)）。そのため`middleware.ts`では呼ばない。
+ただし`src/middleware.ts`だけは例外。Next.jsのmiddlewareは実行コンテキストとして最初から独立しており、middleware内で`Sentry.setUser()`を呼んでも、後続の実際のServer Action・Route Handlerには一切引き継がれない（[Sentry公式ブログ](https://blog.sentry.io/2023/02/21/support-for-next-js-middleware-and-edge-routes/)）。そのため`middleware.ts`では呼ばない（lintで禁止済み。#310）。
 
 このプロジェクトは`await auth()`（Clerk）を15箇所以上のServer Action・use-caseで直接呼んでおり、共通の認証ヘルパーが存在しない。`setUser()`は各呼び出し箇所に書き足すのではなく、認証を解決する共通ヘルパーを1つ作り、その中に埋め込むことで重複を避ける。
 
