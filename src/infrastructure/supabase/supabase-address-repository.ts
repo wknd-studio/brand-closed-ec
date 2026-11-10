@@ -41,30 +41,33 @@ export class SupabaseAddressRepository implements AddressRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findById(id: string): Promise<Address | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("addresses")
       .select(SELECT_FIELDS)
       .eq("id", id)
-      .single();
+      .maybeSingle();
+    if (error) throw error;
     return data ? toAddress(data as AddressRow) : null;
   }
 
   async findByIdAndUserId(id: string, userId: string): Promise<Address | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("addresses")
       .select(SELECT_FIELDS)
       .eq("id", id)
       .eq("user_id", userId)
       .maybeSingle();
+    if (error) throw error;
     return data ? toAddress(data as AddressRow) : null;
   }
 
   async findByUserId(userId: string): Promise<Address[]> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("addresses")
       .select(SELECT_FIELDS)
       .eq("user_id", userId)
       .order("is_default", { ascending: false });
+    if (error) throw error;
     return (data ?? []).map((row) => toAddress(row as AddressRow));
   }
 
@@ -72,16 +75,17 @@ export class SupabaseAddressRepository implements AddressRepository {
     userId: string,
     type: AddressType
   ): Promise<number> {
-    const { count } = await this.db
+    const { count, error } = await this.db
       .from("addresses")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("type", type);
+    if (error) throw error;
     return count ?? 0;
   }
 
   async save(address: Address, userId: string): Promise<void> {
-    await this.db.from("addresses").insert({
+    const { error } = await this.db.from("addresses").insert({
       id: address.id,
       user_id: userId,
       type: address.type,
@@ -95,10 +99,11 @@ export class SupabaseAddressRepository implements AddressRepository {
       address_line2: address.addressLine2 || null,
       phone_number: address.phoneNumber,
     });
+    if (error) throw error;
   }
 
   async update(address: Address): Promise<void> {
-    await this.db
+    const { error } = await this.db
       .from("addresses")
       .update({
         type: address.type,
@@ -113,17 +118,23 @@ export class SupabaseAddressRepository implements AddressRepository {
         phone_number: address.phoneNumber,
       })
       .eq("id", address.id);
+    if (error) throw error;
   }
 
   async delete(addressId: string): Promise<void> {
-    await this.db.from("addresses").delete().eq("id", addressId);
+    const { error } = await this.db
+      .from("addresses")
+      .delete()
+      .eq("id", addressId);
+    if (error) throw error;
   }
 
   async clearDefault(userId: string, type: AddressType): Promise<void> {
-    await this.db
+    const { error } = await this.db
       .from("addresses")
       .update({ is_default: false })
       .eq("user_id", userId)
       .eq("type", type);
+    if (error) throw error;
   }
 }

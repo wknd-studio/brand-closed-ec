@@ -27,20 +27,22 @@ export class SupabaseAdminUserRepository implements AdminUserRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
   async findByClerkUserId(clerkUserId: string): Promise<AdminUser | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from("admin_users")
       .select(SELECT_FIELDS)
       .eq("clerk_user_id", clerkUserId)
       .maybeSingle();
+    if (error) throw error;
     return data ? toAdminUser(data as AdminUserRow) : null;
   }
 
   async save(adminUser: AdminUser): Promise<void> {
-    await this.db.from("admin_users").upsert({
+    const { error } = await this.db.from("admin_users").upsert({
       id: adminUser.id,
       clerk_user_id: adminUser.clerkUserId,
       name: adminUser.name,
       email: adminUser.email,
     });
+    if (error) throw error;
   }
 }

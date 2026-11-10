@@ -307,9 +307,59 @@ describe("SupabaseAddressRepository（会員のクライアント・RLS）", () 
     expect(await adminRepo.findById(ADDRESS_B1_ID)).toEqual(original);
   });
 
-  it("他の会員の住所として作成できない", async () => {
-    await repoAsA.save(buildAddress(ADDRESS_B2_ID, "shipping"), USER_B_ID);
+  it("他の会員の住所として作成しようとすると、RLSに拒否されて例外を投げる", async () => {
+    await expect(
+      repoAsA.save(buildAddress(ADDRESS_B2_ID, "shipping"), USER_B_ID)
+    ).rejects.toThrow(/row-level security/);
 
     expect(await findRow(ADDRESS_B2_ID)).toBeNull();
+  });
+});
+
+// supabase-js は失敗しても例外を投げず error を返すため、捨てると書き込みの失敗が成功扱いに、
+// 読み取りの失敗が「見つからない」「0件」に化ける（#614）
+describe("SupabaseAddressRepository（DBエラー・制約違反）", () => {
+  const repo = new SupabaseAddressRepository(adminClient);
+  const INVALID_UUID = "not-a-uuid";
+
+  it.each([
+    ["findById", () => repo.findById(INVALID_UUID)],
+    [
+      "findByIdAndUserId",
+      () => repo.findByIdAndUserId(INVALID_UUID, USER_A_ID),
+    ],
+    ["findByUserId", () => repo.findByUserId(INVALID_UUID)],
+    [
+      "countByUserIdAndType",
+      () => repo.countByUserIdAndType(INVALID_UUID, "shipping"),
+    ],
+  ])("%s は読み取りの失敗（不正なUUID）で例外を投げる", async (_, call) => {
+    await expect(call()).rejects.toThrow();
+  });
+
+  it.each([
+    ["update", () => repo.update(buildAddress(INVALID_UUID, "shipping"))],
+    ["delete", () => repo.delete(INVALID_UUID)],
+    ["clearDefault", () => repo.clearDefault(INVALID_UUID, "shipping")],
+  ])("%s は書き込みの失敗（不正なUUID）で例外を投げる", async (_, call) => {
+    await expect(call()).rejects.toThrow();
+  });
+
+  it("save は制約違反（同じIDの住所が既にある）で例外を投げる", async () => {
+    await repo.save(buildAddress(ADDRESS_A1_ID, "shipping"), USER_A_ID);
+
+    await expect(
+      repo.save(buildAddress(ADDRESS_A1_ID, "billing"), USER_A_ID)
+    ).rejects.toThrow(/duplicate key/);
+    expect((await findRow(ADDRESS_A1_ID))?.type).toBe("shipping");
+  });
+
+  it("存在しない会員の住所は空配列・0件を返す", async () => {
+    const unknownUserId = "00000000-0000-0000-0000-0000000524ff";
+    expect(await repo.findByUserId(unknownUserId)).toEqual([]);
+    expect(await repo.countByUserIdAndType(unknownUserId, "shipping")).toBe(0);
+    expect(
+      await repo.findByIdAndUserId(ADDRESS_A1_ID, unknownUserId)
+    ).toBeNull();
   });
 });

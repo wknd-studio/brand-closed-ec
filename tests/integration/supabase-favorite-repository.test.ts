@@ -1,13 +1,59 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { createClient } from "@supabase/supabase-js";
+import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
 
+// ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
+// 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
+const LOCAL_JWT_SECRET =
+  "super-secret-jwt-token-with-at-least-32-characters-long";
+
+function base64url(input: Buffer | string): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function signTestJwt(claims: Record<string, unknown>): string {
+  const header = { alg: "HS256", typ: "JWT" };
+  const payload = {
+    role: "authenticated",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...claims,
+  };
+  const headerPart = base64url(JSON.stringify(header));
+  const payloadPart = base64url(JSON.stringify(payload));
+  const signature = createHmac("sha256", LOCAL_JWT_SECRET)
+    .update(`${headerPart}.${payloadPart}`)
+    .digest();
+  return `${headerPart}.${payloadPart}.${base64url(signature)}`;
+}
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  supabaseUrl,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 );
+
+// 会員のセッションと同じく、RLS が効くクライアント
+function clientAs(clerkUserId: string) {
+  return createClient<Database>(
+    supabaseUrl,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: { persistSession: false },
+      global: {
+        headers: {
+          Authorization: `Bearer ${signTestJwt({ sub: clerkUserId })}`,
+        },
+      },
+    }
+  );
+}
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000030";
 const OTHER_USER_ID = "00000000-0000-0000-0000-000000000031";
@@ -92,5 +138,48 @@ describe("SupabaseFavoriteRepository", () => {
   it("お気に入りが無いユーザーは空配列を返す", async () => {
     const ids = await repo.findSanityProductIdsByUserId(TEST_USER_ID);
     expect(ids).toEqual([]);
+  });
+});
+
+// supabase-js は失敗しても例外を投げず error を返すため、捨てると書き込みの失敗が成功扱いに、
+// 読み取りの失敗が「0件」に化ける（#614）
+describe("SupabaseFavoriteRepository（RLS・DBエラー・制約違反）", () => {
+  const repo = new SupabaseFavoriteRepository(supabase);
+  const repoAsTestUser = new SupabaseFavoriteRepository(
+    clientAs("clerk_test_favorite_infra")
+  );
+
+  it("会員のクライアントで自分のお気に入りは登録・取得・削除できる", async () => {
+    await repoAsTestUser.add(TEST_USER_ID, "prod-1");
+    await repoAsTestUser.add(TEST_USER_ID, "prod-1");
+    expect(
+      await repoAsTestUser.findSanityProductIdsByUserId(TEST_USER_ID)
+    ).toEqual(["prod-1"]);
+
+    await repoAsTestUser.remove(TEST_USER_ID, "prod-1");
+    expect(await repo.findSanityProductIdsByUserId(TEST_USER_ID)).toEqual([]);
+  });
+
+  it("会員のクライアントで他の会員のお気に入りを登録しようとすると、RLSに拒否されて例外を投げる", async () => {
+    await expect(repoAsTestUser.add(OTHER_USER_ID, "prod-1")).rejects.toThrow(
+      /row-level security/
+    );
+    expect(await repo.findSanityProductIdsByUserId(OTHER_USER_ID)).toEqual([]);
+  });
+
+  it("add は制約違反（存在しない会員）で例外を投げる", async () => {
+    await expect(
+      repo.add("00000000-0000-0000-0000-00000000003f", "prod-1")
+    ).rejects.toThrow(/foreign key/);
+  });
+
+  it("findSanityProductIdsByUserId は読み取りの失敗（不正なUUID）で例外を投げる", async () => {
+    await expect(
+      repo.findSanityProductIdsByUserId("not-a-uuid")
+    ).rejects.toThrow();
+  });
+
+  it("remove は書き込みの失敗（不正なUUID）で例外を投げる", async () => {
+    await expect(repo.remove("not-a-uuid", "prod-1")).rejects.toThrow();
   });
 });
