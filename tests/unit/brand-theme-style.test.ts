@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveBrandThemeCssVars } from "@/lib/brand-theme-style";
-import type { BrandTheme } from "@/lib/sanity/brand-theme";
+import type { BrandThemeDto } from "@/queries/brand-theme-query-service";
 
 describe("resolveBrandThemeCssVars", () => {
   it("themeがnullの場合は空オブジェクトを返す", () => {
@@ -8,7 +8,7 @@ describe("resolveBrandThemeCssVars", () => {
   });
 
   it("配色とフォントをCSS変数として返す", () => {
-    const theme: BrandTheme = {
+    const theme: BrandThemeDto = {
       primaryColorHex: "#111111",
       accentColorHex: "#ff0000",
       font: "serif",
@@ -23,7 +23,7 @@ describe("resolveBrandThemeCssVars", () => {
   });
 
   it("未知のフォントキーの場合は--brand-fontを含めない", () => {
-    const theme: BrandTheme = {
+    const theme: BrandThemeDto = {
       primaryColorHex: "#111111",
       accentColorHex: "#ff0000",
       font: "unknown",
