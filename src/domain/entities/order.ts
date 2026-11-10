@@ -257,6 +257,19 @@ export class Order {
     return this.settlements.some((s) => s.isUnresolved());
   }
 
+  /**
+   * at_orderの明細の決済単位（Checkout）。注文確定時にat_orderの明細があるときだけ1件作られる
+   * （Order.place）。after_orderの明細のみの注文ではnull
+   */
+  checkoutSettlement(): OrderSettlement | null {
+    return this.settlements.find((s) => s.flow === "checkout") ?? null;
+  }
+
+  /** 決済単位に紐付いた明細（Checkout・Invoiceに載せる明細） */
+  itemsIn(settlement: OrderSettlement): OrderItem[] {
+    return this.items.filter((item) => item.settlementId === settlement.id);
+  }
+
   /** 決済単位を差し替え（無ければ追加）、statusをロールアップし直した注文を返す */
   applySettlement(settlement: OrderSettlement): Order {
     const exists = this.settlements.some((s) => s.id === settlement.id);

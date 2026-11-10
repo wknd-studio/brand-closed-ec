@@ -113,8 +113,7 @@ export async function placeOrder(
     placedAt: new Date(),
     generateId: () => crypto.randomUUID(),
   });
-  // 新しい注文の決済単位は、at_orderの明細があるときのCheckoutの1件だけ
-  const settlement = order.settlements[0] ?? null;
+  const settlement = order.checkoutSettlement();
   const afterOrderItems = order.items.filter((item) => item.isAfterOrder());
 
   // 途中で失敗した場合に注文が中途半端に残らないよう、補償削除してからエラーを伝播する
@@ -167,8 +166,8 @@ export async function placeOrder(
   };
 
   if (settlement) {
-    const lineItems: CheckoutLineItem[] = order.items
-      .filter((item) => item.settlementId === settlement.id)
+    const lineItems: CheckoutLineItem[] = order
+      .itemsIn(settlement)
       .map((item) => ({
         productName: item.productNameSnapshot,
         unitPrice: item.unitPriceSnapshot.amount,
