@@ -75,6 +75,10 @@ feature/* →  Cloudflare Pages Preview URL
 - **依存の確認**: 着手前に `gh api repos/{owner}/{repo}/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
 - **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
+- **担当外の問題**: 作業中に担当issueの範囲外の問題（不具合・設計の歪み等）を見つけたら、実装せずに起票する。見つけることは続ける
+  - マイルストーンは付けない。担当issueと同じマイルストーンにも入れない。マイルストーンへの振り分けと優先度は、オーケストレーションのセッションが人間と決める（セッションがたまたま読んだ場所の順ではなく、危険度の順で直すため）
+  - 同じ種類の問題が複数の箇所にあるときは、場所ごとに起票しない。lint・テストで検出して一度に直す1件として起票し、見つけた箇所を本文に並べる（1か所ずつ直しても、新しいコードで同じ書き方をすれば再発するため。「PRのレビュー」の「レビューをすり抜けたバグはlint・テストに変換する」と同じ考え方）
+  - 担当issueの範囲の作業が増えた場合は、これではなく「タスク分解」に従う
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
 - **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、次の2つを満たせば、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop --body-file <本文ファイル>` まで進めてよい。PR本文は `.github/pull_request_template.md` の各項目を埋める（該当しない欄は「なし」と書く）。
   - `task check` がgreen
@@ -103,7 +107,7 @@ feature/* →  Cloudflare Pages Preview URL
 **タスク分解**: PRの粒度は、PRを作る時点ではなく、issueを起票してタスクを分解した時点で決める。issueは `.github/ISSUE_TEMPLATE/` のテンプレート（タスク／親issue）から起票する。
 
 - issue と PR は常に1対1にする。1PRに収まらない作業は、起票時に親issue（タスクリスト）＋サブissue（1つ = 1PR）に分ける。1つのissueに複数PRは作らない（Orcaの「1issue = 1ワークツリー = 1ブランチ」と揃える）
-- 実装中にやることが増えたら、PRを大きくせず、新しいissueを起票して親issueのタスクリストに追記する。Orcaのセッションは担当issue以外を実装しない
+- 実装中に担当issueの範囲（同じ親issueの目的）の作業が増えたら、PRを大きくせず、新しいissueを起票して親issueのタスクリストに追記する。Orcaのセッションは担当issue以外を実装しない。範囲外の問題を見つけた場合は、親issueに追記せず「並列開発（Orca）」の「担当外の問題」に従う
 - タスクリストは最初から完璧にしなくてよい。大枠から書き、分かった時点で追記する
 
 **PRのレビュー**: スキーマ・RLS、Webhook、認証・認可、決済・注文・金額計算、CI・権限設定・lintなどのゲート、依存に触れるPRには `high-risk` ラベルが自動で付く（対象パスは `.github/labeler.yml`）。
