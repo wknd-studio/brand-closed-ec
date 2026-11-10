@@ -2,6 +2,8 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { Money } from "@/domain/value-objects/money";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import type { PhoneNumber } from "@/domain/value-objects/phone-number";
+import type { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
@@ -13,7 +15,8 @@ interface UserProps {
   email: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
+  // プロフィール未入力ならnull
+  phoneNumber: PhoneNumber | null;
   profileCompletedAt: Date | null;
   rank: MemberRank;
   billingAnchorDay: number | null;
@@ -22,7 +25,7 @@ interface UserProps {
   stripeCustomerId: string | null;
   memberType?: MemberType;
   companyName?: string | null;
-  invoiceRegistrationNumber?: string | null;
+  invoiceRegistrationNumber?: InvoiceRegistrationNumber | null;
   initialFeePaidRank?: MemberRank | null;
 }
 
@@ -32,7 +35,7 @@ export class User {
   readonly email: string;
   readonly firstName: string;
   readonly lastName: string;
-  readonly phoneNumber: string;
+  readonly phoneNumber: PhoneNumber | null;
   readonly profileCompletedAt: Date | null;
   readonly rank: MemberRank;
   readonly billingAnchorDay: number | null;
@@ -41,7 +44,7 @@ export class User {
   readonly stripeCustomerId: string | null;
   readonly memberType: MemberType;
   readonly companyName: string | null;
-  readonly invoiceRegistrationNumber: string | null;
+  readonly invoiceRegistrationNumber: InvoiceRegistrationNumber | null;
   // 支払い済み最高ランク。再入会・アップグレード時の初期費用の判定に使う
   readonly initialFeePaidRank: MemberRank | null;
 
@@ -139,7 +142,7 @@ export class User {
 
   hasCompletedProfile(): boolean {
     return (
-      this.firstName !== "" && this.lastName !== "" && this.phoneNumber !== ""
+      this.firstName !== "" && this.lastName !== "" && this.phoneNumber !== null
     );
   }
 }

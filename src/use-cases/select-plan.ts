@@ -75,7 +75,7 @@ export async function selectPlan(
   const phoneNumber = PhoneNumber.of(input.phoneNumber);
   const memberType = MemberType.of(isCorporate ? "corporate" : "individual");
   const invoiceRegistrationNumber = isCorporate
-    ? InvoiceRegistrationNumber.of(invoiceRegistrationNumberRaw).value
+    ? InvoiceRegistrationNumber.of(invoiceRegistrationNumberRaw)
     : null;
 
   const user = existing
@@ -83,7 +83,7 @@ export async function selectPlan(
         email: input.email,
         firstName,
         lastName,
-        phoneNumber: phoneNumber.value,
+        phoneNumber,
         rank: MemberRank.of(input.plan),
         onboardingCompleted: false,
         memberType,
@@ -96,7 +96,7 @@ export async function selectPlan(
         email: input.email,
         firstName,
         lastName,
-        phoneNumber: phoneNumber.value,
+        phoneNumber,
         profileCompletedAt: null,
         rank: MemberRank.of(input.plan),
         billingAnchorDay: null,
