@@ -65,8 +65,10 @@ export async function placeOrder(
   const products = await productRepo.findByIds(productIds, user.rank.value);
 
   // カート情報は会員のブラウザ側で保持・改竄されうるため、価格・支払いタイミング等の
-  // 判断材料としては使わず、ここで商品IDごとにサーバー側の商品情報の実在性・アクセス権限を検証する
-  for (const c of input.cartItems) {
+  // 判断材料としては使わず、ここで商品IDごとにサーバー側の商品情報の実在性・アクセス権限を検証する。
+  // paymentTimingの分割判定も必ずサーバー側で取得したProductSnapshotの値のみを根拠にする。
+  // クライアント入力（cartItems）にpaymentTimingが含まれていても一切参照しない（研究文書 決定9）
+  const cartItems = input.cartItems.map((c) => {
     const product = products.find(
       (p) => p.sanityProductId === c.sanityProductId
     );
@@ -78,23 +80,13 @@ export async function placeOrder(
         product.minRank
       );
     }
-  }
-
-  // paymentTimingの分割判定は必ずサーバー側で取得したProductSnapshotの値のみを根拠にする。
-  // クライアント入力（cartItems）にpaymentTimingが含まれていても一切参照しない（研究文書 決定9）
-  const cartItems = input.cartItems.map((c) => {
-    const product = products.find(
-      (p) => p.sanityProductId === c.sanityProductId
-    );
     return CartItem.of({
       sanityProductId: c.sanityProductId,
-      productName: product?.productName ?? c.productName,
+      productName: product.productName,
       quantity: c.quantity,
-      unitPrice: product?.isNegotiable
-        ? Money.zero()
-        : (product?.unitPrice ?? Money.zero()),
-      isNegotiable: product?.isNegotiable ?? false,
-      paymentTiming: product?.paymentTiming ?? "at_order",
+      unitPrice: product.isNegotiable ? Money.zero() : product.unitPrice,
+      isNegotiable: product.isNegotiable,
+      paymentTiming: product.paymentTiming,
     });
   });
 
