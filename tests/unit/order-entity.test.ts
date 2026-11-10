@@ -6,6 +6,7 @@ import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
+import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 
 const snapshotProps = {
   recipientLastName: "山田",
@@ -164,10 +165,17 @@ describe("Order", () => {
       expect(cancelled.settlements[1]?.cancelledAt).toBe(earlier);
     });
 
-    it("キャンセル不可の注文はエラー", () => {
+    it("キャンセル不可の注文はOrderNotCancellableErrorを投げる", () => {
       expect(() =>
         makeOrder({ status: OrderStatus.of("paid") }).cancel(new Date())
-      ).toThrow();
+      ).toThrow(OrderNotCancellableError);
+    });
+
+    it("支払い済みの決済単位を含む注文はOrderNotCancellableErrorを投げる", () => {
+      const order = makeOrder({
+        settlements: [makeSettlement({ status: "paid", paidAt: new Date() })],
+      });
+      expect(() => order.cancel(new Date())).toThrow(OrderNotCancellableError);
     });
   });
 

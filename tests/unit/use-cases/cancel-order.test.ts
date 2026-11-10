@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { cancelOrder } from "@/use-cases/cancel-order";
+import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { makeOrderRepo, makeOrder, makeSettlement } from "./helpers";
 
 describe("cancelOrder", () => {
@@ -19,9 +20,9 @@ describe("cancelOrder", () => {
     const order = makeOrder({ status: "paid" });
     const orderRepo = makeOrderRepo(order);
 
-    await expect(
-      cancelOrder({ orderId: order.id }, { orderRepo })
-    ).rejects.toThrow("キャンセルできません");
+    const result = cancelOrder({ orderId: order.id }, { orderRepo });
+    await expect(result).rejects.toThrow(OrderNotCancellableError);
+    await expect(result).rejects.toThrow("キャンセルできません");
     expect(orderRepo.save).not.toHaveBeenCalled();
   });
 
