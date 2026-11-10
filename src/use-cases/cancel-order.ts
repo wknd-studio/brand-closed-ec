@@ -9,7 +9,6 @@ export async function cancelOrder(
 ): Promise<void> {
   const order = await deps.orderRepo.findById(input.orderId);
   if (!order) throw new Error("注文が見つかりません");
-  if (!order.canCancel()) throw new Error("この注文はキャンセルできません");
-
+  // キャンセルできない注文は Order.cancel() が OrderNotCancellableError を投げる
   await deps.orderRepo.save(order.cancel(new Date()));
 }

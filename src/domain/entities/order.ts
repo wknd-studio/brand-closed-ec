@@ -4,6 +4,7 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { OrderItem } from "./order-item";
 import { OrderSettlement } from "./order-settlement";
+import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 
 interface OrderProps {
   id: string;
@@ -77,7 +78,7 @@ export class Order {
   /** 注文をキャンセルし、未払い（未キャンセル）の決済単位も併せてキャンセルする */
   cancel(at: Date): Order {
     if (!this.canCancel()) {
-      throw new Error("この注文はキャンセルできません");
+      throw new OrderNotCancellableError(this.id);
     }
     return this.with({
       status: OrderStatus.of("cancelled"),
@@ -103,7 +104,7 @@ export class Order {
    */
   rollupStatus(): OrderStatus {
     if (this.status.value === "cancelled") return this.status;
-    if (this.settlements.some((s) => s.status === "limit_exceeded")) {
+    if (this.settlements.some((s) => s.isLimitExceeded())) {
       return OrderStatus.of("limit_exceeded");
     }
 
@@ -140,9 +141,7 @@ export class Order {
    * そちら側で改めて導入する）。
    */
   hasUnresolvedSettlement(): boolean {
-    return this.settlements.some(
-      (s) => s.status === "invoice_sent" || s.status === "limit_exceeded"
-    );
+    return this.settlements.some((s) => s.isUnresolved());
   }
 
   /** 決済単位を差し替え（無ければ追加）、statusをロールアップし直した注文を返す */
