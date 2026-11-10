@@ -45,7 +45,7 @@
 **ランク制限とアクセス可否**
 
 - 商品は`min_rank`（最低閲覧ランク）を持つ。会員は自分のランク以上の`min_rank`が設定された商品を閲覧できない（一覧に表示されず、詳細URLへの直接アクセスは404）
-- ランク比較は[[subscription-billing]]が定義するランク序列（STARTER〜ENTERPRISEの7段階、`RANK_ORDER`）のインデックス比較で行う（実装: `isProductAccessible()` / `getAllowedRanks()`、`src/lib/sanity/products.ts`）
+- ランク比較は[[subscription-billing]]が定義するランク序列（STARTER〜ENTERPRISEの7段階、`RANK_ORDER`）のインデックス比較で行う（実装: `MemberRank.canAccess()` / `accessibleRanks()`、`src/domain/value-objects/member-rank.ts`。商品の取得時に `src/infrastructure/sanity/sanity-catalog-query-service.ts` が適用する）
 - 商品にファイルが添付されている場合も同じアクセス制御に従う（閲覧不可な会員には404）
 
 **ランク別価格の決定**
@@ -99,7 +99,7 @@
 
 - `docs/adr/005-sanity-cms.md` — Sanity CMS採用の背景・Supabaseとの役割分担の決定
 - 実装（Sanityスキーマ）: `src/sanity/schemas/product.ts`（商品・価格計算・バリデーション）、`brand.ts`、`category.ts`、`price-settings.ts`（掛け率設定プリセット）、`rank-options.ts`（`RANK_OPTIONS`/`PRICING_RANK_OPTIONS`）
-- 実装（アプリケーション層）: `src/lib/sanity/products.ts`（`isProductAccessible()`・`getAllowedRanks()`・`fetchProducts()`等）、`src/domain/value-objects/cart-item.ts`
+- 実装（アプリケーション層）: `src/queries/catalog-query-service.ts`（商品カタログの Query Service の interface・DTO）、`src/infrastructure/sanity/sanity-catalog-query-service.ts`（Sanity 版の実装）、`src/domain/value-objects/cart-item.ts`
 - `docs/db-schema-redesign.md` の`cart_items`（変更なし）節・`favorites`（変更なし）節・`order_items`の`sanity_product_id`/`product_name_snapshot`/`brand_id_snapshot`/`brand_name_snapshot`/`fulfillment_location_code`列の節
 - `specs/004-product-data-import/` — 業者商品データの統一インポート基盤の仕様（CSV提供業者・スクレイピング業者・定期実行・JANコード重複判定）。`contracts/unified-product-schema.md`に統一中間スキーマの定義あり
 - （旧`docs/archive/service-spec.md`「会員プラン」節・`docs/archive/user-stories.md`「2. 商品閲覧」「2.5 お気に入り」節を材料に執筆。ドメインドキュメント全体完了に伴いarchiveは削除済み）

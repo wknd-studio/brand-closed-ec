@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/infrastructure/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchBrands } from "@/lib/sanity/products";
+import { catalogQueryService } from "@/composition/catalog-query";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 
 export default async function ShopPage() {
@@ -12,9 +12,9 @@ export default async function ShopPage() {
   const userRepo = new SupabaseUserRepository(supabase);
 
   const user = await userRepo.findByClerkUserId(userId!);
-  const userRank = user?.rank.value ?? "starter";
-  const allowedRanks = MemberRank.of(userRank).accessibleRanks();
-  const brands = await fetchBrands(allowedRanks);
+  const brands = await catalogQueryService().findBrands(
+    user?.rank ?? MemberRank.of("starter")
+  );
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">

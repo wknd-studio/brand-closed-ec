@@ -1,29 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Product } from "@/lib/sanity/products";
-import { MemberRank } from "@/domain/value-objects/member-rank";
-import { RankPrices } from "@/domain/value-objects/rank-prices";
+import type { ProductCardDto } from "@/queries/catalog-query-service";
 import FavoriteButton from "@/components/favorite-button";
 
 export default function FavoriteListCard({
   product,
   isAccessible,
-  userRank,
 }: {
-  product: Product;
+  product: ProductCardDto;
   isAccessible: boolean;
-  userRank: string;
 }) {
-  const rankPrice = RankPrices.of({
-    isNegotiable: product.is_negotiable,
-    prices: product.prices,
-  }).priceFor(MemberRank.of(userRank));
-
   const body = (
     <>
       <div className="relative aspect-square bg-gray-100">
         <FavoriteButton
-          sanityProductId={product._id}
+          sanityProductId={product.id}
           className="absolute right-2 top-2 z-10"
         />
         {product.thumbnail ? (
@@ -53,11 +44,11 @@ export default function FavoriteListCard({
         <p className="text-xs text-gray-500">{product.brand}</p>
         <p className="line-clamp-2 text-sm font-medium">{product.name}</p>
         {isAccessible &&
-          (product.is_negotiable ? (
+          (product.isNegotiable ? (
             <p className="text-sm font-semibold text-gray-600">価格要相談</p>
-          ) : rankPrice != null ? (
+          ) : product.unitPrice != null ? (
             <p className="text-sm font-semibold">
-              ¥{rankPrice.amount.toLocaleString()}
+              ¥{product.unitPrice.toLocaleString()}
             </p>
           ) : null)}
       </div>
@@ -72,7 +63,7 @@ export default function FavoriteListCard({
 
   return (
     <Link
-      href={`/shop/${encodeURIComponent(product.brand)}/${product._id}`}
+      href={`/shop/${encodeURIComponent(product.brand)}/${product.id}`}
       className="block overflow-hidden rounded-lg border bg-white transition hover:shadow-md"
     >
       {body}

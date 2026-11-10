@@ -1,27 +1,27 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth/current-user";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { fetchProducts, type Product } from "@/lib/sanity/products";
+import { createServerClient } from "@/infrastructure/supabase/server";
+import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
+import { catalogQueryService } from "@/composition/catalog-query";
+import type { ProductCardDto } from "@/queries/catalog-query-service";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 
 export async function fetchMoreProducts(
   offset: number,
   params: { brand?: string; keyword?: string }
-): Promise<Product[]> {
+): Promise<ProductCardDto[]> {
   const { userId } = await requireAuth();
   if (!userId) return [];
 
-  const supabase = createAdminClient();
-  const { data: user } = await supabase
-    .from("users")
-    .select("rank_code")
-    .eq("clerk_user_id", userId)
-    .single();
+  const user = await new SupabaseUserRepository(
+    await createServerClient()
+  ).findByClerkUserId(userId);
 
-  const allowedRanks = MemberRank.of(
-    user?.rank_code ?? "starter"
-  ).accessibleRanks();
-  const { products } = await fetchProducts({ allowedRanks, offset, ...params });
+  const { products } = await catalogQueryService().findProducts({
+    rank: user?.rank ?? MemberRank.of("starter"),
+    offset,
+    ...params,
+  });
   return products;
 }

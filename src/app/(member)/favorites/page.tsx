@@ -2,8 +2,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
-import { fetchProductsByIds } from "@/lib/sanity/products";
-import { buildFavoriteListItems } from "@/lib/favorites/build-list";
+import { catalogQueryService } from "@/composition/catalog-query";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import FavoriteListCard from "./favorite-list-card";
 
@@ -13,19 +12,16 @@ export default async function FavoritesPage() {
   const userRepo = new SupabaseUserRepository(supabase);
 
   const user = await userRepo.findByClerkUserId(userId!);
-  const userRank = user?.rank.value ?? "starter";
 
   const favoriteSanityProductIds = user
     ? await new SupabaseFavoriteRepository(
         supabase
       ).findSanityProductIdsByUserId(user.id)
     : [];
-  const products = await fetchProductsByIds(favoriteSanityProductIds);
-  const items = buildFavoriteListItems(
-    favoriteSanityProductIds,
-    products,
-    MemberRank.of(userRank)
-  );
+  const items = await catalogQueryService().findFavoriteProducts({
+    rank: user?.rank ?? MemberRank.of("starter"),
+    productIds: favoriteSanityProductIds,
+  });
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -38,10 +34,9 @@ export default async function FavoritesPage() {
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {items.map(({ product, isAccessible }) => (
             <FavoriteListCard
-              key={product._id}
+              key={product.id}
               product={product}
               isAccessible={isAccessible}
-              userRank={userRank}
             />
           ))}
         </div>

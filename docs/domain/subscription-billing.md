@@ -115,4 +115,4 @@
 - `docs/plan-change-flow.md` — プラン変更のStripe操作・Webhookハンドラー・`changePlan`統合ユースケースの詳細設計（本ドキュメントの「業務ルール」節は主にこれを要約）
 - `specs/001-seven-rank-pricing/` — 旧5ランクから新7ランクへの移行spec。`data-model.md`に`MemberRank`のコード定義・DB移行手順あり
 - `specs/005-b2b-organization/spec.md` — 複数メンバー共有型の法人組織モデルの旧spec。2026-09-12方針転換（GitHub issue #200）により実装対象から外れたが、Ver2以降で再導入する場合の参考資料として残す（移行手順は[[membership]]「将来、複数メンバー対応（Ver2以降）を実装する際の移行手順」節参照）
-- 実装: `src/domain/value-objects/member-rank.ts`（`RANK_ORDER`・`MONTHLY_LIMITS`・`MemberRank`クラス）、`src/lib/sanity/products.ts`（`RANK_ORDER`参照）、`src/app/onboarding/plan/`（プラン選択画面。[[membership]]の責務）
+- 実装: `src/domain/value-objects/member-rank.ts`（`RANK_ORDER`・`MONTHLY_LIMITS`・`MemberRank`クラス）、`src/infrastructure/sanity/sanity-catalog-query-service.ts`（`MemberRank.accessibleRanks()`で商品を絞り込む）、`src/app/onboarding/plan/`（プラン選択画面。[[membership]]の責務）

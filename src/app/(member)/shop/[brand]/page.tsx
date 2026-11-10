@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { createServerClient } from "@/infrastructure/supabase/server";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { fetchProducts } from "@/lib/sanity/products";
+import { catalogQueryService } from "@/composition/catalog-query";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
@@ -21,10 +21,9 @@ export default async function BrandProductsPage({
   const userRepo = new SupabaseUserRepository(supabase);
 
   const user = await userRepo.findByClerkUserId(userId!);
-  const userRank = user?.rank.value ?? "starter";
-  const allowedRanks = MemberRank.of(userRank).accessibleRanks();
+  const rank = user?.rank ?? MemberRank.of("starter");
   const [{ products, total }, theme] = await Promise.all([
-    fetchProducts({ allowedRanks, brand }),
+    catalogQueryService().findProducts({ rank, brand }),
     fetchBrandTheme(brand),
   ]);
 
@@ -45,12 +44,7 @@ export default async function BrandProductsPage({
             表示できる商品がありません
           </p>
         ) : (
-          <ProductGrid
-            initialProducts={products}
-            total={total}
-            userRank={userRank}
-            brand={brand}
-          />
+          <ProductGrid initialProducts={products} total={total} brand={brand} />
         )}
       </BrandThemeWrapper>
     </main>
