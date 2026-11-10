@@ -25,7 +25,7 @@ export async function createUser(
     email: input.email,
     firstName: input.firstName,
     lastName: input.lastName,
-    phoneNumber: "",
+    phoneNumber: null,
     profileCompletedAt: null,
     rank: MemberRank.of("starter"),
     billingAnchorDay: null,
