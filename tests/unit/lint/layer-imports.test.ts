@@ -485,6 +485,24 @@ describe("DB・外部サービスのクライアントは src/infrastructure/ �
     expect(messages).toHaveLength(1);
   });
 
+  it.each([
+    "@/infrastructure/stripe/stripe-payment-gateway",
+    "@/infrastructure/resend/resend-notification-service",
+    "@/infrastructure/sanity/client",
+    "@/infrastructure/supabase/server",
+    "stripe-event-types",
+    "@sanity/image-url",
+  ])(
+    "パッケージ名を含むだけの import は禁止されない: src/composition/ から %s",
+    async (path) => {
+      const messages = await restrictedImportMessages(
+        "src/composition/sample.ts",
+        `import x from "${path}";\nexport default x;\n`
+      );
+      expect(messages).toEqual([]);
+    }
+  );
+
   it("クライアントの禁止を足しても、domain の内部の定数の禁止は残る（#442）", async () => {
     const messages = await restrictedImportMessages(
       "src/app/sample.tsx",
