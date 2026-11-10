@@ -3,6 +3,7 @@ import { DomainError } from "@/domain/errors/domain-error";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
+import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 
@@ -115,5 +116,23 @@ describe("ProductPriceNotSetError", () => {
   it("name が ProductPriceNotSetError", () => {
     const err = new ProductPriceNotSetError("prod-001", "standard");
     expect(err.name).toBe("ProductPriceNotSetError");
+  });
+});
+
+describe("InvalidOrderError", () => {
+  it("DomainError を継承し、注文IDと理由を保持する", () => {
+    const err = new InvalidOrderError("order-1", "no_items");
+    expect(err).toBeInstanceOf(DomainError);
+    expect(err.orderId).toBe("order-1");
+    expect(err.reason).toBe("no_items");
+    expect(err.name).toBe("InvalidOrderError");
+  });
+
+  it.each([
+    "no_items",
+    "item_settlement_not_in_order",
+    "settlement_of_other_order",
+  ] as const)("理由（%s）ごとにメッセージが設定される", (reason) => {
+    expect(new InvalidOrderError("order-1", reason).message).not.toBe("");
   });
 });

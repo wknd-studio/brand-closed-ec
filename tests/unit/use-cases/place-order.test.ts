@@ -529,4 +529,42 @@ describe("placeOrder", () => {
     });
     expect(saved.items[0]?.unitPriceSnapshot.amount).toBe(100_000);
   });
+  it("月次上限チェック込みの保存には、要相談を除いた注文の固定額の合計を渡す", async () => {
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([
+        fixedProduct,
+        negotiableProduct,
+        afterOrderFixedProduct,
+      ]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+    };
+
+    await placeOrder(
+      {
+        ...baseInput,
+        cartItems: [
+          { sanityProductId: "prod-1", quantity: 2, productName: "固定商品" },
+          { sanityProductId: "prod-2", quantity: 1, productName: "交渉商品" },
+          {
+            sanityProductId: "prod-3",
+            quantity: 1,
+            productName: "後払い固定商品",
+          },
+        ],
+      },
+      deps
+    );
+
+    const [saved, , , fixedTotal] = vi.mocked(
+      deps.orderRepo.saveNewOrderWithLimitCheck
+    ).mock.calls[0];
+    // 固定商品100,000×2 + 後払い固定商品50,000（交渉商品は含めない）
+    expect(fixedTotal.amount).toBe(250_000);
+    expect(saved.getFixedTotal().amount).toBe(250_000);
+  });
 });

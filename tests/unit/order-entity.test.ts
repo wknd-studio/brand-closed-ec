@@ -7,6 +7,9 @@ import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
+import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
+import { CartItem } from "@/domain/value-objects/cart-item";
+import { User } from "@/domain/entities/user";
 
 const snapshotProps = {
   recipientLastName: "山田",
@@ -86,7 +89,327 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
   });
 }
 
+function makeUser() {
+  return User.of({
+    id: "user-001",
+    clerkUserId: "clerk-001",
+    email: "test@example.com",
+    firstName: "太郎",
+    lastName: "山田",
+    phoneNumber: "09012345678",
+    profileCompletedAt: new Date(2026, 0, 1),
+    rank: MemberRank.of("standard"),
+    billingAnchorDay: 1,
+    onboardingCompleted: true,
+    deletedAt: null,
+    stripeCustomerId: null,
+  });
+}
+
+function makeCartItem(
+  overrides: Partial<Parameters<typeof CartItem.of>[0]> = {}
+) {
+  return CartItem.of({
+    sanityProductId: "prod-at",
+    productName: "先払い商品",
+    quantity: 1,
+    unitPrice: Money.of(10_000),
+    isNegotiable: false,
+    paymentTiming: "at_order",
+    ...overrides,
+  });
+}
+
+/** 呼ばれた順に id-1, id-2, ... を返す（注文・決済単位・明細のIDの割り当て順を固定する） */
+function sequentialIds() {
+  let n = 0;
+  return () => `id-${++n}`;
+}
+
+function placeOrder(cartItems: CartItem[]) {
+  return Order.place({
+    user: makeUser(),
+    cartItems,
+    shippingAddress: AddressSnapshot.of(snapshotProps),
+    billingAddress: AddressSnapshot.of({
+      ...snapshotProps,
+      city: "港区",
+    }),
+    placedAt: new Date(2026, 10, 11),
+    generateId: sequentialIds(),
+  });
+}
+
 describe("Order", () => {
+  // docs/domain/settlement.md「注文と決済単位」: 注文は1回のチェックアウト＝1件。
+  // at_orderの明細があるときだけCheckoutの決済単位を作り、after_orderの明細は決済単位なしで残す
+  describe("Order.place()", () => {
+    it("at_orderの明細のみ: Checkoutの決済単位を1件作り、全明細を紐付け、金額は小計の合計", () => {
+      const order = placeOrder([
+        makeCartItem({ quantity: 2 }),
+        makeCartItem({
+          sanityProductId: "prod-at-2",
+          unitPrice: Money.of(5_000),
+        }),
+      ]);
+
+      expect(order.settlements).toHaveLength(1);
+      const settlement = order.settlements[0]!;
+      expect(settlement).toMatchObject({
+        orderId: order.id,
+        flow: "checkout",
+        status: "pending_payment",
+        stripeCheckoutSessionId: null,
+        stripeInvoiceId: null,
+        paidAt: null,
+        cancelledAt: null,
+      });
+      expect(settlement.amount.amount).toBe(25_000);
+      expect(order.items.map((i) => [i.paymentTiming, i.settlementId])).toEqual(
+        [
+          ["at_order", settlement.id],
+          ["at_order", settlement.id],
+        ]
+      );
+      expect(order.status.value).toBe("processing");
+    });
+
+    it("after_orderの明細のみ: 決済単位を作らず、明細のsettlementIdはNULL", () => {
+      const order = placeOrder([
+        makeCartItem({
+          sanityProductId: "prod-after",
+          unitPrice: Money.of(50_000),
+          paymentTiming: "after_order",
+        }),
+      ]);
+
+      expect(order.settlements).toEqual([]);
+      expect(order.items).toHaveLength(1);
+      expect(order.items[0]).toMatchObject({
+        paymentTiming: "after_order",
+        settlementId: null,
+      });
+      expect(order.status.value).toBe("processing");
+    });
+
+    it("混在: at_orderの明細だけを決済単位に紐付け、金額もat_orderの明細だけで計算する", () => {
+      const order = placeOrder([
+        makeCartItem({
+          sanityProductId: "prod-after",
+          unitPrice: Money.of(50_000),
+          paymentTiming: "after_order",
+        }),
+        makeCartItem({ quantity: 3 }),
+      ]);
+
+      const settlement = order.settlements[0]!;
+      expect(order.settlements).toHaveLength(1);
+      expect(settlement.amount.amount).toBe(30_000);
+      // at_orderの明細が先、after_orderの明細が後
+      expect(
+        order.items.map((i) => [
+          i.sanityProductId,
+          i.paymentTiming,
+          i.settlementId,
+        ])
+      ).toEqual([
+        ["prod-at", "at_order", settlement.id],
+        ["prod-after", "after_order", null],
+      ]);
+    });
+
+    it("要相談の明細は、商品の支払いタイミングがat_orderでもafter_orderとして決済単位なしで残す", () => {
+      const order = placeOrder([
+        makeCartItem({ quantity: 2 }),
+        makeCartItem({
+          sanityProductId: "prod-nego",
+          unitPrice: Money.zero(),
+          isNegotiable: true,
+          paymentTiming: "at_order",
+        }),
+      ]);
+
+      const settlement = order.settlements[0]!;
+      expect(settlement.amount.amount).toBe(20_000);
+      expect(order.items[1]).toMatchObject({
+        sanityProductId: "prod-nego",
+        isNegotiable: true,
+        negotiatedUnitPrice: null,
+        paymentTiming: "after_order",
+        settlementId: null,
+      });
+      expect(order.getFixedTotal().amount).toBe(20_000);
+    });
+
+    it("要相談の明細のみ: 決済単位を作らない", () => {
+      const order = placeOrder([
+        makeCartItem({
+          unitPrice: Money.zero(),
+          isNegotiable: true,
+          paymentTiming: "after_order",
+        }),
+      ]);
+      expect(order.settlements).toEqual([]);
+      expect(order.items[0]?.settlementId).toBeNull();
+    });
+
+    it("明細のスナップショット・会員・住所・日時を注文に写す", () => {
+      const placedAt = new Date(2026, 10, 11);
+      const user = makeUser();
+      const order = Order.place({
+        user,
+        cartItems: [makeCartItem({ quantity: 2 })],
+        shippingAddress: AddressSnapshot.of(snapshotProps),
+        billingAddress: AddressSnapshot.of({ ...snapshotProps, city: "港区" }),
+        placedAt,
+        generateId: sequentialIds(),
+      });
+
+      expect(order).toMatchObject({
+        userId: "user-001",
+        createdAt: placedAt,
+      });
+      expect(order.rankAtOrder.value).toBe("standard");
+      expect(order.monthlyLimitAtOrder.amount).toBe(
+        user.getMonthlyLimit().amount
+      );
+      expect(order.shippingAddress.city).toBe("千代田区");
+      expect(order.billingAddress.city).toBe("港区");
+      expect(order.items[0]).toMatchObject({
+        sanityProductId: "prod-at",
+        productNameSnapshot: "先払い商品",
+        quantity: 2,
+        isNegotiable: false,
+        negotiatedUnitPrice: null,
+      });
+      expect(order.items[0]?.unitPriceSnapshot.amount).toBe(10_000);
+    });
+
+    it("注文・決済単位・明細のIDはgenerateIdで割り当て、重複しない", () => {
+      const order = placeOrder([
+        makeCartItem(),
+        makeCartItem({
+          sanityProductId: "prod-after",
+          paymentTiming: "after_order",
+        }),
+      ]);
+      const ids = [
+        order.id,
+        ...order.settlements.map((s) => s.id),
+        ...order.items.map((i) => i.id),
+      ];
+      expect(new Set(ids).size).toBe(4);
+      expect(ids.every((id) => id.startsWith("id-"))).toBe(true);
+    });
+
+    it("状態は常にロールアップの結果（新しい注文はprocessing）", () => {
+      const order = placeOrder([makeCartItem()]);
+      expect(order.status.value).toBe(order.rollupStatus().value);
+      expect(order.status.value).toBe("processing");
+    });
+
+    it("明細が空ならInvalidOrderError（no_items）を投げる", () => {
+      expect(() => placeOrder([])).toThrow(InvalidOrderError);
+      try {
+        placeOrder([]);
+      } catch (e) {
+        expect((e as InvalidOrderError).reason).toBe("no_items");
+      }
+    });
+  });
+
+  // 注文の不変条件。DBからの復元（Order.of）・変更（with・applySettlement）・ファクトリのすべてで検証する
+  describe("不変条件", () => {
+    function reasonOf(fn: () => unknown) {
+      try {
+        fn();
+      } catch (e) {
+        if (e instanceof InvalidOrderError) return e.reason;
+        throw e;
+      }
+      return null;
+    }
+
+    it("明細が空ならInvalidOrderError（no_items）", () => {
+      expect(reasonOf(() => makeOrder({ items: [] }))).toBe("no_items");
+    });
+
+    it("明細のsettlementIdが注文の決済単位のどれでもなければInvalidOrderError（item_settlement_not_in_order）", () => {
+      expect(
+        reasonOf(() =>
+          makeOrder({
+            items: [makeItem({ settlementId: "s-missing" })],
+            settlements: [makeSettlement({ id: "s1" })],
+          })
+        )
+      ).toBe("item_settlement_not_in_order");
+    });
+
+    it("決済単位のorderIdが注文のidでなければInvalidOrderError（settlement_of_other_order）", () => {
+      expect(
+        reasonOf(() =>
+          makeOrder({
+            settlements: [makeSettlement({ orderId: "order-other" })],
+          })
+        )
+      ).toBe("settlement_of_other_order");
+    });
+
+    it("settlementIdがNULLの明細・注文の決済単位を指す明細は受け付ける", () => {
+      expect(
+        reasonOf(() =>
+          makeOrder({
+            items: [
+              makeItem({ id: "i1", settlementId: "s1" }),
+              makeItem({ id: "i2", settlementId: null }),
+            ],
+            settlements: [makeSettlement({ id: "s1" })],
+          })
+        )
+      ).toBeNull();
+    });
+
+    it("applySettlementで別の注文の決済単位を加えるとInvalidOrderError", () => {
+      const order = makeOrder();
+      expect(
+        reasonOf(() =>
+          order.applySettlement(
+            makeSettlement({ id: "s-new", orderId: "order-other" })
+          )
+        )
+      ).toBe("settlement_of_other_order");
+    });
+
+    it("withで明細を空にするとInvalidOrderError", () => {
+      expect(reasonOf(() => makeOrder().with({ items: [] }))).toBe("no_items");
+    });
+  });
+
+  // 保存されている状態とロールアップの結果の扱い: DBからの復元（Order.of）ではDBの値を正とし、
+  // 食い違っても検証・補正しない（既存データで画面が開けなくなるのを避ける）。
+  // ファクトリ（place）・applySettlementは常にロールアップの結果を使う
+  describe("保存されている状態とロールアップの結果", () => {
+    it("Order.ofは、ロールアップの結果と食い違う状態もそのまま保持する", () => {
+      const order = makeOrder({
+        status: OrderStatus.of("paid"),
+        items: [makeItem({ id: "i1", settlementId: "s1" })],
+        settlements: [makeSettlement({ id: "s1", status: "pending_payment" })],
+      });
+      expect(order.rollupStatus().value).toBe("processing");
+      expect(order.status.value).toBe("paid");
+    });
+
+    it("applySettlementは、保存されていた状態に関わらずロールアップの結果にする", () => {
+      const order = makeOrder({
+        status: OrderStatus.of("paid"),
+        items: [makeItem({ id: "i1", settlementId: "s1" })],
+        settlements: [makeSettlement({ id: "s1", status: "pending_payment" })],
+      });
+      const updated = order.applySettlement(order.settlements[0]!);
+      expect(updated.status.value).toBe("processing");
+    });
+  });
+
   describe("canCancel()", () => {
     it("processing（決済単位が未払い）はキャンセル可能", () => {
       const order = makeOrder({
