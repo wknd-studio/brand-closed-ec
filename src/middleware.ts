@@ -25,12 +25,13 @@ const isAdmin = createRouteMatcher(["/admin(.*)"]);
 const isWebhook = createRouteMatcher(["/api/webhooks/(.*)"]);
 
 // 取得に失敗したときは、Query Service に移す前（エラーを見ずに行が無い会員として扱っていた）と
-// 同じ振る舞いを保つため null を返し、Sentry に送る
+// 同じ振る舞いを保つため null を返し、Sentry に送る。環境変数が無いときは前と同じく例外を投げる
 async function findMemberStatus(
   clerkUserId: string
 ): Promise<MemberStatusDto | null> {
+  const queryService = memberStatusQueryService();
   try {
-    return await memberStatusQueryService().findMemberStatus(clerkUserId);
+    return await queryService.findMemberStatus(clerkUserId);
   } catch (err) {
     Sentry.captureException(err, { tags: { middleware: "member-status" } });
     console.error("[middleware] 会員の状態の取得に失敗:", err);
