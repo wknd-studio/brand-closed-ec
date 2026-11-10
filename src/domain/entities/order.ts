@@ -67,6 +67,10 @@ export class Order {
     };
   }
 
+  isCancelled(): boolean {
+    return this.status.isTerminal();
+  }
+
   /** 支払い済みの決済単位が1件でもあれば、返金フロー（returns）なしにはキャンセルできない */
   canCancel(): boolean {
     return (
