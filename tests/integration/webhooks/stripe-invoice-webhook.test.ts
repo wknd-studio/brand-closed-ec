@@ -159,14 +159,13 @@ beforeAll(async () => {
     paidAt: null,
     cancelledAt: null,
   });
+  // 明細は注文の決済単位にしか紐付けられない（注文の不変条件）ため、決済単位を加えてから紐付ける
   await orderRepo.save(
-    placed!
-      .with({
-        items: placed!.items.map((i) =>
-          OrderItem.of({ ...i, settlementId: settlement.id })
-        ),
-      })
-      .applySettlement(settlement)
+    placed!.applySettlement(settlement).with({
+      items: placed!.items.map((i) =>
+        OrderItem.of({ ...i, settlementId: settlement.id })
+      ),
+    })
   );
 });
 
