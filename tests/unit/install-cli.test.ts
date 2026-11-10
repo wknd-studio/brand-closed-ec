@@ -363,6 +363,22 @@ describe("used_versions", () => {
     expect(output).toContain("deploy.yml");
   });
 
+  it("クォート・行末のコメント・@ref 付きの uses: も install-cli の使用箇所として読む", () => {
+    const { status, stdout } = usedVersions({
+      "deploy.yml": `
+      - uses: "./.github/actions/install-cli" # コメント
+        with: { tool: supabase, version: 2.102.0 }
+      - uses: wknd-studio/brand-closed-ec/.github/actions/install-cli@develop
+        with: { tool: doppler, version: 3.77.1 }
+`,
+    });
+    expect(status).toBe(0);
+    expect(stdout.trim().split("\n")).toEqual([
+      "doppler 3.77.1",
+      "supabase 2.102.0",
+    ]);
+  });
+
   it("このリポジトリのワークフローの install-cli の使用箇所を、すべて読み取れる", () => {
     const workflows = readdirSync(".github/workflows").map((f) =>
       path.join(".github/workflows", f)
