@@ -1,7 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { createClient } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
+import { memberStatusQueryService } from "@/composition/member-status-query";
+import type { MemberStatusDto } from "@/queries/member-status-query-service";
 
 const isPublic = createRouteMatcher([
   "/",
@@ -22,12 +24,18 @@ const isAdmin = createRouteMatcher(["/admin(.*)"]);
 // Stripe/Clerk webhook はレート制限対象外
 const isWebhook = createRouteMatcher(["/api/webhooks/(.*)"]);
 
-function supabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+// 取得に失敗したときは、Query Service に移す前（エラーを見ずに行が無い会員として扱っていた）と
+// 同じ振る舞いを保つため null を返し、Sentry に送る
+async function findMemberStatus(
+  clerkUserId: string
+): Promise<MemberStatusDto | null> {
+  try {
+    return await memberStatusQueryService().findMemberStatus(clerkUserId);
+  } catch (err) {
+    Sentry.captureException(err, { tags: { middleware: "member-status" } });
+    console.error("[middleware] 会員の状態の取得に失敗:", err);
+    return null;
+  }
 }
 
 export default clerkMiddleware(async (auth, req) => {
@@ -70,31 +78,23 @@ export default clerkMiddleware(async (auth, req) => {
     }
     return;
   }
-  // deleted_at は JWT に反映されないため常に DB で確認する。
-  // clerk_user_id の一意制約は deleted_at IS NULL の部分インデックスのため、退会済み行と
-  // 有効な行が併存しうる。有効な行を優先し、無ければ退会済み行を取る
-  const { data } = await supabaseAdmin()
-    .from("users")
-    .select("onboarding_completed, deleted_at")
-    .eq("clerk_user_id", userId!)
-    .order("deleted_at", { ascending: false, nullsFirst: true })
-    .limit(1)
-    .maybeSingle();
+  // deleted_at は JWT に反映されないため常に DB で確認する
+  const status = await findMemberStatus(userId!);
 
-  if (data?.deleted_at) {
+  if (status?.withdrawn) {
     return NextResponse.redirect(new URL("/withdrawn", req.url));
   }
 
   // 入会済みの会員がオンボーディングから送信・決済すると、プランや会員種別の上書き、
   // サブスクリプションの二重作成が起きるため、オンボーディングに入れない
   if (isOnboarding(req)) {
-    if (data?.onboarding_completed && !isPaymentSuccess(req)) {
+    if (status?.onboardingCompleted && !isPaymentSuccess(req)) {
       return NextResponse.redirect(new URL("/shop", req.url));
     }
     return;
   }
 
-  if (!data?.onboarding_completed) {
+  if (!status?.onboardingCompleted) {
     return NextResponse.redirect(new URL("/onboarding/account-type", req.url));
   }
 });
