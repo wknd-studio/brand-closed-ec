@@ -76,7 +76,7 @@ ALWAYS:
 - Use existing package manager
 - Rely on keyless mode, skip account creation and API keys
 
-NEVER:
+NEVER（このプロジェクトでは `authMiddleware`・`withAuth`・`@clerk/nextjs` の `currentUser`・`<SignedIn>`・`<SignedOut>` の import を lint で禁止済み。#310）:
 
 - Reference `_app.tsx` or pages router
 - Use `authMiddleware()` (replaced by `clerkMiddleware()`)

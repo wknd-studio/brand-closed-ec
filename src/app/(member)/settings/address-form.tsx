@@ -86,6 +86,7 @@ async function fetchAddressByZipcode(zipcode: string): Promise<{
       city: result.address2,
       address_line1: result.address3,
     };
+    // eslint-disable-next-line no-restricted-syntax -- 郵便番号の検索は補助で、失敗しても住所を手で入力できる
   } catch {
     return null;
   }

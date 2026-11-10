@@ -14,6 +14,7 @@ function looksLikeValidTicket(ticket: string): boolean {
       typeof payload.exp === "number" &&
       payload.exp * 1000 > Date.now()
     );
+    // eslint-disable-next-line no-restricted-syntax -- 読めないticketは無効として/waitlistへ誘導する想定内の失敗
   } catch {
     return false;
   }

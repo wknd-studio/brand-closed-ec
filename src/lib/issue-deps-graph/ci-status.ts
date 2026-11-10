@@ -135,6 +135,7 @@ export async function failedJobsOf(
       let tests: FailedTests | null;
       try {
         tests = failedTestsFromLog(await readLog(j.id));
+        // eslint-disable-next-line no-restricted-syntax -- CIの依存グラフの生成スクリプトで、Sentryを使わない。ログを読めないジョブはテスト名無しで表示する
       } catch (error) {
         console.error(`ジョブ ${j.name} のログを取得できなかった:`, error);
         tests = null;

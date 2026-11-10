@@ -56,6 +56,7 @@ export async function POST(req: Request) {
   let event;
   try {
     event = constructStripeWebhookEvent(body, signature, secret);
+    // eslint-disable-next-line no-restricted-syntax -- 署名検証の失敗は不正なリクエストで、400を返す想定内の失敗
   } catch {
     return NextResponse.json({ error: "署名が不正です" }, { status: 400 });
   }
