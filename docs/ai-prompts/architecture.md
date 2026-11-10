@@ -26,26 +26,28 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 
 依存は**許可リスト**で考える。下の表に無い依存は禁止。新しいディレクトリを作っても、ここに足すまでは、どの層からも使ってはいけない（lint も許可リストの形で書く。#439）。
 
-| 層                        | import してよいもの                                                                      |
-| ------------------------- | ---------------------------------------------------------------------------------------- |
-| `src/domain/`             | 何にも依存しない（domain の中だけ。外部SDK・Next.js・React も不可）                      |
-| `src/repositories/`       | domain                                                                                   |
-| `src/queries/`            | domain                                                                                   |
-| `src/use-cases/`          | domain・repositories（どちらも外部SDKは不可）                                            |
-| `src/infrastructure/`     | domain・repositories・queries・lib・emails・types・外部SDK                               |
-| `src/composition/`        | domain・repositories・queries・use-cases・infrastructure                                 |
-| `src/app/`                | composition・domain（エラーの判別・値オブジェクト）・queries（DTOの型）・lib・components |
-| `src/components/`         | domain（値オブジェクト・型）・queries（DTOの型）・lib・components                        |
-| `src/lib/`                | lib と外部ライブラリ（Next.js・Clerk 等）だけ。業務の層（domain 以下）は使わない         |
-| `src/emails/`             | lib・emails                                                                              |
-| `src/types/`              | 何にも依存しない（生成物）                                                               |
-| `src/middleware.ts`       | app と同じ（composition・domain・queries・lib）                                          |
-| `src/instrumentation*.ts` | 外部SDK（Sentry 等の初期化）だけ                                                         |
+| 層                        | import してよいもの                                                                                                                             |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain/`             | 何にも依存しない（domain の中だけ。外部SDK・Next.js・React も不可）                                                                             |
+| `src/repositories/`       | domain                                                                                                                                          |
+| `src/queries/`            | domain                                                                                                                                          |
+| `src/use-cases/`          | domain・repositories（どちらも外部SDKは不可）                                                                                                   |
+| `src/infrastructure/`     | domain・repositories・queries・lib・emails・types・外部SDK                                                                                      |
+| `src/composition/`        | domain・repositories・queries・use-cases・infrastructure                                                                                        |
+| `src/app/`                | composition・domain（エラーの判別・値オブジェクト）・queries（DTOの型）・lib・components・外部SDK（DB・外部サービスのクライアントは除く。#440） |
+| `src/components/`         | domain（値オブジェクト・型）・queries（DTOの型）・lib・components                                                                               |
+| `src/lib/`                | lib と外部ライブラリ（Next.js・Clerk 等）だけ。業務の層（domain 以下）は使わない                                                                |
+| `src/emails/`             | lib・emails                                                                                                                                     |
+| `src/types/`              | 何にも依存しない（生成物）                                                                                                                      |
+| `src/middleware.ts`       | composition・domain・queries・lib・外部SDK（app から components を除いたもの）                                                                  |
+| `src/instrumentation*.ts` | 外部SDK（Sentry 等の初期化）だけ                                                                                                                |
 
-- 同じ層の中（`src/use-cases/` から `@/use-cases/...` 等）は、表に書かなくても使ってよい。lint では、domain・repositories・queries・use-cases・infrastructure について、表に無い `@/` の import・外部SDK（表で許可した層を除く）・親ディレクトリへの相対 import（`../`）をエラーにする（#439）
+- 同じ層の中（`src/use-cases/` から `@/use-cases/...` 等）は、表に書かなくても使ってよい。lint では、domain・repositories・queries・use-cases・infrastructure・app・middleware について、表に無い `@/` の import・外部SDK（表で許可した層を除く）・親ディレクトリへの相対 import（`../`）をエラーにする（#439）
 - `src/types/`（DB の型）を使ってよいのは infrastructure だけ。DB の行の形を infrastructure の外に漏らさず、domain・DTO に変換して渡す
 - use-case から Query Service は使わない。書き込みの判断に要るデータは repository から集約として取る（読み取りと書き込みのモデルを混ぜないため）
-- app・components・lib から repositories・infrastructure は使わない（#441）
+- app・middleware は composition が返す use-case（書き込み）・Query Service（読み取り）だけを使い、use-cases・repositories・infrastructure を直接 import しない。lint では、上の表どおりの許可リストで、表に無い `@/` の import と相対 import で層の外に出ること（app は `../`、middleware は相対 import すべて）をエラーにする（#441）
+- components・lib から repositories・infrastructure・app は使わない。DB・外部サービスのデータは app で Query Service から取って props で渡し、Server Action も app から props で受け取る。lint では、この3つの import をエラーにする（components・lib は、表の許可リストより緩いこの禁止だけを lint する。#441）
+- `import type` で repository・infrastructure の型だけを使う場合も禁止に含める。型だけの依存でも、画面が集約・DB の形に引きずられるため。画面で要る型は domain の型か queries の DTO を使う（#441）
 - domain の内部の定数（ルールの正になっている `RANK_ORDER` 等）は domain の外で使わない。外からは value object・entity のメソッドを使う（#442）。lint では、`src/domain/` 以外の `src/` から `src/domain/` で export している定数を import するとエラーにする。定数を新しく export したら `eslint.config.mjs` の `DOMAIN_CONSTANTS` に足す（足し忘れると `tests/unit/lint/layer-imports.test.ts` が落ちる）。tests・scripts は対象外
 
 ## 書き込みと読み取り（CQRS）
