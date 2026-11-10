@@ -141,7 +141,10 @@ beforeAll(async () => {
     [USER_A_ID, CLERK_USER_A],
     [USER_B_ID, CLERK_USER_B],
   ]) {
-    await adminClient.from("users").delete().eq("id", id);
+    await adminClient
+      .from("users")
+      .delete()
+      .or(`id.eq.${id},clerk_user_id.eq.${clerkId}`);
     const { error } = await adminClient.from("users").insert({
       id,
       clerk_user_id: clerkId,
