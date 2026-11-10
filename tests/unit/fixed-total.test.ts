@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { CartItem } from "@/domain/value-objects/cart-item";
-import { OrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { Money } from "@/domain/value-objects/money";
 
 function cartItem(unitPrice: number, quantity: number, isNegotiable = false) {
@@ -27,7 +27,7 @@ describe("sumFixedTotal", () => {
   });
 
   it("要相談の明細は、交渉済みの単価があっても含めない（注文の明細）", () => {
-    const negotiated = OrderItem.of({
+    const negotiated = reconstituteOrderItem({
       id: "item-1",
       sanityProductId: "prod-1",
       productNameSnapshot: "交渉商品",

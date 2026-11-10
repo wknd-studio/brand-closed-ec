@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { User } from "@/domain/entities/user";
+import { User, reconstituteUser } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
@@ -10,8 +10,10 @@ import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import { makeOrder, makeOrderItem, makeSettlement } from "./use-cases/helpers";
 
-function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
-  return User.of({
+function makeUser(
+  overrides: Partial<Parameters<typeof reconstituteUser>[0]> = {}
+) {
+  return reconstituteUser({
     id: "user-001",
     clerkUserId: "clerk_abc123",
     email: "test@example.com",
@@ -357,5 +359,69 @@ describe("User.selectPlan()", () => {
         deletedAt: new Date(2026, 9, 24),
       }).selectPlan(individualApplication)
     ).toThrow(MemberWithdrawnError);
+  });
+});
+
+describe("User.register()", () => {
+  const registered = () =>
+    User.register({
+      id: "user-new",
+      clerkUserId: "clerk_new",
+      email: "new@example.com",
+      firstName: "次郎",
+      lastName: "佐藤",
+    });
+
+  it("ID・Clerkのユーザー・連絡先・氏名を持つ会員を作る", () => {
+    const user = registered();
+    expect(user.id).toBe("user-new");
+    expect(user.clerkUserId).toBe("clerk_new");
+    expect(user.email).toBe("new@example.com");
+    expect(user.firstName).toBe("次郎");
+    expect(user.lastName).toBe("佐藤");
+  });
+
+  it("入会手続き前の初期状態（starter・個人・未入会・未退会・電話番号とStripe Customerと請求基準日なし）で作る", () => {
+    const user = registered();
+    expect(user.rank.value).toBe("starter");
+    expect(user.memberType.value).toBe("individual");
+    expect(user.onboardingCompleted).toBe(false);
+    expect(user.deletedAt).toBeNull();
+    expect(user.phoneNumber).toBeNull();
+    expect(user.profileCompletedAt).toBeNull();
+    expect(user.billingAnchorDay).toBeNull();
+    expect(user.stripeCustomerId).toBeNull();
+    expect(user.companyName).toBeNull();
+    expect(user.invoiceRegistrationNumber).toBeNull();
+    expect(user.initialFeePaidRank).toBeNull();
+  });
+
+  it("登録内容より広いオブジェクトが渡されても、初期状態の項目は上書きしない", () => {
+    const user = User.register({
+      id: "user-new",
+      clerkUserId: "clerk_new",
+      email: "new@example.com",
+      firstName: "次郎",
+      lastName: "佐藤",
+      onboardingCompleted: true,
+      rank: MemberRank.of("pro"),
+    } as Parameters<typeof User.register>[0]);
+    expect(user.onboardingCompleted).toBe(false);
+    expect(user.rank.value).toBe("starter");
+  });
+
+  it("登録した会員はそのままプランを選択できる", () => {
+    const selected = registered().selectPlan({
+      email: "new@example.com",
+      firstName: "次郎",
+      lastName: "佐藤",
+      phoneNumber: PhoneNumber.of("08011112222"),
+      rank: MemberRank.of("premium"),
+      memberType: MemberType.of("individual"),
+      companyName: null,
+      invoiceRegistrationNumber: null,
+    });
+    expect(selected.rank.value).toBe("premium");
+    expect(selected.onboardingCompleted).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Order } from "@/domain/entities/order";
-import { OrderItem } from "@/domain/entities/order-item";
-import { OrderSettlement } from "@/domain/entities/order-settlement";
+import { Order, reconstituteOrder } from "@/domain/entities/order";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -10,7 +10,7 @@ import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { CartItem } from "@/domain/value-objects/cart-item";
-import { User } from "@/domain/entities/user";
+import { reconstituteUser } from "@/domain/entities/user";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 
 const snapshotProps = {
@@ -44,7 +44,7 @@ function makeItem(
     paymentTiming = "at_order",
     settlementId = null,
   } = overrides;
-  return OrderItem.of({
+  return reconstituteOrderItem({
     id,
     sanityProductId: "prod-001",
     productNameSnapshot: "テスト商品",
@@ -59,9 +59,9 @@ function makeItem(
 }
 
 function makeSettlement(
-  overrides: Partial<Parameters<typeof OrderSettlement.of>[0]> = {}
+  overrides: Partial<Parameters<typeof reconstituteOrderSettlement>[0]> = {}
 ) {
-  return OrderSettlement.of({
+  return reconstituteOrderSettlement({
     id: "settlement-001",
     orderId: "order-001",
     flow: "checkout",
@@ -75,8 +75,10 @@ function makeSettlement(
   });
 }
 
-function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
-  return Order.of({
+function makeOrder(
+  overrides: Partial<Parameters<typeof reconstituteOrder>[0]> = {}
+) {
+  return reconstituteOrder({
     id: "order-001",
     userId: "user-001",
     status: OrderStatus.of("processing"),
@@ -92,7 +94,7 @@ function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
 }
 
 function makeUser() {
-  return User.of({
+  return reconstituteUser({
     id: "user-001",
     clerkUserId: "clerk-001",
     email: "test@example.com",
@@ -309,7 +311,7 @@ describe("Order", () => {
     });
   });
 
-  // 注文の不変条件。DBからの復元（Order.of）・変更（with・applySettlement）・ファクトリのすべてで検証する
+  // 注文の不変条件。DBからの復元（reconstituteOrder）・変更（with・applySettlement）・ファクトリのすべてで検証する
   describe("不変条件", () => {
     function reasonOf(fn: () => unknown) {
       try {
@@ -372,17 +374,17 @@ describe("Order", () => {
     });
 
     it("明細を空にして組み立て直すとInvalidOrderError", () => {
-      expect(reasonOf(() => Order.of({ ...makeOrder(), items: [] }))).toBe(
-        "no_items"
-      );
+      expect(
+        reasonOf(() => reconstituteOrder({ ...makeOrder(), items: [] }))
+      ).toBe("no_items");
     });
   });
 
   // 保存されている状態（orders.status）は正のデータではなく、決済単位・明細から算出するキャッシュ
-  // （docs/domain/settlement.md「orders.statusのロールアップ算出」）。そのため Order.of（DBからの復元を含む）は
+  // （docs/domain/settlement.md「orders.statusのロールアップ算出」）。そのため reconstituteOrder（DBからの復元を含む）は
   // 常にロールアップの結果を状態にする。注文自体のキャンセルだけは決済単位から算出できないため、保存されている値を使う
   describe("保存されている状態とロールアップの結果", () => {
-    it("Order.ofは、保存されている状態がロールアップの結果と食い違えば、ロールアップの結果にする（paid → processing）", () => {
+    it("reconstituteOrderは、保存されている状態がロールアップの結果と食い違えば、ロールアップの結果にする（paid → processing）", () => {
       const order = makeOrder({
         status: OrderStatus.of("paid"),
         items: [makeItem({ id: "i1", settlementId: "s1" })],
@@ -392,7 +394,7 @@ describe("Order", () => {
       expect(order.status.value).toBe("processing");
     });
 
-    it("Order.ofは、全明細が支払い済みの決済単位に属していればpaidにする（processing → paid）", () => {
+    it("reconstituteOrderは、全明細が支払い済みの決済単位に属していればpaidにする（processing → paid）", () => {
       const order = makeOrder({
         status: OrderStatus.of("processing"),
         items: [makeItem({ id: "i1", settlementId: "s1" })],
@@ -403,7 +405,7 @@ describe("Order", () => {
       expect(order.status.value).toBe("paid");
     });
 
-    it("Order.ofは、注文自体がキャンセル済みなら、決済単位に関わらずcancelledのまま", () => {
+    it("reconstituteOrderは、注文自体がキャンセル済みなら、決済単位に関わらずcancelledのまま", () => {
       const order = makeOrder({
         status: OrderStatus.of("cancelled"),
         items: [makeItem({ id: "i1", settlementId: "s1" })],

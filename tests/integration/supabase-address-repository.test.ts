@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
-import { Address } from "@/domain/entities/address";
+import { Address, reconstituteAddress } from "@/domain/entities/address";
 import type { AddressType } from "@/domain/entities/address";
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
@@ -71,9 +71,9 @@ const ADDRESS_B2_ID = "00000000-0000-0000-0000-0000000524d2";
 function buildAddress(
   id: string,
   type: AddressType,
-  overrides: Partial<Parameters<typeof Address.of>[0]> = {}
+  overrides: Partial<Parameters<typeof reconstituteAddress>[0]> = {}
 ): Address {
-  return Address.of({
+  return reconstituteAddress({
     id,
     type,
     isDefault: false,
@@ -279,7 +279,7 @@ describe("SupabaseAddressRepository（会員のクライアント・RLS）", () 
 
     const saved = await repoAsA.findById(ADDRESS_A1_ID);
     await repoAsA.update(
-      Address.of({ ...saved!, isDefault: true, city: "港区" })
+      reconstituteAddress({ ...saved!, isDefault: true, city: "港区" })
     );
     expect(await repoAsA.findById(ADDRESS_A1_ID)).toMatchObject({
       isDefault: true,
@@ -302,7 +302,9 @@ describe("SupabaseAddressRepository（会員のクライアント・RLS）", () 
   it("他の会員の住所は更新・既定の解除・削除ができない", async () => {
     const original = await adminRepo.findById(ADDRESS_B1_ID);
 
-    await repoAsA.update(Address.of({ ...original!, city: "書き換え" }));
+    await repoAsA.update(
+      reconstituteAddress({ ...original!, city: "書き換え" })
+    );
     await repoAsA.clearDefault(USER_B_ID, "shipping");
     await repoAsA.delete(ADDRESS_B1_ID);
 

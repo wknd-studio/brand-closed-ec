@@ -32,15 +32,15 @@ import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-
 import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
 import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
-import { Order } from "@/domain/entities/order";
-import { OrderItem } from "@/domain/entities/order-item";
-import { OrderSettlement } from "@/domain/entities/order-settlement";
+import { reconstituteOrder } from "@/domain/entities/order";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
-import { User } from "@/domain/entities/user";
+import { reconstituteUser } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
 
 const addressSnapshot = AddressSnapshot.of({
@@ -54,7 +54,7 @@ const addressSnapshot = AddressSnapshot.of({
   phoneNumber: "03-1234-5678",
 });
 
-const user = User.of({
+const user = reconstituteUser({
   id: "user-1",
   clerkUserId: "clerk-1",
   email: "test@example.com",
@@ -69,7 +69,7 @@ const user = User.of({
   stripeCustomerId: null,
 });
 
-const settlement = OrderSettlement.of({
+const settlement = reconstituteOrderSettlement({
   id: "settlement-paid",
   orderId: "order-1",
   flow: "checkout",
@@ -81,7 +81,7 @@ const settlement = OrderSettlement.of({
   cancelledAt: null,
 });
 
-const otherSettlement = OrderSettlement.of({
+const otherSettlement = reconstituteOrderSettlement({
   id: "settlement-other",
   orderId: "order-1",
   flow: "checkout",
@@ -94,7 +94,7 @@ const otherSettlement = OrderSettlement.of({
 });
 
 function makeOrder() {
-  return Order.of({
+  return reconstituteOrder({
     id: "order-1",
     userId: "user-1",
     status: OrderStatus.of("processing"),
@@ -103,7 +103,7 @@ function makeOrder() {
     rankAtOrder: MemberRank.of("standard"),
     monthlyLimitAtOrder: Money.of(5_000_000),
     items: [
-      OrderItem.of({
+      reconstituteOrderItem({
         id: "item-paid",
         sanityProductId: "prod-1",
         productNameSnapshot: "支払い済み商品",
@@ -114,7 +114,7 @@ function makeOrder() {
         paymentTiming: "at_order",
         settlementId: "settlement-paid",
       }),
-      OrderItem.of({
+      reconstituteOrderItem({
         id: "item-unpaid",
         sanityProductId: "prod-2",
         productNameSnapshot: "未払いの後払い商品",
@@ -125,7 +125,7 @@ function makeOrder() {
         paymentTiming: "after_order",
         settlementId: null,
       }),
-      OrderItem.of({
+      reconstituteOrderItem({
         id: "item-negotiable",
         sanityProductId: "prod-3",
         productNameSnapshot: "価格応談の商品",

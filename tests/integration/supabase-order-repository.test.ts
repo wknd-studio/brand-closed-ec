@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
-import { Order } from "@/domain/entities/order";
-import { OrderItem } from "@/domain/entities/order-item";
-import { OrderSettlement } from "@/domain/entities/order-settlement";
+import { reconstituteOrder } from "@/domain/entities/order";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -142,9 +142,9 @@ const snapshotProps = {
 
 function makeItem(
   id: string,
-  overrides: Partial<Parameters<typeof OrderItem.of>[0]> = {}
+  overrides: Partial<Parameters<typeof reconstituteOrderItem>[0]> = {}
 ) {
-  return OrderItem.of({
+  return reconstituteOrderItem({
     id,
     sanityProductId: "prod-001",
     productNameSnapshot: "テスト商品",
@@ -159,9 +159,9 @@ function makeItem(
 }
 
 function makeSettlement(
-  overrides: Partial<Parameters<typeof OrderSettlement.of>[0]> = {}
+  overrides: Partial<Parameters<typeof reconstituteOrderSettlement>[0]> = {}
 ) {
-  return OrderSettlement.of({
+  return reconstituteOrderSettlement({
     id: SETTLEMENT_ID,
     orderId: ORDER_ID,
     flow: "checkout",
@@ -175,8 +175,10 @@ function makeSettlement(
   });
 }
 
-function makeOrder(overrides: Partial<Parameters<typeof Order.of>[0]> = {}) {
-  return Order.of({
+function makeOrder(
+  overrides: Partial<Parameters<typeof reconstituteOrder>[0]> = {}
+) {
+  return reconstituteOrder({
     id: ORDER_ID,
     userId: TEST_USER_ID,
     status: OrderStatus.of("processing"),

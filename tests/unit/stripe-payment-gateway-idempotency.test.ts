@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { OrderItem } from "@/domain/entities/order-item";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { Money } from "@/domain/value-objects/money";
 import { makeOrder } from "./use-cases/helpers";
 
@@ -72,7 +72,7 @@ describe("StripePaymentGateway - 冪等性キー", () => {
     const gateway = new StripePaymentGateway();
     const order = makeOrder({
       items: [
-        OrderItem.of({
+        reconstituteOrderItem({
           id: "item-1",
           sanityProductId: "prod-1",
           productNameSnapshot: "商品A",
@@ -83,7 +83,7 @@ describe("StripePaymentGateway - 冪等性キー", () => {
           paymentTiming: "after_order",
           settlementId: null,
         }),
-        OrderItem.of({
+        reconstituteOrderItem({
           id: "item-2",
           sanityProductId: "prod-2",
           productNameSnapshot: "商品B",

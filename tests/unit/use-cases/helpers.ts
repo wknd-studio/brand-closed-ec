@@ -1,9 +1,12 @@
 import { vi } from "vitest";
-import { User } from "@/domain/entities/user";
-import { Order } from "@/domain/entities/order";
-import { OrderItem } from "@/domain/entities/order-item";
-import { OrderSettlement } from "@/domain/entities/order-settlement";
-import { Address } from "@/domain/entities/address";
+import { reconstituteUser } from "@/domain/entities/user";
+import { Order, reconstituteOrder } from "@/domain/entities/order";
+import { OrderItem, reconstituteOrderItem } from "@/domain/entities/order-item";
+import {
+  OrderSettlement,
+  reconstituteOrderSettlement,
+} from "@/domain/entities/order-settlement";
+import { reconstituteAddress } from "@/domain/entities/address";
 import { AdminUser } from "@/domain/entities/admin-user";
 import { AdminMembership } from "@/domain/entities/admin-membership";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -43,7 +46,7 @@ export function makeUser(
     stripeCustomerId: string | null;
   }>
 ) {
-  return User.of({
+  return reconstituteUser({
     id: overrides?.id ?? "00000000-0000-0000-0000-000000000001",
     clerkUserId: "clerk-1",
     email: "test@example.com",
@@ -63,7 +66,7 @@ export function makeUser(
 }
 
 export function makeAddress(type: "shipping" | "billing" = "shipping") {
-  return Address.of({
+  return reconstituteAddress({
     id: `${type}-addr`,
     type,
     isDefault: true,
@@ -101,7 +104,7 @@ export function makeOrderItem(
     settlementId: string | null;
   }>
 ) {
-  return OrderItem.of({
+  return reconstituteOrderItem({
     id: "00000000-0000-0000-0000-000000000031",
     sanityProductId: "prod-1",
     productNameSnapshot: "テスト商品",
@@ -118,9 +121,9 @@ export function makeOrderItem(
 }
 
 export function makeSettlement(
-  overrides?: Partial<Parameters<typeof OrderSettlement.of>[0]>
+  overrides?: Partial<Parameters<typeof reconstituteOrderSettlement>[0]>
 ) {
-  return OrderSettlement.of({
+  return reconstituteOrderSettlement({
     id: SETTLEMENT_ID,
     orderId: "00000000-0000-0000-0000-000000000001",
     flow: "checkout",
@@ -140,7 +143,7 @@ export function makeOrder(overrides?: {
   items?: OrderItem[];
   settlements?: OrderSettlement[];
 }) {
-  return Order.of({
+  return reconstituteOrder({
     id: "00000000-0000-0000-0000-000000000001",
     userId: "00000000-0000-0000-0000-000000000001",
     status: OrderStatus.of(overrides?.status ?? "processing"),

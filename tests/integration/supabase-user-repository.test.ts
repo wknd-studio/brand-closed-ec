@@ -7,7 +7,7 @@ import { MemberType } from "@/domain/value-objects/member-type";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
-import { User } from "@/domain/entities/user";
+import { reconstituteUser } from "@/domain/entities/user";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,9 +36,9 @@ const brokenClient = createClient<Database>(
 
 function newUser(
   clerkUserId: string,
-  overrides?: Partial<Parameters<typeof User.of>[0]>
+  overrides?: Partial<Parameters<typeof reconstituteUser>[0]>
 ) {
-  return User.of({
+  return reconstituteUser({
     id: crypto.randomUUID(),
     clerkUserId,
     email: `${clerkUserId}@example.com`,
@@ -272,7 +272,7 @@ describe("SupabaseUserRepository", () => {
       const user = await repo.findById(MAPPER_ID);
 
       await repo.save(
-        User.of({
+        reconstituteUser({
           ...user!,
           phoneNumber: null,
         })
@@ -291,7 +291,7 @@ describe("SupabaseUserRepository", () => {
     it("initial_fee_paid_rank_codeは書き換えない（入会確定等のRPCだけが更新する）", async () => {
       const user = await repo.findById(TEST_USER_ID);
       await repo.save(
-        User.of({
+        reconstituteUser({
           ...user!,
           initialFeePaidRank: null,
         })
@@ -308,7 +308,7 @@ describe("SupabaseUserRepository", () => {
     it("ランクを更新できる", async () => {
       const user = await repo.findById(TEST_USER_ID);
       await repo.save(
-        User.of({
+        reconstituteUser({
           ...user!,
           rank: MemberRank.of("standard"),
         })
@@ -408,7 +408,7 @@ describe("SupabaseUserRepository", () => {
 
       await expect(
         repo.saveIfNotOnboarded(
-          User.of({
+          reconstituteUser({
             ...existing!,
             firstName: "上書き",
             rank: MemberRank.of("starter"),
@@ -460,7 +460,7 @@ describe("SupabaseUserRepository", () => {
 
       await expect(
         repo.saveIfNotOnboarded(
-          User.of({
+          reconstituteUser({
             ...existing!,
             email: "keep-columns@example.com",
             firstName: "太郎",
@@ -518,7 +518,7 @@ describe("SupabaseUserRepository", () => {
     it("同じclerk_user_idの有効な行があれば何もせず成功する（既存行を上書きしない）", async () => {
       const before = await repo.findByClerkUserId(INSERT_CLERK_ID);
       await repo.save(
-        User.of({
+        reconstituteUser({
           ...before!,
           firstName: "入力済み",
         })
