@@ -2,20 +2,14 @@
 
 import { requireAuth } from "@/lib/auth/current-user";
 import { revalidatePath } from "next/cache";
-import { withdraw } from "@/use-cases/withdraw";
+import { withdraw } from "@/composition/member";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
-import { createAddress } from "@/use-cases/create-address";
-import { updateAddress } from "@/use-cases/update-address";
-import { deleteAddress } from "@/use-cases/delete-address";
-import { setDefaultAddress } from "@/use-cases/set-default-address";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
-import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
-import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
-import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
-import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
-import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
+import {
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
+} from "@/composition/address";
 import type { AddressType } from "@/domain/entities/address";
 
 type ActionResult = { success: true } | { error: string };
@@ -28,13 +22,7 @@ export async function setDefaultAddressAction(
   if (!userId) return { error: "認証されていません" };
 
   try {
-    await setDefaultAddress(
-      { clerkUserId: userId, addressId, type },
-      {
-        userRepo: new SupabaseUserRepository(createAdminClient()),
-        addressRepo: new SupabaseAddressRepository(createAdminClient()),
-      }
-    );
+    await setDefaultAddress({ clerkUserId: userId, addressId, type });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -49,24 +37,18 @@ export async function createAddressAction(
   if (!userId) return { error: "認証されていません" };
 
   try {
-    await createAddress(
-      {
-        clerkUserId: userId,
-        type: formData.get("type") as AddressType,
-        recipientLastName: String(formData.get("recipient_last_name") ?? ""),
-        recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
-        postalCode: String(formData.get("postal_code") ?? ""),
-        prefecture: String(formData.get("prefecture") ?? ""),
-        city: String(formData.get("city") ?? ""),
-        addressLine1: String(formData.get("address_line1") ?? ""),
-        addressLine2: (formData.get("address_line2") as string) || null,
-        phoneNumber: String(formData.get("phone_number") ?? ""),
-      },
-      {
-        userRepo: new SupabaseUserRepository(createAdminClient()),
-        addressRepo: new SupabaseAddressRepository(createAdminClient()),
-      }
-    );
+    await createAddress({
+      clerkUserId: userId,
+      type: formData.get("type") as AddressType,
+      recipientLastName: String(formData.get("recipient_last_name") ?? ""),
+      recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
+      postalCode: String(formData.get("postal_code") ?? ""),
+      prefecture: String(formData.get("prefecture") ?? ""),
+      city: String(formData.get("city") ?? ""),
+      addressLine1: String(formData.get("address_line1") ?? ""),
+      addressLine2: (formData.get("address_line2") as string) || null,
+      phoneNumber: String(formData.get("phone_number") ?? ""),
+    });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -82,20 +64,17 @@ export async function updateAddressAction(
   if (!userId) return { error: "認証されていません" };
 
   try {
-    await updateAddress(
-      {
-        addressId,
-        recipientLastName: String(formData.get("recipient_last_name") ?? ""),
-        recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
-        postalCode: String(formData.get("postal_code") ?? ""),
-        prefecture: String(formData.get("prefecture") ?? ""),
-        city: String(formData.get("city") ?? ""),
-        addressLine1: String(formData.get("address_line1") ?? ""),
-        addressLine2: (formData.get("address_line2") as string) || null,
-        phoneNumber: String(formData.get("phone_number") ?? ""),
-      },
-      { addressRepo: new SupabaseAddressRepository(createAdminClient()) }
-    );
+    await updateAddress({
+      addressId,
+      recipientLastName: String(formData.get("recipient_last_name") ?? ""),
+      recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
+      postalCode: String(formData.get("postal_code") ?? ""),
+      prefecture: String(formData.get("prefecture") ?? ""),
+      city: String(formData.get("city") ?? ""),
+      addressLine1: String(formData.get("address_line1") ?? ""),
+      addressLine2: (formData.get("address_line2") as string) || null,
+      phoneNumber: String(formData.get("phone_number") ?? ""),
+    });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -110,10 +89,7 @@ export async function deleteAddressAction(
   if (!userId) return { error: "認証されていません" };
 
   try {
-    await deleteAddress(
-      { addressId },
-      { addressRepo: new SupabaseAddressRepository(createAdminClient()) }
-    );
+    await deleteAddress({ addressId });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -128,18 +104,7 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
   if (!userId) return { error: "認証されていません" };
 
   try {
-    const supabase = createAdminClient();
-    await withdraw(
-      { clerkUserId: userId },
-      {
-        userRepo: new SupabaseUserRepository(supabase),
-        orderRepo: new SupabaseOrderRepository(supabase),
-        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
-        subscriptionGateway: new StripeSubscriptionGateway(),
-        accountGateway: new ClerkAccountGateway(),
-        errorReporter: new SentryErrorReporter(),
-      }
-    );
+    await withdraw({ clerkUserId: userId });
     return { success: true };
   } catch (err) {
     if (err instanceof ActiveOrdersExistError) {

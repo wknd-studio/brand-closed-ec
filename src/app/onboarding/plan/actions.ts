@@ -4,10 +4,7 @@ import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth/current-user";
-import { selectPlan as selectPlanUseCase } from "@/use-cases/select-plan";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import { selectPlan as selectPlanUseCase } from "@/composition/onboarding";
 import { RANK_ORDER } from "@/domain/value-objects/member-rank";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
@@ -79,27 +76,19 @@ export async function selectPlan(
   const user = await currentUser();
   const email = user?.emailAddresses[0]?.emailAddress ?? "";
 
-  const db = createAdminClient();
-
   try {
-    const result = await selectPlanUseCase(
-      {
-        clerkUserId: userId,
-        email,
-        firstName: values.firstName,
-        lastName: values.lastName,
-        phoneNumber: values.phoneNumber,
-        plan,
-        companyName: isCorporate ? values.companyName : undefined,
-        invoiceRegistrationNumber: isCorporate
-          ? values.invoiceRegistrationNumber
-          : undefined,
-      },
-      {
-        userRepo: new SupabaseUserRepository(db),
-        accountGateway: new ClerkAccountGateway(),
-      }
-    );
+    const result = await selectPlanUseCase({
+      clerkUserId: userId,
+      email,
+      firstName: values.firstName,
+      lastName: values.lastName,
+      phoneNumber: values.phoneNumber,
+      plan,
+      companyName: isCorporate ? values.companyName : undefined,
+      invoiceRegistrationNumber: isCorporate
+        ? values.invoiceRegistrationNumber
+        : undefined,
+    });
     return result;
   } catch (error) {
     if (error instanceof MissingRequiredProfileFieldsError) {

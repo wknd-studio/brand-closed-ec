@@ -6,16 +6,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireAuth } from "@/lib/auth/current-user";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
-import { placeOrder as placeOrderUseCase } from "@/use-cases/place-order";
+import { placeOrder as placeOrderUseCase } from "@/composition/order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
-import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
-import { SanityProductRepository } from "@/infrastructure/sanity/sanity-product-repository";
-import { StripePaymentGateway } from "@/infrastructure/stripe/stripe-payment-gateway";
-import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
-import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 
 type PlaceOrderResult = { error: string };
 
@@ -37,28 +29,17 @@ export async function placeOrder(
     const result = await Sentry.startSpan(
       { name: "placeOrder", op: SPAN_OP.serverAction },
       () =>
-        placeOrderUseCase(
-          {
-            clerkUserId: userId,
-            cartItems: cart.items.map((item) => ({
-              sanityProductId: item.productId,
-              quantity: item.quantity,
-              productName: item.productName,
-            })),
-            shippingAddressId,
-            billingAddressId,
-            baseUrl,
-          },
-          {
-            userRepo: new SupabaseUserRepository(createAdminClient()),
-            orderRepo: new SupabaseOrderRepository(createAdminClient()),
-            addressRepo: new SupabaseAddressRepository(createAdminClient()),
-            productRepo: new SanityProductRepository(),
-            paymentGateway: new StripePaymentGateway(),
-            notificationService: new ResendNotificationService(),
-            errorReporter: new SentryErrorReporter(),
-          }
-        )
+        placeOrderUseCase({
+          clerkUserId: userId,
+          cartItems: cart.items.map((item) => ({
+            sanityProductId: item.productId,
+            quantity: item.quantity,
+            productName: item.productName,
+          })),
+          shippingAddressId,
+          billingAddressId,
+          baseUrl,
+        })
     );
     redirectUrl = result.redirectUrl;
   } catch (err) {

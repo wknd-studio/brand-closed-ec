@@ -2,13 +2,10 @@ import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
 import {
   startOnboardingCheckout,
   type StartOnboardingCheckoutResult,
-} from "@/use-cases/start-onboarding-checkout";
+} from "@/composition/onboarding";
 import Link from "next/link";
 
 export default async function OnboardingPaymentPage() {
@@ -34,13 +31,7 @@ export default async function OnboardingPaymentPage() {
   // 決済させる（start-onboarding-checkout.ts参照）
   let checkout: StartOnboardingCheckoutResult;
   try {
-    checkout = await startOnboardingCheckout(
-      { clerkUserId: userId, email },
-      {
-        userRepo: new SupabaseUserRepository(createAdminClient()),
-        checkoutGateway: new StripeOnboardingCheckoutGateway(),
-      }
-    );
+    checkout = await startOnboardingCheckout({ clerkUserId: userId, email });
   } catch (err) {
     Sentry.captureException(err, {
       tags: { page: "onboarding-payment" },

@@ -1,27 +1,18 @@
-import {
-  getStripe,
-  STRIPE_PRICE_IDS,
-  type PaidRank,
-} from "@/infrastructure/stripe/client";
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { SPAN_OP } from "@/lib/observability/span";
-import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
-import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
-import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
-import { SupabaseStripeWebhookEventRepository } from "@/infrastructure/supabase/supabase-stripe-webhook-event-repository";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseSubscriptionOnboardingRepository } from "@/infrastructure/supabase/supabase-subscription-onboarding-repository";
-import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
-import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
-import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 import {
-  toSubscriptionStatus,
-  toSubscriptionPeriod,
-} from "@/infrastructure/stripe/stripe-subscription-mapper";
-import type { StripeWebhookEventClaimResult } from "@/repositories/stripe-webhook-event-repository";
+  markCheckoutOrderAsPaid,
+  markInvoiceOrderAsPaid,
+} from "@/composition/order-payment";
+import { completeSubscriptionOnboarding } from "@/composition/onboarding";
+import {
+  constructStripeWebhookEvent,
+  isPaidRank,
+  retrieveOnboardingSubscription,
+  stripeWebhookEvents,
+  type StripeWebhookEventClaimResult,
+} from "@/composition/stripe-webhook";
 
 /**
  * claimできなかった再送への応答。処理済みなら2xxでスキップする。処理中なら2xx以外を
@@ -41,11 +32,6 @@ function skippedResponse(
   );
 }
 
-// 入会のCheckoutはセルフサービスのランク（STRIPE_PRICE_IDSのキー）でしか作らない
-function isPaidRank(plan: string): plan is PaidRank {
-  return Object.hasOwn(STRIPE_PRICE_IDS, plan);
-}
-
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET が未設定です");
@@ -62,7 +48,7 @@ export async function POST(req: Request) {
 
   let event;
   try {
-    event = getStripe().webhooks.constructEvent(body, signature, secret);
+    event = constructStripeWebhookEvent(body, signature, secret);
   } catch {
     return NextResponse.json({ error: "署名が不正です" }, { status: 400 });
   }
@@ -71,9 +57,7 @@ export async function POST(req: Request) {
     const session = event.data.object;
 
     if (session.mode === "payment") {
-      const webhookEventRepo = new SupabaseStripeWebhookEventRepository(
-        createAdminClient()
-      );
+      const webhookEventRepo = stripeWebhookEvents();
       // stripe_webhook_eventsによるDBレベルの冪等性チェック（issue #221）。
       // 処理中/処理済みの再送であればここでスキップし、後続のuse case側の
       // ステータスチェック（settlement.isPaid()）とあわせて二重の防御とする
@@ -84,21 +68,10 @@ export async function POST(req: Request) {
       });
       if (claim !== "claimed") return skippedResponse(claim);
 
-      const deps = {
-        orderRepo: new SupabaseOrderRepository(createAdminClient()),
-        userRepo: new SupabaseUserRepository(createAdminClient()),
-        notificationService: new ResendNotificationService(),
-        errorReporter: new SentryErrorReporter(),
-      };
-
       try {
         await Sentry.startSpan(
           { name: "markCheckoutOrderAsPaid", op: SPAN_OP.webhook },
-          () =>
-            markCheckoutOrderAsPaid(
-              { stripeCheckoutSessionId: session.id },
-              deps
-            )
+          () => markCheckoutOrderAsPaid({ stripeCheckoutSessionId: session.id })
         );
         await webhookEventRepo.markProcessed(event.id);
       } catch (err) {
@@ -156,9 +129,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true });
       }
 
-      const webhookEventRepo = new SupabaseStripeWebhookEventRepository(
-        createAdminClient()
-      );
+      const webhookEventRepo = stripeWebhookEvents();
       // 同じイベントの再送はここでスキップし、同じサブスクリプションの別イベントは
       // 入会確定のRPC（confirm_subscription_onboarding）の冪等性で防ぐ
       const claim = await webhookEventRepo.claim({
@@ -172,34 +143,26 @@ export async function POST(req: Request) {
       const stripeSubscriptionId = session.subscription as string;
 
       try {
-        const subscription =
-          await getStripe().subscriptions.retrieve(stripeSubscriptionId);
-        const { currentPeriodStart, currentPeriodEnd } =
-          toSubscriptionPeriod(subscription);
-        const status = toSubscriptionStatus(subscription.status);
+        const {
+          status,
+          currentPeriodStart,
+          currentPeriodEnd,
+          subscriptionStartedAt,
+        } = await retrieveOnboardingSubscription(stripeSubscriptionId);
 
         const result = await Sentry.startSpan(
           { name: "completeSubscriptionOnboarding", op: SPAN_OP.webhook },
           () =>
-            completeSubscriptionOnboarding(
-              {
-                clerkUserId,
-                plan,
-                stripeCustomerId,
-                stripeSubscriptionId,
-                status,
-                currentPeriodStart,
-                currentPeriodEnd,
-                subscriptionStartedAt: new Date(subscription.start_date * 1000),
-              },
-              {
-                userRepo: new SupabaseUserRepository(createAdminClient()),
-                onboardingRepo: new SupabaseSubscriptionOnboardingRepository(
-                  createAdminClient()
-                ),
-                accountGateway: new ClerkAccountGateway(),
-              }
-            )
+            completeSubscriptionOnboarding({
+              clerkUserId,
+              plan,
+              stripeCustomerId,
+              stripeSubscriptionId,
+              status,
+              currentPeriodStart,
+              currentPeriodEnd,
+              subscriptionStartedAt,
+            })
         );
 
         // 課金済みなのに記録されないサブスクリプション。再送しても成功しないため
@@ -248,9 +211,7 @@ export async function POST(req: Request) {
 
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
-    const webhookEventRepo = new SupabaseStripeWebhookEventRepository(
-      createAdminClient()
-    );
+    const webhookEventRepo = stripeWebhookEvents();
     const claim = await webhookEventRepo.claim({
       eventId: event.id,
       type: event.type,
@@ -258,17 +219,10 @@ export async function POST(req: Request) {
     });
     if (claim !== "claimed") return skippedResponse(claim);
 
-    const deps = {
-      orderRepo: new SupabaseOrderRepository(createAdminClient()),
-      userRepo: new SupabaseUserRepository(createAdminClient()),
-      notificationService: new ResendNotificationService(),
-      errorReporter: new SentryErrorReporter(),
-    };
-
     try {
       await Sentry.startSpan(
         { name: "markInvoiceOrderAsPaid", op: SPAN_OP.webhook },
-        () => markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id }, deps)
+        () => markInvoiceOrderAsPaid({ stripeInvoiceId: invoice.id })
       );
       await webhookEventRepo.markProcessed(event.id);
     } catch (err) {
