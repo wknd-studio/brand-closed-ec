@@ -324,6 +324,8 @@ const OUTSIDE_DOMAIN = [
   "src/components/sample.tsx",
   "src/lib/sample.ts",
   "src/sanity/sample.ts",
+  "src/composition/sample.ts",
+  "src/emails/sample.tsx",
   "src/middleware.ts",
   "src/repositories/sample.ts",
   "src/queries/sample.ts",
@@ -392,7 +394,7 @@ describe("domain の内部の定数は domain の外で import できない（#4
     const exported = files.flatMap((file) =>
       [
         ...readFileSync(`src/${file}.ts`, "utf8").matchAll(
-          /^export const (\w+)/gm
+          /^export (?:const|let|enum) (\w+)/gm
         ),
       ].map(([, name]) => ({ name, path: `@/${file}` }))
     );
