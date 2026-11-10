@@ -559,3 +559,30 @@ describe("このリポジトリの Query Service", () => {
     ).toBe(true);
   });
 });
+
+describe("検査の配線", () => {
+  const COMMAND = "pnpm -s tsx scripts/ci/query-service-shape.ts";
+
+  it("task check で検査が走る", () => {
+    const taskfile = readFileSync(path.join(ROOT, "Taskfile.yml"), "utf8");
+    const check = /\n {2}check:\n([\s\S]*?)\n {2}\S/.exec(taskfile)?.[1];
+    expect(check).toContain(COMMAND);
+  });
+
+  it("PR と develop への push の CI（Deploy の Lint ジョブ）で検査が走る", () => {
+    const workflow = readFileSync(
+      path.join(ROOT, ".github/workflows/deploy.yml"),
+      "utf8"
+    );
+    const lint = /\n {2}lint:\n([\s\S]*?)\n {2}\S/.exec(workflow)?.[1];
+    expect(lint).toContain(`run: ${COMMAND}`);
+  });
+
+  it("PR Diff Summary に Query Service の節を載せる", () => {
+    const script = readFileSync(
+      path.join(ROOT, "scripts/ci/pr-diff-summary.ts"),
+      "utf8"
+    );
+    expect(script).toContain("renderQueryServiceSection(");
+  });
+});
