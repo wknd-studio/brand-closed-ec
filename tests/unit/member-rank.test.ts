@@ -88,6 +88,35 @@ describe("MemberRank", () => {
     });
   });
 
+  describe("isSelfService()", () => {
+    it("セルフサービスで選べるランクはtrue、個別契約のenterpriseはfalse", () => {
+      expect(MemberRank.of("starter").isSelfService()).toBe(true);
+      expect(MemberRank.of("premium").isSelfService()).toBe(true);
+      expect(MemberRank.of("enterprise").isSelfService()).toBe(false);
+    });
+  });
+
+  describe("pricingRanks()", () => {
+    it("掛け率・ランク別価格を設定するのは、個別契約のenterpriseを除くランク（下位から順）", () => {
+      expect(MemberRank.pricingRanks()).toEqual([
+        "starter",
+        "basic",
+        "standard",
+        "pro",
+        "advanced",
+        "premium",
+      ]);
+    });
+  });
+
+  describe("hasRankPricing()", () => {
+    it("ランク別価格を設定するランクはtrue、個別契約のenterpriseはfalse", () => {
+      expect(MemberRank.of("starter").hasRankPricing()).toBe(true);
+      expect(MemberRank.of("premium").hasRankPricing()).toBe(true);
+      expect(MemberRank.of("enterprise").hasRankPricing()).toBe(false);
+    });
+  });
+
   describe("of()", () => {
     it("旧ランク値（free, entry）は不正な値としてエラーになる", () => {
       expect(() => MemberRank.of("free")).toThrow();

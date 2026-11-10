@@ -12,6 +12,25 @@ export const RANK_ORDER = [
 
 export type MemberRankValue = (typeof RANK_ORDER)[number];
 
+// 個別契約のランク。セルフサービス（入会・決済）の対象外で、掛け率・ランク別価格も設定しない（FR-006）
+const INDIVIDUAL_CONTRACT_RANKS = ["enterprise"] as const;
+type IndividualContractRankValue = (typeof INDIVIDUAL_CONTRACT_RANKS)[number];
+
+/** セルフサービスで選べるランク */
+export type SelfServiceRankValue = Exclude<
+  MemberRankValue,
+  IndividualContractRankValue
+>;
+/** 掛け率・ランク別価格を設定するランク */
+export type PricingRankValue = Exclude<
+  MemberRankValue,
+  IndividualContractRankValue
+>;
+
+function isIndividualContract(rank: MemberRankValue): boolean {
+  return (INDIVIDUAL_CONTRACT_RANKS as readonly string[]).includes(rank);
+}
+
 // TODO: 月間仕入れ上限は未確定（TBD）の暫定値。確定次第更新する
 // （specs/001-seven-rank-pricing/research.md参照）。
 // standard/pro/enterpriseは名称が旧モデルから引き継がれるため、旧モデルの数値を
@@ -33,8 +52,17 @@ export class MemberRank {
   private constructor(readonly value: MemberRankValue) {}
 
   /** セルフサービスで選べるランクの一覧（下位から順）。ENTERPRISEは個別契約のため含まない（FR-006） */
-  static selfServiceRanks(): MemberRankValue[] {
-    return RANK_ORDER.filter((rank) => rank !== "enterprise");
+  static selfServiceRanks(): SelfServiceRankValue[] {
+    return RANK_ORDER.filter(
+      (rank): rank is SelfServiceRankValue => !isIndividualContract(rank)
+    );
+  }
+
+  /** 掛け率・ランク別価格を設定するランクの一覧（下位から順）。ENTERPRISEは個別契約のため含まない */
+  static pricingRanks(): PricingRankValue[] {
+    return RANK_ORDER.filter(
+      (rank): rank is PricingRankValue => !isIndividualContract(rank)
+    );
   }
 
   static of(value: string): MemberRank {
@@ -42,6 +70,18 @@ export class MemberRank {
       throw new Error(`不正なランク値: ${value}`);
     }
     return new MemberRank(value as MemberRankValue);
+  }
+
+  /** セルフサービス（入会・決済）で選べるランクか。true なら value は SelfServiceRankValue に絞られる */
+  isSelfService(): this is MemberRank & {
+    readonly value: SelfServiceRankValue;
+  } {
+    return !isIndividualContract(this.value);
+  }
+
+  /** 掛け率・ランク別価格を設定するランクか */
+  hasRankPricing(): boolean {
+    return !isIndividualContract(this.value);
   }
 
   getMonthlyLimit(): Money {

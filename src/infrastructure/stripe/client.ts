@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import type { SelfServiceRankValue } from "@/domain/value-objects/member-rank";
 
 let _stripe: Stripe | null = null;
 
@@ -14,14 +15,8 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-// enterpriseは個別契約のためセルフサービスのPaidRankには含めない（FR-006）
-export type PaidRank =
-  | "starter"
-  | "basic"
-  | "standard"
-  | "pro"
-  | "advanced"
-  | "premium";
+// セルフサービスで決済できるランクだけに価格を持たせる（個別契約のランクは含めない。FR-006）
+export type PaidRank = SelfServiceRankValue;
 
 export const STRIPE_PRICE_IDS: Record<
   PaidRank,
