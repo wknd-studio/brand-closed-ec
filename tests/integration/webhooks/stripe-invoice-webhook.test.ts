@@ -24,7 +24,6 @@ const supabase = createClient<Database>(
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000080";
 const TEST_CLERK_ID = "clerk_test_stripe_invoice_webhook";
 const TEST_ADDRESS_ID = "00000000-0000-0000-0000-000000000081";
-const TEST_STRIPE_CUSTOMER_ID = "cus_test_stripe_invoice_webhook_080";
 const TEST_INVOICE_ID = "in_test_stripe_invoice_webhook_080";
 const UNIT_PRICE = 200_000;
 
@@ -66,7 +65,6 @@ function makeDeps() {
   const paymentGateway: PaymentGateway = {
     createCheckoutSession: vi.fn(),
     createInvoiceForOrder: vi.fn().mockResolvedValue(TEST_INVOICE_ID),
-    ensureCustomer: vi.fn().mockResolvedValue(TEST_STRIPE_CUSTOMER_ID),
   };
   const notificationService: NotificationService = {
     sendOrderConfirming: vi.fn().mockResolvedValue(undefined),
