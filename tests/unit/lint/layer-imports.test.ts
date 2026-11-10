@@ -48,6 +48,8 @@ const forbidden: ForbiddenCase[] = [
       "next/headers",
       "react",
       "../../infrastructure/supabase/client",
+      "./../infrastructure/supabase/client",
+      "./x/../../../infrastructure/supabase/client",
     ],
   },
   ...["src/repositories/sample.ts", "src/queries/sample.ts"].map((file) => ({
@@ -112,6 +114,7 @@ const forbidden: ForbiddenCase[] = [
       "@/emails/order-confirmation",
       "@/sanity/schemas",
       "../../infrastructure/supabase/server-admin",
+      "./../../infrastructure/supabase/server-admin",
     ],
   },
   {
@@ -696,6 +699,22 @@ describe("components・lib から repositories・infrastructure・app を使え�
         expect(messages).toHaveLength(1);
         expect(messages[0].severity).toBe(2);
         expect(messages[0].message).toContain("props");
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+
+    it.each([
+      "../infrastructure/sanity/client",
+      "./../repositories/order-repository",
+      "../../app/(member)/favorites/actions",
+    ])(
+      "相対パスの %s も、直し方と architecture.md のパスを含むエラーになる",
+      async (path) => {
+        const messages = await restrictedImportMessages(
+          file.replace(/\/sample/, "/x/sample"),
+          `import x from "${path}";\nexport default x;\n`
+        );
+        expect(messages).toHaveLength(1);
         expect(messages[0].message).toContain(DOC);
       }
     );
