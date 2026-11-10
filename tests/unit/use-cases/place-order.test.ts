@@ -69,6 +69,10 @@ describe("placeOrder", () => {
 
     const lastSaved = vi.mocked(deps.orderRepo.save).mock.calls[0][0];
     expect(lastSaved.settlements[0].stripeCheckoutSessionId).toBe("sess_1");
+    // 会員の注文確定の続き（Checkout Session IDの反映）のため、状態を変えた主体は customer
+    expect(vi.mocked(deps.orderRepo.save).mock.calls[0][1]).toEqual({
+      type: "customer",
+    });
   });
 
   it("要相談の商品を含むカートはNegotiableProductNotOrderableErrorになり、注文も決済単位も作られない", async () => {

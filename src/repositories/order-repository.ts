@@ -31,6 +31,15 @@ export type OrderWithUser = {
   }[];
 };
 
+/**
+ * orders.status を変えた主体（order_status_changes.changed_by）。
+ * 運営者の操作では、誰が変えたかを admin_users.id で残す
+ */
+export type OrderStatusChangedBy =
+  | { type: "customer" }
+  | { type: "system" }
+  | { type: "admin"; adminUserId: string };
+
 export interface OrderRepository {
   findById(id: string): Promise<Order | null>;
   /** 指定したCheckout Session IDの決済単位を持つ注文を返す */
@@ -48,8 +57,12 @@ export interface OrderRepository {
     period: MonthlyPeriod
   ): Promise<number>;
 
-  /** 注文・明細・決済単位を保存する（既存があれば更新） */
-  save(order: Order): Promise<void>;
+  /**
+   * 注文・明細・決済単位を1つのトランザクションで保存する（既存があれば更新）。
+   * orders.status が変わったときだけ、changedBy を主体として order_status_changes に
+   * 1行記録する（状態の更新と履歴は両方とも反映されるか、両方とも反映されない。#237）
+   */
+  save(order: Order, changedBy: OrderStatusChangedBy): Promise<void>;
 
   /**
    * 注文（+明細+決済単位）を新規作成する。対象ユーザー行への行ロック込みで
