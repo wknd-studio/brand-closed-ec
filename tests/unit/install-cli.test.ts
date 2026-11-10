@@ -220,7 +220,7 @@ describe("extract_cli", () => {
   });
 
   // files の各パスを、中身が実行できるシェルスクリプトのファイルとして tarball に詰める
-  function tarball(files: Record<string, string>) {
+  function tarball(files: Record<string, string>, prefix = "") {
     const src = path.join(dir, "src");
     for (const [name, body] of Object.entries(files)) {
       const file = path.join(src, name);
@@ -228,7 +228,13 @@ describe("extract_cli", () => {
       writeFileSync(file, `#!/usr/bin/env bash\n${body}\n`, { mode: 0o755 });
     }
     const out = path.join(dir, "cli.tar.gz");
-    spawnSync("tar", ["-czf", out, "-C", src, ...Object.keys(files)]);
+    spawnSync("tar", [
+      "-czf",
+      out,
+      "-C",
+      src,
+      ...Object.keys(files).map((f) => prefix + f),
+    ]);
     return out;
   }
 
@@ -252,6 +258,16 @@ describe("extract_cli", () => {
     });
     expect(version.status).toBe(0);
     expect(version.stdout.trim()).toBe("2.102.0");
+  });
+
+  it("entry が ./ 付きで入っている tarball でも、supabase と supabase-go を置く", () => {
+    const file = tarball(
+      { supabase: 'echo "x"', "supabase-go": 'echo "x"', LICENSE: "" },
+      "./"
+    );
+    const { status, dest } = extract(file, "supabase");
+    expect(status).toBe(0);
+    expect(readdirSync(dest).sort()).toEqual(["supabase", "supabase-go"]);
   });
 
   it("supabase-go が無い tarball（それより前の版）は supabase だけを置く", () => {

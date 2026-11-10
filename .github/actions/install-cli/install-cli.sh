@@ -126,10 +126,10 @@ extract_cli() {
   local file="$1" dest="$2" tool="$3" entry
   local -a members=()
   while IFS= read -r entry; do
-    entry="${entry#./}"
-    [[ "$entry" == "$tool" || "$entry" == "$tool-go" ]] && members+=("$entry")
+    # GNU tar は ./ 付きで入っている entry を ./ 無しの名前では取り出せないため、元の名前のまま渡す
+    [[ "${entry#./}" == "$tool" || "${entry#./}" == "$tool-go" ]] && members+=("$entry")
   done < <(tar -tzf "$file")
-  if [[ " ${members[*]-} " != *" $tool "* ]]; then
+  if [[ " ${members[*]-} " != *" $tool "* && " ${members[*]-} " != *" ./$tool "* ]]; then
     echo "::error::tarball に $tool がありません: $file" >&2
     return 1
   fi
