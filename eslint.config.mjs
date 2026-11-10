@@ -113,8 +113,7 @@ const clientPatterns = [
   },
 ];
 
-const clientSyntaxRule = [
-  "error",
+const clientSyntax = [
   {
     // Supabase のテーブル指定（db.from("users")）。Array.from("...")・Buffer.from("...") は除く
     selector:
@@ -134,8 +133,7 @@ const SUPABASE_ERROR_DOC =
 const SUPABASE_QUERY =
   ":matches(CallExpression[callee.property.name='rpc'], CallExpression[callee.property.name='from'][arguments.0.type=/^(Literal|TemplateLiteral)$/]:not([callee.object.name=/^(Array|Buffer)$/]))";
 
-const supabaseErrorSyntaxRule = [
-  "error",
+const supabaseErrorSyntax = [
   {
     selector: `AwaitExpression:has(${SUPABASE_QUERY}):not(VariableDeclarator[id.type='ObjectPattern'] > AwaitExpression.init)`,
     message: `supabase-js のクエリの結果を捨てたり、変数でそのまま受けたりしない。失敗しても例外にならず error が返るだけなので、成功扱いになる。${SUPABASE_ERROR_DOC}`,
@@ -143,6 +141,72 @@ const supabaseErrorSyntaxRule = [
   {
     selector: `VariableDeclarator[id.type='ObjectPattern']:not(:has(> ObjectPattern:has(> Property[key.name='error']))) > AwaitExpression.init:has(${SUPABASE_QUERY})`,
     message: `supabase-js のクエリの結果から data・count だけを取り出さない。失敗すると data が null・count が null になり、「見つからない」「0件」に化ける。${SUPABASE_ERROR_DOC}`,
+  },
+];
+
+// catch 節で例外を握りつぶさない（#310）。catch すると onRequestError による Sentry への自動送信が効かなくなるため、
+// Sentry.captureException（use-cases では ErrorReporter の captureException）で送るか、投げ直す。
+// 送ったか・投げたかは catch の中の呼び出し・throw の有無だけで見る（条件付きの送信も通る）
+const catchSyntax = [
+  {
+    selector:
+      "CatchClause:not(:has(CallExpression[callee.property.name='captureException'])):not(:has(ThrowStatement))",
+    message:
+      "catch した例外を握りつぶさない。Sentry.captureException(err)（use-cases では errorReporter.captureException(err)）で送るか、throw で投げ直す。署名検証の失敗・壊れた入力の読み飛ばしのような想定内の失敗は、// eslint-disable-next-line no-restricted-syntax -- <送らない理由> で外す。docs/ai-prompts/sentry.md を参照（#310）",
+  },
+];
+
+// middleware で Sentry.setUser を呼んでも後続のリクエストに引き継がれない（#310）
+const middlewareSetUserSyntax = [
+  {
+    selector:
+      "CallExpression:matches([callee.property.name='setUser'], [callee.name='setUser'])",
+    message:
+      "src/middleware.ts で Sentry.setUser は呼ばない（後続の Server Action・Route Handler に引き継がれない）。src/lib/auth/current-user.ts の requireAuth() の中で呼ぶ。docs/ai-prompts/sentry.md を参照（#310）",
+  },
+];
+
+// Clerk の非推奨API（#310）。層の依存方向の no-restricted-imports は層ごとのブロックで置き換わるため、
+// 別のルール（@typescript-eslint/no-restricted-imports）で全ファイルに入れる
+const CLERK_DOC = "docs/ai-prompts/clerk.md の NEVER を参照（#310）";
+
+const CLERK_AUTH_MIDDLEWARE_MESSAGE = `authMiddleware・withAuth は使わない。src/middleware.ts の clerkMiddleware() と、@clerk/nextjs/server の auth()（src/lib/auth/current-user.ts の requireAuth()）を使う。${CLERK_DOC}`;
+
+const clerkPaths = [
+  {
+    name: "@clerk/nextjs",
+    importNames: ["SignedIn", "SignedOut"],
+    message: `<SignedIn>・<SignedOut> は使わない。<Show when="signed-in">・<Show when="signed-out"> を使う。${CLERK_DOC}`,
+  },
+  {
+    name: "@clerk/nextjs",
+    importNames: ["currentUser"],
+    message: `currentUser は @clerk/nextjs/server から import する。${CLERK_DOC}`,
+  },
+  ...["@clerk/nextjs", "@clerk/nextjs/server"].map((name) => ({
+    name,
+    importNames: ["authMiddleware", "withAuth"],
+    message: CLERK_AUTH_MIDDLEWARE_MESSAGE,
+  })),
+];
+
+// E2E の Supabase クライアントは型を付ける（#310）。型無しの createClient(...) は存在しないカラムを指定しても
+// tsc が通り、実行時までカラム不整合に気づけない。esquery では import の別名を追えないため、
+// 別名は createSupabaseClient（next-sanity の createClient と同じファイルで使うとき）だけにする。
+// import * as ... で受けて呼ぶ書き方は検出しない
+const E2E_CLIENT_MESSAGE =
+  "tests/e2e/ の Supabase クライアントは createClient<Database>(...) のように型を付ける（Database は @/types/database.types）。型無しだと存在しないカラムを指定しても tsc が通る。CLAUDE.md を参照（#310）";
+
+const SUPABASE_JS = "ImportDeclaration[source.value='@supabase/supabase-js']";
+
+const e2eClientSyntax = [
+  ...["createClient", "createSupabaseClient"].map((local) => ({
+    selector: `Program:has(${SUPABASE_JS} > ImportSpecifier[imported.name='createClient'][local.name='${local}']) CallExpression[callee.name='${local}']:not([typeArguments])`,
+    message: E2E_CLIENT_MESSAGE,
+  })),
+  {
+    selector: `${SUPABASE_JS} > ImportSpecifier[imported.name='createClient']:not([local.name=/^create(Supabase)?Client$/])`,
+    message: `@supabase/supabase-js の createClient の別名は createSupabaseClient にする（型引数の有無をlintで検査するため）。${E2E_CLIENT_MESSAGE}`,
   },
 ];
 
@@ -304,16 +368,43 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        { paths: clerkPaths },
+      ],
+    },
+  },
+  // no-restricted-syntax も同じルールのブロックが後勝ちで置き換わるため、後のブロックには前のブロックの分も入れる
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", ...catchSyntax],
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/infrastructure/**", "src/sanity/**"],
     rules: {
-      "no-restricted-syntax": clientSyntaxRule,
+      "no-restricted-syntax": ["error", ...clientSyntax, ...catchSyntax],
+    },
+  },
+  {
+    files: ["src/middleware.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...clientSyntax,
+        ...catchSyntax,
+        ...middlewareSetUserSyntax,
+      ],
     },
   },
   {
     files: ["src/infrastructure/supabase/**/*.ts"],
     rules: {
-      "no-restricted-syntax": supabaseErrorSyntaxRule,
+      "no-restricted-syntax": ["error", ...supabaseErrorSyntax, ...catchSyntax],
     },
   },
   // E2Eでnetworkidleを待たない（#519）。Next.jsのprefetch・Clerkのトークン更新等で
@@ -335,6 +426,7 @@ const eslintConfig = defineConfig([
           message:
             "networkidleは待たない。次に操作する要素をexpect(...).toBeVisible()で、遷移をtoHaveURLで待つ（#519）",
         },
+        ...e2eClientSyntax,
       ],
     },
   },
