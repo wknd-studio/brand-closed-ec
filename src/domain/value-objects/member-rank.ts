@@ -65,6 +65,11 @@ export class MemberRank {
     );
   }
 
+  /** セルフサービスで申し込めるランクか（入会のCheckoutのmetadataの検証に使う） */
+  static isSelfServiceRank(value: string): value is MemberRankValue {
+    return (MemberRank.selfServiceRanks() as string[]).includes(value);
+  }
+
   static of(value: string): MemberRank {
     if (!(RANK_ORDER as readonly string[]).includes(value)) {
       throw new Error(`不正なランク値: ${value}`);
