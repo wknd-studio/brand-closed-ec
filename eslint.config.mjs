@@ -150,7 +150,7 @@ const supabaseErrorSyntax = [
 const catchSyntax = [
   {
     selector:
-      "CatchClause:not(:has(CallExpression[callee.property.name='captureException'])):not(:has(ThrowStatement))",
+      "CatchClause:not(:has(CallExpression:matches([callee.property.name='captureException'], [callee.name='captureException']))):not(:has(ThrowStatement))",
     message:
       "catch した例外を握りつぶさない。Sentry.captureException(err)（use-cases では errorReporter.captureException(err)）で送るか、throw で投げ直す。署名検証の失敗・壊れた入力の読み飛ばしのような想定内の失敗は、// eslint-disable-next-line no-restricted-syntax -- <送らない理由> で外す。docs/ai-prompts/sentry.md を参照（#310）",
   },
