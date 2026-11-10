@@ -10,6 +10,7 @@ import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { User } from "@/domain/entities/user";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
 
 const snapshotProps = {
   recipientLastName: "山田",
@@ -96,7 +97,7 @@ function makeUser() {
     email: "test@example.com",
     firstName: "太郎",
     lastName: "山田",
-    phoneNumber: "09012345678",
+    phoneNumber: PhoneNumber.of("09012345678"),
     profileCompletedAt: new Date(2026, 0, 1),
     rank: MemberRank.of("standard"),
     billingAnchorDay: 1,
