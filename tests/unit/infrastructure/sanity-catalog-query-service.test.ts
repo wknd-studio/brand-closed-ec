@@ -317,15 +317,17 @@ describe("SanityCatalogQueryService.findCheckoutProducts", () => {
     ]);
   });
 
-  it("Sanity で削除済みの商品は含めない", async () => {
-    fetchMock.mockResolvedValue([sanityProduct()]);
+  it("後払いの商品は後払いとして返す", async () => {
+    fetchMock.mockResolvedValue([
+      sanityProduct({ payment_timing: "after_order" }),
+    ]);
 
-    const result = await service.findCheckoutProducts({
+    const [product] = await service.findCheckoutProducts({
       rank: MemberRank.of("starter"),
-      productIds: ["prod-1", "deleted"],
+      productIds: ["prod-1"],
     });
 
-    expect(result.map((p) => p.id)).toEqual(["prod-1"]);
+    expect(product.paymentTiming).toBe("after_order");
   });
 
   it("カートが空なら Sanity に問い合わせない", async () => {

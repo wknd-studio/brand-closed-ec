@@ -245,6 +245,30 @@ describe("checkQueryServices（interface と DTO の命名）", () => {
     expect(messages(reports)).toEqual([expect.stringContaining("OrderItem")]);
   });
 
+  it("サブディレクトリに置いた Query Service は違反（検査から漏らさない）", () => {
+    const reports = checkQueryServices(
+      memoryReader({
+        "src/queries/member/member-order-query-service.ts": QUERY,
+      }),
+      NO_OVERRIDES
+    );
+    expect(messages(reports)).toEqual([
+      expect.stringContaining("<対象>-query-service.ts"),
+    ]);
+  });
+
+  it("domain 以外からの再エクスポート・import 型も違反", () => {
+    const reports = check({
+      [PATHS.query]:
+        QUERY +
+        `export type { Database } from "@/types/database.types";\nexport type Row = import("@/types/database.types").Database;\n`,
+    });
+    expect(messages(reports)).toEqual([
+      expect.stringContaining("@/types/database.types"),
+      expect.stringContaining("@/types/database.types"),
+    ]);
+  });
+
   it("domain 以外を import していれば違反", () => {
     const reports = check({
       [PATHS.query]:
@@ -328,6 +352,20 @@ describe("checkQueryServices（組み立て）", () => {
     });
     expect(messages(reports)).toEqual([
       expect.stringContaining("MemberOrderQueryService"),
+    ]);
+  });
+
+  it("interface の型で返す関数と別に、実装のクラスの型で返す関数を export していれば違反", () => {
+    const reports = check({
+      [PATHS.composition]:
+        COMPOSITION +
+        `export function rawMemberOrderQueryService(): SupabaseMemberOrderQueryService {
+  return new SupabaseMemberOrderQueryService(db);
+}
+`,
+    });
+    expect(messages(reports)).toEqual([
+      expect.stringContaining("rawMemberOrderQueryService"),
     ]);
   });
 
