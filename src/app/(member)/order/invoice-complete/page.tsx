@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/infrastructure/supabase/server";
-import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { memberOrderQueryService } from "@/composition/member-order-query";
 import InvoiceCompleteClient from "./invoice-complete-client";
 
 type Props = {
@@ -15,30 +14,19 @@ export default async function InvoiceCompletePage({ searchParams }: Props) {
   const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
-  const supabase = await createServerClient();
-  const orderRepo = new SupabaseOrderRepository(supabase);
-
-  const order = await orderRepo.findById(order_id);
-  if (!order) redirect("/shop");
   // 後払い（after_order）の明細を含む注文のみが対象
-  const afterOrderItems = order.items.filter(
-    (item) => item.paymentTiming === "after_order"
-  );
-  if (afterOrderItems.length === 0) redirect("/shop");
+  const queryService = await memberOrderQueryService();
+  const order = await queryService.findInvoiceRequestedOrder({
+    clerkUserId: userId,
+    orderId: order_id,
+  });
+  if (!order) redirect("/shop");
 
   return (
     <InvoiceCompleteClient
-      orderId={order.id}
-      createdAt={order.createdAt.toISOString()}
-      items={afterOrderItems.map((item) => ({
-        id: item.id,
-        productNameSnapshot: item.productNameSnapshot,
-        quantity: item.quantity,
-        unitPriceSnapshot: item.isNegotiable
-          ? null
-          : item.unitPriceSnapshot.amount,
-        isNegotiable: item.isNegotiable,
-      }))}
+      orderId={order.orderId}
+      createdAt={order.createdAt}
+      items={order.items}
     />
   );
 }
