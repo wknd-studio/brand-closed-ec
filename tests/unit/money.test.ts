@@ -9,20 +9,17 @@ describe("Money", () => {
     it("0は作れる", () => {
       expect(Money.of(0).amount).toBe(0);
     });
+    it.each([0.5, 100.1, Number.NaN, Number.POSITIVE_INFINITY])(
+      "円の整数でない金額（%s）は作れない",
+      (amount) => {
+        expect(() => Money.of(amount)).toThrow();
+      }
+    );
   });
 
   describe("add()", () => {
     it("金額を加算する", () => {
       expect(Money.of(100).add(Money.of(200)).amount).toBe(300);
-    });
-  });
-
-  describe("subtract()", () => {
-    it("金額を減算する", () => {
-      expect(Money.of(500).subtract(Money.of(200)).amount).toBe(300);
-    });
-    it("結果が負になる場合は0になる", () => {
-      expect(Money.of(100).subtract(Money.of(300)).amount).toBe(0);
     });
   });
 

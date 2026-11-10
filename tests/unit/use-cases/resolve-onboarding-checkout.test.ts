@@ -34,7 +34,7 @@ describe("resolveOnboardingCheckout", () => {
   it.each([
     ["姓", { lastName: "" }],
     ["名", { firstName: "" }],
-    ["電話番号", { phoneNumber: "" }],
+    ["電話番号", { phoneNumber: null }],
   ])("%sが未入力の場合: 種別選択へ戻す", async (_label, overrides) => {
     const userRepo = makeUserRepo();
     vi.mocked(userRepo.findByClerkUserId).mockResolvedValue(

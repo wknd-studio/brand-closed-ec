@@ -22,6 +22,8 @@ describe("createUser", () => {
     expect(inserted.rank.value).toBe("starter");
     expect(inserted.onboardingCompleted).toBe(false);
     expect(inserted.id).toBeTruthy();
+    // プロフィール未入力。電話番号は空文字ではなく null で表す
+    expect(inserted.phoneNumber).toBeNull();
   });
 
   // user.createdの再送やselectPlanが先に行を作っていた場合に、既存行（入力済みの
