@@ -94,6 +94,11 @@ export class MemberRank {
     return !isIndividualContract(this.value);
   }
 
+  /** 月間仕入れ上限の金額が無制限のランクのものか（画面で「無制限」と出し分けるため） */
+  static isUnlimitedMonthlyLimit(amount: number): boolean {
+    return amount === MONTHLY_LIMITS.enterprise;
+  }
+
   getMonthlyLimit(): Money {
     return Money.of(MONTHLY_LIMITS[this.value]);
   }

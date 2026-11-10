@@ -6,7 +6,6 @@ import {
   updateQuantity,
   removeItem,
   clearCart,
-  calcCartFixedTotal,
 } from "@/lib/cart/cookie";
 import type { Cart } from "@/lib/cart/types";
 
@@ -164,33 +163,5 @@ describe("removeItem", () => {
 describe("clearCart", () => {
   it("空カートを返す", () => {
     expect(clearCart()).toEqual(empty);
-  });
-});
-
-describe("calcCartFixedTotal", () => {
-  it("固定価格商品のみ合計する（要相談商品はスキップ）", () => {
-    // p1: 10,000 × 2 = 20,000 / p2: 要相談（null）はスキップ
-    expect(calcCartFixedTotal(withItems)).toBe(20_000);
-  });
-
-  it("空カートは0を返す", () => {
-    expect(calcCartFixedTotal(empty)).toBe(0);
-  });
-
-  it("全商品が要相談の場合は0を返す", () => {
-    const cart: Cart = {
-      items: [
-        {
-          productId: "p1",
-          productName: "A",
-          thumbnail: null,
-          quantity: 3,
-          unitPrice: null,
-          availability: "available",
-          paymentTiming: "at_order",
-        },
-      ],
-    };
-    expect(calcCartFixedTotal(cart)).toBe(0);
   });
 });

@@ -125,6 +125,28 @@ describe("CartProvider", () => {
     expect(latest.cart.items).toEqual([{ ...product, quantity: 2 }]);
   });
 
+  it("上限0のときは、追加も数量を増やす変更も同じく上限超過として扱う", () => {
+    const initialCart: Cart = { items: [{ ...product, quantity: 1 }] };
+    render({ initialCart, monthlyLimit: 0 });
+
+    let addResult: { error?: string } = {};
+    let updateResult: { error?: string } = {};
+    act(() => {
+      addResult = latest.addToCart(product, 1);
+    });
+    act(() => {
+      updateResult = latest.updateItemQuantity("product-1", 2);
+    });
+
+    expect(addResult.error).toBe(
+      "月間仕入れ上限（¥0）を超えるため追加できません"
+    );
+    expect(updateResult.error).toBe(
+      "月間仕入れ上限（¥0）を超えるため変更できません"
+    );
+    expect(latest.cart).toEqual(initialCart);
+  });
+
   it("Provider の外で useCart を使うとエラーになる", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => act(() => root.render(<Probe onRender={() => {}} />))).toThrow(
