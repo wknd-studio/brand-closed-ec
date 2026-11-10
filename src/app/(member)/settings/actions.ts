@@ -18,32 +18,59 @@ import {
   deleteAddress,
   setDefaultAddress,
 } from "@/composition/address";
-import type { AddressType } from "@/domain/entities/address";
+import type { AddressContent, AddressType } from "@/domain/entities/address";
 
 type ActionResult = { success: true } | { error: string };
 
-// フォームの項目名に合わせる（address-form.tsx）
-const REQUIRED_ADDRESS_FIELD_LABELS: Record<RequiredAddressField, string> = {
-  recipientLastName: "宛名（姓）",
-  recipientFirstName: "宛名（名）",
-  postalCode: "郵便番号",
-  prefecture: "都道府県",
-  city: "市区町村",
-  addressLine1: "番地・建物名",
-  phoneNumber: "電話番号",
+// 住所の入力値の検証で拒否したときは、フォームの項目ごとに出す文言を fieldErrors で返す
+export type AddressFormResult =
+  | { success: true }
+  | { error: string }
+  | { fieldErrors: Partial<Record<RequiredAddressField, string>> };
+
+const REQUIRED_ADDRESS_FIELD_MESSAGES: Record<RequiredAddressField, string> = {
+  recipientLastName: "姓を入力してください",
+  recipientFirstName: "名を入力してください",
+  postalCode: "郵便番号を入力してください",
+  prefecture: "都道府県を入力してください",
+  city: "市区町村を入力してください",
+  addressLine1: "番地・建物名を入力してください",
+  phoneNumber: "電話番号を入力してください",
 };
 
-/** 住所の入力値の検証エラーなら、どの項目が不正かが分かる文言を返す。それ以外は null */
-function addressInputErrorMessage(err: unknown): string | null {
+function readAddressForm(formData: FormData): AddressContent {
+  return {
+    recipientLastName: String(formData.get("recipient_last_name") ?? ""),
+    recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
+    postalCode: String(formData.get("postal_code") ?? ""),
+    prefecture: String(formData.get("prefecture") ?? ""),
+    city: String(formData.get("city") ?? ""),
+    addressLine1: String(formData.get("address_line1") ?? ""),
+    addressLine2: String(formData.get("address_line2") ?? ""),
+    phoneNumber: String(formData.get("phone_number") ?? ""),
+  };
+}
+
+/** 住所の入力値の検証エラーなら、項目ごとの文言を返す。それ以外は null */
+function addressFieldErrors(
+  err: unknown
+): Partial<Record<RequiredAddressField, string>> | null {
   if (err instanceof MissingRequiredAddressFieldsError) {
-    const labels = err.fields.map((f) => REQUIRED_ADDRESS_FIELD_LABELS[f]);
-    return `次の項目を入力してください: ${labels.join("、")}`;
+    return Object.fromEntries(
+      err.fields.map((field) => [field, REQUIRED_ADDRESS_FIELD_MESSAGES[field]])
+    );
   }
   if (err instanceof InvalidPostalCodeError) {
-    return "郵便番号は7桁の数字で入力してください（ハイフンは任意。例: 150-0001）";
+    return {
+      postalCode:
+        "郵便番号は7桁の数字で入力してください（ハイフンは任意。例: 150-0001）",
+    };
   }
   if (err instanceof InvalidPhoneNumberError) {
-    return "電話番号は0から始まる10〜11桁の数字で入力してください（ハイフンは任意）";
+    return {
+      phoneNumber:
+        "電話番号は0から始まる10〜11桁の数字で入力してください（ハイフンは任意）",
+    };
   }
   return null;
 }
@@ -69,7 +96,8 @@ export async function setDefaultAddressAction(
 
 export async function createAddressAction(
   formData: FormData
-): Promise<ActionResult> {
+): Promise<AddressFormResult> {
+  const content = readAddressForm(formData);
   const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
@@ -77,20 +105,14 @@ export async function createAddressAction(
     await createAddress({
       clerkUserId: userId,
       type: formData.get("type") as AddressType,
-      recipientLastName: String(formData.get("recipient_last_name") ?? ""),
-      recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
-      postalCode: String(formData.get("postal_code") ?? ""),
-      prefecture: String(formData.get("prefecture") ?? ""),
-      city: String(formData.get("city") ?? ""),
-      addressLine1: String(formData.get("address_line1") ?? ""),
-      addressLine2: (formData.get("address_line2") as string) || null,
-      phoneNumber: String(formData.get("phone_number") ?? ""),
+      ...content,
+      addressLine2: content.addressLine2 || null,
     });
     revalidatePath("/settings");
     return { success: true };
   } catch (err) {
-    const inputError = addressInputErrorMessage(err);
-    if (inputError) return { error: inputError };
+    const fieldErrors = addressFieldErrors(err);
+    if (fieldErrors) return { fieldErrors };
     if (!(err instanceof DomainError))
       Sentry.captureException(err, { tags: { useCase: "createAddress" } });
     return { error: "住所の登録に失敗しました" };
@@ -100,27 +122,22 @@ export async function createAddressAction(
 export async function updateAddressAction(
   addressId: string,
   formData: FormData
-): Promise<ActionResult> {
+): Promise<AddressFormResult> {
+  const content = readAddressForm(formData);
   const { userId } = await requireAuth();
   if (!userId) return { error: "認証されていません" };
 
   try {
     await updateAddress({
       addressId,
-      recipientLastName: String(formData.get("recipient_last_name") ?? ""),
-      recipientFirstName: String(formData.get("recipient_first_name") ?? ""),
-      postalCode: String(formData.get("postal_code") ?? ""),
-      prefecture: String(formData.get("prefecture") ?? ""),
-      city: String(formData.get("city") ?? ""),
-      addressLine1: String(formData.get("address_line1") ?? ""),
-      addressLine2: (formData.get("address_line2") as string) || null,
-      phoneNumber: String(formData.get("phone_number") ?? ""),
+      ...content,
+      addressLine2: content.addressLine2 || null,
     });
     revalidatePath("/settings");
     return { success: true };
   } catch (err) {
-    const inputError = addressInputErrorMessage(err);
-    if (inputError) return { error: inputError };
+    const fieldErrors = addressFieldErrors(err);
+    if (fieldErrors) return { fieldErrors };
     if (!(err instanceof DomainError))
       Sentry.captureException(err, { tags: { useCase: "updateAddress" } });
     return { error: "住所の更新に失敗しました" };

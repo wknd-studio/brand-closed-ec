@@ -1,7 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { createAddressAction, updateAddressAction } from "./actions";
+import {
+  startTransition,
+  useActionState,
+  useState,
+  type FormEvent,
+} from "react";
+import {
+  createAddressAction,
+  updateAddressAction,
+  type AddressFormResult,
+} from "./actions";
+import type { RequiredAddressField } from "@/domain/errors/missing-required-address-fields-error";
 
 type AddressDto = {
   id: string;
@@ -92,10 +102,51 @@ async function fetchAddressByZipcode(zipcode: string): Promise<{
   }
 }
 
+const INPUT_CLASS =
+  "w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 aria-invalid:border-danger";
+
+function FieldError({
+  field,
+  fieldErrors,
+}: {
+  field: RequiredAddressField;
+  fieldErrors: Partial<Record<RequiredAddressField, string>> | undefined;
+}) {
+  const message = fieldErrors?.[field];
+  if (!message) return null;
+  return (
+    <p id={`address-${field}-error`} className="mt-1 text-xs text-danger">
+      {message}
+    </p>
+  );
+}
+
 export default function AddressForm(props: Props) {
   const addr = props.mode === "edit" ? props.address : null;
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+  const [state, action, isPending] = useActionState<
+    AddressFormResult | null,
+    FormData
+  >(async (_, formData) => {
+    const result =
+      props.mode === "create"
+        ? await createAddressAction(formData)
+        : await updateAddressAction(props.address.id, formData);
+    if ("success" in result) props.onClose();
+    return result;
+  }, null);
+
+  const fieldErrors =
+    state && "fieldErrors" in state ? state.fieldErrors : undefined;
+  const formError = state && "error" in state ? state.error : null;
+
+  // <form action> に関数を渡すと、React 19 は送信後にフォームをリセットし、制御された select（都道府県）は
+  // state の値に戻らない。失敗しても入力を残すため、onSubmit から action を呼んでリセットさせない
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(() => action(formData));
+  }
+
   const [prefecture, setPrefecture] = useState(addr?.prefecture ?? "");
   const [city, setCity] = useState(addr?.city ?? "");
   const [addressLine1, setAddressLine1] = useState(addr?.addressLine1 ?? "");
@@ -114,19 +165,13 @@ export default function AddressForm(props: Props) {
     }
   }
 
-  async function handleSubmit(formData: FormData) {
-    setError(null);
-    setIsPending(true);
-    const result =
-      props.mode === "create"
-        ? await createAddressAction(formData)
-        : await updateAddressAction(props.address.id, formData);
-    setIsPending(false);
-    if ("error" in result) {
-      setError(result.error);
-    } else {
-      props.onClose();
-    }
+  function invalidProps(field: RequiredAddressField) {
+    return {
+      "aria-invalid": !!fieldErrors?.[field],
+      "aria-describedby": fieldErrors?.[field]
+        ? `address-${field}-error`
+        : undefined,
+    };
   }
 
   return (
@@ -136,7 +181,7 @@ export default function AddressForm(props: Props) {
           {props.mode === "create" ? "住所を追加" : "住所を編集"}
         </h3>
 
-        <form action={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {props.mode === "create" && (
             <input type="hidden" name="type" value={props.type} />
           )}
@@ -148,8 +193,10 @@ export default function AddressForm(props: Props) {
                 name="recipient_last_name"
                 defaultValue={addr?.recipientLastName ?? ""}
                 required
-                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                {...invalidProps("recipientLastName")}
+                className={INPUT_CLASS}
               />
+              <FieldError field="recipientLastName" fieldErrors={fieldErrors} />
             </div>
             <div>
               <label className="mb-1 block text-xs text-gray-500">名</label>
@@ -157,7 +204,12 @@ export default function AddressForm(props: Props) {
                 name="recipient_first_name"
                 defaultValue={addr?.recipientFirstName ?? ""}
                 required
-                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                {...invalidProps("recipientFirstName")}
+                className={INPUT_CLASS}
+              />
+              <FieldError
+                field="recipientFirstName"
+                fieldErrors={fieldErrors}
               />
             </div>
           </div>
@@ -169,9 +221,13 @@ export default function AddressForm(props: Props) {
                 name="postal_code"
                 defaultValue={addr?.postalCode ?? ""}
                 required
+                // domain の InvalidPostalCodeError と同じ形式（tests/unit/address-form.test.tsx で一致を確かめる）
+                pattern="\d{3}-?\d{4}"
+                title="7桁の数字（例: 150-0001）"
                 placeholder="1500001"
                 onChange={(e) => handleZipcodeChange(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                {...invalidProps("postalCode")}
+                className={INPUT_CLASS}
               />
               {zipcodeLoading && (
                 <span className="absolute right-3 top-2 text-xs text-gray-400">
@@ -179,6 +235,7 @@ export default function AddressForm(props: Props) {
                 </span>
               )}
             </div>
+            <FieldError field="postalCode" fieldErrors={fieldErrors} />
           </div>
 
           <div>
@@ -188,7 +245,8 @@ export default function AddressForm(props: Props) {
               value={prefecture}
               onChange={(e) => setPrefecture(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              {...invalidProps("prefecture")}
+              className={INPUT_CLASS}
             >
               <option value="">選択してください</option>
               {PREFECTURES.map((p) => (
@@ -197,6 +255,7 @@ export default function AddressForm(props: Props) {
                 </option>
               ))}
             </select>
+            <FieldError field="prefecture" fieldErrors={fieldErrors} />
           </div>
 
           <div>
@@ -206,8 +265,10 @@ export default function AddressForm(props: Props) {
               value={city}
               onChange={(e) => setCity(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              {...invalidProps("city")}
+              className={INPUT_CLASS}
             />
+            <FieldError field="city" fieldErrors={fieldErrors} />
           </div>
 
           <div>
@@ -219,8 +280,10 @@ export default function AddressForm(props: Props) {
               value={addressLine1}
               onChange={(e) => setAddressLine1(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              {...invalidProps("addressLine1")}
+              className={INPUT_CLASS}
             />
+            <FieldError field="addressLine1" fieldErrors={fieldErrors} />
           </div>
 
           <div>
@@ -230,7 +293,7 @@ export default function AddressForm(props: Props) {
             <input
               name="address_line2"
               defaultValue={addr?.addressLine2 ?? ""}
-              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className={INPUT_CLASS}
             />
           </div>
 
@@ -240,12 +303,17 @@ export default function AddressForm(props: Props) {
               name="phone_number"
               defaultValue={addr?.phoneNumber ?? ""}
               required
+              // domain の PhoneNumber と同じ形式（0始まりの10〜11桁。ハイフンは任意）
+              pattern="0(?:-?\d){9,10}"
+              title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
               placeholder="09012345678"
-              className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              {...invalidProps("phoneNumber")}
+              className={INPUT_CLASS}
             />
+            <FieldError field="phoneNumber" fieldErrors={fieldErrors} />
           </div>
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {formError && <p className="text-xs text-red-600">{formError}</p>}
 
           <div className="flex gap-2 pt-2">
             <button
