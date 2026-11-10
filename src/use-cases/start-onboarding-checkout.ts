@@ -40,6 +40,7 @@ export async function startOnboardingCheckout(
       userId: user.id,
       clerkUserId,
       email: input.email ?? user.email,
+      name: user.billingName(),
     });
     // 保存できないままCheckoutを作ると、次回また別のCustomerで決済させてしまう
     await userRepo.saveStripeCustomerId(user.id, stripeCustomerId);

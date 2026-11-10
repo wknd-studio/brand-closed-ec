@@ -22,6 +22,4 @@ export interface PaymentGateway {
     order: Order,
     stripeCustomerId: string
   ): Promise<string>;
-
-  ensureCustomer(email: string, userId: string): Promise<string>;
 }
