@@ -64,12 +64,14 @@ export class Order {
 
   /**
    * DBからの復元を含め、注文を組み立てる。不変条件が破れていればInvalidOrderErrorを投げる。
-   * statusは渡された値（DBの値）を正とし、rollupStatus()と食い違っても補正しない
-   * （既存のデータで画面が開けなくならないように）
+   * statusは正のデータではなく決済単位・明細から算出するキャッシュのため（docs/domain/settlement.md）、
+   * 渡された値に関わらずrollupStatus()の結果にする。注文自体のキャンセル（cancelled）だけは
+   * 決済単位から算出できないため、渡された値を使う（rollupStatus()がそう扱う）
    */
   static of(props: OrderProps): Order {
     Order.assertInvariants(props);
-    return new Order(props);
+    const order = new Order(props);
+    return new Order({ ...props, status: order.rollupStatus() });
   }
 
   /**
@@ -133,7 +135,7 @@ export class Order {
       settlements: settlement ? [settlement] : [],
       createdAt: props.placedAt,
     });
-    return order.with({ status: order.rollupStatus() });
+    return order;
   }
 
   /**
@@ -270,13 +272,12 @@ export class Order {
     return this.items.filter((item) => item.settlementId === settlement.id);
   }
 
-  /** 決済単位を差し替え（無ければ追加）、statusをロールアップし直した注文を返す */
+  /** 決済単位を差し替え（無ければ追加）した注文を返す。statusはOrder.ofがロールアップし直す */
   applySettlement(settlement: OrderSettlement): Order {
     const exists = this.settlements.some((s) => s.id === settlement.id);
     const settlements = exists
       ? this.settlements.map((s) => (s.id === settlement.id ? settlement : s))
       : [...this.settlements, settlement];
-    const next = this.with({ settlements });
-    return next.with({ status: next.rollupStatus() });
+    return this.with({ settlements });
   }
 }
