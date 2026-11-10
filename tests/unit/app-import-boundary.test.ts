@@ -13,12 +13,14 @@ function listSourceFiles(dir: string): string[] {
 }
 
 // docs/ai-prompts/architecture.md「依存してよい方向」（#548）。
-// Server Action は app から props で受け取り、lib・components からは import しない
+// Server Action は app から props で受け取り、lib・components からは import しない（静的・副作用・動的 import を見る）
 describe.each(["src/lib", "src/components"])("%s", (dir) => {
   it("@/app を import しない", () => {
     const importing = listSourceFiles(path.join(ROOT, dir))
       .filter((file) =>
-        /from\s+["']@\/app[/"']/.test(readFileSync(file, "utf8"))
+        /(?:from|import)\s*\(?\s*["']@\/app[/"']/.test(
+          readFileSync(file, "utf8")
+        )
       )
       .map((file) => path.relative(ROOT, file));
     expect(importing).toEqual([]);
