@@ -165,7 +165,10 @@ export async function placeOrder(
       throw error;
     }
     await orderRepo.save(
-      order.applySettlement(settlement.attachCheckoutSession(session.sessionId))
+      order.applySettlement(
+        settlement.attachCheckoutSession(session.sessionId)
+      ),
+      { type: "customer" }
     );
 
     if (afterOrderItems.length > 0) {
