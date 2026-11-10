@@ -67,21 +67,6 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
   // 検査が「例外から外す」よう失敗するので削除する
   exceptions: [
     {
-      file: "src/infrastructure/clerk/clerk-account-gateway.ts",
-      suite: "unit",
-      issue: 523,
-    },
-    {
-      file: "src/infrastructure/resend/resend-notification-service.ts",
-      suite: "unit",
-      issue: 523,
-    },
-    {
-      file: "src/infrastructure/stripe/stripe-subscription-gateway.ts",
-      suite: "unit",
-      issue: 523,
-    },
-    {
       // findActiveOrdersWithUser を Query Service へ移すときに無くなる
       file: "src/infrastructure/supabase/supabase-order-repository.ts",
       suite: "integration",
