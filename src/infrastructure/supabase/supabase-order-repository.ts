@@ -327,10 +327,11 @@ export class SupabaseOrderRepository implements OrderRepository {
   }
 
   async delete(orderId: string): Promise<void> {
-    // order_items.settlement_id → order_settlementsのFKがあるため、明細を先に削除する
-    await this.db.from("order_items").delete().eq("order_id", orderId);
-    await this.db.from("order_settlements").delete().eq("order_id", orderId);
-    await this.db.from("orders").delete().eq("id", orderId);
+    // 明細・決済単位・注文を1つのトランザクションで消し、途中で失敗しても一部だけ残さない
+    const { error } = await this.db.rpc("delete_order", {
+      p_order_id: orderId,
+    });
+    if (error) throw new Error(`Order削除に失敗: ${error.message}`);
   }
 
   async findByUserId(userId: string): Promise<Order[]> {
