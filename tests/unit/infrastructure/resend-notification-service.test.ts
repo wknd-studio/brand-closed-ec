@@ -38,6 +38,7 @@ import { OrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
@@ -59,7 +60,7 @@ const user = User.of({
   email: "test@example.com",
   firstName: "太郎",
   lastName: "テスト",
-  phoneNumber: "09012345678",
+  phoneNumber: PhoneNumber.of("09012345678"),
   profileCompletedAt: new Date(2026, 0, 1),
   rank: MemberRank.of("standard"),
   billingAnchorDay: 1,
