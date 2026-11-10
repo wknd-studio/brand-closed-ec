@@ -160,6 +160,15 @@ describe("checkQueryServices", () => {
     ]);
   });
 
+  it("テストがちょうど2つでも違反", () => {
+    const reports = check({
+      [PATHS.test]: TEST.replace('it("存在しない"', 'it.skip("存在しない"'),
+    });
+    expect(messages(reports)).toEqual([
+      expect.stringMatching(/findCheckout\b.*2/),
+    ]);
+  });
+
   it("it.each・skipIf のテストも数える", () => {
     const reports = check({
       [PATHS.test]: TEST.replace(
