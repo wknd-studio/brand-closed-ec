@@ -239,7 +239,7 @@ describe("placeOrder", () => {
         },
         deps
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow("商品が見つかりません");
     expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
   });
 
