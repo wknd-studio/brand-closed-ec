@@ -18,6 +18,27 @@ describe("validateIsNegotiable", () => {
   });
 });
 
+describe("is_negotiable フィールドのバリデーション", () => {
+  it("ONでの保存を validateIsNegotiable で拒否する", () => {
+    const field = product.fields.find(
+      (f) => (f as { name: string }).name === "is_negotiable"
+    ) as { validation?: (rule: unknown) => unknown } | undefined;
+    if (!field?.validation) throw new Error("validation未設定: is_negotiable");
+
+    let customValidator: ((value: unknown) => unknown) | undefined;
+    const rule = {
+      custom: (fn: (value: unknown) => unknown) => {
+        customValidator = fn;
+        return rule;
+      },
+    };
+    field.validation(rule);
+
+    expect(customValidator?.(true)).toBe(validateIsNegotiable(true));
+    expect(customValidator?.(false)).toBe(true);
+  });
+});
+
 describe("is_negotiable フィールドの表示条件", () => {
   function getHidden() {
     const field = product.fields.find(

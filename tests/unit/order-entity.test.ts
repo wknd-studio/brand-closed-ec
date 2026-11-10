@@ -8,6 +8,7 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
+import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { User } from "@/domain/entities/user";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
@@ -219,39 +220,28 @@ describe("Order", () => {
       ]);
     });
 
-    it("要相談の明細は、商品の支払いタイミングがat_orderでもafter_orderとして決済単位なしで残す", () => {
-      const order = placeOrder([
-        makeCartItem({ quantity: 2 }),
-        makeCartItem({
-          sanityProductId: "prod-nego",
-          unitPrice: Money.zero(),
-          isNegotiable: true,
-          paymentTiming: "at_order",
-        }),
-      ]);
+    it("要相談の商品を含むカートは、NegotiableProductNotOrderableErrorで注文を作らない", () => {
+      // 要相談商品は Ver1 では扱わない（docs/domain/catalog.md・#608）。単価0円の明細・
+      // 月次上限の対象外の明細ができないよう、どの入口から注文を作っても拒否する
+      const place = () =>
+        placeOrder([
+          makeCartItem({ quantity: 2 }),
+          makeCartItem({
+            sanityProductId: "prod-nego",
+            productName: "要相談商品",
+            unitPrice: Money.zero(),
+            isNegotiable: true,
+            paymentTiming: "after_order",
+          }),
+        ]);
 
-      const settlement = order.settlements[0]!;
-      expect(settlement.amount.amount).toBe(20_000);
-      expect(order.items[1]).toMatchObject({
-        sanityProductId: "prod-nego",
-        isNegotiable: true,
-        negotiatedUnitPrice: null,
-        paymentTiming: "after_order",
-        settlementId: null,
-      });
-      expect(order.getFixedTotal().amount).toBe(20_000);
-    });
-
-    it("要相談の明細のみ: 決済単位を作らない", () => {
-      const order = placeOrder([
-        makeCartItem({
-          unitPrice: Money.zero(),
-          isNegotiable: true,
-          paymentTiming: "after_order",
-        }),
-      ]);
-      expect(order.settlements).toEqual([]);
-      expect(order.items[0]?.settlementId).toBeNull();
+      expect(place).toThrow(NegotiableProductNotOrderableError);
+      expect(place).toThrow(
+        expect.objectContaining({
+          productId: "prod-nego",
+          productName: "要相談商品",
+        })
+      );
     });
 
     it("明細のスナップショット・会員・住所・日時を注文に写す", () => {
