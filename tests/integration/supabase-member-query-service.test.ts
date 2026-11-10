@@ -55,7 +55,15 @@ const WITHDRAWN_USER_ID = "00000000-0000-0000-0000-000000453c01";
 const CLERK_USER = "clerk_test_member_query";
 const CLERK_OTHER_USER = "clerk_test_member_query_other";
 const CLERK_WITHDRAWN_USER = "clerk_test_member_query_withdrawn";
-const ALL_USER_IDS = [USER_ID, OTHER_USER_ID, WITHDRAWN_USER_ID];
+// 決済は済んだが、入会の確定（Webhook）がまだの会員
+const PENDING_USER_ID = "00000000-0000-0000-0000-000000453d01";
+const CLERK_PENDING_USER = "clerk_test_member_query_pending";
+const ALL_USER_IDS = [
+  USER_ID,
+  OTHER_USER_ID,
+  WITHDRAWN_USER_ID,
+  PENDING_USER_ID,
+];
 
 const SHIPPING_DEFAULT_ID = "00000000-0000-0000-0000-000000453a11";
 const SHIPPING_OTHER_ID = "00000000-0000-0000-0000-000000453a12";
@@ -196,6 +204,16 @@ beforeAll(async () => {
       onboarding_completed: true,
       billing_anchor_day: 1,
       deleted_at: "2026-07-01T00:00:00.000Z",
+    },
+    {
+      id: PENDING_USER_ID,
+      clerk_user_id: CLERK_PENDING_USER,
+      email: `${CLERK_PENDING_USER}@example.com`,
+      first_name: "テスト",
+      last_name: "四郎",
+      rank_code: "basic",
+      onboarding_completed: false,
+      billing_anchor_day: 1,
     },
   ]);
   await insert("addresses", [
@@ -394,9 +412,33 @@ describe("SupabaseMemberQueryService.findMemberLayout", () => {
   });
 });
 
-// page・layout が使う組み立て。ログイン中の会員のトークンで RLS を効かせたクライアントでも取得できること
+describe("SupabaseMemberQueryService.findOnboardingCompleted", () => {
+  it("入会が確定した会員は true", async () => {
+    expect(await queryService.findOnboardingCompleted(CLERK_USER)).toBe(true);
+  });
+
+  it("入会の確定がまだの会員は false", async () => {
+    expect(await queryService.findOnboardingCompleted(CLERK_PENDING_USER)).toBe(
+      false
+    );
+  });
+
+  it("存在しない会員は false", async () => {
+    expect(
+      await queryService.findOnboardingCompleted("clerk_test_not_exists")
+    ).toBe(false);
+  });
+
+  it("退会済みの会員は false", async () => {
+    expect(
+      await queryService.findOnboardingCompleted(CLERK_WITHDRAWN_USER)
+    ).toBe(false);
+  });
+});
+
+// page・layout・Server Action が使う組み立て。ログイン中の会員のトークンで RLS を効かせたクライアントでも取得できること
 describe("memberQueryService（composition。RLS 付きのクライアント）", () => {
-  it("ログイン中の会員の設定・お気に入り・レイアウトを取得できる", async () => {
+  it("ログイン中の会員の設定・お気に入り・レイアウト・入会の確定を取得できる", async () => {
     getToken.mockResolvedValue(signTestJwt(CLERK_USER));
     const rlsQueryService = await memberQueryService();
 
@@ -411,6 +453,18 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
       monthlyLimit: 50_000_000,
       favoriteProductIds: ["prod-new", "prod-old"],
     });
+    expect(await rlsQueryService.findOnboardingCompleted(CLERK_USER)).toBe(
+      true
+    );
+  });
+
+  it("入会の確定がまだの会員のトークンでも、自分の入会状態を取得できる", async () => {
+    getToken.mockResolvedValue(signTestJwt(CLERK_PENDING_USER));
+    const rlsQueryService = await memberQueryService();
+
+    expect(
+      await rlsQueryService.findOnboardingCompleted(CLERK_PENDING_USER)
+    ).toBe(false);
   });
 
   it("引数に他の会員を渡しても、RLS によりトークンの会員以外のデータは取得できない", async () => {
@@ -420,5 +474,8 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
     expect(await rlsQueryService.findSettings(CLERK_USER)).toBeNull();
     expect(await rlsQueryService.findFavorites(CLERK_USER)).toBeNull();
     expect(await rlsQueryService.findMemberLayout(CLERK_USER)).toBeNull();
+    expect(await rlsQueryService.findOnboardingCompleted(CLERK_USER)).toBe(
+      false
+    );
   });
 });

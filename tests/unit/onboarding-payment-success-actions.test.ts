@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { requireAuth, findMemberStatus } = vi.hoisted(() => ({
+const { requireAuth, findOnboardingCompleted } = vi.hoisted(() => ({
   requireAuth: vi.fn(),
-  findMemberStatus: vi.fn(),
+  findOnboardingCompleted: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/current-user", () => ({ requireAuth }));
@@ -16,8 +16,8 @@ vi.mock("@/infrastructure/supabase/server-admin", () => ({
   }),
 }));
 
-vi.mock("@/composition/member-status-query", () => ({
-  memberStatusQueryService: () => ({ findMemberStatus }),
+vi.mock("@/composition/member-query", () => ({
+  memberQueryService: async () => ({ findOnboardingCompleted }),
 }));
 
 import { isOnboardingCompleted } from "@/app/onboarding/payment/success/actions";
@@ -28,37 +28,12 @@ describe("isOnboardingCompleted（Query Service 経由）", () => {
     requireAuth.mockResolvedValue({ userId: "clerk_1" });
   });
 
-  it("入会が確定した会員は true", async () => {
-    findMemberStatus.mockResolvedValue({
-      onboardingCompleted: true,
-      withdrawn: false,
-    });
-
+  it("Query Service が返した入会の確定をそのまま返す", async () => {
+    findOnboardingCompleted.mockResolvedValue(true);
     expect(await isOnboardingCompleted()).toBe(true);
-    expect(findMemberStatus).toHaveBeenCalledWith("clerk_1");
-  });
+    expect(findOnboardingCompleted).toHaveBeenCalledWith("clerk_1");
 
-  it("入会が確定していない会員は false", async () => {
-    findMemberStatus.mockResolvedValue({
-      onboardingCompleted: false,
-      withdrawn: false,
-    });
-
-    expect(await isOnboardingCompleted()).toBe(false);
-  });
-
-  it("退会済みの会員は false", async () => {
-    findMemberStatus.mockResolvedValue({
-      onboardingCompleted: true,
-      withdrawn: true,
-    });
-
-    expect(await isOnboardingCompleted()).toBe(false);
-  });
-
-  it("会員の行が無いときは false", async () => {
-    findMemberStatus.mockResolvedValue(null);
-
+    findOnboardingCompleted.mockResolvedValue(false);
     expect(await isOnboardingCompleted()).toBe(false);
   });
 
@@ -66,6 +41,6 @@ describe("isOnboardingCompleted（Query Service 経由）", () => {
     requireAuth.mockResolvedValue({ userId: null });
 
     expect(await isOnboardingCompleted()).toBe(false);
-    expect(findMemberStatus).not.toHaveBeenCalled();
+    expect(findOnboardingCompleted).not.toHaveBeenCalled();
   });
 });
