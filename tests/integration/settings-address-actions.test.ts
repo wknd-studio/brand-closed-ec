@@ -184,7 +184,10 @@ describe("設定画面の住所アクション（会員Aとしてログイン中
 
       const result = await updateAddressAction(ADDRESS_B1_ID, addressForm());
 
-      expect(result).toEqual({ error: expect.any(String) });
+      expect(result).toEqual({
+        error: expect.any(String),
+        values: expect.any(Object),
+      });
       expect(await findRow(ADDRESS_B1_ID)).toEqual(before);
     });
 
@@ -270,7 +273,7 @@ describe("設定画面の住所アクション（会員Aとしてログイン中
     });
   });
 
-  // 入力値の検証（#632）で拒否されたときは、どの項目が不正かが分かる文言を返し、保存しない
+  // 入力値の検証（#632）で拒否されたときは、項目ごとの文言と入力値（フォームに戻す）を返し、保存しない
   describe.each([
     {
       name: "作成",
@@ -302,7 +305,20 @@ describe("設定画面の住所アクション（会員Aとしてログイン中
       );
 
       expect(result).toEqual({
-        error: "次の項目を入力してください: 宛名（姓）、市区町村",
+        fieldErrors: {
+          recipientLastName: "姓を入力してください",
+          city: "市区町村を入力してください",
+        },
+        values: {
+          recipientLastName: "",
+          recipientFirstName: "花子",
+          postalCode: "1500001",
+          prefecture: "東京都",
+          city: "  ",
+          addressLine1: "神宮前1-1-1",
+          addressLine2: "神宮前ビル2F",
+          phoneNumber: "0398765432",
+        },
       });
       await expectNothingSaved();
     });
@@ -311,8 +327,11 @@ describe("設定画面の住所アクション（会員Aとしてログイン中
       const result = await run(addressForm({ postal_code: "123" }));
 
       expect(result).toEqual({
-        error:
-          "郵便番号は7桁の数字で入力してください（ハイフンは任意。例: 150-0001）",
+        fieldErrors: {
+          postalCode:
+            "郵便番号は7桁の数字で入力してください（ハイフンは任意。例: 150-0001）",
+        },
+        values: expect.objectContaining({ postalCode: "123" }),
       });
       await expectNothingSaved();
     });
@@ -321,8 +340,11 @@ describe("設定画面の住所アクション（会員Aとしてログイン中
       const result = await run(addressForm({ phone_number: "12345" }));
 
       expect(result).toEqual({
-        error:
-          "電話番号は0から始まる10〜11桁の数字で入力してください（ハイフンは任意）",
+        fieldErrors: {
+          phoneNumber:
+            "電話番号は0から始まる10〜11桁の数字で入力してください（ハイフンは任意）",
+        },
+        values: expect.objectContaining({ phoneNumber: "12345" }),
       });
       await expectNothingSaved();
     });

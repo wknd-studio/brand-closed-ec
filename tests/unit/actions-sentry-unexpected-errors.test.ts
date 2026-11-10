@@ -99,7 +99,7 @@ describe.each(addressCases)("$useCase の Server Action", (c) => {
     const err = new Error("DB接続エラー");
     vi.mocked(c.mock).mockRejectedValue(err);
 
-    expect(await c.run()).toEqual({ error: c.error });
+    expect(await c.run()).toMatchObject({ error: c.error });
     expect(Sentry.captureException).toHaveBeenCalledWith(err, {
       tags: { useCase: c.useCase },
     });
@@ -110,7 +110,7 @@ describe.each(addressCases)("$useCase の Server Action", (c) => {
     class OtherDomainError extends DomainError {}
     vi.mocked(c.mock).mockRejectedValue(new OtherDomainError("業務ルール違反"));
 
-    expect(await c.run()).toEqual({ error: c.error });
+    expect(await c.run()).toMatchObject({ error: c.error });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 });
@@ -127,7 +127,7 @@ describe.each(
   ])("%s は Sentry に送らない", async (err) => {
     vi.mocked(c.mock).mockRejectedValue(err);
 
-    expect(await c.run()).not.toEqual({ error: c.error });
+    expect(await c.run()).not.toMatchObject({ error: c.error });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 });
