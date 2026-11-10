@@ -1,17 +1,22 @@
 import { getStripe } from "@/infrastructure/stripe/client";
-import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
 import type { MemberQueryService } from "@/queries/member-query-service";
 import type { OnboardingPaymentQueryService } from "@/queries/onboarding-payment-query-service";
+import type { OnboardingCheckoutGateway } from "@/repositories/onboarding-checkout-gateway";
 
 // IDの形式でない値はStripeに問い合わせずに弾く（APIのパスに任意の文字列を渡さないため）
 const CHECKOUT_SESSION_ID_PATTERN = /^cs_(test|live)_[A-Za-z0-9]+$/;
 
 export class StripeOnboardingPaymentQueryService implements OnboardingPaymentQueryService {
-  // 会員の Stripe Customer は、ログイン中の会員のトークンで RLS を効かせた Query Service から読む
+  // 会員の Stripe Customer は、ログイン中の会員のトークンで RLS を効かせた Query Service から読む。
+  // 有効なサブスクリプションの判定は、決済画面と同じ gateway で行う
   constructor(
     private readonly memberQuery: Pick<
       MemberQueryService,
       "findStripeCustomerId"
+    >,
+    private readonly checkoutGateway: Pick<
+      OnboardingCheckoutGateway,
+      "hasActiveSubscription"
     >
   ) {}
 
@@ -66,15 +71,13 @@ export class StripeOnboardingPaymentQueryService implements OnboardingPaymentQue
    * 本人のStripe Customerに有効なサブスクリプションがあるかを確かめる（GitHub issue #461）。
    * 決済画面は、有効なサブスクリプションがあるとsession_idを付けずに決済完了画面へ送るため
    * （start-onboarding-checkout.ts）、session_idが無くても決済済みの会員を種別選択へ
-   * 戻さないようにする。判定は決済画面と同じhasActiveSubscriptionで行う
+   * 戻さないようにする
    */
   private async hasActiveSubscription(clerkUserId: string): Promise<boolean> {
     const stripeCustomerId =
       await this.memberQuery.findStripeCustomerId(clerkUserId);
     if (!stripeCustomerId) return false;
 
-    return new StripeOnboardingCheckoutGateway().hasActiveSubscription(
-      stripeCustomerId
-    );
+    return this.checkoutGateway.hasActiveSubscription(stripeCustomerId);
   }
 }
