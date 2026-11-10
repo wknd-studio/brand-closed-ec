@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCart } from "@/lib/cart/context";
+import { useCart } from "@/components/cart/cart-provider";
 import type { CartItem } from "@/lib/cart/types";
 
 type Props = {

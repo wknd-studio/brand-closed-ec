@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { useCart } from "@/lib/cart/context";
+import { useCart } from "@/components/cart/cart-provider";
 import { calcCartFixedTotal } from "@/lib/cart/cookie";
 import { groupCartItemsByPaymentTiming, type CartItem } from "@/lib/cart/types";
 
