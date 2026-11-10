@@ -4,7 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useCart } from "@/components/cart/cart-provider";
-import { sumCartFixedTotal } from "@/domain/services/cart-limit";
+import {
+  sumCartFixedTotal,
+  monthlyLimitStatus,
+} from "@/domain/services/cart-limit";
 import { groupCartItemsByPaymentTiming, type CartItem } from "@/lib/cart/types";
 
 type ItemRowProps = {
@@ -174,8 +177,8 @@ export default function CartSidebar() {
     cart,
     isOpen,
     closeCart,
+    confirmedAmount,
     monthlyLimit,
-    totalUsed,
     updateItemQuantity,
     removeFromCart,
     emptyCart,
@@ -184,7 +187,11 @@ export default function CartSidebar() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const items = cart.items;
   const cartFixedTotal = sumCartFixedTotal(cart.items);
-  const remaining = monthlyLimit - totalUsed;
+  const limitStatus = monthlyLimitStatus({
+    lines: items,
+    confirmedAmount,
+    monthlyLimit,
+  });
   const groups = groupCartItemsByPaymentTiming(items);
 
   return (
@@ -331,13 +338,13 @@ export default function CartSidebar() {
                 <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between text-gray-500">
                     <span>月間仕入れ残量</span>
-                    {monthlyLimit === Number.MAX_SAFE_INTEGER ? (
+                    {limitStatus.isUnlimited ? (
                       <span className="font-medium text-gray-900">無制限</span>
                     ) : (
                       <span
-                        className={`font-medium tabular-nums ${remaining < 0 ? "text-red-600" : "text-gray-900"}`}
+                        className={`font-medium tabular-nums ${limitStatus.isOver ? "text-red-600" : "text-gray-900"}`}
                       >
-                        ¥{remaining.toLocaleString()}
+                        ¥{limitStatus.remaining.toLocaleString()}
                       </span>
                     )}
                   </div>

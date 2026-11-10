@@ -1,3 +1,4 @@
+import { MemberRank } from "@/domain/value-objects/member-rank";
 import { Money } from "@/domain/value-objects/money";
 
 /** カート（cookie）の明細のうち、上限の判定に使う項目。unitPrice が null なら要相談 */
@@ -78,4 +79,24 @@ export function canChangeCartQuantity({
     line === target ? { ...line, quantity: newQuantity } : line
   );
   return !isOverLimit(fixedTotalOf(changed), confirmedAmount, monthlyLimit);
+}
+
+/**
+ * 月間仕入れ上限の残量（上限 - 今月の確定額 - カートの確定額）。超過していれば負になる
+ */
+export function monthlyLimitStatus({
+  lines,
+  confirmedAmount,
+  monthlyLimit,
+}: {
+  lines: readonly CartLine[];
+  confirmedAmount: number;
+  monthlyLimit: number;
+}): { isUnlimited: boolean; remaining: number; isOver: boolean } {
+  const total = fixedTotalOf(lines);
+  return {
+    isUnlimited: MemberRank.isUnlimitedMonthlyLimit(monthlyLimit),
+    remaining: monthlyLimit - confirmedAmount - total.amount,
+    isOver: isOverLimit(total, confirmedAmount, monthlyLimit),
+  };
 }
