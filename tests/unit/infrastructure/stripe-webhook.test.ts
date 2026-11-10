@@ -24,7 +24,9 @@ import {
 const toUnix = (date: Date) => Math.floor(date.getTime() / 1000);
 
 describe("constructStripeWebhookEvent", () => {
-  beforeEach(() => constructEvent.mockReset());
+  beforeEach(() => {
+    constructEvent.mockReset();
+  });
 
   it("本文・署名・シークレットを Stripe の署名検証に渡し、検証済みのイベントを返す", () => {
     const event = { id: "evt_1", type: "invoice.paid" };
@@ -57,7 +59,9 @@ describe("isPaidRank", () => {
 });
 
 describe("retrieveOnboardingSubscription", () => {
-  beforeEach(() => retrieve.mockReset());
+  beforeEach(() => {
+    retrieve.mockReset();
+  });
 
   it("Stripe のサブスクリプションを取得し、入会の確定に使うステータス・期間・開始日に変換する", async () => {
     const start = new Date(2026, 0, 1);
