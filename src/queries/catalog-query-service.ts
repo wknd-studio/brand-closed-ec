@@ -49,7 +49,7 @@ export type FavoriteProductDto = {
   isAccessible: boolean;
 };
 
-// 注文確認画面（/order/checkout）のカートの商品の最新の状態
+// 注文確認画面（/order/checkout）のカートの商品の最新の状態。閲覧できない商品は価格を持たない
 export type CheckoutProductDto = {
   id: string;
   name: string;
@@ -57,6 +57,7 @@ export type CheckoutProductDto = {
   unitPrice: number | null;
   isOutOfStock: boolean;
   paymentTiming: ProductPaymentTiming;
+  isAccessible: boolean;
 };
 
 // 商品カタログの読み取り。閲覧できるランクの絞り込みとランク別価格の選択は、会員ランク（rank）から実装の中で行う

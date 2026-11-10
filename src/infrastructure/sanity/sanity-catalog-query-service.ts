@@ -194,15 +194,19 @@ export class SanityCatalogQueryService implements CatalogQueryService {
     rank: MemberRank;
     productIds: string[];
   }): Promise<CheckoutProductDto[]> {
-    return (await this.fetchByIds(productIds)).map((product) => ({
-      id: product._id,
-      name: product.name,
-      thumbnail: product.thumbnail,
-      unitPrice: priceFor(product, rank),
-      isOutOfStock: product.availability === "out_of_stock",
-      // 後方互換: payment_timing 未設定の既存商品は at_order（従来の checkout フロー相当）として扱う
-      paymentTiming: product.payment_timing ?? "at_order",
-    }));
+    return (await this.fetchByIds(productIds)).map((product) => {
+      const isAccessible = canAccess(product, rank);
+      return {
+        id: product._id,
+        name: product.name,
+        thumbnail: product.thumbnail,
+        unitPrice: isAccessible ? priceFor(product, rank) : null,
+        isOutOfStock: product.availability === "out_of_stock",
+        // 後方互換: payment_timing 未設定の既存商品は at_order（従来の checkout フロー相当）として扱う
+        paymentTiming: product.payment_timing ?? "at_order",
+        isAccessible,
+      };
+    });
   }
 
   private async fetchByIds(ids: string[]): Promise<SanityProduct[]> {
