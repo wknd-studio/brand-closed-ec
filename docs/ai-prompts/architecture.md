@@ -228,6 +228,12 @@ admin で会員本人の操作を組み立てるときは、RLS の代わりに 
 
 use-case の中に `if (user.rankCode === "gold" && ...)` のような判定を書きたくなったら、それは domain のメソッドにする（例: 商品にアクセスできるかは `MemberRank.canAccess()`、退会できるかは User エンティティ（#446））。domain のメソッドにすると、DBもモックも無いユニットテストで分岐を確かめられる。
 
+### エンティティの状態は意図を表すメソッドで変える
+
+エンティティの状態は、意図を表すメソッド（`OrderSettlement.markPaid()`・`attachCheckoutSession()`・`User.withdraw()`・`selectPlan()`・`Address.update()`・`makeDefault()` 等）で変える。各メソッドがその変更に必要な検証（状態遷移・不変条件）を行う。
+
+汎用の `with(overrides)` を domain の外に出さない（`private` にする）。`settlement.with({ status: "paid" })` のように、ガードを通らずに任意の項目を書き換えられてしまうため（#589）。use-case で新しい書き換えが必要になったら、`with` を public に戻さず、エンティティにメソッドを足す。DBの行からの復元やテストの組み立ては `of` を使う（`Order.of({ ...order, items })` のように既存のエンティティを広げてよい。`of` はコンストラクタの不変条件を検査する）。
+
 ## 外側の関心事はポート経由
 
 エラー通知（Sentry）・メール送信・外部サービスの操作など、外側の関心事は use-case から直接呼ばない。ポート（interface）を `src/repositories/` に定義し、実装を `src/infrastructure/` に置いて、composition で注入する（エラー通知は `ErrorReporter`（`src/repositories/error-reporter.ts`）。実装は `src/infrastructure/sentry/`）。
