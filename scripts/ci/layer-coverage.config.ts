@@ -82,11 +82,6 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       issue: 523,
     },
     {
-      file: "src/infrastructure/supabase/supabase-address-repository.ts",
-      suite: "integration",
-      issue: 524,
-    },
-    {
       // findActiveOrdersWithUser を Query Service へ移すときに無くなる
       file: "src/infrastructure/supabase/supabase-order-repository.ts",
       suite: "integration",
