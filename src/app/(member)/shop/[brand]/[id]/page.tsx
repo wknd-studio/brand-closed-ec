@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { PortableText } from "@portabletext/react";
 import { catalogQueryService } from "@/composition/catalog-query";
-import { findShopMemberRank } from "../../member-rank";
+import { findShopMemberRank } from "@/app/(member)/shop/member-rank";
 import { fetchBrandTheme } from "@/lib/sanity/brand-theme";
 import BrandThemeWrapper from "@/components/brand-theme-wrapper";
 import ImageGallery from "./image-gallery";
