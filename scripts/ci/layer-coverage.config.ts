@@ -76,21 +76,6 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
       "src/use-cases/place-order.ts",
     ].map((file) => ({ file, suite: "unit" as const, issue: 538 })),
     {
-      file: "src/infrastructure/clerk/clerk-account-gateway.ts",
-      suite: "unit",
-      issue: 523,
-    },
-    {
-      file: "src/infrastructure/resend/resend-notification-service.ts",
-      suite: "unit",
-      issue: 523,
-    },
-    {
-      file: "src/infrastructure/stripe/stripe-subscription-gateway.ts",
-      suite: "unit",
-      issue: 523,
-    },
-    {
       file: "src/infrastructure/supabase/supabase-address-repository.ts",
       suite: "integration",
       issue: 524,
