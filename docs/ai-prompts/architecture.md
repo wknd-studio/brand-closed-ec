@@ -161,6 +161,7 @@ await withdraw({ clerkUserId: userId });
 
 Supabase・Sanity・Stripe・Resend のクライアント生成は `src/infrastructure/` に置く（`src/infrastructure/supabase/server.ts`・`server-admin.ts`・`src/infrastructure/sanity/client.ts`・`src/infrastructure/stripe/client.ts`・`src/infrastructure/resend/client.ts`）。クライアントを使ってよいのは `src/infrastructure/` の中だけ（#440）。
 
+- lint では、`src/infrastructure/`・`src/sanity/` 以外の `src/` で `@supabase/*`・`next-sanity`・`@sanity/client`・`stripe`・`resend` を import する・テーブルを文字列で指定する `.from("...")` を書くとエラーにする。tests・scripts は対象外。既存の違反は `eslint-suppressions.json`（ESLint の bulk suppressions）に記録してあり、直したら `pnpm exec eslint . --prune-suppressions` で抑制も消す（残すと `pnpm lint` が失敗する）。新しい違反を抑制に足さない
 - 例外: `src/sanity/`（Sanity Studio）は Studio の中で Sanity のクライアントを使ってよい（「層構成の対象外」を参照）
 - Clerk の認証済みユーザーの取得（`auth()` を包んだ共通ヘルパー）は Next.js のリクエストに結びついた処理なので、`src/lib/auth/` に置く。Clerk の管理API（ユーザーの削除等）を呼ぶ処理は gateway として `src/infrastructure/clerk/` に置く
 

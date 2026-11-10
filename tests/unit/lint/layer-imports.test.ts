@@ -1,11 +1,21 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { ESLint, type Linter } from "eslint";
 import { describe, it, expect } from "vitest";
 
 // 層の依存方向のlint（#439）の回帰テスト。実際の eslint.config.mjs を読み込み、
 // 各層のファイルとして違反するコードを lintText に渡してエラーになることを確かめる。
-// 後続の #440・#441・#442 も、ここにケースを足す
+// 後続の #441 等も、ここにケースを足す
 
 const RULE = "no-restricted-imports";
 const DOC = "docs/ai-prompts/architecture.md";
@@ -408,5 +418,204 @@ describe("domain の内部の定数は domain の外で import できない（#4
       );
       expect(messages, `${name} が禁止されていない`).toHaveLength(1);
     }
+  });
+});
+
+// DB・外部サービスのクライアントは src/infrastructure/ の中だけで使う（#440）。
+// repository を通さない直接クエリが、業務ルールのコピーと食い違いを生んだ（#444）
+
+const CLIENT_PACKAGES = [
+  "@supabase/supabase-js",
+  "@supabase/ssr",
+  "next-sanity",
+  "@sanity/client",
+  "stripe",
+  "resend",
+];
+
+// 層の許可リスト（#439）で外部SDKをすでに禁止している層以外の src/
+const OUTSIDE_LAYERS = [
+  "src/app/sample.tsx",
+  "src/app/api/sample/route.ts",
+  "src/components/sample.tsx",
+  "src/lib/sample.ts",
+  "src/composition/sample.ts",
+  "src/emails/sample.tsx",
+  "src/middleware.ts",
+];
+
+const OUTSIDE_INFRASTRUCTURE = [
+  ...OUTSIDE_LAYERS,
+  "src/domain/sample.ts",
+  "src/repositories/sample.ts",
+  "src/queries/sample.ts",
+  "src/use-cases/sample.ts",
+];
+
+async function restrictedSyntaxMessages(filePath: string, code: string) {
+  const [result] = await eslint.lintText(code, { filePath });
+  return result.messages.filter((m) => m.ruleId === "no-restricted-syntax");
+}
+
+describe("DB・外部サービスのクライアントは src/infrastructure/ の外で使えない（#440）", () => {
+  describe.each(OUTSIDE_LAYERS)("%s", (file) => {
+    it.each(CLIENT_PACKAGES)(
+      "%s を import すると、直し方と architecture.md のパスを含むエラーになる",
+      async (path) => {
+        const messages = await restrictedImportMessages(
+          file,
+          `import x from "${path}";\nexport default x;\n`
+        );
+        expect(messages).toHaveLength(1);
+        expect(messages[0].severity).toBe(2);
+        expect(messages[0].message).toContain("repository");
+        expect(messages[0].message).toContain("Query Service");
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+  });
+
+  it.each([
+    `import { createClient } from "@supabase/supabase-js/dist/main";\nexport default createClient;\n`,
+    `import type { SanityClient } from "@sanity/client";\nexport type C = SanityClient;\n`,
+    `import { toPlainText } from "next-sanity/image";\nexport default toPlainText;\n`,
+    `export { default } from "stripe";\n`,
+  ])("サブパス・import type・re-export でも禁止される: %s", async (code) => {
+    const messages = await restrictedImportMessages("src/app/sample.tsx", code);
+    expect(messages).toHaveLength(1);
+  });
+
+  it.each([
+    "@/infrastructure/stripe/stripe-payment-gateway",
+    "@/infrastructure/resend/resend-notification-service",
+    "@/infrastructure/sanity/client",
+    "@/infrastructure/supabase/server",
+    "stripe-event-types",
+    "@sanity/image-url",
+  ])(
+    "パッケージ名を含むだけの import は禁止されない: src/composition/ から %s",
+    async (path) => {
+      const messages = await restrictedImportMessages(
+        "src/composition/sample.ts",
+        `import x from "${path}";\nexport default x;\n`
+      );
+      expect(messages).toEqual([]);
+    }
+  );
+
+  it("クライアントの禁止を足しても、domain の内部の定数の禁止は残る（#442）", async () => {
+    const messages = await restrictedImportMessages(
+      "src/app/sample.tsx",
+      `import { RANK_ORDER } from "@/domain/value-objects/member-rank";\nexport default RANK_ORDER;\n`
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain("MemberRank.");
+  });
+
+  describe.each(OUTSIDE_INFRASTRUCTURE)("%s", (file) => {
+    it.each([
+      `export const q = (db) => db.from("users").select("id");\n`,
+      `export const q = (db) => db.schema("public").from("users").select("id");\n`,
+      'export const q = (db) => db.from(`users`).select("id");\n',
+    ])(
+      "テーブルを文字列で指定する .from() は、直し方と architecture.md のパスを含むエラーになる: %s",
+      async (code) => {
+        const messages = await restrictedSyntaxMessages(file, code);
+        expect(messages).toHaveLength(1);
+        expect(messages[0].severity).toBe(2);
+        expect(messages[0].message).toContain("repository");
+        expect(messages[0].message).toContain("Query Service");
+        expect(messages[0].message).toContain(DOC);
+      }
+    );
+  });
+
+  it.each([
+    `export const a = Array.from("abc");\n`,
+    `export const b = Buffer.from("abc", "utf8");\n`,
+    `export const c = (xs: number[]) => Array.from(xs);\n`,
+  ])(
+    "Supabase のテーブル指定ではない .from() は禁止されない: %s",
+    async (code) => {
+      const messages = await restrictedSyntaxMessages(
+        "src/app/sample.ts",
+        code
+      );
+      expect(messages).toEqual([]);
+    }
+  );
+
+  it.each([
+    "src/infrastructure/supabase/sample.ts",
+    "src/infrastructure/sanity/sample.ts",
+    "src/sanity/sample.ts",
+    "tests/unit/sample.test.ts",
+    "tests/integration/sample.test.ts",
+    "scripts/sample.ts",
+  ])("%s ではクライアントの import も .from() も使ってよい", async (file) => {
+    const code = [
+      `import { createClient } from "@supabase/supabase-js";`,
+      `import { createClient as sanity } from "@sanity/client";`,
+      `import Stripe from "stripe";`,
+      `import { Resend } from "resend";`,
+      `export const q = () => createClient("u", "k").from("users").select("id");`,
+      `export default [sanity, Stripe, Resend];`,
+      "",
+    ].join("\n");
+    const messages = (await eslint.lintText(code, { filePath: file }))[0]
+      .messages;
+    expect(
+      messages.filter((m) =>
+        ["no-restricted-imports", "no-restricted-syntax"].includes(m.ruleId!)
+      )
+    ).toEqual([]);
+  });
+});
+
+// 既存の違反は ESLint の bulk suppressions（eslint-suppressions.json）に記録している（#440）。
+// 違反を直したら抑制も消す。消し忘れると pnpm lint が失敗することを確かめる
+
+describe("eslint-suppressions.json（#440）", () => {
+  it("抑制を記録したファイルはすべて存在する（ファイルを消した・移した抑制は ESLint が検出しない）", () => {
+    const suppressions = JSON.parse(
+      readFileSync("eslint-suppressions.json", "utf8")
+    ) as Record<string, unknown>;
+    const missing = Object.keys(suppressions).filter(
+      (file) => !existsSync(file)
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("pnpm lint は、違反を直したのに残った抑制をエラーにする", () => {
+    const lintScript = (
+      JSON.parse(readFileSync("package.json", "utf8")) as {
+        scripts: Record<string, string>;
+      }
+    ).scripts.lint;
+    expect(lintScript).not.toMatch(
+      /--pass-on-unpruned-suppressions|--prune-suppressions|--suppressions-location/
+    );
+
+    // pnpm lint と同じ引数で、違反の無いファイルに抑制だけがある状態を作る
+    const dir = mkdtempSync(join(tmpdir(), "eslint-suppressions-"));
+    const file = "src/lib/brand-theme-fonts.ts";
+    const location = join(dir, "eslint-suppressions.json");
+    writeFileSync(
+      location,
+      JSON.stringify({ [file]: { "no-restricted-syntax": { count: 1 } } })
+    );
+    const args = lintScript
+      .split(/\s+/)
+      .slice(1)
+      .filter((arg) => arg !== ".");
+    const result = spawnSync(
+      "node_modules/.bin/eslint",
+      [...args, "--suppressions-location", location, file],
+      { encoding: "utf8" }
+    );
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr + result.stdout).toContain("--prune-suppressions");
   });
 });

@@ -59,6 +59,8 @@ risk:gate:
           - ".github/**"
           - ".claude/settings.json"
           - "eslint.config.mjs"
+          # 既存の lint 違反の抑制（#440）。抑制を足すとゲートを弱められる
+          - "eslint-suppressions.json"
           - "Taskfile.yml"
           - "scripts/ci/**"
           # テストの対象・層ごとのカバレッジ検査の配線（閾値・例外は scripts/ci/layer-coverage.config.ts）
@@ -104,6 +106,8 @@ high-risk:
           - ".github/**"
           - ".claude/settings.json"
           - "eslint.config.mjs"
+          # 既存の lint 違反の抑制（#440）。抑制を足すとゲートを弱められる
+          - "eslint-suppressions.json"
           - "Taskfile.yml"
           - "scripts/ci/**"
           # テストの対象・層ごとのカバレッジ検査の配線（閾値・例外は scripts/ci/layer-coverage.config.ts）

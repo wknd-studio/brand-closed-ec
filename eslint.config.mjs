@@ -84,6 +84,30 @@ const domainConstantPatterns = DOMAIN_CONSTANTS.map(
   })
 );
 
+// DB・外部サービスのクライアントは src/infrastructure/ の中だけで使う（#440）。repository を通さない直接クエリが、
+// 業務ルールのコピーと食い違いを生んだ（#444）。domain・repositories・queries・use-cases は、層の許可リストで
+// 外部SDKをすでに禁止しているので、それ以外の src/ に足す。既存の違反は eslint-suppressions.json に記録している
+const CLIENT_DOC =
+  "DB・外部サービスは repository（書き込み・その判断に要る読み取り）か Query Service（画面用の読み取り）を composition 経由で使い、実装は src/infrastructure/ に置く。docs/ai-prompts/architecture.md の「外部サービスのクライアント」を参照（#440）";
+
+const clientPatterns = [
+  {
+    // group（gitignore 形式）の stripe/* は @/infrastructure/stripe/... にも当たるため、先頭に固定した正規表現で書く
+    regex: "^(@supabase/|(next-sanity|@sanity/client|stripe|resend)(/|$))",
+    message: `@supabase/*・next-sanity・@sanity/client・stripe・resend は src/infrastructure/ の外で import しない。${CLIENT_DOC}`,
+  },
+];
+
+const clientSyntaxRule = [
+  "error",
+  {
+    // Supabase のテーブル指定（db.from("users")）。Array.from("...")・Buffer.from("...") は除く
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.property.name='from'][arguments.0.type=/^(Literal|TemplateLiteral)$/]:not([callee.object.name=/^(Array|Buffer)$/])",
+    message: `テーブルを指定するクエリ（.from("...")）は src/infrastructure/ の外で書かない。${CLIENT_DOC}`,
+  },
+];
+
 function layerImportsConfig({ layer, allow, external, hint }) {
   const allowed = [layer, ...allow];
   const allowedText = [
@@ -163,9 +187,29 @@ const eslintConfig = defineConfig([
   ...LAYER_IMPORTS.map(layerImportsConfig),
   {
     files: ["src/**/*.{ts,tsx}"],
-    ignores: LAYER_IMPORTS.map(({ layer }) => `src/${layer}/**`),
+    ignores: [
+      ...LAYER_IMPORTS.map(({ layer }) => `src/${layer}/**`),
+      "src/sanity/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [...domainConstantPatterns, ...clientPatterns] },
+      ],
+    },
+  },
+  // Sanity Studio は Sanity のクライアントを直接使う（#440 の対象外）
+  {
+    files: ["src/sanity/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: domainConstantPatterns }],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/infrastructure/**", "src/sanity/**"],
+    rules: {
+      "no-restricted-syntax": clientSyntaxRule,
     },
   },
   // E2Eでnetworkidleを待たない（#519）。Next.jsのprefetch・Clerkのトークン更新等で

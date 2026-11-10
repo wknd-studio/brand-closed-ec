@@ -1,0 +1,20 @@
+{
+  "src/app/(member)/shop/[brand]/actions.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/app/onboarding/payment/success/actions.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/middleware.ts": {
+    "no-restricted-imports": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  }
+}
