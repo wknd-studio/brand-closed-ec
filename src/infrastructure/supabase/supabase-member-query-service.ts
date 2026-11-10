@@ -85,6 +85,18 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     return data?.onboarding_completed ?? false;
   }
 
+  async findStripeCustomerId(clerkUserId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from("users")
+      .select("stripe_customer_id")
+      .eq("clerk_user_id", clerkUserId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (error) throw error;
+
+    return data?.stripe_customer_id ?? null;
+  }
+
   async findMemberRank(clerkUserId: string): Promise<MemberRank | null> {
     const { data, error } = await this.db
       .from("users")

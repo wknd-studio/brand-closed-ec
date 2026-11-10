@@ -26,7 +26,8 @@ function supabaseAdmin() {
  *
  * 決済完了済みのセッションはStripeの決済画面を操作しないと作れないため、確定待ちの
  * 表示・他人のセッション・Stripe APIの失敗はユニットテスト
- * （tests/unit/onboarding-payment-success.test.ts）で確認する。
+ * （tests/unit/onboarding-payment-success.test.ts・
+ * tests/unit/infrastructure/stripe-onboarding-payment-query-service.test.ts）で確認する。
  *
  * Webhookの到着はDBの更新で代替する。画面での会員登録は経由せず、Clerkのユーザーを
  * Backend APIで作成し、決済直前の状態（onboarding_completed=false）のusers行を直接用意する
