@@ -122,7 +122,8 @@ describe("AddressForm", () => {
     expect(errorOf("phone_number")).toBe("電話番号のエラー");
     expect(field("postal_code").getAttribute("aria-invalid")).toBe("true");
     expect(field("phone_number").getAttribute("aria-invalid")).toBe("true");
-    expect(field("city").getAttribute("aria-invalid")).toBe("false");
+    // エラーの無い項目には aria-invalid を付けない（src/components/ui/input.tsx と同じ）
+    expect(field("city").hasAttribute("aria-invalid")).toBe(false);
     expect(errorOf("city")).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -188,6 +189,11 @@ describe("AddressForm", () => {
       expect.any(FormData)
     );
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("電話番号の入力欄は type=tel にする", () => {
+    render();
+    expect(field("phone_number").getAttribute("type")).toBe("tel");
   });
 
   // ブラウザでの形式の確認は domain の検証（tests/unit/address-entity.test.ts）と同じ値を受け付ける
