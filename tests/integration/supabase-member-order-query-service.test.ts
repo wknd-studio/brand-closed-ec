@@ -62,7 +62,12 @@ const OTHER_USER_ADDRESS_ID = "00000000-0000-0000-0000-000000450b11";
 
 const MIXED_ORDER_ID = "00000000-0000-0000-0000-000000450a21";
 const AT_ORDER_ONLY_ORDER_ID = "00000000-0000-0000-0000-000000450a22";
-const ALL_ORDER_IDS = [MIXED_ORDER_ID, AT_ORDER_ONLY_ORDER_ID];
+const WITHDRAWN_USER_ORDER_ID = "00000000-0000-0000-0000-000000450c21";
+const ALL_ORDER_IDS = [
+  MIXED_ORDER_ID,
+  AT_ORDER_ONLY_ORDER_ID,
+  WITHDRAWN_USER_ORDER_ID,
+];
 const MIXED_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450a31";
 const AT_ORDER_ONLY_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450a32";
 const AT_ORDER_ITEM_ID = "00000000-0000-0000-0000-000000450a41";
@@ -71,6 +76,9 @@ const NEGOTIABLE_AFTER_ORDER_ITEM_ID = "00000000-0000-0000-0000-000000450a43";
 const AT_ORDER_ONLY_ITEM_ID = "00000000-0000-0000-0000-000000450a44";
 const SESSION_ID = "cs_test_member_order_query_001";
 const AT_ORDER_ONLY_SESSION_ID = "cs_test_member_order_query_002";
+const WITHDRAWN_USER_SESSION_ID = "cs_test_member_order_query_003";
+const WITHDRAWN_USER_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450c31";
+const WITHDRAWN_USER_ITEM_ID = "00000000-0000-0000-0000-000000450c41";
 const CREATED_AT = "2026-06-12T03:00:00.000Z";
 
 const addressSnapshot = {
@@ -106,10 +114,10 @@ function address(
   };
 }
 
-function order(id: string) {
+function order(id: string, userId = USER_ID) {
   return {
     id,
-    user_id: USER_ID,
+    user_id: userId,
     status: "processing",
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,
@@ -200,6 +208,7 @@ beforeAll(async () => {
   await insert("orders", [
     order(MIXED_ORDER_ID),
     order(AT_ORDER_ONLY_ORDER_ID),
+    order(WITHDRAWN_USER_ORDER_ID, WITHDRAWN_USER_ID),
   ]);
   await insert("order_settlements", [
     {
@@ -216,6 +225,14 @@ beforeAll(async () => {
       flow: "checkout",
       status: "pending_payment",
       stripe_checkout_session_id: AT_ORDER_ONLY_SESSION_ID,
+      amount_snapshot: 100_000,
+    },
+    {
+      id: WITHDRAWN_USER_SETTLEMENT_ID,
+      order_id: WITHDRAWN_USER_ORDER_ID,
+      flow: "checkout",
+      status: "pending_payment",
+      stripe_checkout_session_id: WITHDRAWN_USER_SESSION_ID,
       amount_snapshot: 100_000,
     },
   ]);
@@ -239,6 +256,10 @@ beforeAll(async () => {
     }),
     item(AT_ORDER_ONLY_ITEM_ID, AT_ORDER_ONLY_ORDER_ID, {
       settlement_id: AT_ORDER_ONLY_SETTLEMENT_ID,
+    }),
+    item(WITHDRAWN_USER_ITEM_ID, WITHDRAWN_USER_ORDER_ID, {
+      payment_timing: "after_order",
+      settlement_id: WITHDRAWN_USER_SETTLEMENT_ID,
     }),
   ]);
 });
@@ -340,6 +361,15 @@ describe("SupabaseMemberOrderQueryService.findCheckoutCompletedOrder", () => {
     ).toBeNull();
   });
 
+  it("退会済みの会員の Checkout Session は null", async () => {
+    expect(
+      await queryService.findCheckoutCompletedOrder({
+        clerkUserId: CLERK_WITHDRAWN_USER,
+        stripeCheckoutSessionId: WITHDRAWN_USER_SESSION_ID,
+      })
+    ).toBeNull();
+  });
+
   it("存在しない Checkout Session は null", async () => {
     expect(
       await queryService.findCheckoutCompletedOrder({
@@ -382,6 +412,15 @@ describe("SupabaseMemberOrderQueryService.findInvoiceRequestedOrder", () => {
       await queryService.findInvoiceRequestedOrder({
         clerkUserId: CLERK_OTHER_USER,
         orderId: MIXED_ORDER_ID,
+      })
+    ).toBeNull();
+  });
+
+  it("退会済みの会員の注文は null", async () => {
+    expect(
+      await queryService.findInvoiceRequestedOrder({
+        clerkUserId: CLERK_WITHDRAWN_USER,
+        orderId: WITHDRAWN_USER_ORDER_ID,
       })
     ).toBeNull();
   });
