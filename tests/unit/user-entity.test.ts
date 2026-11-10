@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { User } from "@/domain/entities/user";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
+import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
@@ -14,7 +16,7 @@ function makeUser(overrides: Partial<Parameters<typeof User.of>[0]> = {}) {
     email: "test@example.com",
     firstName: "太郎",
     lastName: "山田",
-    phoneNumber: "09012345678",
+    phoneNumber: PhoneNumber.of("09012345678"),
     profileCompletedAt: new Date(2026, 0, 10),
     rank: MemberRank.of("basic"),
     billingAnchorDay: 10,
@@ -170,17 +172,17 @@ describe("User", () => {
         makeUser({
           firstName: "太郎",
           lastName: "山田",
-          phoneNumber: "09012345678",
+          phoneNumber: PhoneNumber.of("09012345678"),
         }).hasCompletedProfile()
       ).toBe(true);
     });
 
-    it("電話番号が空のとき false", () => {
+    it("電話番号が未入力（null）のとき false", () => {
       expect(
         makeUser({
           firstName: "太郎",
           lastName: "山田",
-          phoneNumber: "",
+          phoneNumber: null,
         }).hasCompletedProfile()
       ).toBe(false);
     });
@@ -190,7 +192,7 @@ describe("User", () => {
         makeUser({
           firstName: "",
           lastName: "",
-          phoneNumber: "09012345678",
+          phoneNumber: PhoneNumber.of("09012345678"),
         }).hasCompletedProfile()
       ).toBe(false);
     });
@@ -229,12 +231,23 @@ describe("User", () => {
       const user = makeUser({
         memberType: MemberType.of("corporate"),
         companyName: "テスト株式会社",
-        invoiceRegistrationNumber: "T1234567890123",
+        invoiceRegistrationNumber:
+          InvoiceRegistrationNumber.of("T1234567890123"),
       });
       expect(user.memberType.value).toBe("corporate");
       expect(user.companyName).toBe("テスト株式会社");
-      expect(user.invoiceRegistrationNumber).toBe("T1234567890123");
+      expect(user.invoiceRegistrationNumber?.value).toBe("T1234567890123");
     });
+  });
+});
+
+describe("User の電話番号", () => {
+  it("値オブジェクトで持ち、with() でも引き継ぐ", () => {
+    const user = makeUser({ phoneNumber: PhoneNumber.of("090-1234-5678") });
+    expect(user.phoneNumber?.value).toBe("09012345678");
+    expect(user.with({ firstName: "次郎" }).phoneNumber?.value).toBe(
+      "09012345678"
+    );
   });
 });
 

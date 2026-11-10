@@ -7,6 +7,7 @@ import { Address } from "@/domain/entities/address";
 import { AdminUser } from "@/domain/entities/admin-user";
 import { AdminMembership } from "@/domain/entities/admin-membership";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { Money } from "@/domain/value-objects/money";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
@@ -37,7 +38,7 @@ export function makeUser(
     billingAnchorDay: number | null;
     firstName: string;
     lastName: string;
-    phoneNumber: string;
+    phoneNumber: PhoneNumber | null;
   }>
 ) {
   return User.of({
@@ -46,7 +47,10 @@ export function makeUser(
     email: "test@example.com",
     firstName: overrides?.firstName ?? "太郎",
     lastName: overrides?.lastName ?? "山田",
-    phoneNumber: overrides?.phoneNumber ?? "09012345678",
+    phoneNumber:
+      overrides && "phoneNumber" in overrides
+        ? (overrides.phoneNumber ?? null)
+        : PhoneNumber.of("09012345678"),
     profileCompletedAt: new Date(2026, 0, 1),
     rank: MemberRank.of(overrides?.rank ?? "standard"),
     billingAnchorDay: overrides?.billingAnchorDay ?? 1,

@@ -32,7 +32,7 @@ describe("selectPlan", () => {
     expect(saved.onboardingCompleted).toBe(false);
     expect(saved.firstName).toBe("太郎");
     expect(saved.lastName).toBe("山田");
-    expect(saved.phoneNumber).toBe("09012345678");
+    expect(saved.phoneNumber?.value).toBe("09012345678");
     expect(accountGateway.updateOnboardingMetadata).toHaveBeenCalledWith(
       "clerk-1",
       false
@@ -57,7 +57,7 @@ describe("selectPlan", () => {
     expect(saved.rank.value).toBe("standard");
     expect(saved.firstName).toBe("太郎");
     expect(saved.lastName).toBe("山田");
-    expect(saved.phoneNumber).toBe("09012345678");
+    expect(saved.phoneNumber?.value).toBe("09012345678");
   });
 
   it("電話番号の形式が不正な場合はInvalidPhoneNumberErrorをthrowする", async () => {
@@ -91,7 +91,7 @@ describe("selectPlan", () => {
     const saved = vi.mocked(userRepo.saveIfNotOnboarded).mock.calls[0][0];
     expect(saved.memberType.value).toBe("corporate");
     expect(saved.companyName).toBe("テスト株式会社");
-    expect(saved.invoiceRegistrationNumber).toBe("T1234567890123");
+    expect(saved.invoiceRegistrationNumber?.value).toBe("T1234567890123");
   });
 
   it("companyName/invoiceRegistrationNumberが指定されない場合: memberType=individualで保存する", async () => {
