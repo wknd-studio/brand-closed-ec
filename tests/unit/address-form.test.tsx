@@ -30,18 +30,6 @@ const typed: Record<string, string> = {
   phone_number: "03-9876-5432",
 };
 
-// Server Action が返す入力値（項目名は AddressContent に合わせる）
-const typedValues = {
-  recipientLastName: "佐藤",
-  recipientFirstName: "花子",
-  postalCode: "150-0001",
-  prefecture: "東京都",
-  city: "渋谷区",
-  addressLine1: "神宮前1-1-1",
-  addressLine2: "神宮前ビル2F",
-  phoneNumber: "03-9876-5432",
-};
-
 const editingAddress = {
   id: "addr-1",
   recipientLastName: "山田",
@@ -125,7 +113,6 @@ describe("AddressForm", () => {
         postalCode: "郵便番号のエラー",
         phoneNumber: "電話番号のエラー",
       },
-      values: typedValues,
     });
     render();
 
@@ -143,7 +130,6 @@ describe("AddressForm", () => {
   it("都道府県（select）の空のエラーも項目の下に出す", async () => {
     vi.mocked(createAddressAction).mockResolvedValue({
       fieldErrors: { prefecture: "都道府県を入力してください" },
-      values: typedValues,
     });
     render();
 
@@ -156,7 +142,6 @@ describe("AddressForm", () => {
   it("保存に失敗しても、入力した値がフォームに残る", async () => {
     vi.mocked(createAddressAction).mockResolvedValue({
       fieldErrors: { postalCode: "郵便番号のエラー" },
-      values: typedValues,
     });
     render();
 
@@ -170,7 +155,6 @@ describe("AddressForm", () => {
   it("項目に結び付かないエラーはフォームの下に出す", async () => {
     vi.mocked(createAddressAction).mockResolvedValue({
       error: "住所の登録に失敗しました",
-      values: typedValues,
     });
     render();
 
