@@ -58,11 +58,68 @@ repository を通さない直接クエリは、domain や repository にある�
 
 ## Query Service
 
-- **interface**: `src/queries/` に置く（例（#450 で作る予定）: `src/queries/member-order-query-service.ts`）。domain 以外に依存しない
-- **実装**: `src/infrastructure/` に置く（例（#450 で作る予定）: `src/infrastructure/supabase/supabase-member-order-query-service.ts`）
+- **interface**: `src/queries/` に置く（例: `src/queries/member-order-query-service.ts`）。domain 以外に依存しない
+- **実装**: `src/infrastructure/` に置く（例: `src/infrastructure/supabase/supabase-member-order-query-service.ts`）
 - **戻り値**: 画面用のDTO。DTOの型は interface と同じファイル（`src/queries/`）に置く。集約の repository に画面用の型を足さない
 - **業務ルール**: ランクによる表示制限・ランク別価格の選択などは、Query Service の実装の中で domain（`MemberRank` 等）を呼んで適用する。クエリの条件や実装の中に、同じ判定を書き直さない
 - 1画面（または1つの用途）に1メソッドを基本にする。複数の画面で同じ形が要るときだけ共通にする
+- **会員のデータの絞り込み**: 会員のデータを返すメソッドは、引数に会員（`clerkUserId`）を必須にし、実装のクエリでその会員の行だけに絞る。URL から来たID（`session_id`・`order_id` 等）だけで取らない。他の会員の行・存在しない行・画面の対象外の行は `null` を返し、page は `null` なら redirect する
+- **命名**: interface は `<対象>QueryService`、メソッドは `find<画面・用途>`、DTO は `<画面・用途>Dto`。実装は `Supabase<対象>QueryService`
+
+### 作り方の例（会員の注文系画面。#450）
+
+```ts
+// src/queries/member-order-query-service.ts — interface と DTO。domain 以外を import しない
+export type InvoiceRequestedOrderDto = {
+  orderId: string;
+  createdAt: string; // Client Component に渡すため、Date ではなく ISO 文字列
+  items: CompletedOrderItemDto[];
+};
+
+export interface MemberOrderQueryService {
+  // 他の会員の注文・存在しない注文・後払いの明細が無い注文は null
+  findInvoiceRequestedOrder(input: {
+    clerkUserId: string;
+    orderId: string;
+  }): Promise<InvoiceRequestedOrderDto | null>;
+}
+
+// src/infrastructure/supabase/supabase-member-order-query-service.ts — 実装。DBの行を DTO に変換する
+export class SupabaseMemberOrderQueryService implements MemberOrderQueryService {
+  constructor(private readonly db: SupabaseClient<Database>) {}
+
+  async findInvoiceRequestedOrder({ clerkUserId, orderId }) {
+    const { data, error } = await this.db
+      .from("orders")
+      .select(
+        "id, created_at, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at), order_items(...)"
+      )
+      .eq("id", orderId)
+      .eq("users.clerk_user_id", clerkUserId) // 会員で絞る
+      .is("users.deleted_at", null)
+      .maybeSingle();
+    if (error) throw error; // エラーを握りつぶして null にしない（URL の不正な値など、null にすべきものだけ判別する）
+    // ...
+  }
+}
+
+// src/composition/member-order-query.ts — 組み立て。Query Service のインスタンスを返す
+export async function memberOrderQueryService(): Promise<MemberOrderQueryService> {
+  return new SupabaseMemberOrderQueryService(await createServerClient());
+}
+
+// src/app/(member)/order/invoice-complete/page.tsx — page は composition から受け取って呼ぶだけ
+const queryService = await memberOrderQueryService();
+const order = await queryService.findInvoiceRequestedOrder({
+  clerkUserId: userId,
+  orderId: order_id,
+});
+if (!order) redirect("/shop");
+```
+
+- **クライアント**: 会員の画面の読み取りは、ログイン中の会員のトークンで RLS を効かせた `createServerClient()` を使う（引数の会員による絞り込みと二重に守る）。そのため組み立て関数は `async` になる
+- **組み立てのファイル**: 書き込みの組み立て（`src/composition/order.ts` 等）とは分け、`src/composition/<対象>-query.ts` に置く。page が使わない外部サービス（Sanity・Stripe 等）の実装を読み込まないため
+- **テスト**: `tests/integration/supabase-<対象>-query-service.test.ts` に、実DBの統合テストを置く（例: `tests/integration/supabase-member-order-query-service.test.ts`）。メソッドごとに「取得できる」「他の会員のデータを取得できない」「存在しない」の3つを必ず書く。実装は service_role のクライアントで確かめ、組み立て（RLS 付きのクライアント）は `requireAuth` をモックしてテスト用のJWTを渡して確かめる
 
 ## 組み立て（composition）
 

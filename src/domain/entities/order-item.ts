@@ -51,6 +51,11 @@ export class OrderItem {
     return Money.of(this.unitPriceSnapshot.amount * this.quantity);
   }
 
+  /** 後払い（注文後に運営者が請求書を送る）の明細か。注文確定時のスナップショットで決まる */
+  isAfterOrder(): boolean {
+    return this.paymentTiming === "after_order";
+  }
+
   isPriceConfirmed(): boolean {
     if (!this.isNegotiable) return true;
     return this.negotiatedUnitPrice !== null;

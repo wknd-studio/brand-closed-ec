@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth/current-user";
-import { createServerClient } from "@/infrastructure/supabase/server";
-import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { memberOrderQueryService } from "@/composition/member-order-query";
 import OrderCompleteClient from "./order-complete-client";
 
 type Props = {
@@ -15,30 +14,19 @@ export default async function OrderCompletePage({ searchParams }: Props) {
   const { userId } = await requireAuth();
   if (!userId) redirect("/sign-in");
 
-  const supabase = await createServerClient();
-  const orderRepo = new SupabaseOrderRepository(supabase);
-
-  const order = await orderRepo.findByStripeCheckoutSessionId(session_id);
-  if (!order) redirect("/shop");
-
-  const toClientItem = (item: (typeof order.items)[number]) => ({
-    id: item.id,
-    productNameSnapshot: item.productNameSnapshot,
-    quantity: item.quantity,
-    unitPriceSnapshot: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
-    isNegotiable: item.isNegotiable,
+  const queryService = await memberOrderQueryService();
+  const order = await queryService.findCheckoutCompletedOrder({
+    clerkUserId: userId,
+    stripeCheckoutSessionId: session_id,
   });
+  if (!order) redirect("/shop");
 
   return (
     <OrderCompleteClient
-      orderId={order.id}
-      createdAt={order.createdAt.toISOString()}
-      items={order.items
-        .filter((item) => item.paymentTiming === "at_order")
-        .map(toClientItem)}
-      afterOrderItems={order.items
-        .filter((item) => item.paymentTiming === "after_order")
-        .map(toClientItem)}
+      orderId={order.orderId}
+      createdAt={order.createdAt}
+      items={order.atOrderItems}
+      afterOrderItems={order.afterOrderItems}
     />
   );
 }
