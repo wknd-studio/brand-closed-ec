@@ -264,6 +264,12 @@ export function makeNotificationService(): NotificationService {
 export function makeSubscriptionGateway(): SubscriptionGateway {
   return {
     cancelSubscription: vi.fn().mockResolvedValue(undefined),
+    retrieveSubscription: vi.fn().mockResolvedValue({
+      status: "active",
+      currentPeriodStart: new Date(2026, 0, 1),
+      currentPeriodEnd: new Date(2026, 1, 1),
+      startedAt: new Date(2026, 0, 1),
+    }),
   };
 }
 

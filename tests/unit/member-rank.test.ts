@@ -75,6 +75,22 @@ describe("MemberRank", () => {
     });
   });
 
+  describe("isSelfServiceRank()", () => {
+    it.each(["starter", "basic", "standard", "pro", "advanced", "premium"])(
+      "セルフサービスで申し込める%sならtrue",
+      (value) => {
+        expect(MemberRank.isSelfServiceRank(value)).toBe(true);
+      }
+    );
+
+    it.each(["enterprise", "gold", "", "toString"])(
+      "個別契約のenterpriseや不正な値（%s）ならfalse",
+      (value) => {
+        expect(MemberRank.isSelfServiceRank(value)).toBe(false);
+      }
+    );
+  });
+
   describe("selfServiceRanks()", () => {
     it("セルフサービスで選べるのは、個別契約のenterpriseを除くランク（下位から順）", () => {
       expect(MemberRank.selfServiceRanks()).toEqual([
