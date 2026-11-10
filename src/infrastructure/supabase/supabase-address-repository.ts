@@ -49,6 +49,16 @@ export class SupabaseAddressRepository implements AddressRepository {
     return data ? toAddress(data as AddressRow) : null;
   }
 
+  async findByIdAndUserId(id: string, userId: string): Promise<Address | null> {
+    const { data } = await this.db
+      .from("addresses")
+      .select(SELECT_FIELDS)
+      .eq("id", id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data ? toAddress(data as AddressRow) : null;
+  }
+
   async findByUserId(userId: string): Promise<Address[]> {
     const { data } = await this.db
       .from("addresses")
