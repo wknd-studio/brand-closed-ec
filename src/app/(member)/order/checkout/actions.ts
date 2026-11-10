@@ -8,6 +8,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { placeOrder as placeOrderUseCase } from "@/composition/order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
+import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 
 type PlaceOrderResult = { error: string };
 
@@ -46,6 +47,11 @@ export async function placeOrder(
     if (err instanceof LimitExceededError) {
       return {
         error: `月次仕入れ上限（¥${err.limit.toLocaleString()}）を超えるため注文できません`,
+      };
+    }
+    if (err instanceof NegotiableProductNotOrderableError) {
+      return {
+        error: `「${err.productName}」は現在ご注文いただけません。カートから削除してから注文してください`,
       };
     }
     Sentry.captureException(err, {
