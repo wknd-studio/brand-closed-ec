@@ -211,12 +211,33 @@ describe("Stripe Checkout決済確定Webhook（実DB・署名検証込み）", (
 
     const { data: after } = await supabase
       .from("orders")
-      .select("status, order_settlements(status, paid_at)")
+      .select("id, status, order_settlements(status, paid_at)")
       .eq("user_id", TEST_USER_ID)
       .single();
     expect(after?.status).toBe("paid");
     expect(after?.order_settlements[0]?.status).toBe("paid");
     expect(after?.order_settlements[0]?.paid_at).not.toBeNull();
+
+    // 注文確定の最初の1行に続き、決済完了による変化が system として記録される（#237）
+    const { data: history } = await supabase
+      .from("order_status_changes")
+      .select("from_status, to_status, changed_by, changed_by_admin_user_id")
+      .eq("order_id", after!.id)
+      .order("created_at", { ascending: true });
+    expect(history).toEqual([
+      {
+        from_status: null,
+        to_status: "processing",
+        changed_by: "customer",
+        changed_by_admin_user_id: null,
+      },
+      {
+        from_status: "processing",
+        to_status: "paid",
+        changed_by: "system",
+        changed_by_admin_user_id: null,
+      },
+    ]);
 
     const { data: webhookEvent } = await supabase
       .from("stripe_webhook_events")

@@ -48,6 +48,29 @@ describe("markInvoiceOrderAsPaid", () => {
     expect(notificationService.sendInvoicePaid).toHaveBeenCalled();
   });
 
+  it("入金による状態の変化は system が変えたとして保存する", async () => {
+    const orderRepo = makeOrderRepo(
+      makeOrder({
+        items: [afterOrderItem()],
+        settlements: [invoiceSettlement()],
+      })
+    );
+
+    await markInvoiceOrderAsPaid(
+      { stripeInvoiceId: "inv_1" },
+      {
+        orderRepo,
+        userRepo: makeUserRepo(),
+        notificationService: makeNotificationService(),
+        errorReporter: makeErrorReporter(),
+      }
+    );
+
+    expect(vi.mocked(orderRepo.save).mock.calls[0]?.[1]).toEqual({
+      type: "system",
+    });
+  });
+
   it("他の請求がまだ未払いの注文は、この決済単位がpaidでも注文はprocessingのまま", async () => {
     const order = makeOrder({
       items: [
