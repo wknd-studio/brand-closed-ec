@@ -51,6 +51,11 @@ const MONTHLY_LIMITS: Record<MemberRankValue, number> = {
 export class MemberRank {
   private constructor(readonly value: MemberRankValue) {}
 
+  /** 全ランクの一覧（下位から順）。個別契約のENTERPRISEも含む */
+  static allRanks(): MemberRankValue[] {
+    return [...RANK_ORDER];
+  }
+
   /** セルフサービスで選べるランクの一覧（下位から順）。ENTERPRISEは個別契約のため含まない（FR-006） */
   static selfServiceRanks(): SelfServiceRankValue[] {
     return RANK_ORDER.filter(

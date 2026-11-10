@@ -183,19 +183,10 @@ export const product = defineType({
         "掛け率から自動計算されます（直接編集不可）。要相談商品の場合は空欄で構いません",
       type: "object",
       readOnly: true,
-      fields: [
-        defineField({ name: "starter", title: "Starter", type: "number" }),
-        defineField({ name: "basic", title: "Basic", type: "number" }),
-        defineField({ name: "standard", title: "Standard", type: "number" }),
-        defineField({ name: "pro", title: "Pro", type: "number" }),
-        defineField({ name: "advanced", title: "Advanced", type: "number" }),
-        defineField({ name: "premium", title: "Premium", type: "number" }),
-        defineField({
-          name: "enterprise",
-          title: "Enterprise",
-          type: "number",
-        }),
-      ],
+      // 個別契約の Enterprise も、価格が入っていれば表示するため全ランクの項目を持つ
+      fields: RANK_OPTIONS.map((rank) =>
+        defineField({ name: rank.value, title: rank.title, type: "number" })
+      ),
       validation: (r) =>
         r.custom((prices, { document }) =>
           validatePrices(

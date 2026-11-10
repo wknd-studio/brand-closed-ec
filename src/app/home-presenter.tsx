@@ -8,6 +8,10 @@ import { FeatureGrid } from "@/components/ui/feature-grid";
 import { Heading } from "@/components/ui/heading";
 import { Section } from "@/components/ui/section";
 import { SectionHeader } from "@/components/ui/section-header";
+import {
+  MemberRank,
+  type MemberRankValue,
+} from "@/domain/value-objects/member-rank";
 
 // 会員メリット・料金プラン・ブランド例のコンテンツ定義
 
@@ -52,9 +56,19 @@ const OTHER_BENEFITS = [
 // 料金・月間仕入れ上限はdocs/archive/service-spec.mdおよびsrc/domain/value-objects/member-rank.ts
 // のMONTHLY_LIMITS（暫定値）に基づく表示専用の値。Stripeの実価格（src/infrastructure/stripe/client.ts）とは独立して
 // 管理する。改定時はここも更新すること。
-const PLANS = [
+const PLAN_DETAILS: Record<
+  MemberRankValue,
   {
-    id: "starter",
+    label: string;
+    name: string;
+    description: string;
+    monthlyFee: string;
+    initialFee: string;
+    monthlyLimit: string;
+    featured: boolean;
+  }
+> = {
+  starter: {
     label: "STARTER",
     name: "入門",
     description: "副業・お試し層向け",
@@ -63,8 +77,7 @@ const PLANS = [
     monthlyLimit: "300,000",
     featured: false,
   },
-  {
-    id: "basic",
+  basic: {
     label: "BASIC",
     name: "基本",
     description: "個人せどり・副業層向け",
@@ -73,8 +86,7 @@ const PLANS = [
     monthlyLimit: "1,000,000",
     featured: false,
   },
-  {
-    id: "standard",
+  standard: {
     label: "STANDARD",
     name: "標準",
     description: "本業EC事業者・小規模セレクトショップ向け",
@@ -83,8 +95,7 @@ const PLANS = [
     monthlyLimit: "5,000,000",
     featured: true,
   },
-  {
-    id: "pro",
+  pro: {
     label: "PRO",
     name: "上位",
     description: "中規模セレクトショップ・法人向け",
@@ -93,8 +104,7 @@ const PLANS = [
     monthlyLimit: "20,000,000",
     featured: false,
   },
-  {
-    id: "advanced",
+  advanced: {
     label: "ADVANCED",
     name: "上級",
     description: "中〜大規模法人向け",
@@ -103,8 +113,7 @@ const PLANS = [
     monthlyLimit: "50,000,000",
     featured: false,
   },
-  {
-    id: "premium",
+  premium: {
     label: "PREMIUM",
     name: "最上位",
     description: "大規模法人・チェーン店向け",
@@ -113,8 +122,7 @@ const PLANS = [
     monthlyLimit: "100,000,000",
     featured: false,
   },
-  {
-    id: "enterprise",
+  enterprise: {
     label: "ENTERPRISE",
     name: "個別契約",
     description: "SLA対応・専任チームサポート付き",
@@ -123,7 +131,13 @@ const PLANS = [
     monthlyLimit: "無制限",
     featured: false,
   },
-] as const;
+};
+
+// 並び順は MemberRank から取る（個別契約の ENTERPRISE も比較表に載せる）
+export const PLANS = MemberRank.allRanks().map((rank) => ({
+  id: rank,
+  ...PLAN_DETAILS[rank],
+}));
 
 // Sanity連携（実ブランド・商品データの取得）は別PRで対応する。ここではレイアウト確認用のダミー表示のみ。
 const BRAND_EXAMPLES = [
