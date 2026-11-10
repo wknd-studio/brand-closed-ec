@@ -106,6 +106,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
+  install-cli-versions:
+    name: Install CLI Versions
+    runs-on: ubuntu-latest
+    # デプロイのジョブでしか使わない版（deploy-staging・deploy-prod の Supabase CLI 等）は、
+    # PR の CI ではインストールされず、壊れていても develop・main へのマージ後まで気づけない（#549）。
+    # ワークフローが install-cli に渡している全ての CLI と版を、ここで実際にインストールして
+    # --version まで動かす
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install every CLI version used in workflows
+        run: |
+          source .github/actions/install-cli/install-cli.sh
+          used_versions .github/workflows/*.yml > "$RUNNER_TEMP/cli-versions"
+          while read -r tool version; do
+            # 版の一覧を標準入力から読ませない（読まれると残りの版が黙って飛ばされる）
+            GITHUB_PATH= bash .github/actions/install-cli/install-cli.sh "$tool" "$version" < /dev/null
+          done < "$RUNNER_TEMP/cli-versions"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest

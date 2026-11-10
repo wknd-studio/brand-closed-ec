@@ -5,7 +5,8 @@ import CartSidebar from "@/components/cart-sidebar";
 import { CartProvider } from "@/lib/cart/context";
 import { getMonthlyUsageInfo } from "@/lib/cart/monthly-confirmed";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
-import { FavoritesProvider } from "@/lib/favorites/context";
+import { FavoritesProvider } from "@/components/favorites/favorites-provider";
+import { addFavoriteAction, removeFavoriteAction } from "./favorites/actions";
 import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseFavoriteRepository } from "@/infrastructure/supabase/supabase-favorite-repository";
@@ -44,7 +45,11 @@ export default async function MemberLayout({
       monthlyLimit={monthlyLimit}
       initialCart={initialCart}
     >
-      <FavoritesProvider initialFavoriteIds={initialFavoriteIds}>
+      <FavoritesProvider
+        initialFavoriteIds={initialFavoriteIds}
+        addFavorite={addFavoriteAction}
+        removeFavorite={removeFavoriteAction}
+      >
         <div className="flex min-h-full flex-col">
           <Header />
           <main className="flex-1">{children}</main>

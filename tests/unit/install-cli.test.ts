@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -199,5 +206,185 @@ describe("verify_checksum", () => {
   it("checksums.txt にファイルの行が無ければ失敗する（名前の前方一致で別のファイルの値を使わない）", () => {
     expect(verify(`${sha}  supabase_linux_amd64.tar.gz\n`).status).not.toBe(0);
     expect(verify(`${sha}  ${name}.sig\n`).status).not.toBe(0);
+  });
+});
+
+describe("extract_cli", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "install-cli-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  // files の各パスを、中身が実行できるシェルスクリプトのファイルとして tarball に詰める
+  function tarball(files: Record<string, string>, prefix = "") {
+    const src = path.join(dir, "src");
+    for (const [name, body] of Object.entries(files)) {
+      const file = path.join(src, name);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, `#!/usr/bin/env bash\n${body}\n`, { mode: 0o755 });
+    }
+    const out = path.join(dir, "cli.tar.gz");
+    spawnSync("tar", [
+      "-czf",
+      out,
+      "-C",
+      src,
+      ...Object.keys(files).map((f) => prefix + f),
+    ]);
+    return out;
+  }
+
+  function extract(file: string, tool: string) {
+    const dest = path.join(dir, "dest");
+    const result = call('extract_cli "$1" "$2" "$3"', [file, dest, tool]);
+    return { ...result, dest };
+  }
+
+  it("Supabase CLI（v2.102.0 以降）は、シムの supabase と本体の supabase-go を同じディレクトリに置く", () => {
+    const file = tarball({
+      // 実物のシムと同じく、隣の supabase-go に処理を渡す
+      supabase: 'exec "$(dirname "$0")/supabase-go" "$@"',
+      "supabase-go": 'echo "2.102.0"',
+    });
+    const { status, dest } = extract(file, "supabase");
+    expect(status).toBe(0);
+    expect(readdirSync(dest).sort()).toEqual(["supabase", "supabase-go"]);
+    const version = spawnSync(path.join(dest, "supabase"), ["--version"], {
+      encoding: "utf8",
+    });
+    expect(version.status).toBe(0);
+    expect(version.stdout.trim()).toBe("2.102.0");
+  });
+
+  it("entry が ./ 付きで入っている tarball でも、supabase と supabase-go を置く", () => {
+    const file = tarball(
+      { supabase: 'echo "x"', "supabase-go": 'echo "x"', LICENSE: "" },
+      "./"
+    );
+    const { status, dest } = extract(file, "supabase");
+    expect(status).toBe(0);
+    expect(readdirSync(dest).sort()).toEqual(["supabase", "supabase-go"]);
+  });
+
+  it("supabase-go が無い tarball（それより前の版）は supabase だけを置く", () => {
+    const { status, dest } = extract(
+      tarball({ supabase: 'echo "2.0.0"' }),
+      "supabase"
+    );
+    expect(status).toBe(0);
+    expect(readdirSync(dest)).toEqual(["supabase"]);
+  });
+
+  it("Doppler CLI は doppler だけを置き、LICENSE・completions は展開しない", () => {
+    const { status, dest } = extract(
+      tarball({
+        doppler: 'echo "3.77.1"',
+        LICENSE: "",
+        "README.md": "",
+        "completions/doppler.bash": "",
+      }),
+      "doppler"
+    );
+    expect(status).toBe(0);
+    expect(readdirSync(dest)).toEqual(["doppler"]);
+  });
+
+  it("tarball に CLI の実行ファイルが無ければ失敗する", () => {
+    const { status } = extract(tarball({ LICENSE: "" }), "supabase");
+    expect(status).not.toBe(0);
+  });
+});
+
+describe("used_versions", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "install-cli-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function usedVersions(workflows: Record<string, string>) {
+    const files = Object.entries(workflows).map(([name, body]) => {
+      const file = path.join(dir, name);
+      writeFileSync(file, body);
+      return file;
+    });
+    return call('used_versions "$@"', files);
+  }
+
+  it("ワークフローで install-cli に渡している CLI と版を、重複なく1行ずつ返す（デプロイのジョブでしか使わない版も含む）", () => {
+    const { status, stdout } = usedVersions({
+      "deploy.yml": `
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.116.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
+  deploy-staging:
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.102.0 }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
+`,
+      "sync.yml": `
+      - uses: ./ci-tools/.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
+`,
+    });
+    expect(status).toBe(0);
+    expect(stdout.trim().split("\n")).toEqual([
+      "doppler 3.77.1",
+      "supabase 2.102.0",
+      "supabase 2.116.0",
+    ]);
+  });
+
+  it("1つも見つからなければ失敗する（書き方が変わって検査が空振りしないように）", () => {
+    expect(usedVersions({ "x.yml": "jobs: {}\n" }).status).not.toBe(0);
+  });
+
+  it("install-cli の使用箇所の with: が読めなければ失敗する（読めない版を検査から漏らさない）", () => {
+    const { status, output } = usedVersions({
+      "deploy.yml": `
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.116.0 }
+      - uses: ./.github/actions/install-cli
+        with:
+          tool: supabase
+          version: 2.102.0
+`,
+    });
+    expect(status).not.toBe(0);
+    expect(output).toContain("deploy.yml");
+  });
+
+  it("クォート・行末のコメント・@ref 付きの uses: も install-cli の使用箇所として読む", () => {
+    const { status, stdout } = usedVersions({
+      "deploy.yml": `
+      - uses: "./.github/actions/install-cli" # コメント
+        with: { tool: supabase, version: 2.102.0 }
+      - uses: wknd-studio/brand-closed-ec/.github/actions/install-cli@develop
+        with: { tool: doppler, version: 3.77.1 }
+`,
+    });
+    expect(status).toBe(0);
+    expect(stdout.trim().split("\n")).toEqual([
+      "doppler 3.77.1",
+      "supabase 2.102.0",
+    ]);
+  });
+
+  it("このリポジトリのワークフローの install-cli の使用箇所を、すべて読み取れる", () => {
+    const workflows = readdirSync(".github/workflows").map((f) =>
+      path.join(".github/workflows", f)
+    );
+    const { status, stdout } = call('used_versions "$@"', workflows);
+    expect(status).toBe(0);
+    expect(stdout.trim()).not.toBe("");
   });
 });

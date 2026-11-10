@@ -2,14 +2,12 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { createUser } from "@/use-cases/create-user";
-import { syncAdminMembership } from "@/use-cases/sync-admin-membership";
-import { removeAdminMembership } from "@/use-cases/remove-admin-membership";
-import { createAdminClient } from "@/infrastructure/supabase/server-admin";
-import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
-import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
-import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";
-import { SupabaseAdminMembershipRepository } from "@/infrastructure/supabase/supabase-admin-membership-repository";
+import { createUser } from "@/composition/onboarding";
+import { findMemberByClerkUserId } from "@/composition/member";
+import {
+  syncAdminMembership,
+  removeAdminMembership,
+} from "@/composition/admin-membership";
 
 function getAdminOrganizationId(): string {
   const orgId = process.env.CLERK_ADMIN_ORGANIZATION_ID;
@@ -58,18 +56,12 @@ export async function POST(req: Request) {
     };
 
     try {
-      await createUser(
-        {
-          clerkUserId: data.id,
-          email: data.email_addresses[0]?.email_address ?? "",
-          firstName: data.first_name ?? "",
-          lastName: data.last_name ?? "",
-        },
-        {
-          userRepo: new SupabaseUserRepository(createAdminClient()),
-          accountGateway: new ClerkAccountGateway(),
-        }
-      );
+      await createUser({
+        clerkUserId: data.id,
+        email: data.email_addresses[0]?.email_address ?? "",
+        firstName: data.first_name ?? "",
+        lastName: data.last_name ?? "",
+      });
     } catch (err) {
       // 2xx以外を返してClerk（svix）に再送させる
       Sentry.captureException(err, {
@@ -89,9 +81,7 @@ export async function POST(req: Request) {
 
     // 退会処理（withdraw.ts）を通らずにClerkアカウントが消えると、課金が続き会員も有効なまま残る。
     // 解約の判断は業務判断を伴うため自動で退会扱いにはせず、運営者に通知だけする（#531）
-    const user = await new SupabaseUserRepository(
-      createAdminClient()
-    ).findByClerkUserId(data.id);
+    const user = await findMemberByClerkUserId(data.id);
     if (user) {
       Sentry.captureMessage(
         "退会処理を通らずにClerkアカウントが削除されました。Stripeのサブスクを解約し、users.deleted_atを設定してください",
@@ -120,20 +110,12 @@ export async function POST(req: Request) {
     };
 
     if (data.organization.id === getAdminOrganizationId()) {
-      await syncAdminMembership(
-        {
-          clerkUserId: data.public_user_data.user_id,
-          name: `${data.public_user_data.first_name ?? ""} ${data.public_user_data.last_name ?? ""}`.trim(),
-          email: data.public_user_data.identifier,
-          clerkRole: data.role,
-        },
-        {
-          adminUserRepo: new SupabaseAdminUserRepository(createAdminClient()),
-          adminMembershipRepo: new SupabaseAdminMembershipRepository(
-            createAdminClient()
-          ),
-        }
-      );
+      await syncAdminMembership({
+        clerkUserId: data.public_user_data.user_id,
+        name: `${data.public_user_data.first_name ?? ""} ${data.public_user_data.last_name ?? ""}`.trim(),
+        email: data.public_user_data.identifier,
+        clerkRole: data.role,
+      });
     }
   }
 
@@ -144,15 +126,9 @@ export async function POST(req: Request) {
     };
 
     if (data.organization.id === getAdminOrganizationId()) {
-      await removeAdminMembership(
-        { clerkUserId: data.public_user_data.user_id },
-        {
-          adminUserRepo: new SupabaseAdminUserRepository(createAdminClient()),
-          adminMembershipRepo: new SupabaseAdminMembershipRepository(
-            createAdminClient()
-          ),
-        }
-      );
+      await removeAdminMembership({
+        clerkUserId: data.public_user_data.user_id,
+      });
     }
   }
 

@@ -17,7 +17,7 @@ lint（`eslint.config.mjs`）のエラーメッセージはこのファイルを
 | `src/infrastructure/` | ポートと Query Service の実装、外部サービスのクライアント生成、DBの行・外部APIのレスポンスと domain の間の変換（mapper）                                   | 業務ルールの判定（domain を呼んで使う）。手順（→ use-case）                                |
 | `src/composition/`    | 組み立て。repository・gateway・Query Service の実装を生成し、use-case に注入して返す                                                                       | 業務ルール・手順・クエリ                                                                   |
 | `src/app/`            | Next.js のルーティング（page・layout・Route Handler・Server Action）。入力の受け取り・認証済みユーザーの取得・composition が返すものの呼び出し・画面の表示 | 業務判断。DB・外部SDKの直接利用。repository・infrastructure の直接利用                     |
-| `src/components/`     | UI部品。props で受け取った DTO を表示する                                                                                                                  | データの取得・書き込み。業務判断                                                           |
+| `src/components/`     | UI部品。props で受け取った DTO を表示する。業務の状態を持つ Client Component（Provider 等。Server Action は props で受け取って呼ぶ）                       | データの取得・書き込みを自分で行うこと（Server Action の import を含む）。業務判断         |
 | `src/lib/`            | 業務を知らない共通部品（「src/lib に置くもの・置かないもの」を参照）                                                                                       | DBアクセス・業務ルール・組み立て・Server Action                                            |
 | `src/emails/`         | メールテンプレート（React Email）。props を表示するだけ                                                                                                    | 送信処理（→ `src/infrastructure/resend/`）。データの取得                                   |
 | `src/types/`          | 生成物（`database.types.ts`。`supabase gen types` で作る DB の型）                                                                                         | 手で書く型（各層の中に置く）                                                               |
@@ -70,6 +70,35 @@ repository を通さない直接クエリは、domain や repository にある�
 - **app は composition が返す use-case・Query Service だけを使う**。app の中で `new SupabaseOrderRepository(...)` のように実装を生成しない
 - composition はサーバー側（Server Action・Route Handler・Server Component・middleware）からだけ使う。Client Component から import しない。use-case の依存（deps）を束ねた関数や、Query Service のインスタンスを返す
 - composition に条件分岐を持つのは、環境による実装の差し替え（E2Eで外部送信を止める等）だけにする
+
+### 組み立て関数の形
+
+ファイルは機能ごと（`src/composition/address.ts`・`order.ts`・`onboarding.ts` 等）に分ける。各ファイルは、**use-case と同じ名前・同じ入力で、`deps` だけを省いた関数**を export する（#449）。
+
+```ts
+// src/composition/member.ts
+export function withdraw(input: WithdrawInput) {
+  // Supabase のクライアントは呼び出しごとに1回作り、同じ組み立ての repository で共有する
+  const supabase = createAdminClient();
+  return withdrawUseCase(input, {
+    userRepo: new SupabaseUserRepository(supabase),
+    orderRepo: new SupabaseOrderRepository(supabase),
+    subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
+    subscriptionGateway: new StripeSubscriptionGateway(),
+    accountGateway: new ClerkAccountGateway(),
+    errorReporter: new SentryErrorReporter(),
+  });
+}
+
+// src/app/(member)/settings/actions.ts
+import { withdraw } from "@/composition/member";
+await withdraw({ clerkUserId: userId });
+```
+
+- 実装はモジュールの読み込み時ではなく、関数の呼び出しのたびに生成する（環境変数の無いビルド時・テストで読み込んでも失敗しないため）
+- 同じ組み立てを複数の use-case で使うときは、ファイルの中に `deps` を作る関数を置いて共有してよい（例: `src/composition/order-payment.ts` の `paidOrderDeps`）
+- 入口から使われないものを同じファイルに入れない。Webhook の route が `src/composition/order.ts`（注文の作成。Sanity を使う）を読み込まないよう、決済完了の組み立ては `src/composition/order-payment.ts` に分けている
+- Webhook の署名検証など、use-case を通さずに Route Handler の入口で使う外部の操作は、関数として `src/infrastructure/` に置き（例: `src/infrastructure/stripe/stripe-webhook.ts`）、composition から re-export する（`src/composition/stripe-webhook.ts`）
 
 ## 外部サービスのクライアント
 
@@ -145,6 +174,7 @@ use-case の中に `if (user.rankCode === "gold" && ...)` のような判定を�
 
 - ルーティング・入力の受け取り・表示 → `src/app/`（Server Action は `src/app/**/actions.ts`）
 - UI部品 → `src/components/`
+- 業務の状態を持つ Client Component（お気に入りの `FavoritesProvider` 等）→ `src/components/`。Server Action は自分で import せず、Server Component（layout・page）から props で受け取る（例: `src/app/(member)/layout.tsx` → `src/components/favorites/favorites-provider.tsx`。#548）
 - メールの見た目 → `src/emails/`
 - 業務を知らない共通部品 → `src/lib/`
 

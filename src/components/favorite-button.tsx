@@ -1,6 +1,6 @@
 "use client";
 
-import { useFavorites } from "@/lib/favorites/context";
+import { useFavorites } from "@/components/favorites/favorites-provider";
 
 export default function FavoriteButton({
   sanityProductId,
