@@ -36,11 +36,63 @@ function makeClerk(existingEmails: string[] = []): SeedClerk & {
   };
 }
 
-function makeSupabase(error: { message: string } | null = null) {
-  const upsert = vi.fn(async () => ({ error }));
-  const supabase: SeedSupabase = { from: vi.fn(() => ({ upsert })) };
-  return { supabase, upsert };
+type FakeRow = Record<string, unknown> & {
+  id: string;
+  clerk_user_id: string;
+  deleted_at: string | null;
+};
+type FakeError = { code?: string; message: string };
+
+// seed-users.ts が使う「有効な行を更新して、無ければ作る」の呼び出しだけを、メモリ上の行で再現する
+function makeSupabase({
+  rows = [],
+  failEmails = [],
+}: { rows?: FakeRow[]; failEmails?: string[] } = {}) {
+  const failure = (row: Record<string, unknown>): FakeError | null =>
+    failEmails.includes(row.email as string)
+      ? { message: "write failed" }
+      : null;
+
+  const from = vi.fn((table: string) => {
+    expect(table).toBe("users");
+    return {
+      update: (fields: Record<string, unknown>) => ({
+        eq: (column: string, value: unknown) => ({
+          is: (nullColumn: string, nullValue: null) => ({
+            select: async () => {
+              const error = failure(fields);
+              if (error) return { data: null, error };
+              const matched = rows.filter(
+                (r) => r[column] === value && r[nullColumn] === nullValue
+              );
+              for (const r of matched) Object.assign(r, fields);
+              return { data: matched.map((r) => ({ id: r.id })), error: null };
+            },
+          }),
+        }),
+      }),
+      insert: (row: Record<string, unknown>) => ({
+        select: () => ({
+          single: async () => {
+            const error = failure(row);
+            if (error) return { data: null, error };
+            const created = {
+              id: `row_${rows.length + 1}`,
+              deleted_at: null,
+              ...row,
+            } as FakeRow;
+            rows.push(created);
+            return { data: { id: created.id }, error: null };
+          },
+        }),
+      }),
+    };
+  });
+  return { supabase: { from } as unknown as SeedSupabase, rows };
 }
+
+const MEMBER_SEED_USERS = SEED_USERS.filter((u) => u.role === "member");
+const ADMIN_SEED_USERS = SEED_USERS.filter((u) => u.role === "admin");
 
 function makeLogger() {
   return { log: vi.fn(), error: vi.fn() };
@@ -118,9 +170,9 @@ describe("seedUsers", () => {
     }
   });
 
-  it("Supabase の users に各アカウントを upsert する", async () => {
-    const clerk = makeClerk([SEED_USERS[0].email]);
-    const { supabase, upsert } = makeSupabase();
+  it("会員7人の users の行を、オンボーディングを終えた状態で作る", async () => {
+    const clerk = makeClerk([MEMBER_SEED_USERS[0].email]);
+    const { supabase, rows } = makeSupabase();
 
     await seedUsers({
       clerk,
@@ -129,33 +181,138 @@ describe("seedUsers", () => {
       logger: makeLogger(),
     });
 
-    expect(supabase.from).toHaveBeenCalledWith("users");
-    expect(upsert).toHaveBeenCalledTimes(SEED_USERS.length);
-    expect(upsert).toHaveBeenCalledWith(
+    expect(MEMBER_SEED_USERS).toHaveLength(7);
+    expect(rows).toHaveLength(MEMBER_SEED_USERS.length);
+    expect(rows[0]).toEqual(
       expect.objectContaining({
-        clerk_user_id: `user_existing_${SEED_USERS[0].email}`,
-        email: SEED_USERS[0].email,
-        rank: SEED_USERS[0].rank,
+        clerk_user_id: `user_existing_${MEMBER_SEED_USERS[0].email}`,
+        email: MEMBER_SEED_USERS[0].email,
+        rank_code: "starter",
+        member_type: "individual",
         onboarding_completed: true,
-      }),
-      { onConflict: "clerk_user_id" }
+      })
     );
+    expect(rows.map((r) => r.rank_code)).toEqual([
+      "starter",
+      "basic",
+      "standard",
+      "pro",
+      "advanced",
+      "premium",
+      "enterprise",
+    ]);
+    expect(rows[0]).not.toHaveProperty("rank");
+  });
+
+  it("既存の有効な行は更新し、何度実行しても行を増やさない", async () => {
+    const clerk = makeClerk(SEED_USERS.map((u) => u.email));
+    const { supabase, rows } = makeSupabase({
+      rows: [
+        {
+          id: "row_webhook",
+          clerk_user_id: `user_existing_${MEMBER_SEED_USERS[1].email}`,
+          deleted_at: null,
+          email: MEMBER_SEED_USERS[1].email,
+          rank_code: "starter",
+          onboarding_completed: false,
+        },
+      ],
+    });
+
+    for (let i = 0; i < 2; i++) {
+      await seedUsers({
+        clerk,
+        supabase,
+        password: PASSWORD,
+        logger: makeLogger(),
+      });
+    }
+
+    expect(rows).toHaveLength(MEMBER_SEED_USERS.length);
+    expect(rows.find((r) => r.id === "row_webhook")).toEqual(
+      expect.objectContaining({
+        rank_code: "basic",
+        onboarding_completed: true,
+      })
+    );
+  });
+
+  it("運営者は users の行を作らず、Clerk の publicMetadata.role を admin にするだけ", async () => {
+    const clerk = makeClerk();
+    const { supabase, rows } = makeSupabase();
+
+    await seedUsers({
+      clerk,
+      supabase,
+      password: PASSWORD,
+      logger: makeLogger(),
+    });
+
+    expect(ADMIN_SEED_USERS).toHaveLength(3);
+    const adminEmails = ADMIN_SEED_USERS.map((u) => u.email);
+    expect(rows.filter((r) => adminEmails.includes(r.email as string))).toEqual(
+      []
+    );
+    for (const def of ADMIN_SEED_USERS) {
+      expect(clerk.users.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAddress: [def.email],
+          publicMetadata: { role: "admin" },
+        })
+      );
+    }
+    for (const def of MEMBER_SEED_USERS) {
+      expect(clerk.users.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailAddress: [def.email],
+          publicMetadata: {},
+        })
+      );
+    }
+  });
+
+  it("Supabase への書き込みが1件でも失敗したら、残りを続けたうえでエラーにする", async () => {
+    const logger = makeLogger();
+    const { supabase, rows } = makeSupabase({
+      failEmails: [MEMBER_SEED_USERS[0].email],
+    });
+
+    await expect(
+      seedUsers({ clerk: makeClerk(), supabase, password: PASSWORD, logger })
+    ).rejects.toThrow(/1件/);
+    expect(rows).toHaveLength(MEMBER_SEED_USERS.length - 1);
+    expect(allOutput(logger)).not.toContain("完了しました");
+  });
+
+  it("Clerk の操作が失敗したアカウントがあれば、残りを続けたうえでエラーにする", async () => {
+    const clerk = makeClerk();
+    clerk.users.createUser.mockRejectedValueOnce(new Error("clerk down"));
+    const logger = makeLogger();
+    const { supabase, rows } = makeSupabase();
+
+    await expect(
+      seedUsers({ clerk, supabase, password: PASSWORD, logger })
+    ).rejects.toThrow(/1件/);
+    expect(rows).toHaveLength(MEMBER_SEED_USERS.length - 1);
+    expect(allOutput(logger)).toContain("clerk down");
   });
 
   it("出力にパスワードを出さない（作成・更新・Supabase の失敗のどの場合も）", async () => {
     const logger = makeLogger();
-    const { supabase } = makeSupabase({ message: "upsert failed" });
+    const { supabase } = makeSupabase({ failEmails: [SEED_USERS[0].email] });
 
-    await seedUsers({
-      clerk: makeClerk([SEED_USERS[0].email]),
-      supabase,
-      password: PASSWORD,
-      logger,
-    });
+    await expect(
+      seedUsers({
+        clerk: makeClerk([SEED_USERS[0].email]),
+        supabase,
+        password: PASSWORD,
+        logger,
+      })
+    ).rejects.toThrow();
 
     const output = allOutput(logger);
     expect(output).toContain(SEED_USERS[0].email);
-    expect(output).toContain("upsert failed");
+    expect(output).toContain("write failed");
     expect(output).not.toContain(PASSWORD);
     expect(output).not.toMatch(/password/i);
   });
@@ -182,5 +339,14 @@ describe("runSeedUsers", () => {
     expect(clerk.users.createUser).toHaveBeenCalledWith(
       expect.objectContaining({ password: PASSWORD })
     );
+  });
+
+  it("シードに失敗したアカウントがあれば、エラーで終わる（終了コードを0にしない）", async () => {
+    const { supabase } = makeSupabase({ failEmails: [SEED_USERS[0].email] });
+    const connect = vi.fn(() => ({ clerk: makeClerk(), supabase }));
+
+    await expect(
+      runSeedUsers({ SEED_USER_PASSWORD: PASSWORD }, connect, makeLogger())
+    ).rejects.toThrow(/1件/);
   });
 });
