@@ -9,11 +9,15 @@ Clerk / Sanity は local と stg で共用のため、一度シードすれば�
 
 ## テストアカウント（`scripts/seed-users.ts`）
 
-各ランク1人ずつ + 管理者3人。存在しなければClerk側も新規作成した上でSupabaseにupsertする（べき等）。
+各ランク1人ずつの会員 + 管理者3人。存在しなければClerk側も新規作成する（べき等）。
+
+- **会員**: Supabase の `users` に、オンボーディングを終えた状態（個人・`rank_code` はランクどおり・`onboarding_completed = true`・電話番号 `09012345678`・請求基準日 1日）の行を入れる。`clerk_user_id` の有効な行があれば更新し、無ければ作る（user.created Webhook が作った未入会の行も、この状態に上書きする）。退会済みの行は触らない
+- **管理者**: `users` の行は作らない。Clerk の `publicMetadata.role = "admin"` だけ
+- 1件でも失敗したら、残りのアカウントを続けたうえで終了コード1で終わる（「完了しました」は出ない）
 
 **パスワード**は全アカウント共通で、Doppler の `dev` と `stg` の両方の config の `SEED_USER_PASSWORD` に同じ値で入っている（Clerk を local と stg で共用しているため）。リポジトリには書かない。実行するたびに既存のアカウントのパスワードもこの値に更新するので、値を変えたら `dev` と `stg` の両方を同じ値に変えてから `task supabase:seed-users:stg` を実行し直す。`SEED_USER_PASSWORD` が未設定ならアカウントを作らずに止まる。
 
-| メールアドレス                       | 種別   | rank       |
+| メールアドレス                       | 種別   | rank_code  |
 | ------------------------------------ | ------ | ---------- |
 | info+test_starter@wknd-studio.com    | 会員   | starter    |
 | info+test_basic@wknd-studio.com      | 会員   | basic      |
