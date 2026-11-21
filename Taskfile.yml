@@ -76,6 +76,12 @@ tasks:
     cmds:
       - git worktree list
 
+  secrets:check:
+    desc: GitHubのsecretsに develop・main の .github/ から参照されていないものが無いか、environment のデプロイできるブランチが production=main・staging=develop だけかを確かめる（リポジトリの管理者の権限が要る。#673）
+    cmds:
+      - git fetch -q origin develop main
+      - pnpm -s tsx scripts/check-github-secrets.ts
+
   deps:graph:
     desc: オープンなissueの依存グラフをHTMLで開く（`-- --json` でAI・スクリプト向けのJSONを出力）。依存の正はGitHubのBlocked by
     cmds:
