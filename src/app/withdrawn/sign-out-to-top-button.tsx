@@ -14,6 +14,7 @@ export function SignOutToTopButton() {
       await signOut();
     } finally {
       // signOutが失敗しても、退会済みのためmiddlewareで保護ページには入れない
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- ログアウト後のClerkの状態をクライアントに残さないため、ページを読み込み直して移る
       window.location.assign("/");
     }
   }

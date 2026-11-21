@@ -18,6 +18,7 @@ export default function WithdrawalDialog() {
       // ここでsignOutすると、Clerkがこの保護ページへ送るServer Actionをmiddlewareが退会済みとして
       // /withdrawn へリダイレクトし、signOutが終わらない。Clerkのセッションはbanで失効済みのため、
       // 公開ページの /withdrawn へ移り、そこでログアウトする
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- banで失効したClerkのセッションをクライアントに残さないため、ページを読み込み直して移る
       window.location.assign("/withdrawn");
     });
   }
