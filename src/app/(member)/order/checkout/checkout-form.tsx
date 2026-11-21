@@ -20,6 +20,7 @@ type Props = {
   shippingAddresses: AddressDto[];
   billingAddresses: AddressDto[];
   hasOutOfStock: boolean;
+  hasNotAccessible: boolean;
   fixedTotal: number;
 };
 
@@ -31,6 +32,7 @@ export default function CheckoutForm({
   shippingAddresses,
   billingAddresses,
   hasOutOfStock,
+  hasNotAccessible,
   fixedTotal,
 }: Props) {
   const [shippingId, setShippingId] = useState(defaultId(shippingAddresses));
@@ -39,7 +41,11 @@ export default function CheckoutForm({
   const [orderError, setOrderError] = useState<string | null>(null);
 
   const canOrder =
-    !hasOutOfStock && shippingId !== "" && billingId !== "" && fixedTotal >= 0;
+    !hasOutOfStock &&
+    !hasNotAccessible &&
+    shippingId !== "" &&
+    billingId !== "" &&
+    fixedTotal >= 0;
 
   async function handleOrder() {
     setOrderError(null);
@@ -65,6 +71,12 @@ export default function CheckoutForm({
       {hasOutOfStock && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
           在庫切れの商品が含まれています。カートから削除してから注文してください。
+        </p>
+      )}
+
+      {hasNotAccessible && (
+        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+          現在のランクでは購入できない商品が含まれています。カートから削除してから注文してください。
         </p>
       )}
 
