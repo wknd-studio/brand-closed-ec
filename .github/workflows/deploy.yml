@@ -375,12 +375,18 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Sync Wrangler Secrets & Deploy
-        # SUPABASE_DB_URL（postgres ロールのパスワード入り）はマイグレーションにしか使わないため、Worker には上げない（#673）
+        # Worker の secrets には、Worker 用の config（stg）の値だけを上げる。管理用のトークン（SUPABASE_DB_URL・
+        # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、stg を引き継いだデプロイ用の config（stg_deploy。
+        # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md）。
+        # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
+        # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
+        shell: bash
         run: |
-          doppler run -- sh -c 'doppler secrets download --no-file --format json | jq "del(.SUPABASE_DB_URL)" | pnpm exec wrangler secret bulk --config wrangler.stg.jsonc'
+          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | doppler run -- pnpm exec wrangler secret bulk --config wrangler.stg.jsonc
           doppler run -- pnpm exec wrangler deploy --config wrangler.stg.jsonc
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
       - name: Detect Sanity Studio changes
         uses: dorny/paths-filter@v3
         id: sanity-filter
@@ -421,12 +427,18 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Sync Wrangler Secrets & Deploy
-        # SUPABASE_DB_URL（postgres ロールのパスワード入り）はマイグレーションにしか使わないため、Worker には上げない（#673）
+        # Worker の secrets には、Worker 用の config（prod）の値だけを上げる。管理用のトークン（SUPABASE_DB_URL・
+        # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、prod を引き継いだデプロイ用の config（prod_deploy。
+        # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md）。
+        # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
+        # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
+        shell: bash
         run: |
-          doppler run -- sh -c 'doppler secrets download --no-file --format json | jq "del(.SUPABASE_DB_URL)" | pnpm exec wrangler secret bulk --config wrangler.prod.jsonc'
+          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | doppler run -- pnpm exec wrangler secret bulk --config wrangler.prod.jsonc
           doppler run -- pnpm exec wrangler deploy --config wrangler.prod.jsonc
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
 
   e2e:
     name: E2E Tests (stg)

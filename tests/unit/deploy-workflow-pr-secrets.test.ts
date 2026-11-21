@@ -20,7 +20,6 @@ function secretsOf(id: string): string[] {
 // PRのCI（Dependabotのセキュリティ更新のPRを含む）で、人間が見る前の依存と一緒に動くジョブ。
 // 管理用のトークンが入っていないCI専用のDopplerのconfigだけを読む（#671）
 const PR_JOBS = ["integration", "build", "e2e-pr"];
-const DEPLOY_JOBS = ["deploy-stg", "deploy-prod", "e2e"];
 
 describe("PRのCIが読むDopplerのconfig", () => {
   it.each(PR_JOBS)(
@@ -34,13 +33,16 @@ describe("PRのCIが読むDopplerのconfig", () => {
     expect(secretsOf(id)).toEqual(["DOPPLER_TOKEN_PR"]);
   });
 
-  it.each(DEPLOY_JOBS)(
-    "%s は今までどおりenvironmentのDOPPLER_TOKENを読む",
-    (id) => {
-      expect(workflow.jobs[id].environment).toBeDefined();
-      expect(secretsOf(id)).toEqual(["DOPPLER_TOKEN"]);
-    }
-  );
+  // DOPPLER_TOKEN はデプロイ用の config（stg_deploy・prod_deploy）、DOPPLER_TOKEN_WORKER は
+  // Worker に上げる値だけの config（stg・prod）を読む（#672）
+  it.each([
+    ["deploy-stg", ["DOPPLER_TOKEN", "DOPPLER_TOKEN_WORKER"]],
+    ["deploy-prod", ["DOPPLER_TOKEN", "DOPPLER_TOKEN_WORKER"]],
+    ["e2e", ["DOPPLER_TOKEN"]],
+  ])("%s はenvironmentのトークンだけを読む", (id, expected) => {
+    expect(workflow.jobs[id].environment).toBeDefined();
+    expect(secretsOf(id).sort()).toEqual(expected);
+  });
 
   it("Integration Tests はメールを送らない（CI専用のconfigにRESEND_API_KEYを入れないため）", () => {
     const run = workflow.jobs.integration.steps.find(

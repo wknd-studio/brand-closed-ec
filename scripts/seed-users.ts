@@ -8,7 +8,7 @@
  *
  * 実行:
  *   task supabase:seed-users        （dev config → ローカルDB）
- *   doppler run -c stg -- pnpm tsx scripts/seed-users.ts  （stg config → stg Supabase）
+ *   doppler run -c stg_deploy -- pnpm tsx scripts/seed-users.ts  （stg_deploy config → stg Supabase。SEED_USER_PASSWORD はデプロイ用の config にある）
  *
  * 投入するアカウント一覧: docs/seed-data.md
  */

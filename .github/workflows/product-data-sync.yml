@@ -40,7 +40,7 @@ jobs:
     # アプリ本体と同じ「main = 本番 / develop = stg」の昇格フローに揃える。ワークフローと同じ
     # コミット（main なら本番に出たコード）で動くため、未リリースのスクレイパーが本番Sanityに書き込まない。
     # DOPPLER_TOKENはGitHub Environmentごとに登録した、各Doppler config
-    # （production → prod / staging → stg）のService Token（#314）
+    # （production → prod_deploy / staging → stg_deploy。SANITY_WRITE_TOKEN はデプロイ用の config にある。#672）のService Token（#314）
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     concurrency:

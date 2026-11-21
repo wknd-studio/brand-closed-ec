@@ -3,7 +3,7 @@
 `task seed`（またはstg向けは `task supabase:seed-users:stg` + `task sanity:seed`）で投入される開発用データの一覧。
 定義の実体は `scripts/seed-users.ts` と `scripts/seed-products.ts`。
 
-Clerk / Sanity は local と stg で共用のため、一度シードすれば両方の環境で同じデータが使える。Supabaseのみ local/stg でプロジェクトが分かれているため、`doppler run -c stg` の有無で投入先を切り替える。
+Clerk / Sanity は local と stg で共用のため、一度シードすれば両方の環境で同じデータが使える。Supabaseのみ local/stg でプロジェクトが分かれているため、`doppler run -c stg_deploy` の有無で投入先を切り替える（`SEED_USER_PASSWORD` はデプロイ用の config `stg_deploy` にだけある。docs/cicd.md）。
 
 ---
 
