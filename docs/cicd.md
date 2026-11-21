@@ -81,11 +81,39 @@ PR の CI（Dependabot のセキュリティ更新の PR を含む）では、�
 
 Worker の実行環境（`process.env`）に管理用のトークンがあると、アプリの穴（issue #666 の `next` の RCE のようなもの）から、本番のインフラを操作できるトークンまで盗まれる。そのため Doppler の config を、Worker に上げる値と、デプロイだけに使う値に分ける（#672）。
 
+stg の例。本番は `production` environment → `prod`・`prod_deploy` → 本番のサービスで、同じ形。
+
+```mermaid
+flowchart LR
+  subgraph GH["GitHub の secrets"]
+    TW["staging environment<br/>DOPPLER_TOKEN_WORKER"]
+    TD["staging environment<br/>DOPPLER_TOKEN"]
+    TP["Actions・Dependabot secrets<br/>DOPPLER_TOKEN_PR"]
+  end
+  subgraph DP["Doppler（brand-closed-ec）"]
+    STG["stg（root）= Worker 用<br/>Clerk・Supabase の service role・Stripe<br/>Resend・SANITY_API_TOKEN・NEXT_PUBLIC_*"]
+    DEP["stg_deploy（branch）= デプロイ用<br/>stg の値 + SUPABASE_DB_URL・CLOUDFLARE_*<br/>SENTRY_AUTH_TOKEN・SANITY_AUTH/WRITE_TOKEN・E2E_*"]
+    CI["ci（root・別の環境）<br/>PR の CI 用。管理用の値なし"]
+  end
+  subgraph JOB["読むジョブ・ステップ"]
+    SYNC["Sync: wrangler secret bulk<br/>（filter-worker-env.jq で検査）"]
+    DJOB["Migrate DB・Build・wrangler deploy<br/>Sanity Studio・E2E (stg)・商品データの同期"]
+    PRJ["PR の CI<br/>Integration・Build・E2E (PR)"]
+  end
+  subgraph SVC["使う先"]
+    WK["Worker（stg）の secrets"]
+    RT["Clerk・Stripe・Supabase（API）<br/>Resend・Sanity（読み取り）"]
+    INF["Supabase の DB・Cloudflare<br/>Sentry・Sanity（書き込み）"]
+    LOC["ジョブ内のローカル Supabase<br/>CI 用の Clerk・Sanity 等"]
+  end
+  TW --> STG --> SYNC --> WK -- 実行時に呼ぶ --> RT
+  TD --> DEP --> DJOB --> INF
+  STG -. 全部を引き継ぐ .-> DEP
+  DEP -. wrangler の認証（CLOUDFLARE_API_TOKEN）だけ .-> SYNC
+  TP --> CI --> PRJ --> LOC
 ```
-stg（root）: Worker が実行時に使う値だけ ──（DOPPLER_TOKEN_WORKER）──→ wrangler secret bulk → Worker の secrets
-  └─ stg_deploy（branch。stg の値を引き継ぐ）: + 管理用の値 ──（DOPPLER_TOKEN）──→ Migrate DB・Build・wrangler deploy・Sanity Studio・E2E (stg)・商品データの同期
-prod / prod_deploy も同じ
-```
+
+Worker に上がるのは `stg` の値だけで、`stg_deploy` にしかない管理用の値は Worker に届かない。
 
 - **root の `stg`・`prod`** に置くもの: Worker が実行時に使う値（Clerk・Supabase の service role・Stripe・Resend・`SANITY_API_TOKEN`・`NEXT_PUBLIC_*`）
 - **branch の `stg_deploy`・`prod_deploy`** にだけ置くもの: `SUPABASE_DB_URL`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`・`SANITY_AUTH_TOKEN`・`SANITY_WRITE_TOKEN`・`SUPABASE_PROJECT_REF`・`E2E_USER_EMAIL`・`E2E_USER_PASSWORD`・`SEED_USER_PASSWORD`。branch は root の値を引き継ぐので、実行時の値を二重に置かなくてよい
