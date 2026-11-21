@@ -150,6 +150,7 @@ function snapshot(
     unitPrice: Money.of(10_000),
     isNegotiable: false,
     minRank: "standard",
+    availability: "available",
     paymentTiming: "at_order",
     ...props,
   };

@@ -6,6 +6,10 @@ import { memberOrderQueryService } from "@/composition/member-order-query";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { groupCartItemsByPaymentTiming } from "@/lib/cart/types";
 import { catalogQueryService } from "@/composition/catalog-query";
+import {
+  selectNotAccessibleProductIds,
+  sumCheckoutFixedTotal,
+} from "@/domain/services/checkout-access";
 import CheckoutForm from "./checkout-form";
 
 type LineItem = {
@@ -15,6 +19,7 @@ type LineItem = {
   quantity: number;
   unitPrice: number | null;
   isOutOfStock: boolean;
+  isNotAccessible: boolean;
 };
 
 function LineItemList({ items }: { items: LineItem[] }) {
@@ -39,13 +44,20 @@ function LineItemList({ items }: { items: LineItem[] }) {
             <div className="space-y-0.5">
               <p className="text-sm font-medium">{item.productName}</p>
               <p className="text-xs text-gray-500">
-                {item.unitPrice !== null
-                  ? `¥${item.unitPrice.toLocaleString()}`
-                  : "価格要相談"}{" "}
+                {item.isNotAccessible
+                  ? "—"
+                  : item.unitPrice !== null
+                    ? `¥${item.unitPrice.toLocaleString()}`
+                    : "価格要相談"}{" "}
                 × {item.quantity}
               </p>
               {item.isOutOfStock && (
                 <p className="text-xs font-medium text-red-500">在庫切れ</p>
+              )}
+              {item.isNotAccessible && (
+                <p className="text-xs font-medium text-red-500">
+                  現在のランクでは購入できません
+                </p>
               )}
             </div>
             <p className="text-sm font-medium tabular-nums">
@@ -77,12 +89,18 @@ export default async function CheckoutPage() {
     productIds: cart.items.map((i) => i.productId),
   });
 
+  const notAccessibleIds = selectNotAccessibleProductIds(
+    cart.items.map((i) => i.productId),
+    products
+  );
+
   const lineItems = cart.items.map((item) => {
     const product = products.find((p) => p.id === item.productId);
     return {
       ...item,
       unitPrice: product?.unitPrice ?? null,
       isOutOfStock: product?.isOutOfStock ?? false,
+      isNotAccessible: notAccessibleIds.includes(item.productId),
       productName: product?.name ?? item.productName,
       thumbnail: product?.thumbnail ?? item.thumbnail,
       // 表示用のグループ分けはサーバー側の最新payment_timingを根拠にする
@@ -92,10 +110,8 @@ export default async function CheckoutPage() {
   });
 
   const hasOutOfStock = lineItems.some((i) => i.isOutOfStock);
-  const fixedTotal = lineItems.reduce((sum, item) => {
-    if (item.unitPrice === null) return sum;
-    return sum + item.unitPrice * item.quantity;
-  }, 0);
+  const hasNotAccessible = notAccessibleIds.length > 0;
+  const fixedTotal = sumCheckoutFixedTotal(lineItems);
   const hasNegotiable = lineItems.some((i) => i.unitPrice === null);
   const paymentTimingGroups = groupCartItemsByPaymentTiming(lineItems);
 
@@ -145,6 +161,7 @@ export default async function CheckoutPage() {
           shippingAddresses={shippingAddresses}
           billingAddresses={billingAddresses}
           hasOutOfStock={hasOutOfStock}
+          hasNotAccessible={hasNotAccessible}
           fixedTotal={fixedTotal}
         />
       </div>

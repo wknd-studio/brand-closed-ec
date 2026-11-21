@@ -3,7 +3,7 @@
 `task seed`（またはstg向けは `task supabase:seed-users:stg` + `task sanity:seed`）で投入される開発用データの一覧。
 定義の実体は `scripts/seed-users.ts` と `scripts/seed-products.ts`。
 
-Clerk / Sanity は local と stg で共用のため、一度シードすれば両方の環境で同じデータが使える。Supabaseのみ local/stg でプロジェクトが分かれているため、`doppler run -c stg` の有無で投入先を切り替える。
+Clerk / Sanity は local と stg で共用のため、一度シードすれば両方の環境で同じデータが使える。Supabaseのみ local/stg でプロジェクトが分かれているため、`doppler run -c stg_deploy` の有無で投入先を切り替える（`SEED_USER_PASSWORD` はデプロイ用の config `stg_deploy` にだけある。docs/cicd.md）。
 
 ---
 
@@ -11,9 +11,9 @@ Clerk / Sanity は local と stg で共用のため、一度シードすれば�
 
 各ランク1人ずつ + 管理者3人。存在しなければClerk側も新規作成した上でSupabaseにupsertする（べき等）。
 
-**パスワードはメールアドレスと全く同じ文字列。**
+**パスワード**は全アカウント共通で、Doppler の `dev` と `stg` の両方の config の `SEED_USER_PASSWORD` に同じ値で入っている（Clerk を local と stg で共用しているため）。リポジトリには書かない。実行するたびに既存のアカウントのパスワードもこの値に更新するので、値を変えたら `dev` と `stg` の両方を同じ値に変えてから `task supabase:seed-users:stg` を実行し直す。`SEED_USER_PASSWORD` が未設定ならアカウントを作らずに止まる。
 
-| メールアドレス（= パスワード）       | 種別   | rank       |
+| メールアドレス                       | 種別   | rank       |
 | ------------------------------------ | ------ | ---------- |
 | info+test_starter@wknd-studio.com    | 会員   | starter    |
 | info+test_basic@wknd-studio.com      | 会員   | basic      |

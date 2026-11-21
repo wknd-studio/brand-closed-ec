@@ -117,6 +117,9 @@ const BLOCKER_ITEM_ID = "00000000-0000-0000-0000-000000000039";
 const STRIPE_SESSION_ID = "cs_test_infra_001";
 const STRIPE_INVOICE_ID = "in_test_infra_001";
 
+// 状態を変えた主体（order_status_changes.changed_by）。このファイルでは保存の内容だけを確かめる
+const SYSTEM = { type: "system" } as const;
+
 const ALL_ORDER_IDS = [
   ORDER_ID,
   ORDER_ID_2,
@@ -237,7 +240,7 @@ describe("SupabaseOrderRepository", () => {
 
   describe("save() — 新規作成", () => {
     it("Order・OrderItem・OrderSettlementを保存し、明細を決済単位に紐付けられる", async () => {
-      await repo.save(makeOrder());
+      await repo.save(makeOrder(), SYSTEM);
 
       const { data: order } = await supabase
         .from("orders")
@@ -280,7 +283,8 @@ describe("SupabaseOrderRepository", () => {
             }),
           ],
           settlements: [],
-        })
+        }),
+        SYSTEM
       );
 
       const reloaded = await repo.findById(ORDER_ID_2);
@@ -345,7 +349,8 @@ describe("SupabaseOrderRepository", () => {
               stripeInvoiceId: STRIPE_INVOICE_ID,
             }),
           ],
-        })
+        }),
+        SYSTEM
       );
 
       const order = await repo.findByStripeInvoiceId(STRIPE_INVOICE_ID);
@@ -363,7 +368,8 @@ describe("SupabaseOrderRepository", () => {
       const order = await repo.findById(ORDER_ID);
       const paidAt = new Date(2026, 5, 13);
       await repo.save(
-        order!.applySettlement(order!.settlements[0]!.markPaid(paidAt))
+        order!.applySettlement(order!.settlements[0]!.markPaid(paidAt)),
+        SYSTEM
       );
 
       const reloaded = await repo.findById(ORDER_ID);
@@ -392,7 +398,8 @@ describe("SupabaseOrderRepository", () => {
     it("cancelledの決済単位に属する明細は含めない", async () => {
       const order = await repo.findById(ORDER_ID_3);
       await repo.save(
-        order!.applySettlement(order!.settlements[0]!.cancel(new Date()))
+        order!.applySettlement(order!.settlements[0]!.cancel(new Date())),
+        SYSTEM
       );
 
       const total = await repo.sumConfirmedAmountByUserId(TEST_USER_ID, period);
@@ -416,7 +423,8 @@ describe("SupabaseOrderRepository", () => {
               stripeCheckoutSessionId: null,
             }),
           ],
-        })
+        }),
+        SYSTEM
       );
 
       const total = await repo.sumConfirmedAmountByUserId(TEST_USER_ID, period);
@@ -491,7 +499,8 @@ describe("SupabaseOrderRepository", () => {
               stripeInvoiceId: "in_test_active_005",
             }),
           ],
-        })
+        }),
+        SYSTEM
       );
       await repo.save(
         makeOrder({
@@ -511,7 +520,8 @@ describe("SupabaseOrderRepository", () => {
               stripeCheckoutSessionId: null,
             }),
           ],
-        })
+        }),
+        SYSTEM
       );
 
       await repo.save(
@@ -524,7 +534,8 @@ describe("SupabaseOrderRepository", () => {
             }),
           ],
           settlements: [],
-        })
+        }),
+        SYSTEM
       );
 
       const orders = await repo.findByUserId(TEST_USER_ID);
@@ -584,7 +595,8 @@ describe("SupabaseOrderRepository", () => {
                 stripeCheckoutSessionId: "cs_test_infra_delete_fail",
               }),
             ],
-          })
+          }),
+          SYSTEM
         );
         // 別の注文の明細が DELETE_FAIL_ORDER_ID の決済単位を参照しているため、
         // 明細の削除のあと、決済単位の削除が外部キーで失敗する
@@ -701,7 +713,8 @@ describe("SupabaseOrderRepository", () => {
               }),
             ],
             settlements: [],
-          })
+          }),
+          SYSTEM
         )
       ).rejects.toThrow("Order保存に失敗");
     });

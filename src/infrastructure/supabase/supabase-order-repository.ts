@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type {
   OrderRepository,
+  OrderStatusChangedBy,
   OrderWithUser,
 } from "@/repositories/order-repository";
 import { Order, reconstituteOrder } from "@/domain/entities/order";
@@ -381,35 +382,27 @@ export class SupabaseOrderRepository implements OrderRepository {
     return data ? toOrderWithUser(data as unknown as OrderWithUserRow) : null;
   }
 
-  async save(order: Order): Promise<void> {
-    const { error: orderError } = await this.db
-      .from("orders")
-      .upsert(toOrderRowForInsert(order));
-    if (orderError) throw new Error(`Order保存に失敗: ${orderError.message}`);
-
-    // order_items.settlement_idのFKがあるため、決済単位を明細より先に保存する
-    if (order.settlements.length > 0) {
-      const rows = toSettlementRowsForInsert(order).map((row, i) => ({
-        ...row,
-        paid_at: order.settlements[i].paidAt?.toISOString() ?? null,
-        cancelled_at: order.settlements[i].cancelledAt?.toISOString() ?? null,
-      }));
-      const { error: settlementsError } = await this.db
-        .from("order_settlements")
-        .upsert(rows);
-      if (settlementsError)
-        throw new Error(
-          `OrderSettlement保存に失敗: ${settlementsError.message}`
-        );
-    }
-
-    if (order.items.length > 0) {
-      const { error: itemsError } = await this.db
-        .from("order_items")
-        .upsert(toItemRowsForInsert(order));
-      if (itemsError)
-        throw new Error(`OrderItem保存に失敗: ${itemsError.message}`);
-    }
+  async save(order: Order, changedBy: OrderStatusChangedBy): Promise<void> {
+    // 状態の更新と order_status_changes の追記を同じトランザクションで行うため、
+    // 注文・決済単位・明細の保存を1回のDB呼び出しにまとめる（#237）
+    const settlements = toSettlementRowsForInsert(order).map((row, i) => ({
+      ...row,
+      paid_at: order.settlements[i].paidAt?.toISOString() ?? null,
+      cancelled_at: order.settlements[i].cancelledAt?.toISOString() ?? null,
+    }));
+    const { error } = await this.db.rpc("save_order", {
+      p_order: toOrderRowForInsert(order) as unknown as Json,
+      p_settlements: settlements as unknown as Json,
+      p_items: toItemRowsForInsert(order) as unknown as Json,
+      p_status_change: {
+        changed_by: changedBy.type,
+        changed_by_admin_user_id:
+          changedBy.type === "admin" ? changedBy.adminUserId : null,
+        // キャンセル理由を画面から渡すのは #271
+        reason: null,
+      },
+    });
+    if (error) throw new Error(`Order保存に失敗: ${error.message}`);
   }
 
   async saveNewOrderWithLimitCheck(

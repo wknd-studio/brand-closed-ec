@@ -163,6 +163,7 @@ export const fixedProduct: ProductSnapshot = {
   unitPrice: Money.of(100_000),
   isNegotiable: false,
   minRank: "starter",
+  availability: "available",
   paymentTiming: "at_order",
 };
 
@@ -172,6 +173,7 @@ export const negotiableProduct: ProductSnapshot = {
   unitPrice: Money.zero(),
   isNegotiable: true,
   minRank: "starter",
+  availability: "available",
   paymentTiming: "after_order",
 };
 
@@ -181,6 +183,7 @@ export const afterOrderFixedProduct: ProductSnapshot = {
   unitPrice: Money.of(50_000),
   isNegotiable: false,
   minRank: "starter",
+  availability: "available",
   paymentTiming: "after_order",
 };
 

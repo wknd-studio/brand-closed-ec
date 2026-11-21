@@ -1,6 +1,8 @@
 import type { Money } from "./money";
 import type { MemberRankValue } from "./member-rank";
 
+export type ProductAvailability = "available" | "out_of_stock" | "discontinued";
+
 // 注文確定時点でサーバー側から取得した商品情報。カートの明細は、価格・支払いタイミング等を
 // カートの値ではなくこの値から作る（CartItem.fromProducts）
 export interface ProductSnapshot {
@@ -9,5 +11,6 @@ export interface ProductSnapshot {
   unitPrice: Money;
   isNegotiable: boolean;
   minRank: MemberRankValue;
+  availability: ProductAvailability;
   paymentTiming: "at_order" | "after_order";
 }

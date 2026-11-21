@@ -45,60 +45,165 @@ push (develop・main)
 
 GitHub リポジトリの Settings → Secrets and variables → Actions に設定する。
 
-### 既存
+### Doppler の config と secret の対応
 
-| Secret                        | 用途                                 |
-| ----------------------------- | ------------------------------------ |
-| `CLERK_PUBLISHABLE_KEY_STG`   | stg ビルド時の Clerk 公開鍵          |
-| `CLERK_PUBLISHABLE_KEY_PROD`  | prod ビルド時の Clerk 公開鍵         |
-| `SUPABASE_URL_STG`            | stg Supabase URL                     |
-| `SUPABASE_URL_PROD`           | prod Supabase URL                    |
-| `SUPABASE_ANON_KEY_STG`       | stg Supabase anon キー               |
-| `SUPABASE_ANON_KEY_PROD`      | prod Supabase anon キー              |
-| `STRIPE_PUBLISHABLE_KEY_STG`  | stg Stripe 公開鍵                    |
-| `STRIPE_PUBLISHABLE_KEY_PROD` | prod Stripe 公開鍵                   |
-| `SANITY_PROJECT_ID`           | Sanity プロジェクト ID（全環境共通） |
-| `SENTRY_DSN`                  | Sentry DSN                           |
-| `SENTRY_AUTH_TOKEN`           | Sentry ソースマップアップロード用    |
-| `CLOUDFLARE_API_TOKEN`        | Wrangler デプロイ用                  |
-| `CLOUDFLARE_ACCOUNT_ID`       | Cloudflare アカウント ID             |
+ジョブは Doppler のサービストークンを `DOPPLER_TOKEN` 環境変数で渡し、`doppler run` で config の値を読む。どの secret がどの config を指すか:
 
-### 設定済み（追加済み）
+| Secret                 | 置き場所                                         | Doppler の config | 使うジョブ                                                                                    |
+| ---------------------- | ------------------------------------------------ | ----------------- | --------------------------------------------------------------------------------------------- |
+| `DOPPLER_TOKEN_PR`     | リポジトリの Actions secrets・Dependabot secrets | `ci`（環境 `CI`） | Integration Tests・Build (Cloudflare)・E2E Tests (PR)                                         |
+| `DOPPLER_TOKEN`        | `staging` environment                            | `stg_deploy`      | Deploy (staging)・E2E Tests (stg)・商品データの同期                                           |
+| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期                                                         |
+| `DOPPLER_TOKEN_WORKER` | `staging` environment                            | `stg`             | Deploy (staging) の Sync Wrangler Secrets & Deploy だけ（Worker の secrets に上げる値を読む） |
+| `DOPPLER_TOKEN_WORKER` | `production` environment                         | `prod`            | Deploy (production) の Sync Wrangler Secrets & Deploy だけ                                    |
 
-| Secret                          | 用途                                                                 |
-| ------------------------------- | -------------------------------------------------------------------- |
-| `APP_URL_STG`                   | stg の公開 URL                                                       |
-| `CLERK_SECRET_KEY_STG`          | stg Clerk Secret Key（E2E テスト用）                                 |
-| `SUPABASE_SERVICE_ROLE_KEY_STG` | stg Supabase service_role キー（E2E テストのデータクリーンアップ用） |
-| `SUPABASE_ACCESS_TOKEN`         | Supabase CLI 認証トークン（DB マイグレーション用）                   |
-| `SUPABASE_PROJECT_REF_STG`      | stg Supabase プロジェクト参照 ID                                     |
-| `E2E_USER_EMAIL`                | E2E テスト用アカウントのメールアドレス                               |
-| `E2E_USER_PASSWORD`             | E2E テスト用アカウントのパスワード（実ログインフローテスト用）       |
+`DOPPLER_TOKEN_PR` は Actions secrets と Dependabot secrets に同じ値で登録している（Dependabot の PR のワークフローは Dependabot secrets しか読めないため）。作り直すときは両方を入れ替える。
 
-### 要追加（prod 準備時）
+```bash
+doppler configs tokens create github-actions-pr -p brand-closed-ec -c ci --access read --plain \
+  | tee >(gh secret set DOPPLER_TOKEN_PR --app actions) | gh secret set DOPPLER_TOKEN_PR --app dependabot
+```
 
-| Secret                        | 用途                              |
-| ----------------------------- | --------------------------------- |
-| `APP_URL_PROD`                | prod の公開 URL                   |
-| `STRIPE_PUBLISHABLE_KEY_PROD` | prod Stripe 公開鍵                |
-| `SUPABASE_PROJECT_REF_PROD`   | prod Supabase プロジェクト参照 ID |
+### PR の CI が読む Doppler の config（`ci`）
+
+PR の CI（Dependabot のセキュリティ更新の PR を含む）では、人間が見る前の新しい版の依存が secret と一緒に動く。依存が乗っ取られていても管理用のトークンが盗まれないよう、PR のジョブは `environment` を使わず、テスト・ビルドに要る値だけを入れた `ci` だけを読む（#671）。
+
+- `ci` は `stg` の branch config ではなく、別の環境（`CI`）の root config にしている（branch config は親の値を引き継ぎ、消せないため）。`stg` の値を変えても `ci` には反映されないので、テストに要る値を足すときは `ci` にも入れる
+- 入れないもの: `SUPABASE_DB_URL`・`SUPABASE_ACCESS_TOKEN`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`（ビルドでソースマップを Sentry にアップロードしない）・`SANITY_AUTH_TOKEN`・`RESEND_API_KEY`（PR の CI ではメールを送らない。`DISABLE_EMAIL_SENDING`）・`SUPABASE_SERVICE_ROLE_KEY`・`SUPABASE_PROJECT_REF`（stg の DB に触れない）
+- `NEXT_PUBLIC_SUPABASE_URL`・`NEXT_PUBLIC_SUPABASE_ANON_KEY` はローカルの Supabase の既定値（`http://127.0.0.1:54321` と既定の publishable key）。Integration Tests・E2E Tests (PR) はジョブ内で起動したローカルの Supabase の値で上書きし、Build (Cloudflare) はデプロイしないビルドなので埋め込まれても困らない
+- Clerk のキー（`CLERK_SECRET_KEY`・`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`・`CLERK_WEBHOOK_SECRET`）は CI 専用の Clerk 開発インスタンスのもの（#299）
+- `SANITY_API_TOKEN`・`SANITY_WRITE_TOKEN` は CI 専用の Sanity のトークン（ラベル `github-actions-pr-ci`・Editor）。E2E が `staging` データセットに商品を書き込むため Editor にしている。Sanity のトークンはプロジェクト単位で、本番の `production` データセットにも届く（プロジェクトは分けない判断。#671）
+- そのほか: `NEXT_PUBLIC_APP_URL`・`NEXT_PUBLIC_SANITY_*`・`NEXT_PUBLIC_SENTRY_*`・`RESEND_FROM_EMAIL`・`RESEND_ADMIN_EMAIL`・`RESEND_TEST_TO`・Stripe のテストモードのキーと `STRIPE_PRICE_ID_*`（`stg` と同じ値）
+
+`tests/unit/deploy-workflow-pr-secrets.test.ts` が、PR のジョブが `environment` を使わず `DOPPLER_TOKEN_PR` だけを読むこと、デプロイのジョブが environment の `DOPPLER_TOKEN`（と Sync の `DOPPLER_TOKEN_WORKER`）だけを読むことを検査する。
+
+### Worker に上げる値と管理用の値を分ける（`stg`・`stg_deploy`）
+
+Worker の実行環境（`process.env`）に管理用のトークンがあると、アプリの穴（issue #666 の `next` の RCE のようなもの）から、本番のインフラを操作できるトークンまで盗まれる。そのため Doppler の config を、Worker に上げる値と、デプロイだけに使う値に分ける（#672）。
+
+stg の例。本番は `production` environment → `prod`・`prod_deploy` → 本番のサービスで、同じ形。
+
+```mermaid
+flowchart LR
+  subgraph GH["GitHub の secrets"]
+    TW["staging environment<br/>DOPPLER_TOKEN_WORKER"]
+    TD["staging environment<br/>DOPPLER_TOKEN"]
+    TP["Actions・Dependabot secrets<br/>DOPPLER_TOKEN_PR"]
+  end
+  subgraph DP["Doppler（brand-closed-ec）"]
+    STG["stg（root）= Worker 用<br/>Clerk・Supabase の service role・Stripe<br/>Resend・SANITY_API_TOKEN・NEXT_PUBLIC_*"]
+    DEP["stg_deploy（branch）= デプロイ用<br/>stg の値 + SUPABASE_DB_URL・CLOUDFLARE_*<br/>SENTRY_AUTH_TOKEN・SANITY_AUTH/WRITE_TOKEN・E2E_*"]
+    CI["ci（root・別の環境）<br/>PR の CI 用。管理用の値なし"]
+  end
+  subgraph JOB["読むジョブ・ステップ"]
+    SYNC["Sync: wrangler secret bulk<br/>（filter-worker-env.jq で検査）"]
+    DJOB["Migrate DB・Build・wrangler deploy<br/>Sanity Studio・E2E (stg)・商品データの同期"]
+    PRJ["PR の CI<br/>Integration・Build・E2E (PR)"]
+  end
+  subgraph SVC["使う先"]
+    WK["Worker（stg）の secrets"]
+    RT["Clerk・Stripe・Supabase（API）<br/>Resend・Sanity（読み取り）"]
+    INF["Supabase の DB・Cloudflare<br/>Sentry・Sanity（書き込み）"]
+    LOC["ジョブ内のローカル Supabase<br/>CI 用の Clerk・Sanity 等"]
+  end
+  TW --> STG --> SYNC --> WK -- 実行時に呼ぶ --> RT
+  TD --> DEP --> DJOB --> INF
+  STG -. 全部を引き継ぐ .-> DEP
+  DEP -. wrangler の認証（CLOUDFLARE_API_TOKEN）だけ .-> SYNC
+  TP --> CI --> PRJ --> LOC
+```
+
+Worker に上がるのは `stg` の値だけで、`stg_deploy` にしかない管理用の値は Worker に届かない。
+
+- **root の `stg`・`prod`** に置くもの: Worker が実行時に使う値（Clerk・Supabase の service role・Stripe・Resend・`SANITY_API_TOKEN`・`NEXT_PUBLIC_*`）
+- **branch の `stg_deploy`・`prod_deploy`** にだけ置くもの: `SUPABASE_DB_URL`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`・`SANITY_AUTH_TOKEN`・`SANITY_WRITE_TOKEN`・`SUPABASE_PROJECT_REF`・`E2E_USER_EMAIL`・`E2E_USER_PASSWORD`・`SEED_USER_PASSWORD`。branch は root の値を引き継ぐので、実行時の値を二重に置かなくてよい
+- 新しい値を足すときは、Worker が実行時に読むなら root、デプロイ・テスト・スクリプトだけが使うなら branch に置く。リポジトリ側に名前の一覧は持たない
+- Sync のステップは、root の値を `scripts/ci/filter-worker-env.jq` に通してから `wrangler secret bulk` に渡す。Doppler が付ける `DOPPLER_*` を落とし、管理用のトークン（`SUPABASE_DB_URL`・`CLOUDFLARE_API_TOKEN`・`SENTRY_AUTH_TOKEN`・`SANITY_AUTH_TOKEN`・`SANITY_WRITE_TOKEN`・`SUPABASE_ACCESS_TOKEN`）を root に置き間違えていたら、Worker に上げずにデプロイを止める（`tests/unit/deploy-workflow-worker-env.test.ts`）
+- ローカルで stg の値を使うスクリプトは、要る値に合わせて config を選ぶ。シード（`task supabase:seed-users:stg`）は `SEED_USER_PASSWORD` を使うため `-c stg_deploy`
+
+**root から branch に値を移すとき**: 先に branch に同じ値を書いても、root と同じ値は「引き継ぎ」と扱われて branch には残らない（2026-11-21 に確かめた）。値をシェルの変数に持ったまま、root から消してから branch に書く。失敗したら root の変更は `doppler configs logs rollback <ログID> -c <config>` で戻せる。
+
+```bash
+# bash で実行する（zsh では $names が単語に分かれない）
+names='<移す名前をスペース区切り>'; keys=$(printf '%s\n' $names | jq -R . | jq -sc .)
+vals=$(doppler secrets download -p brand-closed-ec -c stg --no-file --format json | jq -c --argjson k "$keys" 'with_entries(select(.key as $x | $k | index($x)))')
+doppler secrets delete $names -p brand-closed-ec -c stg -y
+echo "$vals" | doppler secrets upload -p brand-closed-ec -c stg_deploy /dev/stdin --silent; unset vals
+```
+
+### 使い道ごとの管理用トークン（Doppler の `stg_deploy`・`prod_deploy`）
+
+デプロイのジョブが使う管理用のトークンは、stg 用と本番用で別のものにする（#673）。stg のデプロイのジョブ・stg の値が漏れても、本番を操作されないようにするため。`stg` と `prod` で同じ値を持たないことは、値のハッシュを比べて確かめる（値は画面に出さない）。
+
+```bash
+for k in SUPABASE_DB_URL CLOUDFLARE_API_TOKEN SENTRY_AUTH_TOKEN RESEND_API_KEY SANITY_API_TOKEN; do
+  for c in stg_deploy prod_deploy; do
+    printf '%s %s %s\n' "$k" "$c" "$(doppler secrets get "$k" -p brand-closed-ec -c "$c" --plain | shasum -a 256 | cut -c1-12)"
+  done
+done
+```
+
+| 値                     | `stg`                                                     | `prod`                       | 使うジョブ・ステップ                                                                                             | 権限・範囲                                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_DB_URL`      | stg のプロジェクトの DB の接続文字列                      | 本番のプロジェクトの同じもの | Deploy (staging)・Deploy (production) の Migrate DB だけ。Worker の実行環境には上げない（`*_deploy` にだけ置く） | そのプロジェクトの DB だけ。Session pooler（`aws-1-ap-northeast-1.pooler.supabase.com:5432`。GitHub のランナーは IPv6 に繋がらないため直接接続は使わない） |
+| `CLOUDFLARE_API_TOKEN` | stg 用のトークン                                          | 本番用のトークン             | Deploy の Sync Wrangler Secrets & Deploy・E2E Tests (stg)                                                        | アカウントの Workers Scripts の Edit だけ。Worker 単位には絞れないため、stg 用のトークンでも本番の Worker に届く（下の「届く範囲を補う」）                 |
+| `SENTRY_AUTH_TOKEN`    | stg 用の組織トークン                                      | 本番用の組織トークン         | Deploy の Build（ソースマップのアップロード）                                                                    | `org:ci`                                                                                                                                                   |
+| `RESEND_API_KEY`       | stg 用のキー                                              | 本番用のキー                 | Worker の実行環境（メールの送信。`wrangler secret bulk`）                                                        | Sending access・送信元のドメインだけ                                                                                                                       |
+| `SANITY_API_TOKEN`     | stg 用のトークン                                          | 本番用のトークン             | ビルド・Worker の実行環境（商品の読み取り）                                                                      | Viewer。プロジェクト単位のため、どちらも両方のデータセットに届く（プロジェクトは分けない判断。#673）                                                       |
+| `SANITY_AUTH_TOKEN`    | Studio のデプロイ用（`github-actions-stg-sanity-deploy`） | 入れない                     | Deploy (staging) の Deploy Sanity Studio                                                                         | Deploy Studio だけ                                                                                                                                         |
+
+- **切り替えの状況**（2026-11-21）: 分け終えたのは `SUPABASE_DB_URL` だけ。`CLOUDFLARE_API_TOKEN`・`SENTRY_AUTH_TOKEN`・`RESEND_API_KEY`・`SANITY_API_TOKEN` は、まだ `stg`・`prod` で同じ値（issue #673 で切り替え中。終わったらこの行を消す）
+- **`SUPABASE_ACCESS_TOKEN` は CI で使わない**。アカウント単位の個人用のトークンで、stg・本番の両方のプロジェクトを操作できるため。Doppler のどの config にも置かない（置くと `doppler run` が各ステップの環境変数に入れる）。マイグレーションは `supabase db push --db-url "$SUPABASE_DB_URL"` で行う（`supabase link` は要らない）
+- **`SUPABASE_DB_URL` の作り直し**: DB のパスワードを作り直すと、古い接続文字列は使えなくなる。パスワードは英数字だけにする（接続文字列はパーセントエンコードが要るため）
+
+  ```bash
+  # <config> は stg_deploy か prod_deploy。<ref> は doppler secrets get SUPABASE_PROJECT_REF -c <config> --plain。T は Supabase の個人用トークン
+  PW=$(openssl rand -hex 24)
+  curl -sf -X PATCH -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+    -d "{\"password\":\"$PW\"}" https://api.supabase.com/v1/projects/<ref>/database/password
+  printf '%s' "postgresql://postgres.<ref>:$PW@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres" \
+    | doppler secrets set SUPABASE_DB_URL -p brand-closed-ec -c <config> --silent
+  doppler run -p brand-closed-ec -c <config> -- sh -c 'supabase db push --db-url "$SUPABASE_DB_URL" --dry-run'
+  ```
+
+- **トークンを作り直すとき**: 新しいトークンを発行して Doppler に入れ、stg のデプロイ（develop への push）が通るのを確かめてから本番を切り替える。古いトークンは、両方のデプロイが新しいトークンで通ってから各サービスで取り消す（先に取り消すとデプロイが止まる）。ローカル開発で要るもの（`dev` の `RESEND_API_KEY`・`SANITY_API_TOKEN` 等）は、ローカル専用として別に発行する
+
+#### 届く範囲を補う（environment の保護ルール）
+
+Cloudflare・Sanity のトークンは、stg 用でも本番に届く。そのため、トークンを読めるジョブを絞って補う。
+
+- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は `staging`・`production` の environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging` は `develop` だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
+- PR のジョブは environment を使わない（上の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）
+- 商品データの同期（`product-data-sync.yml`）の定期実行は、GitHub の仕様で既定ブランチ（develop）でしか動かない。本番の同期は、develop の実行が `gh workflow run product-data-sync.yml --ref main` で main の上に起動し直して行う（main にこのワークフローが無い間は飛ばす）
+
+```bash
+gh api repos/{owner}/{repo}/environments/production --jq .deployment_branch_policy
+gh api repos/{owner}/{repo}/environments/production/deployment-branch-policies --jq '.branch_policies[].name'
+```
+
+### 使われていない secrets を溜めない（`task secrets:check`）
+
+リポジトリの Actions secrets・Dependabot secrets・各 environment の secrets には、ワークフローから参照するもの（上の表の `DOPPLER_TOKEN_PR`・`DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER`）だけを置く。使われていない secret も、同じリポジトリのブランチからの PR でワークフローを書き換えれば読み出せるため。値は Doppler に置き、GitHub には Doppler のサービストークンだけを置く。
+
+`task secrets:check` が、develop と main の `.github/` のどこからも参照されていない secret と、environment のデプロイできるブランチが上のとおりでないものを出す（`scripts/check-github-secrets.ts`）。secrets の名前の一覧・environment の設定を読む API はリポジトリの管理者の権限が要り、CI の `GITHUB_TOKEN` では読めないため、CI には入れない（入れるには管理者の権限のトークンを CI に置くことになり、本末転倒）。secrets を足し引きしたとき・トークンを作り直したときに、管理者が手元で動かす。
+
+- main の `deploy.yml` が develop より古い間は、main からだけ参照される secret（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）も「参照されている」と扱う。develop を main に出したあとで消す
+- 消すときは `gh secret delete <名前>`（environment は `--env <名前>`、Dependabot は `--app dependabot`）
 
 ---
 
 ## Cloudflare Workers ランタイムシークレット
 
-ビルド時の環境変数（`NEXT_PUBLIC_*`）とは別に、サーバーサイドのシークレットは Cloudflare Workers に直接設定する必要がある。`selectPlan` Server Action や Webhook ハンドラーが使用する。
+Worker の secrets は、デプロイのたびに Sync Wrangler Secrets & Deploy が Worker 用の config（`stg`・`prod`）の値で追加・上書きする（上の「[Worker に上げる値と管理用の値を分ける](#worker-に上げる値と管理用の値を分けるstgstg_deploy)」）。手で `wrangler secret put` しない。
+
+`wrangler secret bulk` は追加・上書きだけで、Doppler から消した値・branch に移した値は Worker に残る。値を消したり移したりしたら、Worker に残っていないかを確かめて消す（stg は 2026-11-21 に掃除済み。本番は初めて main に出すときに issue #681 で行う）。
 
 ```bash
-# stg
-wrangler secret put CLERK_SECRET_KEY --config wrangler.stg.jsonc
-wrangler secret put CLERK_WEBHOOK_SECRET --config wrangler.stg.jsonc
-wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.stg.jsonc
-
-# prod
-wrangler secret put CLERK_SECRET_KEY --config wrangler.prod.jsonc
-wrangler secret put CLERK_WEBHOOK_SECRET --config wrangler.prod.jsonc
-wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
+# Worker にあって Worker 用の config に無い名前
+w=$(doppler run -p brand-closed-ec -c stg_deploy -- pnpm exec wrangler secret list --config wrangler.stg.jsonc | jq -c '[.[].name]')
+r=$(doppler secrets download -p brand-closed-ec -c stg --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | jq -c keys)
+jq -n --argjson w "$w" --argjson r "$r" '$w - $r'
+doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler secret delete <名前> --config wrangler.stg.jsonc'
 ```
 
 ---
@@ -107,7 +212,7 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 
 ### CI での実行タイミング（2種類）
 
-1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`stg_ci`、GitHub Secretsの`DOPPLER_TOKEN_CI`で参照）から取得する。`stg_ci`は`stg`のbranch configで、ClerkのキーだけをCI専用のClerk開発インスタンスのもので上書きし、それ以外は`stg`の値を引き継ぐ。ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
+1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`ci`、GitHub Secretsの`DOPPLER_TOKEN_PR`で参照）から取得する（下の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。`ci`のClerkのキーはCI専用のClerk開発インスタンスのもので、ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
    全部のE2Eの前に、「環境の確認（スモークテスト）」のステップでデータを書き換えないスモークテスト（`tests/e2e/smoke/`、`pnpm test:e2e:smoke`）だけを流す（#649）。ここで失敗したら全部のE2Eは流さずにジョブが失敗するので、ステップ名から振る舞いの不具合ではなく環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）の問題と分かる。スモークテストは `scripts/seed-users.ts` の既存のアカウント（`docs/seed-data.md`）でログインするため、それが無い使い捨てのDBで動く `pnpm test:e2e`（PRのE2E）には含めない。stgにアカウントが無いときの入れ方は `tests/e2e/smoke/smoke.spec.ts` の冒頭
 
@@ -194,7 +299,6 @@ CI の Supabase CLI・Doppler CLI は、共通の composite action `.github/acti
 - 5xx・タイムアウトだけを、間隔をあけて数回やり直す。4xx（403・404・429 等）はやり直さずに失敗する
 - 取得したファイルはリリースの `checksums.txt` の SHA-256 と照合してから展開する
 - 版はジョブごとに `version` で固定する。上げるときは `tests/unit/workflow-cli-install.test.ts` の `EXPECTED_VERSIONS` も一緒に変える
-- `product-data-sync.yml` は `main` をチェックアウトするジョブがあるため、このワークフローと同じコミットの action を `ci-tools/` に sparse checkout して使う
 
 ---
 
