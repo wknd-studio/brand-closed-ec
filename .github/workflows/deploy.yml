@@ -480,6 +480,14 @@ jobs:
         run: doppler run -- sh -c 'echo "true" | pnpm exec wrangler secret put DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: 環境の確認（スモークテスト）
+        # デプロイした環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）が動いているかを、
+        # データを書き換えずに数本で確かめる（#649）。ここで失敗したら振る舞いの不具合ではなく環境の問題として、
+        # 全部のE2Eを流さずにジョブを止める。ログインに使うアカウントは tests/e2e/smoke/smoke.spec.ts の冒頭
+        id: smoke
+        run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e:smoke'
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Run E2E tests
         id: e2e
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e'
@@ -492,7 +500,7 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Install age (暗号化用・E2Eの失敗時のみ)
         # Playwrightのレポートを暗号化するために使う（#513）
-        if: failure() && steps.e2e.outcome == 'failure'
+        if: failure() && (steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure')
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq age > /dev/null
@@ -500,7 +508,7 @@ jobs:
         # E2E Tests (PR)の同名のステップと同じ（#513）。stgに対するテストのため、
         # trace.zipにはstgのレスポンス・Cookieが入る
         id: playwright-report
-        if: failure() && steps.e2e.outcome == 'failure'
+        if: failure() && (steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure')
         run: pnpm -s tsx scripts/ci/encrypt-artifact.ts playwright-report-encrypted/playwright-report.tar.gz.age playwright-report test-results
       - name: Upload Playwright report (暗号化済み・E2Eの失敗時のみ)
         # E2E Tests (PR)の同名のステップと同じ

@@ -81,6 +81,16 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
+      testIgnore: /smoke\//,
+    },
+    // デプロイした環境を、データを書き換えずに確かめるスモークテスト（#649）。
+    // 事前に用意した固定のアカウントを使うため、使い捨てのDBで動くPRのE2Eでは流せない。
+    // `pnpm test:e2e`（--project=chromium）には含めず、`pnpm test:e2e:smoke` で流す
+    {
+      name: "smoke",
+      testDir: "./tests/e2e/smoke",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["setup"],
     },
   ],
 });
