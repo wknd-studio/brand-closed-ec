@@ -59,6 +59,11 @@ test.describe("スモークテスト", { tag: "@smoke" }, () => {
 
     // ブランド一覧はSupabase（会員のランク）とSanity（商品）の両方を読む
     await page.goto("/shop");
+    // usersの行が無い・オンボーディングを終えていない会員は、middlewareがオンボーディングへ戻す
+    await expect(
+      page,
+      "会員の行が無いときは `task supabase:seed-users:stg` で入れる"
+    ).toHaveURL(/\/shop$/);
     await expect(
       page.getByRole("heading", { name: "ブランドから探す" })
     ).toBeVisible();
