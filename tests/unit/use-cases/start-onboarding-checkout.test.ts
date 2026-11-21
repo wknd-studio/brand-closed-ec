@@ -34,6 +34,7 @@ describe("startOnboardingCheckout", () => {
       userId: USER_ID,
       clerkUserId: "clerk-1",
       email: "clerk@example.com",
+      name: "山田 太郎",
     });
     expect(deps.userRepo.saveStripeCustomerId).toHaveBeenCalledWith(
       USER_ID,

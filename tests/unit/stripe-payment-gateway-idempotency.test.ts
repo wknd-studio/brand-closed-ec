@@ -4,7 +4,6 @@ import { Money } from "@/domain/value-objects/money";
 import { makeOrder } from "./use-cases/helpers";
 
 const createCheckoutSessionMock = vi.fn();
-const createCustomerMock = vi.fn();
 const createInvoiceMock = vi.fn();
 const createInvoiceItemMock = vi.fn();
 const finalizeInvoiceMock = vi.fn();
@@ -13,7 +12,6 @@ const sendInvoiceMock = vi.fn();
 vi.mock("@/infrastructure/stripe/client", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: createCheckoutSessionMock } },
-    customers: { create: createCustomerMock },
     invoices: {
       create: createInvoiceMock,
       finalizeInvoice: finalizeInvoiceMock,
@@ -36,7 +34,6 @@ describe("StripePaymentGateway - 冪等性キー", () => {
       id: "cs_1",
       url: "https://checkout.stripe.com/cs_1",
     });
-    createCustomerMock.mockResolvedValue({ id: "cus_1" });
     createInvoiceMock.mockResolvedValue({ id: "in_1" });
     createInvoiceItemMock.mockResolvedValue({ id: "ii_1" });
     finalizeInvoiceMock.mockResolvedValue({ id: "in_1" });
@@ -55,16 +52,6 @@ describe("StripePaymentGateway - 冪等性キー", () => {
 
     expect(createCheckoutSessionMock).toHaveBeenCalledWith(expect.any(Object), {
       idempotencyKey: `checkout-session-${ORDER_ID}`,
-    });
-  });
-
-  it("ensureCustomerはuserIdベースのidempotencyKeyを付与する", async () => {
-    const gateway = new StripePaymentGateway();
-
-    await gateway.ensureCustomer("test@example.com", "user-1");
-
-    expect(createCustomerMock).toHaveBeenCalledWith(expect.any(Object), {
-      idempotencyKey: "ensure-customer-user-1",
     });
   });
 

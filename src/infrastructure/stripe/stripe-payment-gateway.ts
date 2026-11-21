@@ -34,17 +34,6 @@ export class StripePaymentGateway implements PaymentGateway {
     return { sessionId: session.id, url: session.url! };
   }
 
-  async ensureCustomer(email: string, userId: string): Promise<string> {
-    const customer = await getStripe().customers.create(
-      {
-        email,
-        metadata: { supabase_user_id: userId },
-      },
-      { idempotencyKey: `ensure-customer-${userId}` }
-    );
-    return customer.id;
-  }
-
   async createInvoiceForOrder(
     order: Order,
     stripeCustomerId: string

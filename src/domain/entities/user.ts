@@ -208,6 +208,13 @@ export class User {
     return this.onboardingCompleted;
   }
 
+  // 適格請求書の「書類の交付を受ける事業者の氏名又は名称」。法人会員は会社名、個人会員は姓名（#261）
+  billingName(): string {
+    return this.memberType.isCorporate() && this.companyName
+      ? this.companyName
+      : `${this.lastName} ${this.firstName}`;
+  }
+
   hasCompletedProfile(): boolean {
     return (
       this.firstName !== "" && this.lastName !== "" && this.phoneNumber !== null
