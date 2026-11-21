@@ -52,7 +52,7 @@ describe("デプロイのマイグレーション", () => {
         (s) => s.name === "Sync Wrangler Secrets & Deploy"
       )?.run;
       expect(run).toMatch(
-        /doppler secrets download --no-file --format json \| jq 'del\(\.SUPABASE_DB_URL\)' \| pnpm exec wrangler secret bulk/
+        /doppler secrets download --no-file --format json \| jq "del\(\.SUPABASE_DB_URL\)" \| pnpm exec wrangler secret bulk/
       );
     }
   );

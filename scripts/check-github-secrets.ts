@@ -22,7 +22,7 @@ export type EnvironmentBranches = {
   name: string;
   /** デプロイできるブランチを制限しているか（deployment_branch_policy が null でない） */
   restricted: boolean;
-  /** 許可しているブランチの名前（パターン） */
+  /** 許可しているブランチの名前（パターン）。タグのポリシーは含めない */
   branches: string[];
 };
 
@@ -132,7 +132,7 @@ function main(): void {
       branches: restricted
         ? gh(
             `${repo}/environments/${name}/deployment-branch-policies`,
-            ".branch_policies[].name"
+            '.branch_policies[] | select(.type == "branch") | .name'
           )
         : [],
     };
