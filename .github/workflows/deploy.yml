@@ -9,7 +9,7 @@ on:
 jobs:
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -28,7 +28,7 @@ jobs:
 
   typecheck:
     name: TypeScript
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別のPRが後から
     # マージされた組み合わせで壊れることがある（#498）。数分で終わるこのチェックだけは
     # developへのpushのたびにも動かす。続けてマージしても各コミットで動くよう、
@@ -44,7 +44,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # developへのpushでも動かす理由はtypecheckのコメント参照
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
@@ -58,7 +58,7 @@ jobs:
 
   schema-types-drift:
     name: Schema Types Drift
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
 
   test:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # developへのpushでも動かす理由はtypecheckのコメント参照
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
@@ -108,7 +108,7 @@ jobs:
 
   install-cli-versions:
     name: Install CLI Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # デプロイのジョブでしか使わない版（deploy-staging・deploy-prod の Supabase CLI 等）は、
     # PR の CI ではインストールされず、壊れていても develop・main へのマージ後まで気づけない（#549）。
     # ワークフローが install-cli に渡している全ての CLI と版を、ここで実際にインストールして
@@ -129,9 +129,10 @@ jobs:
 
   integration:
     name: Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
-    environment: staging
+    # PRのジョブは environment（staging）を使わず、CI専用の Doppler の config（ci）だけを読む。
+    # デプロイ用・管理用のトークンが入っていない config で、Dependabot の PR からも読める（#671。docs/cicd.md）
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -149,20 +150,22 @@ jobs:
       - name: Apply local migrations
         run: supabase db reset
       - name: Run integration tests
-        # Stripe・Clerkの署名シークレット等はstaging Doppler環境から取得するが、
+        # Stripe・Clerkの署名シークレット等はDopplerのCI専用config（ci）から取得するが、
         # Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルのSupabaseで
         # 上書きする（本物のstg DBには一切アクセスしない）。
         # sanity-products.test.tsは共有のSanityデータセットに書き込むため、
-        # RUN_SANITY_INTEGRATIONを渡さずスキップさせる
+        # RUN_SANITY_INTEGRATIONを渡さずスキップさせる。
+        # ciにはRESEND_API_KEYを入れていないため、メールは送らない（DISABLE_EMAIL_SENDING）
         run: |
           eval "$(supabase status -o env | sed 's/^/export /')"
           doppler run -- env \
             NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
             NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUBLISHABLE_KEY" \
             SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" \
+            DISABLE_EMAIL_SENDING="true" \
             pnpm test:integration
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PR }}
       - name: Install age (暗号化用・失敗時のみ)
         # 失敗時に残すアーティファクトを暗号化するために使う（#497・#513）。インストールに失敗したら
         # 後続の暗号化のステップも失敗し、何もアップロードしない
@@ -193,10 +196,10 @@ jobs:
 
   build:
     name: Build (Cloudflare)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
-    environment: staging
+    # environmentを使わない理由はIntegration Testsのコメント参照
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -210,18 +213,18 @@ jobs:
         # ランタイム非対応のNode API・ビルド時のページ生成エラー等を、developマージ後の
         # deploy-stgで初めて落ちる前にPR段階で止める。e2e-prでもビルドは走るが、
         # そちらはcontinue-on-errorのためマージをブロックできない。
-        # NEXT_PUBLIC_*はビルド時にバンドルへ埋め込まれるため、deploy-stgと同じく
-        # staging Doppler環境から渡す
+        # NEXT_PUBLIC_*はビルド時にバンドルへ埋め込まれるため、DopplerのCI専用config（ci）
+        # から渡す。ciにはSENTRY_AUTH_TOKENが無いため、ソースマップはSentryにアップロードしない
         run: doppler run -- pnpm build:cloudflare
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PR }}
 
   e2e-pr:
     name: E2E Tests (PR)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
-    environment: staging
+    # environmentを使わない理由はIntegration Testsのコメント参照
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -260,7 +263,7 @@ jobs:
           sed -i "s/^domain = \".*\.clerk\.accounts\.dev\"$/domain = \"$domain\"/" supabase/config.toml
           grep -q "^domain = \"$domain\"$" supabase/config.toml
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PR }}
       - name: Start local Supabase
         # このアプリはStorage/Realtime/Edge Functions/Studio/inbucketを使わないため、
         # 未使用コンテナのDocker pull・起動をスキップしてCI時間を短縮する
@@ -268,13 +271,12 @@ jobs:
       - name: Apply local migrations
         run: supabase db reset
       - name: Run E2E tests
-        # Clerk/Stripe/Sanity等のテスト用シークレットはDopplerのCI専用config（stg_ci）
+        # Clerk/Stripe/Sanity等のテスト用シークレットはDopplerのCI専用config（ci）
         # から取得するが、Supabase関連（URL・キー）だけはこのジョブ内で起動したローカルの
         # Supabaseを明示的に上書きして使う（本物のstg DBには一切アクセスしない）。
-        # stg_ciはstgのbranch configで、ClerkのキーだけをCI専用の開発インスタンスの
-        # もので上書きし、それ以外はstgの値を引き継ぐ。ローカルの並列開発セッションと
+        # ciのClerkのキーはCI専用の開発インスタンスのもの。ローカルの並列開発セッションと
         # Clerk Backend APIのレート制限の枠を取り合わないよう、Clerkインスタンスを
-        # 分けている（#299）。DOPPLER_TOKEN_CIはstg_ciに紐づくService Token
+        # 分けている（#299）。DOPPLER_TOKEN_PRはciに紐づくService Token
         # stripe listenはローカルのtask dev:stripeと同じ役割（Stripe Webhookを
         # localhost:3000へ転送）で、これがないと決済確定後のWebhook処理がテストで
         # 検証できない。署名シークレット（STRIPE_WEBHOOK_SECRET）はStripeアカウント
@@ -291,7 +293,7 @@ jobs:
             DISABLE_EMAIL_SENDING="true" \
             pnpm test:e2e
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_CI }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PR }}
       - name: Install age (暗号化用・失敗時のみ)
         # Integration Testsの同名のステップと同じ
         if: failure()
@@ -334,7 +336,7 @@ jobs:
 
   deploy-stg:
     name: Deploy (staging)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # マージごとのチェック（TypeScript・Lint・Unit Tests）が通ったコミットだけをstgに出す。
     # 待つ分デプロイは数分遅れるが、壊れたものをstgに出してE2E (stg)を無駄に落とさずに済む。
     # チェックはconcurrencyの外で動くので、ここで待っても取り消されない
@@ -363,7 +365,9 @@ jobs:
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
-        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
+        # 個人用のトークン（SUPABASE_ACCESS_TOKEN）は stg・本番の両方のプロジェクトを操作できるため使わず、
+        # このプロジェクトの DB の接続文字列（Session pooler）だけで適用する（#673。docs/cicd.md）
+        run: doppler run -- sh -c 'supabase db push --db-url "$SUPABASE_DB_URL"'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build
@@ -371,8 +375,9 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Sync Wrangler Secrets & Deploy
+        # SUPABASE_DB_URL（postgres ロールのパスワード入り）はマイグレーションにしか使わないため、Worker には上げない（#673）
         run: |
-          doppler run -- sh -c 'doppler secrets download --no-file --format json | pnpm exec wrangler secret bulk --config wrangler.stg.jsonc'
+          doppler run -- sh -c 'doppler secrets download --no-file --format json | jq "del(.SUPABASE_DB_URL)" | pnpm exec wrangler secret bulk --config wrangler.stg.jsonc'
           doppler run -- pnpm exec wrangler deploy --config wrangler.stg.jsonc
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
@@ -393,7 +398,7 @@ jobs:
 
   deploy-prod:
     name: Deploy (production)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
     steps:
@@ -407,7 +412,8 @@ jobs:
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
-        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
+        # deploy-stg の同名のステップと同じ（#673）
+        run: doppler run -- sh -c 'supabase db push --db-url "$SUPABASE_DB_URL"'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build
@@ -415,15 +421,16 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Sync Wrangler Secrets & Deploy
+        # SUPABASE_DB_URL（postgres ロールのパスワード入り）はマイグレーションにしか使わないため、Worker には上げない（#673）
         run: |
-          doppler run -- sh -c 'doppler secrets download --no-file --format json | pnpm exec wrangler secret bulk --config wrangler.prod.jsonc'
+          doppler run -- sh -c 'doppler secrets download --no-file --format json | jq "del(.SUPABASE_DB_URL)" | pnpm exec wrangler secret bulk --config wrangler.prod.jsonc'
           doppler run -- pnpm exec wrangler deploy --config wrangler.prod.jsonc
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
 
   e2e:
     name: E2E Tests (stg)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [deploy-stg]
     if: github.ref == 'refs/heads/develop'
     environment: staging

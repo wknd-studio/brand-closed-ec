@@ -7,12 +7,16 @@
 #   - 各項目は、HTMLコメント（テンプレートの説明）と空白を除いて何か書いてある。「なし」は記入済み
 #   - 項目の内容は、同じ行のラベルの後ろと、次の項目・見出しまでの続きの行を合わせて見る
 #
-# 使い方: PR_BODY="<PR本文>" bash scripts/ci/check-pr-review-summary.sh
+# Dependabot が作ったPR（作成者が dependabot[bot]）は、issue 無しの例外で本文を決まりに合わせられないため、
+# 検査せずに成功扱いにする（#668。運用は CLAUDE.md の「Dependabot のセキュリティ更新」）
+#
+# 使い方: PR_BODY="<PR本文>" PR_AUTHOR="<PRの作成者>" bash scripts/ci/check-pr-review-summary.sh
 #   （.github/workflows/pr-review-summary.yml から呼ぶ）
 set -euo pipefail
 
 SUMMARY_HEADING="レビューの要点"
 SUMMARY_ITEMS=("変わる振る舞い" "一番危ない箇所" "人間に判断してほしいこと")
+DEPENDABOT_AUTHOR="dependabot[bot]"
 
 # 標準入力: PR本文
 # 空欄の項目を出力し、1つでもあれば1を返す
@@ -79,6 +83,10 @@ MSG
 }
 
 main() {
+  if [[ "${PR_AUTHOR:-}" == "$DEPENDABOT_AUTHOR" ]]; then
+    echo "OK: Dependabot が作ったPRのため、本文の「${SUMMARY_HEADING}」は検査しません（high-risk として人間が差分を精読する）"
+    return 0
+  fi
   printf '%s' "${PR_BODY:-}" | judge_pr_review_summary
 }
 
