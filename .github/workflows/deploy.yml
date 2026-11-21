@@ -378,7 +378,7 @@ jobs:
         # Worker の secrets には、Worker 用の config（stg）の値だけを上げる。管理用のトークン（SUPABASE_DB_URL・
         # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、stg を引き継いだデプロイ用の config（stg_deploy。
         # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md）。
-        # doppler run の中では DOPPLER_CONFIG 等の環境変数がデプロイ用の config を指すため、--no-read-env で読む。
+        # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
         # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
         shell: bash
         run: |
@@ -430,7 +430,7 @@ jobs:
         # Worker の secrets には、Worker 用の config（prod）の値だけを上げる。管理用のトークン（SUPABASE_DB_URL・
         # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、prod を引き継いだデプロイ用の config（prod_deploy。
         # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md）。
-        # doppler run の中では DOPPLER_CONFIG 等の環境変数がデプロイ用の config を指すため、--no-read-env で読む。
+        # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
         # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
         shell: bash
         run: |

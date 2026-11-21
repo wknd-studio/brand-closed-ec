@@ -64,8 +64,7 @@ describe("Sync Wrangler Secrets & Deploy", () => {
       expect(step!.env?.DOPPLER_TOKEN_WORKER).toBe(
         "${{ secrets.DOPPLER_TOKEN_WORKER }}"
       );
-      // doppler run の中では DOPPLER_CONFIG 等の環境変数がデプロイ用の config を指すため、
-      // 環境変数を読まずに Worker 用のトークンだけで読む
+      // ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まず、Worker 用のトークンだけで読む
       expect(step!.run).toContain(
         `doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f ${FILTER} | doppler run -- pnpm exec wrangler secret bulk --config ${config}`
       );

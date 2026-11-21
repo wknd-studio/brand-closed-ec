@@ -96,6 +96,7 @@ prod / prod_deploy も同じ
 **root から branch に値を移すとき**: 先に branch に同じ値を書いても、root と同じ値は「引き継ぎ」と扱われて branch には残らない（2026-11-21 に確かめた）。値をシェルの変数に持ったまま、root から消してから branch に書く。失敗したら root の変更は `doppler configs logs rollback <ログID> -c <config>` で戻せる。
 
 ```bash
+# bash で実行する（zsh では $names が単語に分かれない）
 names='<移す名前をスペース区切り>'; keys=$(printf '%s\n' $names | jq -R . | jq -sc .)
 vals=$(doppler secrets download -p brand-closed-ec -c stg --no-file --format json | jq -c --argjson k "$keys" 'with_entries(select(.key as $x | $k | index($x)))')
 doppler secrets delete $names -p brand-closed-ec -c stg -y
