@@ -83,6 +83,7 @@ function makeDeps() {
         unitPrice: Money.of(58_000),
         isNegotiable: false,
         minRank: "starter",
+        availability: "available",
         paymentTiming: "at_order",
       },
     ]),

@@ -46,6 +46,7 @@ function makeDeps(
       unitPrice: Money.of(100_000),
       isNegotiable: false,
       minRank: "starter",
+      availability: "available",
       paymentTiming: "at_order",
     },
   ]
@@ -236,6 +237,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         unitPrice: Money.of(30_000),
         isNegotiable: false,
         minRank: "starter",
+        availability: "available",
         paymentTiming: "at_order",
       },
       {
@@ -244,6 +246,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         unitPrice: Money.of(70_000),
         isNegotiable: false,
         minRank: "starter",
+        availability: "available",
         paymentTiming: "after_order",
       },
     ]);
@@ -332,6 +335,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         unitPrice: Money.of(70_000),
         isNegotiable: false,
         minRank: "starter",
+        availability: "available",
         paymentTiming: "after_order",
       },
     ]);
