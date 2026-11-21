@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parse } from "yaml";
 
 const SCRIPT = path.resolve(
   __dirname,
@@ -192,6 +193,29 @@ describe("Dependabot が作ったPR", () => {
 
   it("作成者を渡さなければ、今までどおり本文を検査する", () => {
     expect(run({ PR_BODY: "" }).status).toBe(1);
+  });
+
+  it("ワークフローは、実行した人ではなくPRの作成者を PR_AUTHOR に渡す", () => {
+    const workflow = parse(
+      readFileSync(
+        path.resolve(
+          __dirname,
+          "../../.github/workflows/pr-review-summary.yml"
+        ),
+        "utf8"
+      )
+    ) as {
+      jobs: Record<
+        string,
+        { steps: { run?: string; env?: Record<string, string> }[] }
+      >;
+    };
+    const step = Object.values(workflow.jobs)
+      .flatMap((job) => job.steps)
+      .find((s) => s.run?.includes("check-pr-review-summary.sh"));
+    expect(step?.env?.PR_AUTHOR).toBe(
+      "${{ github.event.pull_request.user.login }}"
+    );
   });
 });
 
