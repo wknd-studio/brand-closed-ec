@@ -47,7 +47,13 @@ type FakeError = { code?: string; message: string };
 function makeSupabase({
   rows = [],
   failEmails = [],
-}: { rows?: FakeRow[]; failEmails?: string[] } = {}) {
+  webhookRaceEmails = [],
+}: {
+  rows?: FakeRow[];
+  failEmails?: string[];
+  // 更新してから作成するまでの間に、user.created Webhook が有効な行を作るアカウント
+  webhookRaceEmails?: string[];
+} = {}) {
   const failure = (row: Record<string, unknown>): FakeError | null =>
     failEmails.includes(row.email as string)
       ? { message: "write failed" }
@@ -76,6 +82,23 @@ function makeSupabase({
           single: async () => {
             const error = failure(row);
             if (error) return { data: null, error };
+            if (webhookRaceEmails.includes(row.email as string)) {
+              rows.push({
+                id: `row_webhook_${rows.length + 1}`,
+                clerk_user_id: row.clerk_user_id as string,
+                deleted_at: null,
+                email: row.email,
+                onboarding_completed: false,
+              });
+              return {
+                data: null,
+                error: {
+                  code: "23505",
+                  message:
+                    'duplicate key value violates unique constraint "users_clerk_user_id_active_idx"',
+                },
+              };
+            }
             const created = {
               id: `row_${rows.length + 1}`,
               deleted_at: null,
@@ -235,6 +258,28 @@ describe("seedUsers", () => {
         onboarding_completed: true,
       })
     );
+  });
+
+  it("作成の直前に user.created Webhook が行を作っていたら、その行を更新する", async () => {
+    const [member] = MEMBER_SEED_USERS;
+    const { supabase, rows } = makeSupabase({
+      webhookRaceEmails: [member.email],
+    });
+
+    await seedUsers({
+      clerk: makeClerk(),
+      supabase,
+      password: PASSWORD,
+      logger: makeLogger(),
+    });
+
+    const memberRows = rows.filter((r) => r.email === member.email);
+    expect(memberRows).toEqual([
+      expect.objectContaining({
+        rank_code: member.rank,
+        onboarding_completed: true,
+      }),
+    ]);
   });
 
   it("運営者は users の行を作らず、Clerk の publicMetadata.role を admin にするだけ", async () => {
