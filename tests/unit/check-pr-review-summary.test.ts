@@ -161,9 +161,12 @@ describe("judge_pr_review_summary", () => {
 
 // ワークフローと同じく環境変数で本文・作成者を渡し、スクリプト全体を実行する
 function run(env: { PR_BODY: string; PR_AUTHOR?: string }) {
+  // テストを実行している環境の PR_AUTHOR を持ち込まない
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
+  if (env.PR_AUTHOR === undefined) delete childEnv.PR_AUTHOR;
   const result = spawnSync("bash", [SCRIPT], {
     encoding: "utf8",
-    env: { PATH: process.env.PATH, ...env },
+    env: childEnv,
   });
   return { status: result.status, output: result.stdout + result.stderr };
 }
