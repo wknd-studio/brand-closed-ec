@@ -16,7 +16,7 @@ on:
 jobs:
   migration-order:
     name: Migration Order
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -31,7 +31,7 @@ jobs:
 
   recheck-open-prs:
     name: Recheck open PRs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'push'
     permissions:
       actions: write
