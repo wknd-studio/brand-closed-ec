@@ -1,9 +1,9 @@
 import { clerkClient } from "@clerk/nextjs/server";
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
+import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { test, expect, type Browser, type Page } from "@playwright/test";
+import { signInAsAdmin } from "../helpers/admin-user";
 import {
   cleanupTestUser,
-  getClerkUserIdByEmail,
   setupClerkTestingTokenForInvitation,
   slotEmail,
 } from "../helpers/clerk-test-invitation";
@@ -51,24 +51,6 @@ async function cleanupWaitlistEntry(email: string) {
   await clerk.waitlistEntries.reject(entry.id).catch(() => {});
 }
 
-/**
- * 管理者のClerkユーザーを用意する。middleware・Server Actionはセッショントークンの
- * metadata.role（publicMetadata）で管理者を判定する。前回の実行が中断され
- * 削除されずに残っていれば再利用する
- */
-async function ensureAdminUser(email: string) {
-  const existingId = await getClerkUserIdByEmail(email);
-  if (existingId) return;
-  const clerkApi = await clerkClient();
-  await clerkApi.users.createUser({
-    emailAddress: [email],
-    // ログインはclerk.signInのサインイントークンで行い、パスワードは使わないので乱数でよい
-    password: `E2e-${crypto.randomUUID()}`,
-    skipLegalChecks: true,
-    publicMetadata: { role: "admin" },
-  });
-}
-
 /** 公開ページの/waitlistから参加希望を送信し、Clerkにpendingのエントリができるまで待つ */
 async function submitWaitlist(page: Page, email: string) {
   await setupClerkTestingToken({ page });
@@ -94,14 +76,11 @@ async function approveAsAdmin(
   email: string,
   adminEmail: string
 ) {
-  await ensureAdminUser(adminEmail);
-  const adminContext = await browser.newContext({
-    baseURL: test.info().project.use.baseURL,
-  });
-  const adminPage = await adminContext.newPage();
-  // clerk.signInはClerkを読み込む非保護ページで呼ぶ必要がある
-  await adminPage.goto("/");
-  await clerk.signIn({ page: adminPage, emailAddress: adminEmail });
+  const { adminContext, adminPage } = await signInAsAdmin(
+    browser,
+    adminEmail,
+    test.info().project.use.baseURL
+  );
   await adminPage.goto("/admin/waitlist");
 
   const row = adminPage.getByRole("row").filter({ hasText: email });
