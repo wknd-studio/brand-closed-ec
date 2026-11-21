@@ -159,6 +159,39 @@ describe("judge_pr_review_summary", () => {
   );
 });
 
+// ワークフローと同じく環境変数で本文・作成者を渡し、スクリプト全体を実行する
+function run(env: { PR_BODY: string; PR_AUTHOR?: string }) {
+  const result = spawnSync("bash", [SCRIPT], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, ...env },
+  });
+  return { status: result.status, output: result.stdout + result.stderr };
+}
+
+// Dependabot のセキュリティ更新のPRは issue 無しの例外で、本文の書き方を決まりに合わせられない（#668）
+describe("Dependabot が作ったPR", () => {
+  it("作成者が dependabot[bot] なら、本文が空でも成功扱いにする", () => {
+    const { status, output } = run({
+      PR_BODY: "",
+      PR_AUTHOR: "dependabot[bot]",
+    });
+    expect(status).toBe(0);
+    expect(output).toContain("Dependabot");
+  });
+
+  it.each(["wknd-studio", "dependabot", "github-actions[bot]", ""])(
+    "作成者が %j なら、今までどおり本文を検査する",
+    (author) => {
+      expect(run({ PR_BODY: "", PR_AUTHOR: author }).status).toBe(1);
+      expect(run({ PR_BODY: summary({}), PR_AUTHOR: author }).status).toBe(0);
+    }
+  );
+
+  it("作成者を渡さなければ、今までどおり本文を検査する", () => {
+    expect(run({ PR_BODY: "" }).status).toBe(1);
+  });
+});
+
 describe("pull_request_template.md", () => {
   const body = template("pull_request_template.md");
 
