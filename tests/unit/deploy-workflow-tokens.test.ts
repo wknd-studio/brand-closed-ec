@@ -82,7 +82,10 @@ describe("商品データの同期（product-data-sync.yml）", () => {
   it("定期実行は develop（既定ブランチ）で動くため、本番の同期は main の上で起動し直す", () => {
     const dispatch = sync.jobs["dispatch-production"];
     expect(dispatch.if).toBe("github.ref == 'refs/heads/develop'");
-    expect(dispatch.permissions).toEqual({ actions: "write" });
+    expect(dispatch.permissions).toEqual({
+      actions: "write",
+      contents: "read",
+    });
     const run = dispatch.steps.map((s) => s.run ?? "").join("\n");
     expect(run).toContain("gh workflow run product-data-sync.yml --ref main");
     // main にまだこのワークフローが無い間は、失敗させずに飛ばす
