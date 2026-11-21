@@ -10,6 +10,7 @@ import { placeOrder as placeOrderUseCase } from "@/composition/order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 
 type PlaceOrderResult = { error: string };
 
@@ -64,6 +65,19 @@ export async function placeOrder(
         error: productName
           ? `「${productName}」は現在のランクでは購入できません。カートから外してから注文してください`
           : "現在のランクでは購入できない商品が含まれています。カートから外してから注文してください",
+      };
+    }
+    if (err instanceof ProductUnavailableError) {
+      // カートに入れた後に在庫切れ・取り扱い終了になった商品。想定内のためSentryには送らない
+      const productName = cart.items.find(
+        (item) => item.productId === err.productId
+      )?.productName;
+      const reason =
+        err.availability === "out_of_stock" ? "在庫切れ" : "取り扱い終了";
+      return {
+        error: productName
+          ? `「${productName}」は${reason}のため注文できません。カートから外してから注文してください`
+          : "在庫切れ・取り扱い終了の商品が含まれています。カートから外してから注文してください",
       };
     }
     Sentry.captureException(err, {

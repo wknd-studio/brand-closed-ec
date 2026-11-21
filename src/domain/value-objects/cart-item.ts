@@ -2,6 +2,7 @@ import { Money } from "./money";
 import { MemberRank } from "./member-rank";
 import type { ProductSnapshot } from "./product-snapshot";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 
 interface CartItemProps {
   sanityProductId: string;
@@ -40,7 +41,7 @@ export class CartItem {
    * サーバー側の商品情報とカートの数量から明細を作る。
    * カート情報は会員のブラウザ側で保持・改竄されうるため、カートからは商品IDと数量だけを使い、
    * 商品名・単価・支払いタイミングはサーバー側の商品情報の値だけを根拠にする（研究文書 決定9）。
-   * 商品情報に無い商品・会員のランクでアクセスできない商品はエラーにする
+   * 商品情報に無い商品・会員のランクでアクセスできない商品・在庫切れ／取り扱い終了の商品はエラーにする
    */
   static fromProducts(
     cartLines: readonly { sanityProductId: string; quantity: number }[],
@@ -57,6 +58,12 @@ export class CartItem {
           product.sanityProductId,
           memberRank.value,
           product.minRank
+        );
+      }
+      if (product.availability !== "available") {
+        throw new ProductUnavailableError(
+          product.sanityProductId,
+          product.availability
         );
       }
       return CartItem.of({
