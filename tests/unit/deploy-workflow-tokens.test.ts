@@ -45,6 +45,18 @@ describe("デプロイのマイグレーション", () => {
     }
   );
 
+  it.each(["deploy-stg", "deploy-prod"])(
+    "%s は DB の接続文字列を Worker の実行環境に上げない（マイグレーションにしか使わない）",
+    (id) => {
+      const run = deploy.jobs[id].steps.find(
+        (s) => s.name === "Sync Wrangler Secrets & Deploy"
+      )?.run;
+      expect(run).toMatch(
+        /doppler secrets download --no-file --format json \| jq 'del\(\.SUPABASE_DB_URL\)' \| pnpm exec wrangler secret bulk/
+      );
+    }
+  );
+
   it("どのジョブも SUPABASE_ACCESS_TOKEN を参照しない", () => {
     expect(JSON.stringify(deploy)).not.toContain("SUPABASE_ACCESS_TOKEN");
   });
