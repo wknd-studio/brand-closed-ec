@@ -45,6 +45,36 @@ push (develop・main)
 
 GitHub リポジトリの Settings → Secrets and variables → Actions に設定する。
 
+### Doppler の config と secret の対応
+
+ジョブは Doppler のサービストークンを `DOPPLER_TOKEN` 環境変数で渡し、`doppler run` で config の値を読む。どの secret がどの config を指すか:
+
+| Secret             | 置き場所                                         | Doppler の config | 使うジョブ                                            |
+| ------------------ | ------------------------------------------------ | ----------------- | ----------------------------------------------------- |
+| `DOPPLER_TOKEN_PR` | リポジトリの Actions secrets・Dependabot secrets | `ci`（環境 `CI`） | Integration Tests・Build (Cloudflare)・E2E Tests (PR) |
+| `DOPPLER_TOKEN`    | `staging` environment                            | `stg`             | Deploy (staging)・E2E Tests (stg)                     |
+| `DOPPLER_TOKEN`    | `production` environment                         | `prod`            | Deploy (production)                                   |
+
+`DOPPLER_TOKEN_PR` は Actions secrets と Dependabot secrets に同じ値で登録している（Dependabot の PR のワークフローは Dependabot secrets しか読めないため）。作り直すときは両方を入れ替える。
+
+```bash
+doppler configs tokens create github-actions-pr -p brand-closed-ec -c ci --access read --plain \
+  | tee >(gh secret set DOPPLER_TOKEN_PR --app actions) | gh secret set DOPPLER_TOKEN_PR --app dependabot
+```
+
+### PR の CI が読む Doppler の config（`ci`）
+
+PR の CI（Dependabot のセキュリティ更新の PR を含む）では、人間が見る前の新しい版の依存が secret と一緒に動く。依存が乗っ取られていても管理用のトークンが盗まれないよう、PR のジョブは `environment` を使わず、テスト・ビルドに要る値だけを入れた `ci` だけを読む（#671）。
+
+- `ci` は `stg` の branch config ではなく、別の環境（`CI`）の root config にしている（branch config は親の値を引き継ぎ、消せないため）。`stg` の値を変えても `ci` には反映されないので、テストに要る値を足すときは `ci` にも入れる
+- 入れないもの: `SUPABASE_ACCESS_TOKEN`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`（ビルドでソースマップを Sentry にアップロードしない）・`SANITY_AUTH_TOKEN`・`RESEND_API_KEY`（PR の CI ではメールを送らない。`DISABLE_EMAIL_SENDING`）・`SUPABASE_SERVICE_ROLE_KEY`・`SUPABASE_PROJECT_REF`（stg の DB に触れない）
+- `NEXT_PUBLIC_SUPABASE_URL`・`NEXT_PUBLIC_SUPABASE_ANON_KEY` はローカルの Supabase の既定値（`http://127.0.0.1:54321` と既定の publishable key）。Integration Tests・E2E Tests (PR) はジョブ内で起動したローカルの Supabase の値で上書きし、Build (Cloudflare) はデプロイしないビルドなので埋め込まれても困らない
+- Clerk のキー（`CLERK_SECRET_KEY`・`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`・`CLERK_WEBHOOK_SECRET`）は CI 専用の Clerk 開発インスタンスのもの（#299）
+- `SANITY_API_TOKEN`・`SANITY_WRITE_TOKEN` は CI 専用の Sanity のトークン（ラベル `github-actions-pr-ci`・Editor）。E2E が `staging` データセットに商品を書き込むため Editor にしている。Sanity のトークンはプロジェクト単位で、本番の `production` データセットにも届く（プロジェクトは分けない判断。#671）
+- そのほか: `NEXT_PUBLIC_APP_URL`・`NEXT_PUBLIC_SANITY_*`・`NEXT_PUBLIC_SENTRY_*`・`RESEND_FROM_EMAIL`・`RESEND_ADMIN_EMAIL`・`RESEND_TEST_TO`・Stripe のテストモードのキーと `STRIPE_PRICE_ID_*`（`stg` と同じ値）
+
+`tests/unit/deploy-workflow-pr-secrets.test.ts` が、PR のジョブが `environment` を使わず `DOPPLER_TOKEN_PR` だけを読むこと、デプロイのジョブが今までどおり `DOPPLER_TOKEN` を読むことを検査する。
+
 ### 既存
 
 | Secret                        | 用途                                 |
@@ -107,7 +137,7 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.prod.jsonc
 
 ### CI での実行タイミング（2種類）
 
-1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`stg_ci`、GitHub Secretsの`DOPPLER_TOKEN_CI`で参照）から取得する。`stg_ci`は`stg`のbranch configで、ClerkのキーだけをCI専用のClerk開発インスタンスのもので上書きし、それ以外は`stg`の値を引き継ぐ。ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
+1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`ci`、GitHub Secretsの`DOPPLER_TOKEN_PR`で参照）から取得する（下の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。`ci`のClerkのキーはCI専用のClerk開発インスタンスのもので、ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
 
 どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
