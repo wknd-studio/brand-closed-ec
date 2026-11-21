@@ -365,7 +365,9 @@ jobs:
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
-        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
+        # 個人用のトークン（SUPABASE_ACCESS_TOKEN）は stg・本番の両方のプロジェクトを操作できるため使わず、
+        # このプロジェクトの DB の接続文字列（Session pooler）だけで適用する（#673。docs/cicd.md）
+        run: doppler run -- sh -c 'supabase db push --db-url "$SUPABASE_DB_URL"'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build
@@ -409,7 +411,8 @@ jobs:
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
       - name: Migrate DB
-        run: doppler run -- sh -c 'supabase link --project-ref $SUPABASE_PROJECT_REF && supabase db push --linked'
+        # deploy-stg の同名のステップと同じ（#673）
+        run: doppler run -- sh -c 'supabase db push --db-url "$SUPABASE_DB_URL"'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build
