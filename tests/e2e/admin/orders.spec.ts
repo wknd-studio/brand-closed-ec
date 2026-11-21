@@ -3,7 +3,11 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect, withWorkerSuffix } from "../helpers/test-member";
 import { clickAddToCart } from "../helpers/cart";
-import { signInAsAdmin } from "../helpers/admin-user";
+import {
+  deleteAdminUserRow,
+  ensureAdminUserRow,
+  signInAsAdmin,
+} from "../helpers/admin-user";
 import { cleanupTestUser, slotEmail } from "../helpers/clerk-test-invitation";
 
 // 注文はStripeの画面を操作せずに確定できるよう、後払い（after_order）の商品だけで作る。
@@ -65,19 +69,21 @@ test.describe("運営者の注文の確認とキャンセル", () => {
     });
   });
 
-  test.afterAll(async () => {
+  test.afterAll(async ({}, workerInfo) => {
     const client = sanityWriteClient();
     await client.delete(TEST_PRODUCT_ID);
     await client.delete(TEST_BRAND_ID);
+
+    // 会員・注文・住所は test-member の fixture が各テストの終わりに片付ける。
+    // キャンセルの記録（order_status_changes）が運営者の行を参照するため、
+    // 注文が消えた後のここで運営者を消す（afterEachは fixture の片付けより前に動く）
+    const email = adminEmailFor(workerInfo.parallelIndex);
+    await deleteAdminUserRow(email);
+    await cleanupTestUser(email);
   });
 
   test.beforeEach(({}, testInfo) => {
     adminEmail = adminEmailFor(testInfo.parallelIndex);
-  });
-
-  test.afterEach(async () => {
-    // 会員・注文・住所は test-member の fixture が片付ける
-    await cleanupTestUser(adminEmail);
   });
 
   test("会員が確定した注文を、運営者が一覧で見つけて詳細を確認し、キャンセルすると、詳細の状態がキャンセルになり一覧から外れる", async ({
@@ -142,6 +148,7 @@ test.describe("運営者の注文の確認とキャンセル", () => {
       adminEmail,
       test.info().project.use.baseURL
     );
+    await ensureAdminUserRow(adminEmail);
     try {
       await adminPage.goto("/admin/orders");
       await expect(

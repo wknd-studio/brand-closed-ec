@@ -1,6 +1,8 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { clerk } from "@clerk/testing/playwright";
 import type { Browser } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { getClerkUserIdByEmail } from "./clerk-test-invitation";
 
 /**
@@ -41,4 +43,46 @@ export async function signInAsAdmin(
   await adminPage.goto("/");
   await clerk.signIn({ page: adminPage, emailAddress: email });
   return { adminContext, adminPage };
+}
+
+function supabaseAdmin() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+/**
+ * 管理者のadmin_usersの行を用意する。注文のキャンセル等、誰が操作したかを残す操作は
+ * この行が無い運営者には許されない。本番ではClerkの組織メンバーシップのWebhookが作るが、
+ * E2EにはWebhookが届かないため直接作る。ensureAdminUserの後に呼ぶ
+ */
+export async function ensureAdminUserRow(email: string): Promise<void> {
+  const clerkUserId = await getClerkUserIdByEmail(email);
+  if (!clerkUserId) {
+    throw new Error(`管理者のClerkユーザーが見つかりません: ${email}`);
+  }
+  const { error } = await supabaseAdmin()
+    .from("admin_users")
+    .upsert(
+      { clerk_user_id: clerkUserId, name: "テスト運営者", email },
+      { onConflict: "clerk_user_id" }
+    );
+  if (error) {
+    throw new Error(`管理者の行の作成に失敗しました: ${error.message}`);
+  }
+}
+
+/**
+ * 管理者のadmin_usersの行を削除する。order_status_changesが運営者を参照するため、
+ * その運営者が操作した注文を消した後に呼ぶ（注文の削除で状態変更の記録も消える）
+ */
+export async function deleteAdminUserRow(email: string): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("admin_users")
+    .delete()
+    .eq("email", email);
+  if (error) {
+    throw new Error(`管理者の行の削除に失敗しました: ${error.message}`);
+  }
 }
