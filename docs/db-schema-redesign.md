@@ -561,6 +561,8 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 `orders.status`の更新は、必ずこのテーブルへのINSERTと同一トランザクションで行う（`rank_changes`と同じ運用ルール）。
 
+実装（#237）: `order_id`は注文確定の補償削除（`delete_order`）で注文ごと消すため`ON DELETE CASCADE`とし、それ以外のUPDATE/DELETEはservice roleも含めてトリガーで拒否する。`changed_by = 'admin'`のときだけ`changed_by_admin_user_id`を必須にする（CHECK `order_status_changes_admin_user_check`）。
+
 ---
 
 ### `order_settlements`（新設、2026-09-20: [[settlement]]設計に対応）
@@ -850,7 +852,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 8. ✅ [#219](https://github.com/wknd-studio/brand-closed-ec/issues/219) `order_settlements`を新設し、`order_items.settlement_id`／`payment_timing`を追加する。`orders.status`のCHECK制約を`('cancelled','processing','limit_exceeded','paid')`へ変更し、`payment_flow`/`requested_by_user_id`/`approved_by_user_id`/`approval_status`/`approved_at`/`stripe_checkout_session_id`/`stripe_invoice_id`/`split_group_id`/`procurement_due_at`を削除する（[[settlement]]・[[ordering]]参照。法人組織の注文承認フロー廃止に伴う削除も同時に行う）。既存issue #172〜176は本ステップの後に実施する形に順序が変わる。（`supabase/migrations/20260921120000_create_order_settlements.sql`で実装済み。既存ordersからのバックフィル込み。アプリコード追従（`OrderStatus`の4値化・`OrderSettlement`エンティティ・place-order/Webhookの決済単位化）も同PRで完了。`procurement_due_at`は現行スキーマに存在しないため削除対象なし）
 9. ⬜ [#172](https://github.com/wknd-studio/brand-closed-ec/issues/172) `procurement_tasks`を新設し、`order_items.procurement_task_id`・`received_at`を追加する（`admin_users`が存在した後でないと`procurement_tasks.assigned_admin_user_id`のFKが張れないため7の後、また`order_items.settlement_id`を参照する対応待ちキューの入場条件があるため8の後に実施する）。`status`のCHECK制約は`('pending','claimed','ordered','cancelled')`の4値（`'received'`は明細単位の`received_at`に置き換えたため含めない）。`orders.procurement_due_at`は削除済みのため追加しない
 10. ⬜ [#173](https://github.com/wknd-studio/brand-closed-ec/issues/173) `shipments`を新設し、`order_items.shipment_id`を追加する。`status`のCHECK制約は`('pending','preparing','shipped','delivered')`の4値、`assigned_admin_user_id`（FK→`admin_users`）も追加する。`orders.status`のCHECK制約変更はステップ8で完了済みのため本ステップでは不要
-11. ⬜ [#174](https://github.com/wknd-studio/brand-closed-ec/issues/174) `order_status_changes`を新設する（実データが無いためバックフィル不要）。
+11. ✅ [#174](https://github.com/wknd-studio/brand-closed-ec/issues/174)（[#237](https://github.com/wknd-studio/brand-closed-ec/issues/237)で実装）`order_status_changes`を新設する（実データが無いためバックフィル不要）。（`supabase/migrations/20261110215518_create_order_status_changes.sql`で実装済み。注文の保存を`save_order`関数にまとめ、`orders.status`が変わったときだけ同じトランザクションで1行追記する。注文確定時の最初の1行は`place_order_with_limit_check`が`changed_by = 'customer'`で記録する。UPDATE/DELETEはトリガーで拒否し、注文確定の補償削除（`delete_order`）に伴う`ON DELETE CASCADE`だけを通す。RLSは本人の注文の履歴の参照のみ（組織は削除済み）。`reason`を画面から渡すのは#271）
 12. ⬜ [#175](https://github.com/wknd-studio/brand-closed-ec/issues/175) `returns`/`return_items`を新設する。`returns.admin_note`（自由記述の備考欄）も含める
 13. ⬜ [#176](https://github.com/wknd-studio/brand-closed-ec/issues/176) `locations`を新設し、`('office', ...)`/`('supplier_direct', ...)`の初期2行を投入する。`order_items.fulfillment_location_code`・`shipments.origin_location_code`を追加する（実データが無いためバックフィル不要）。
 

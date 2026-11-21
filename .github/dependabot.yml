@@ -1,0 +1,33 @@
+# Dependabot のセキュリティ更新を、エコシステムごとに1つのPRにまとめて自動で作る（#668）。
+# 運用（issue 無しの例外・high-risk として精読・CI が落ちたときの扱い）は CLAUDE.md の「Dependabot のセキュリティ更新」を参照。
+#
+# - target-branch は書かない。書くとこのエントリの設定（groups 等）がセキュリティの更新に効かなくなる。
+#   セキュリティの更新は常にリポジトリの既定ブランチ（develop）に向く
+# - バージョンの定期更新（セキュリティ以外）は open-pull-requests-limit: 0 で作らない。
+#   セキュリティの更新はこの上限と別の上限（10件）で動くため止まらない。schedule は書くことが必須のため書いている
+# - directory はルートだけにする（.agents/ 配下のスキルのテンプレートの package.json は対象にしない）
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ["*"]

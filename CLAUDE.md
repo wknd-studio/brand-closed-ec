@@ -118,6 +118,12 @@ feature/* →  Cloudflare Pages Preview URL
 - 対象パスを足すときは、`.github/labeler.yml` の区分と `high-risk` の両方に足す（ずれると `tests/unit/review-checklists.test.ts` が失敗する）
 - レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、見落とした観点を `docs/review-checklists/` に足すか、同じバグを検出するlint・テストに変換する
 
+**Dependabot のセキュリティ更新**: Dependabot が、セキュリティの更新をエコシステム（npm・GitHub Actions）ごとに1つのPRにまとめて、develop に向けて自動で作る（設定は `.github/dependabot.yml`。バージョンの定期更新は作らない）。
+
+- このPRは「1PR = 1目的 = 1issue」の例外で、issue 無しで扱う。本文も決まりの書き方にならないため、`PR Review Summary` は作成者が `dependabot[bot]` のPRを検査せずに成功扱いにする。ほかのCIは通常のPRと同じく動く
+- `package.json`・`pnpm-lock.yaml`・`.github/` を変えるため `high-risk` が付く。人間が差分を精読してからマージする
+- CIが落ちたら、オーケストレーションのセッションが修正の issue を起票する（Dependabot のPRのブランチに直接コミットしない）
+
 **developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
 
 - developのCIが赤なら、新しいPRのマージより、直す・revertすることを優先する。原因のPRがすぐ直せなければ、まずそのマージコミットをrevertする（`git revert -m 1 <マージコミット>` をfeatureブランチで行い、develop向けのPRにする）

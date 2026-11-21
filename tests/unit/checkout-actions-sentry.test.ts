@@ -143,6 +143,43 @@ describe("placeOrder Server Action - Sentry例外送信", () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["out_of_stock", "在庫切れ"],
+    ["discontinued", "取り扱い終了"],
+  ] as const)(
+    "在庫状況が%sの商品のエラーは商品名と対処を返し、Sentry.captureExceptionを呼ばない",
+    async (availability, label) => {
+      const { ProductUnavailableError } =
+        await import("@/domain/errors/product-unavailable-error");
+      vi.mocked(placeOrderUseCase).mockRejectedValue(
+        new ProductUnavailableError("prod-1", availability)
+      );
+
+      const result = await placeOrder("addr-1", "addr-1");
+
+      expect(result).toEqual({
+        error: `「テスト商品」は${label}のため注文できません。カートから外してから注文してください`,
+      });
+      expect(Sentry.captureException).not.toHaveBeenCalled();
+    }
+  );
+
+  it("在庫切れ・取り扱い終了の商品がカートに見つからないときは、商品名なしで原因と対処を返す", async () => {
+    const { ProductUnavailableError } =
+      await import("@/domain/errors/product-unavailable-error");
+    vi.mocked(placeOrderUseCase).mockRejectedValue(
+      new ProductUnavailableError("prod-unknown", "out_of_stock")
+    );
+
+    const result = await placeOrder("addr-1", "addr-1");
+
+    expect(result).toEqual({
+      error:
+        "在庫切れ・取り扱い終了の商品が含まれています。カートから外してから注文してください",
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
   it("Sentry.startSpanでラップして実行する", async () => {
     vi.mocked(placeOrderUseCase).mockResolvedValue({
       redirectUrl: "https://checkout.stripe.com/cs_1",

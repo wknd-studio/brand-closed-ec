@@ -34,6 +34,24 @@ describe("markCheckoutOrderAsPaid", () => {
     expect(notificationService.sendCheckoutPaid).toHaveBeenCalled();
   });
 
+  it("決済完了による状態の変化は system が変えたとして保存する", async () => {
+    const orderRepo = makeOrderRepo(makeOrder());
+
+    await markCheckoutOrderAsPaid(
+      { stripeCheckoutSessionId: "sess_1" },
+      {
+        orderRepo,
+        userRepo: makeUserRepo(),
+        notificationService: makeNotificationService(),
+        errorReporter: makeErrorReporter(),
+      }
+    );
+
+    expect(vi.mocked(orderRepo.save).mock.calls[0]?.[1]).toEqual({
+      type: "system",
+    });
+  });
+
   it("請求作成前のafter_order明細が残っている注文は、決済単位がpaidでも注文はprocessingのまま", async () => {
     const order = makeOrder({
       items: [

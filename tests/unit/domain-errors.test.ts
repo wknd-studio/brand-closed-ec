@@ -5,6 +5,7 @@ import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-tra
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 
@@ -145,5 +146,18 @@ describe("InvalidOrderError", () => {
     "settlement_of_other_order",
   ] as const)("理由（%s）ごとにメッセージが設定される", (reason) => {
     expect(new InvalidOrderError("order-1", reason).message).not.toBe("");
+  });
+});
+
+describe("ProductUnavailableError", () => {
+  it("DomainError を継承している", () => {
+    const err = new ProductUnavailableError("prod-001", "out_of_stock");
+    expect(err).toBeInstanceOf(DomainError);
+  });
+
+  it("productId, availability を保持する", () => {
+    const err = new ProductUnavailableError("prod-001", "discontinued");
+    expect(err.productId).toBe("prod-001");
+    expect(err.availability).toBe("discontinued");
   });
 });

@@ -8,11 +8,13 @@ import { DomainError } from "@/domain/errors/domain-error";
 
 type ActionResult = { error: string };
 
-async function requireAdmin(): Promise<{ error: string } | null> {
-  const { sessionClaims } = await requireAuth();
+async function requireAdmin(): Promise<
+  { error: string } | { adminClerkUserId: string }
+> {
+  const { userId, sessionClaims } = await requireAuth();
   const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role;
-  if (role !== "admin") return { error: "権限がありません" };
-  return null;
+  if (!userId || role !== "admin") return { error: "権限がありません" };
+  return { adminClerkUserId: userId };
 }
 
 export async function cancelOrder(
@@ -20,11 +22,14 @@ export async function cancelOrder(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   reason: string
 ): Promise<ActionResult | void> {
-  const authError = await requireAdmin();
-  if (authError) return authError;
+  const admin = await requireAdmin();
+  if ("error" in admin) return admin;
 
   try {
-    await cancelOrderUseCase({ orderId });
+    await cancelOrderUseCase({
+      orderId,
+      adminClerkUserId: admin.adminClerkUserId,
+    });
   } catch (err) {
     // キャンセルできない状態等の業務ルールの違反（DomainError）は想定内の失敗のため送らない
     if (!(err instanceof DomainError))

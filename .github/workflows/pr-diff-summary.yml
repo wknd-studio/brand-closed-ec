@@ -22,7 +22,7 @@ concurrency:
 jobs:
   summarize:
     name: Summarize diff
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
@@ -53,7 +53,7 @@ jobs:
   comment:
     name: Comment summary
     needs: summarize
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
     env:

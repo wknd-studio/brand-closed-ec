@@ -2,6 +2,7 @@ import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
+import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";
 import { SanityProductRepository } from "@/infrastructure/sanity/sanity-product-repository";
 import { StripePaymentGateway } from "@/infrastructure/stripe/stripe-payment-gateway";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
@@ -30,7 +31,9 @@ export function placeOrder(input: PlaceOrderInput) {
 }
 
 export function cancelOrder(input: CancelOrderInput) {
+  const supabase = createAdminClient();
   return cancelOrderUseCase(input, {
-    orderRepo: new SupabaseOrderRepository(createAdminClient()),
+    orderRepo: new SupabaseOrderRepository(supabase),
+    adminUserRepo: new SupabaseAdminUserRepository(supabase),
   });
 }

@@ -256,7 +256,7 @@ describe("SanityCatalogQueryService.findFavoriteProducts", () => {
 });
 
 describe("SanityCatalogQueryService.findCheckoutProducts", () => {
-  it("カートの商品の最新の名前・ランクの価格・在庫・支払いタイミングを返す", async () => {
+  it("カートの商品の最新の名前・ランクの価格・在庫・支払いタイミング・閲覧できるかを返す", async () => {
     fetchMock.mockResolvedValue([
       sanityProduct(),
       sanityProduct({
@@ -282,6 +282,7 @@ describe("SanityCatalogQueryService.findCheckoutProducts", () => {
         unitPrice: 8000,
         isOutOfStock: false,
         paymentTiming: "at_order",
+        isAccessible: true,
       },
       {
         id: "prod-2",
@@ -290,7 +291,25 @@ describe("SanityCatalogQueryService.findCheckoutProducts", () => {
         unitPrice: null,
         isOutOfStock: true,
         paymentTiming: "at_order",
+        isAccessible: true,
       },
+    ]);
+  });
+
+  it("会員ランクより上のランクの商品は閲覧できないとし、価格を返さない", async () => {
+    fetchMock.mockResolvedValue([sanityProduct({ min_rank: "pro" })]);
+
+    const result = await service.findCheckoutProducts({
+      rank: MemberRank.of("starter"),
+      productIds: ["prod-1"],
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "prod-1",
+        unitPrice: null,
+        isAccessible: false,
+      }),
     ]);
   });
 
