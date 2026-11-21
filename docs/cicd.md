@@ -127,7 +127,7 @@ main への PR（develop → main のリリース）では、`.github/workflows/
 ```bash
 pnpm test:e2e       # pnpm dev を自動起動してテスト
 pnpm test:e2e --ui  # Playwright UI モード（ブラウザの動きをリアルタイムで確認できる）
-pnpm test:e2e:smoke # スモークテストだけ（docs/seed-data.md のアカウントが要る）
+pnpm test:e2e:smoke # スモークテストだけ（docs/seed-data.md のアカウントが要る。ワークツリーでは bash scripts/with-worktree-db.sh を通す）
 ```
 
 失敗したテストの動画・トレースはローカルでも`test-results/`配下に自動保存される（`playwright.config.ts`の`video: "retain-on-failure"` / `trace: "retain-on-failure"`）。
