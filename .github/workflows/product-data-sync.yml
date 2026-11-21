@@ -7,60 +7,53 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  scheduled-sync:
-    name: Run scheduled scraping sync (${{ matrix.env }})
+  dispatch-production:
+    name: Dispatch production sync on main
     runs-on: ubuntu-24.04
-    # アプリ本体と同じ「main = 本番 / develop = stg」の昇格フローに揃える。
-    # checkoutのrefを固定しないとデフォルトブランチ（develop）のコードで動き、
-    # 未リリースのスクレイパーが本番Sanityに書き込みうるため、環境ごとに明示する。
+    # 定期実行は既定ブランチ（develop）でしか動かない。production の environment は main だけが
+    # 使えるよう絞っているため（#673）、本番の同期は main の上でこのワークフローを起動し直して行う。
+    # GITHUB_TOKEN で起こした workflow_dispatch は、ほかのイベントと違い新しい実行を作る
+    if: github.ref == 'refs/heads/develop'
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Run this workflow on main
+        # main にまだこのワークフローが無い間（develop を main に出す前）は、失敗させずに飛ばす。
+        # 404 以外のエラーは飛ばさずに失敗する（本番の同期が黙って止まらないようにする）
+        run: |
+          if ! out=$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/product-data-sync.yml?ref=main" --silent 2>&1); then
+            if echo "$out" | grep -q "HTTP 404"; then
+              echo "::notice::main に product-data-sync.yml が未リリースのため、production の同期をスキップします"
+              exit 0
+            fi
+            echo "$out" >&2
+            exit 1
+          fi
+          gh workflow run product-data-sync.yml --ref main --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  scheduled-sync:
+    name: Run scheduled scraping sync (${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }})
+    runs-on: ubuntu-24.04
+    # アプリ本体と同じ「main = 本番 / develop = stg」の昇格フローに揃える。ワークフローと同じ
+    # コミット（main なら本番に出たコード）で動くため、未リリースのスクレイパーが本番Sanityに書き込まない。
     # DOPPLER_TOKENはGitHub Environmentごとに登録した、各Doppler config
     # （production → prod / staging → stg）のService Token（#314）
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { env: production, ref: main }
-          - { env: staging, ref: develop }
-    environment: ${{ matrix.env }}
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     concurrency:
-      group: product-data-sync-${{ matrix.env }}
+      group: product-data-sync-${{ github.ref_name }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ matrix.ref }}" }
-      - name: Checkout CI actions of this workflow
-        # CLIのインストール手順（.github/actions/install-cli）は、checkoutしたブランチ（mainの
-        # こともある）ではなく、このワークフローと同じコミットのものを使う。mainへ昇格する前でも
-        # 本番の同期のジョブがインストールで落ちないようにするため（#546）
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          path: ci-tools
-          sparse-checkout: .github/actions/install-cli
-          # cone mode だとルート直下のファイル（package.json 等）まで入るため、actionだけを取る
-          sparse-checkout-cone-mode: false
-      - name: Check sync script is released to this branch
-        # 同期機能がまだmainに昇格していない間、本番ジョブが毎日失敗し続けないよう、
-        # checkoutしたコードにスクリプトが無ければ以降をスキップする
-        id: released
-        run: |
-          if [ -f scripts/product-import/run-scheduled-sync.ts ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::${{ matrix.ref }} に同期スクリプトが未リリースのため、${{ matrix.env }} の同期をスキップします"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          fi
       - uses: pnpm/action-setup@v4
-        if: steps.released.outputs.ok == 'true'
       - uses: actions/setup-node@v4
-        if: steps.released.outputs.ok == 'true'
         with: { node-version: "22", cache: "pnpm" }
-      - uses: ./ci-tools/.github/actions/install-cli
-        if: steps.released.outputs.ok == 'true'
+      - uses: ./.github/actions/install-cli
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
-        if: steps.released.outputs.ok == 'true'
       - run: doppler run -- pnpm tsx scripts/product-import/run-scheduled-sync.ts
-        if: steps.released.outputs.ok == 'true'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
