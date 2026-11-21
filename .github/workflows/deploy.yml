@@ -375,8 +375,9 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Sync Wrangler Secrets & Deploy
+        # SUPABASE_DB_URL（postgres ロールのパスワード入り）はマイグレーションにしか使わないため、Worker には上げない（#673）
         run: |
-          doppler run -- sh -c 'doppler secrets download --no-file --format json | pnpm exec wrangler secret bulk --config wrangler.stg.jsonc'
+          doppler run -- sh -c 'doppler secrets download --no-file --format json | jq "del(.SUPABASE_DB_URL)" | pnpm exec wrangler secret bulk --config wrangler.stg.jsonc'
           doppler run -- pnpm exec wrangler deploy --config wrangler.stg.jsonc
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
@@ -420,8 +421,9 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Sync Wrangler Secrets & Deploy
+        # SUPABASE_DB_URL（postgres ロールのパスワード入り）はマイグレーションにしか使わないため、Worker には上げない（#673）
         run: |
-          doppler run -- sh -c 'doppler secrets download --no-file --format json | pnpm exec wrangler secret bulk --config wrangler.prod.jsonc'
+          doppler run -- sh -c 'doppler secrets download --no-file --format json | jq "del(.SUPABASE_DB_URL)" | pnpm exec wrangler secret bulk --config wrangler.prod.jsonc'
           doppler run -- pnpm exec wrangler deploy --config wrangler.prod.jsonc
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
