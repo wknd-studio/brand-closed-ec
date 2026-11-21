@@ -9,7 +9,7 @@ on:
 jobs:
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -28,7 +28,7 @@ jobs:
 
   typecheck:
     name: TypeScript
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別のPRが後から
     # マージされた組み合わせで壊れることがある（#498）。数分で終わるこのチェックだけは
     # developへのpushのたびにも動かす。続けてマージしても各コミットで動くよう、
@@ -44,7 +44,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # developへのpushでも動かす理由はtypecheckのコメント参照
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
@@ -58,7 +58,7 @@ jobs:
 
   schema-types-drift:
     name: Schema Types Drift
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
 
   test:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # developへのpushでも動かす理由はtypecheckのコメント参照
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
@@ -108,7 +108,7 @@ jobs:
 
   install-cli-versions:
     name: Install CLI Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # デプロイのジョブでしか使わない版（deploy-staging・deploy-prod の Supabase CLI 等）は、
     # PR の CI ではインストールされず、壊れていても develop・main へのマージ後まで気づけない（#549）。
     # ワークフローが install-cli に渡している全ての CLI と版を、ここで実際にインストールして
@@ -129,7 +129,7 @@ jobs:
 
   integration:
     name: Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     environment: staging
     steps:
@@ -193,7 +193,7 @@ jobs:
 
   build:
     name: Build (Cloudflare)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     environment: staging
@@ -218,7 +218,7 @@ jobs:
 
   e2e-pr:
     name: E2E Tests (PR)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     environment: staging
@@ -334,7 +334,7 @@ jobs:
 
   deploy-stg:
     name: Deploy (staging)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # マージごとのチェック（TypeScript・Lint・Unit Tests）が通ったコミットだけをstgに出す。
     # 待つ分デプロイは数分遅れるが、壊れたものをstgに出してE2E (stg)を無駄に落とさずに済む。
     # チェックはconcurrencyの外で動くので、ここで待っても取り消されない
@@ -393,7 +393,7 @@ jobs:
 
   deploy-prod:
     name: Deploy (production)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
     steps:
@@ -423,7 +423,7 @@ jobs:
 
   e2e:
     name: E2E Tests (stg)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [deploy-stg]
     if: github.ref == 'refs/heads/develop'
     environment: staging
