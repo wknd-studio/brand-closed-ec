@@ -48,7 +48,7 @@ export async function markInvoiceOrderAsPaid(
   }
 
   const paidOrder = order.applySettlement(settlement.markPaid(new Date()));
-  await orderRepo.save(paidOrder);
+  await orderRepo.save(paidOrder, { type: "system" });
 
   const user = await userRepo.findById(order.userId);
   if (user) {

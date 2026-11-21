@@ -369,6 +369,54 @@ export type Database = {
           },
         ];
       };
+      order_status_changes: {
+        Row: {
+          changed_by: string;
+          changed_by_admin_user_id: string | null;
+          created_at: string;
+          from_status: string | null;
+          id: string;
+          order_id: string;
+          reason: string | null;
+          to_status: string;
+        };
+        Insert: {
+          changed_by: string;
+          changed_by_admin_user_id?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          order_id: string;
+          reason?: string | null;
+          to_status: string;
+        };
+        Update: {
+          changed_by?: string;
+          changed_by_admin_user_id?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          order_id?: string;
+          reason?: string | null;
+          to_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "order_status_changes_changed_by_admin_user_id_fkey";
+            columns: ["changed_by_admin_user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_status_changes_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       orders: {
         Row: {
           billing_address_snapshot: Json;
@@ -739,6 +787,15 @@ export type Database = {
           p_period_start: string;
           p_settlement: Json;
           p_user_id: string;
+        };
+        Returns: undefined;
+      };
+      save_order: {
+        Args: {
+          p_items: Json;
+          p_order: Json;
+          p_settlements: Json;
+          p_status_change: Json;
         };
         Returns: undefined;
       };
