@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parse } from "yaml";
 
 const SCRIPT = path.resolve(
   __dirname,
@@ -157,6 +158,65 @@ describe("judge_pr_review_summary", () => {
       expect(output).toContain("人間に判断してほしいこと");
     }
   );
+});
+
+// ワークフローと同じく環境変数で本文・作成者を渡し、スクリプト全体を実行する
+function run(env: { PR_BODY: string; PR_AUTHOR?: string }) {
+  // テストを実行している環境の PR_AUTHOR を持ち込まない
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
+  if (env.PR_AUTHOR === undefined) delete childEnv.PR_AUTHOR;
+  const result = spawnSync("bash", [SCRIPT], {
+    encoding: "utf8",
+    env: childEnv,
+  });
+  return { status: result.status, output: result.stdout + result.stderr };
+}
+
+// Dependabot のセキュリティ更新のPRは issue 無しの例外で、本文の書き方を決まりに合わせられない（#668）
+describe("Dependabot が作ったPR", () => {
+  it("作成者が dependabot[bot] なら、本文が空でも成功扱いにする", () => {
+    const { status, output } = run({
+      PR_BODY: "",
+      PR_AUTHOR: "dependabot[bot]",
+    });
+    expect(status).toBe(0);
+    expect(output).toContain("Dependabot");
+  });
+
+  it.each(["wknd-studio", "dependabot", "github-actions[bot]", ""])(
+    "作成者が %j なら、今までどおり本文を検査する",
+    (author) => {
+      expect(run({ PR_BODY: "", PR_AUTHOR: author }).status).toBe(1);
+      expect(run({ PR_BODY: summary({}), PR_AUTHOR: author }).status).toBe(0);
+    }
+  );
+
+  it("作成者を渡さなければ、今までどおり本文を検査する", () => {
+    expect(run({ PR_BODY: "" }).status).toBe(1);
+  });
+
+  it("ワークフローは、実行した人ではなくPRの作成者を PR_AUTHOR に渡す", () => {
+    const workflow = parse(
+      readFileSync(
+        path.resolve(
+          __dirname,
+          "../../.github/workflows/pr-review-summary.yml"
+        ),
+        "utf8"
+      )
+    ) as {
+      jobs: Record<
+        string,
+        { steps: { run?: string; env?: Record<string, string> }[] }
+      >;
+    };
+    const step = Object.values(workflow.jobs)
+      .flatMap((job) => job.steps)
+      .find((s) => s.run?.includes("check-pr-review-summary.sh"));
+    expect(step?.env?.PR_AUTHOR).toBe(
+      "${{ github.event.pull_request.user.login }}"
+    );
+  });
 });
 
 describe("pull_request_template.md", () => {
