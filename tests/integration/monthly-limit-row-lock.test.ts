@@ -54,6 +54,7 @@ function makeDeps() {
         unitPrice: Money.of(UNIT_PRICE),
         isNegotiable: false,
         minRank: "starter",
+        availability: "available",
         paymentTiming: "at_order",
       },
     ]),

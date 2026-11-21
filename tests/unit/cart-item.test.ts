@@ -4,6 +4,7 @@ import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import type { ProductSnapshot } from "@/domain/value-objects/product-snapshot";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 
 describe("CartItem", () => {
   const base = {
@@ -69,6 +70,7 @@ describe("CartItem", () => {
       unitPrice: Money.of(100_000),
       isNegotiable: false,
       minRank: "standard",
+      availability: "available",
       paymentTiming: "at_order",
     };
     const negotiableProduct: ProductSnapshot = {
@@ -77,6 +79,7 @@ describe("CartItem", () => {
       unitPrice: Money.of(50_000),
       isNegotiable: true,
       minRank: "starter",
+      availability: "available",
       paymentTiming: "after_order",
     };
 
@@ -120,6 +123,57 @@ describe("CartItem", () => {
         productId: "prod-1",
         userRank: "basic",
         requiredRank: "standard",
+      });
+    });
+
+    it("在庫状況がavailableの商品は明細にする", () => {
+      const [item] = CartItem.fromProducts(
+        [{ sanityProductId: "prod-1", quantity: 1 }],
+        [{ ...fixedProduct, availability: "available" }],
+        MemberRank.of("standard")
+      );
+      expect(item.sanityProductId).toBe("prod-1");
+    });
+
+    it.each(["out_of_stock", "discontinued"] as const)(
+      "在庫状況が%sの商品はProductUnavailableErrorにする",
+      (availability) => {
+        let error: unknown;
+        try {
+          CartItem.fromProducts(
+            [{ sanityProductId: "prod-1", quantity: 1 }],
+            [{ ...fixedProduct, availability }],
+            MemberRank.of("standard")
+          );
+        } catch (e) {
+          error = e;
+        }
+        expect(error).toBeInstanceOf(ProductUnavailableError);
+        expect(error).toMatchObject({ productId: "prod-1", availability });
+      }
+    );
+
+    it("複数の商品のうち1つだけ在庫切れでも、カート全体をProductUnavailableErrorにする", () => {
+      let error: unknown;
+      try {
+        CartItem.fromProducts(
+          [
+            { sanityProductId: "prod-1", quantity: 1 },
+            { sanityProductId: "prod-2", quantity: 1 },
+          ],
+          [
+            fixedProduct,
+            { ...negotiableProduct, availability: "out_of_stock" },
+          ],
+          MemberRank.of("standard")
+        );
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(ProductUnavailableError);
+      expect(error).toMatchObject({
+        productId: "prod-2",
+        availability: "out_of_stock",
       });
     });
 

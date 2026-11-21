@@ -67,6 +67,48 @@ describe("SanityProductRepository", () => {
     expect(result[0].paymentTiming).toBe("at_order");
   });
 
+  it.each(["available", "out_of_stock", "discontinued"] as const)(
+    "Sanityの在庫状況（%s）をそのまま返す",
+    async (availability) => {
+      fetchMock.mockResolvedValue([
+        {
+          _id: "prod-1",
+          name: "商品A",
+          is_negotiable: false,
+          prices: { standard: 5000 },
+          min_rank: "starter",
+          availability,
+          payment_timing: "at_order",
+        },
+      ]);
+
+      const repo = new SanityProductRepository();
+      const result = await repo.findByIds(["prod-1"], "standard");
+
+      expect(result[0].availability).toBe(availability);
+      expect(fetchMock.mock.lastCall?.[0]).toContain("availability");
+    }
+  );
+
+  it("availability未設定の既存商品はavailable扱いになる（後方互換）", async () => {
+    fetchMock.mockResolvedValue([
+      {
+        _id: "prod-legacy",
+        name: "既存商品（availability未設定）",
+        is_negotiable: false,
+        prices: { standard: 8000 },
+        min_rank: "starter",
+        availability: null,
+        payment_timing: "at_order",
+      },
+    ]);
+
+    const repo = new SanityProductRepository();
+    const result = await repo.findByIds(["prod-legacy"], "standard");
+
+    expect(result[0].availability).toBe("available");
+  });
+
   it("固定価格商品で該当ランクの価格が未設定の場合はProductPriceNotSetErrorを投げる", async () => {
     fetchMock.mockResolvedValue([
       {

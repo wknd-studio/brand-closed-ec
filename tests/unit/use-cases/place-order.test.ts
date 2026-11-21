@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { placeOrder, type PlaceOrderInput } from "@/use-cases/place-order";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
+import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { Money } from "@/domain/value-objects/money";
 import {
@@ -288,6 +289,55 @@ describe("placeOrder", () => {
     });
     expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
   });
+
+  it.each(["out_of_stock", "discontinued"] as const)(
+    "在庫状況が%sの商品を含むカートはProductUnavailableErrorになり、注文も決済単位もStripeのCheckoutも作られない（#201）",
+    async (availability) => {
+      const deps = {
+        userRepo: makeUserRepo(),
+        orderRepo: makeOrderRepo(),
+        addressRepo: makeAddressRepo(),
+        productRepo: makeProductRepo([
+          fixedProduct,
+          { ...afterOrderFixedProduct, availability },
+        ]),
+        paymentGateway: makePaymentGateway(),
+        notificationService: makeNotificationService(),
+        errorReporter: makeErrorReporter(),
+      };
+
+      const promise = placeOrder(
+        {
+          ...baseInput,
+          cartItems: [
+            { sanityProductId: "prod-1", quantity: 1, productName: "固定商品" },
+            {
+              sanityProductId: "prod-3",
+              quantity: 1,
+              productName: "後払い固定商品",
+            },
+          ],
+        },
+        deps
+      );
+
+      await expect(promise).rejects.toBeInstanceOf(ProductUnavailableError);
+      await expect(promise).rejects.toMatchObject({
+        productId: "prod-3",
+        availability,
+      });
+      expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
+      expect(deps.orderRepo.save).not.toHaveBeenCalled();
+      expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
+      expect(deps.paymentGateway.createInvoiceForOrder).not.toHaveBeenCalled();
+      expect(
+        deps.notificationService.sendOrderConfirming
+      ).not.toHaveBeenCalled();
+      expect(
+        deps.notificationService.sendOrderOperatorNotification
+      ).not.toHaveBeenCalled();
+    }
+  );
 
   it("支払いタイミングが混在するカートでも注文は1件のまま。at_order明細だけをCheckout決済単位に紐付け、after_order明細は未紐付けにする", async () => {
     const orderRepo = makeOrderRepo();
