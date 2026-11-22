@@ -121,6 +121,9 @@ await requireAdminPermission(AdminPermission.requiredFor("cancelOrder").key);
 - 権限マトリクスと `src/domain/` の権限キーのずれ
 - 運営組織の Role Set にある、権限マトリクスに無いロール（未知のロール）・権限マトリクスにあって Clerk に無いロール
 - 運営者のロールが、顧客の組織用の Role Set（`role_set:default` 等）にも入っている
+- 運営組織の Role Set に無いロール（顧客の組織の `org:admin` 等）に、権限マトリクスの権限が付いている
+
+`setup` は表に無い権限を運営者のロールから外すため、Clerk のシステム権限（`org:sys_*`）も付かない。運営組織のメンバーの追加・削除・ロール変更は Clerk Dashboard で行い、アプリの `<OrganizationProfile />` 等からは行わない前提
 
 ## 他コンテキストとの関係
 
