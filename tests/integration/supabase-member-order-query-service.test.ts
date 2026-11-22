@@ -53,7 +53,15 @@ const WITHDRAWN_USER_ID = "00000000-0000-0000-0000-000000450c01";
 const CLERK_USER = "clerk_test_member_order_query";
 const CLERK_OTHER_USER = "clerk_test_member_order_query_other";
 const CLERK_WITHDRAWN_USER = "clerk_test_member_order_query_withdrawn";
-const ALL_USER_IDS = [USER_ID, OTHER_USER_ID, WITHDRAWN_USER_ID];
+// 注文履歴（findOrderHistory）用の会員。他の describe の注文と混ざらないよう分ける
+const HISTORY_USER_ID = "00000000-0000-0000-0000-000000364a01";
+const CLERK_HISTORY_USER = "clerk_test_member_order_query_history";
+const ALL_USER_IDS = [
+  USER_ID,
+  OTHER_USER_ID,
+  WITHDRAWN_USER_ID,
+  HISTORY_USER_ID,
+];
 
 const SHIPPING_DEFAULT_ID = "00000000-0000-0000-0000-000000450a11";
 const SHIPPING_OTHER_ID = "00000000-0000-0000-0000-000000450a12";
@@ -63,10 +71,19 @@ const OTHER_USER_ADDRESS_ID = "00000000-0000-0000-0000-000000450b11";
 const MIXED_ORDER_ID = "00000000-0000-0000-0000-000000450a21";
 const AT_ORDER_ONLY_ORDER_ID = "00000000-0000-0000-0000-000000450a22";
 const WITHDRAWN_USER_ORDER_ID = "00000000-0000-0000-0000-000000450c21";
+// 注文履歴の会員の注文。古い順に paid → cancelled → limit_exceeded → processing（要相談の明細を含む）
+const HISTORY_PAID_ORDER_ID = "00000000-0000-0000-0000-000000364a21";
+const HISTORY_CANCELLED_ORDER_ID = "00000000-0000-0000-0000-000000364a22";
+const HISTORY_LIMIT_EXCEEDED_ORDER_ID = "00000000-0000-0000-0000-000000364a23";
+const HISTORY_PROCESSING_ORDER_ID = "00000000-0000-0000-0000-000000364a24";
 const ALL_ORDER_IDS = [
   MIXED_ORDER_ID,
   AT_ORDER_ONLY_ORDER_ID,
   WITHDRAWN_USER_ORDER_ID,
+  HISTORY_PAID_ORDER_ID,
+  HISTORY_CANCELLED_ORDER_ID,
+  HISTORY_LIMIT_EXCEEDED_ORDER_ID,
+  HISTORY_PROCESSING_ORDER_ID,
 ];
 const MIXED_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450a31";
 const AT_ORDER_ONLY_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450a32";
@@ -114,16 +131,20 @@ function address(
   };
 }
 
-function order(id: string, userId = USER_ID) {
+function order(
+  id: string,
+  userId = USER_ID,
+  { status = "processing", createdAt = CREATED_AT } = {}
+) {
   return {
     id,
     user_id: userId,
-    status: "processing",
+    status,
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,
     rank_at_order: "standard" as const,
     monthly_limit_at_order: 1_000_000,
-    created_at: CREATED_AT,
+    created_at: createdAt,
   };
 }
 
@@ -198,6 +219,16 @@ beforeAll(async () => {
       billing_anchor_day: 10,
       deleted_at: "2026-07-01T00:00:00.000Z",
     },
+    {
+      id: HISTORY_USER_ID,
+      clerk_user_id: CLERK_HISTORY_USER,
+      email: `${CLERK_HISTORY_USER}@example.com`,
+      first_name: "テスト",
+      last_name: "四郎",
+      rank_code: "standard",
+      onboarding_completed: true,
+      billing_anchor_day: 10,
+    },
   ]);
   await insert("addresses", [
     address(SHIPPING_OTHER_ID, USER_ID, "shipping", false, "港区"),
@@ -209,6 +240,22 @@ beforeAll(async () => {
     order(MIXED_ORDER_ID),
     order(AT_ORDER_ONLY_ORDER_ID),
     order(WITHDRAWN_USER_ORDER_ID, WITHDRAWN_USER_ID),
+    order(HISTORY_PAID_ORDER_ID, HISTORY_USER_ID, {
+      status: "paid",
+      createdAt: "2026-07-01T00:00:00.000Z",
+    }),
+    order(HISTORY_CANCELLED_ORDER_ID, HISTORY_USER_ID, {
+      status: "cancelled",
+      createdAt: "2026-08-01T00:00:00.000Z",
+    }),
+    order(HISTORY_LIMIT_EXCEEDED_ORDER_ID, HISTORY_USER_ID, {
+      status: "limit_exceeded",
+      createdAt: "2026-09-01T00:00:00.000Z",
+    }),
+    order(HISTORY_PROCESSING_ORDER_ID, HISTORY_USER_ID, {
+      status: "processing",
+      createdAt: "2026-10-01T00:00:00.000Z",
+    }),
   ]);
   await insert("order_settlements", [
     {
@@ -260,6 +307,40 @@ beforeAll(async () => {
     item(WITHDRAWN_USER_ITEM_ID, WITHDRAWN_USER_ORDER_ID, {
       payment_timing: "after_order",
       settlement_id: WITHDRAWN_USER_SETTLEMENT_ID,
+    }),
+    // 注文履歴の明細。決済単位は履歴の表示に使わないため紐付けない
+    item("00000000-0000-0000-0000-000000364a41", HISTORY_PAID_ORDER_ID, {
+      unit_price_snapshot: 10_000,
+      quantity: 3,
+    }),
+    item("00000000-0000-0000-0000-000000364a42", HISTORY_PAID_ORDER_ID, {
+      unit_price_snapshot: 5_000,
+      quantity: 1,
+      payment_timing: "after_order",
+    }),
+    item("00000000-0000-0000-0000-000000364a43", HISTORY_CANCELLED_ORDER_ID, {
+      unit_price_snapshot: 20_000,
+      quantity: 1,
+    }),
+    item(
+      "00000000-0000-0000-0000-000000364a44",
+      HISTORY_LIMIT_EXCEEDED_ORDER_ID,
+      {
+        unit_price_snapshot: 40_000,
+        quantity: 2,
+        payment_timing: "after_order",
+      }
+    ),
+    item("00000000-0000-0000-0000-000000364a45", HISTORY_PROCESSING_ORDER_ID, {
+      unit_price_snapshot: 8_000,
+      quantity: 2,
+    }),
+    item("00000000-0000-0000-0000-000000364a46", HISTORY_PROCESSING_ORDER_ID, {
+      unit_price_snapshot: null,
+      quantity: 1,
+      is_negotiable: true,
+      negotiated_unit_price: 99_000,
+      payment_timing: "after_order",
     }),
   ]);
 });
@@ -444,6 +525,159 @@ describe("SupabaseMemberOrderQueryService.findInvoiceRequestedOrder", () => {
   });
 });
 
+describe("SupabaseMemberOrderQueryService.findOrderHistory", () => {
+  const historyRow = (
+    orderId: string,
+    createdAt: string,
+    rest: {
+      status: string;
+      fixedTotal: number;
+      includesNegotiable: boolean;
+      itemCount: number;
+    }
+  ) => ({ orderId, createdAt, ...rest });
+
+  const processing = historyRow(
+    HISTORY_PROCESSING_ORDER_ID,
+    "2026-10-01T00:00:00.000Z",
+    // 要相談の明細は交渉済みの単価があっても固定額に含めない（sumFixedTotal）
+    {
+      status: "processing",
+      fixedTotal: 16_000,
+      includesNegotiable: true,
+      itemCount: 3,
+    }
+  );
+  const limitExceeded = historyRow(
+    HISTORY_LIMIT_EXCEEDED_ORDER_ID,
+    "2026-09-01T00:00:00.000Z",
+    {
+      status: "limit_exceeded",
+      fixedTotal: 80_000,
+      includesNegotiable: false,
+      itemCount: 2,
+    }
+  );
+  const cancelled = historyRow(
+    HISTORY_CANCELLED_ORDER_ID,
+    "2026-08-01T00:00:00.000Z",
+    {
+      status: "cancelled",
+      fixedTotal: 20_000,
+      includesNegotiable: false,
+      itemCount: 1,
+    }
+  );
+  const paid = historyRow(
+    HISTORY_PAID_ORDER_ID,
+    "2026-07-01T00:00:00.000Z",
+    // 注文時に支払う明細と後払いの明細の両方を合計する
+    {
+      status: "paid",
+      fixedTotal: 35_000,
+      includesNegotiable: false,
+      itemCount: 4,
+    }
+  );
+
+  // status は値オブジェクトのため、比較用に値へ直す
+  const plain = (
+    history: Awaited<ReturnType<typeof queryService.findOrderHistory>>
+  ) => ({
+    ...history,
+    orders: history.orders.map((o) => ({ ...o, status: o.status.value })),
+  });
+
+  it("本人の注文を、キャンセル済み・支払い済みも含めて新しい順に返す", async () => {
+    const history = await queryService.findOrderHistory({
+      clerkUserId: CLERK_HISTORY_USER,
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(plain(history)).toEqual({
+      orders: [processing, limitExceeded, cancelled, paid],
+      totalCount: 4,
+      page: 1,
+      pageSize: 10,
+    });
+  });
+
+  it("ページ単位で返し、2ページ目以降で古い注文までたどれる", async () => {
+    const first = await queryService.findOrderHistory({
+      clerkUserId: CLERK_HISTORY_USER,
+      page: 1,
+      pageSize: 3,
+    });
+    const second = await queryService.findOrderHistory({
+      clerkUserId: CLERK_HISTORY_USER,
+      page: 2,
+      pageSize: 3,
+    });
+
+    expect(plain(first)).toEqual({
+      orders: [processing, limitExceeded, cancelled],
+      totalCount: 4,
+      page: 1,
+      pageSize: 3,
+    });
+    expect(plain(second)).toEqual({
+      orders: [paid],
+      totalCount: 4,
+      page: 2,
+      pageSize: 3,
+    });
+  });
+
+  it("最後のページより後のページは、注文を空で返す", async () => {
+    const history = await queryService.findOrderHistory({
+      clerkUserId: CLERK_HISTORY_USER,
+      page: 3,
+      pageSize: 3,
+    });
+
+    expect(history.orders).toEqual([]);
+    expect(history.totalCount).toBe(4);
+  });
+
+  it("他の会員の注文を含めない", async () => {
+    const history = await queryService.findOrderHistory({
+      clerkUserId: CLERK_OTHER_USER,
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(history).toEqual({
+      orders: [],
+      totalCount: 0,
+      page: 1,
+      pageSize: 10,
+    });
+  });
+
+  it("退会済みの会員の注文は返さない", async () => {
+    const history = await queryService.findOrderHistory({
+      clerkUserId: CLERK_WITHDRAWN_USER,
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(history.orders).toEqual([]);
+    expect(history.totalCount).toBe(0);
+  });
+
+  it("存在しない会員は、注文を空で返す", async () => {
+    const history = await queryService.findOrderHistory({
+      clerkUserId: "clerk_test_not_exists",
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(history.orders).toEqual([]);
+    expect(history.totalCount).toBe(0);
+  });
+});
+
 // page が使う組み立て。ログイン中の会員のトークンで RLS を効かせたクライアントでも取得できること
 describe("memberOrderQueryService（composition。RLS 付きのクライアント）", () => {
   it("ログイン中の会員の注文確認・注文完了・後払いの注文完了を取得できる", async () => {
@@ -469,6 +703,24 @@ describe("memberOrderQueryService（composition。RLS 付きのクライアン�
     ).toMatchObject({ orderId: MIXED_ORDER_ID });
   });
 
+  it("ログイン中の会員の注文履歴を取得できる", async () => {
+    getToken.mockResolvedValue(signTestJwt(CLERK_HISTORY_USER));
+    const rlsQueryService = await memberOrderQueryService();
+
+    const history = await rlsQueryService.findOrderHistory({
+      clerkUserId: CLERK_HISTORY_USER,
+      page: 1,
+      pageSize: 10,
+    });
+    expect(history.orders.map((o) => o.orderId)).toEqual([
+      HISTORY_PROCESSING_ORDER_ID,
+      HISTORY_LIMIT_EXCEEDED_ORDER_ID,
+      HISTORY_CANCELLED_ORDER_ID,
+      HISTORY_PAID_ORDER_ID,
+    ]);
+    expect(history.totalCount).toBe(4);
+  });
+
   it("引数に他の会員を渡しても、RLS によりトークンの会員以外のデータは取得できない", async () => {
     getToken.mockResolvedValue(signTestJwt(CLERK_OTHER_USER));
     const rlsQueryService = await memberOrderQueryService();
@@ -486,5 +738,12 @@ describe("memberOrderQueryService（composition。RLS 付きのクライアン�
         orderId: MIXED_ORDER_ID,
       })
     ).toBeNull();
+    const history = await rlsQueryService.findOrderHistory({
+      clerkUserId: CLERK_HISTORY_USER,
+      page: 1,
+      pageSize: 10,
+    });
+    expect(history.orders).toEqual([]);
+    expect(history.totalCount).toBe(0);
   });
 });
