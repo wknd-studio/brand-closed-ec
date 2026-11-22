@@ -6,11 +6,12 @@
 pnpm dev                        # 開発サーバー
 pnpm typecheck                  # tsc --noEmit
 pnpm lint                       # eslint
+pnpm knip                       # デッドコードの検出（knip:production でテストからしか使われていない本番のコードも）。誤検出の対応は docs/knip.md
 pnpm format                     # prettier --write
 pnpm test                       # Vitest（ユニット・統合）
 pnpm test:e2e                   # Playwright E2E
 pnpm test:e2e --ui              # Playwright UIモード
-task check                      # push・PR前の完了チェック（typecheck → lint → ユニット → 統合）
+task check                      # push・PR前の完了チェック（typecheck → lint → knip → ユニット → 統合）
 
 supabase start                  # ローカルDB起動
 supabase migration new <name>   # マイグレーション作成
@@ -62,7 +63,7 @@ feature/* →  Cloudflare Pages Preview URL
 
 ## 行動ルール
 
-**実装順序**: テストを書く → 失敗を確認 → テストをコミット → 実装 → テスト通過確認 → 実装・生成物・ドキュメントをそれぞれコミット（自動。分け方は下記「コミット形式」）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する（例外は下記「並列開発（Orca）」の自動push・PR条件のみ）。push・PR作成前に `task check`（typecheck → lint → ユニットテスト → 統合テスト）がgreenであること。
+**実装順序**: テストを書く → 失敗を確認 → テストをコミット → 実装 → テスト通過確認 → 実装・生成物・ドキュメントをそれぞれコミット（自動。分け方は下記「コミット形式」）→ ユーザーに作業内容を報告。プッシュ・PRはユーザーの明示的な承認後のみ実行する（例外は下記「並列開発（Orca）」の自動push・PR条件のみ）。push・PR作成前に `task check`（typecheck → lint → knip → ユニットテスト → 統合テスト）がgreenであること。
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
 
@@ -124,7 +125,7 @@ feature/* →  Cloudflare Pages Preview URL
 - `package.json`・`pnpm-lock.yaml`・`.github/` を変えるため `high-risk` が付く。人間が差分を精読してからマージする
 - CIが落ちたら、オーケストレーションのセッションが修正の issue を起票する（Dependabot のPRのブランチに直接コミットしない）
 
-**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
+**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Knip・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
 
 - developのCIが赤なら、新しいPRのマージより、直す・revertすることを優先する。原因のPRがすぐ直せなければ、まずそのマージコミットをrevertする（`git revert -m 1 <マージコミット>` をfeatureブランチで行い、develop向けのPRにする）
 - 赤のdevelopに別のPRを重ねてマージしない（どのマージで壊れたかが分からなくなり、stgにも出なくなる）
