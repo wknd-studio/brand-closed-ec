@@ -256,6 +256,27 @@ describe("User", () => {
   });
 });
 
+describe("User.billingName()", () => {
+  it("法人会員は会社名を返す", () => {
+    const user = makeUser({
+      memberType: MemberType.of("corporate"),
+      companyName: "テスト株式会社",
+      invoiceRegistrationNumber: InvoiceRegistrationNumber.of("T1234567890123"),
+    });
+    expect(user.billingName()).toBe("テスト株式会社");
+  });
+
+  it("個人会員は姓と名を空白で区切って返す", () => {
+    expect(makeUser().billingName()).toBe("山田 太郎");
+  });
+
+  it("個人会員に会社名が残っていても姓名を返す", () => {
+    expect(makeUser({ companyName: "旧株式会社" }).billingName()).toBe(
+      "山田 太郎"
+    );
+  });
+});
+
 describe("User の電話番号", () => {
   it("値オブジェクトで持つ", () => {
     const user = makeUser({ phoneNumber: PhoneNumber.of("090-1234-5678") });

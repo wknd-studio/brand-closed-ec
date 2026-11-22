@@ -17,17 +17,24 @@ export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGatewa
     userId: string;
     clerkUserId: string;
     email: string;
+    name: string;
   }): Promise<string> {
     const customer = await getStripe().customers.create(
       {
         email: input.email,
+        name: input.name,
         metadata: {
           supabase_user_id: input.userId,
           clerk_user_id: input.clerkUserId,
         },
       },
-      // 決済画面を同時に開いても、保存前のCustomerが2つできないようにする
-      { idempotencyKey: `onboarding-customer-${input.userId}` }
+      // 決済画面を同時に開いても、保存前のCustomerが2つできないようにする。
+      // 同じキーで異なるパラメータを送るとStripeがエラーを返すため、保存に失敗した後に
+      // 宛名（会社名・氏名）が変わっても作り直せるよう、宛名もキーに含める。
+      // ヘッダーにはASCIIしか使えないため、宛名はハッシュにする
+      {
+        idempotencyKey: `onboarding-customer-${input.userId}-${await sha256Hex(input.name)}`,
+      }
     );
     return customer.id;
   }
@@ -79,4 +86,14 @@ export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGatewa
     );
     return session.url;
   }
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value)
+  );
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
 }
