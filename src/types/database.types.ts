@@ -213,6 +213,48 @@ export type Database = {
           },
         ];
       };
+      locations: {
+        Row: {
+          address_line1: string | null;
+          address_line2: string | null;
+          city: string | null;
+          code: string;
+          created_at: string;
+          name: string;
+          phone_number: string | null;
+          postal_code: string | null;
+          prefecture: string | null;
+          requires_receiving: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          address_line1?: string | null;
+          address_line2?: string | null;
+          city?: string | null;
+          code: string;
+          created_at?: string;
+          name: string;
+          phone_number?: string | null;
+          postal_code?: string | null;
+          prefecture?: string | null;
+          requires_receiving: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          address_line1?: string | null;
+          address_line2?: string | null;
+          city?: string | null;
+          code?: string;
+          created_at?: string;
+          name?: string;
+          phone_number?: string | null;
+          postal_code?: string | null;
+          prefecture?: string | null;
+          requires_receiving?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       member_ranks: {
         Row: {
           code: string;
@@ -252,6 +294,7 @@ export type Database = {
       order_items: {
         Row: {
           created_at: string;
+          fulfillment_location_code: string;
           id: string;
           is_negotiable: boolean;
           negotiated_unit_price: number | null;
@@ -267,6 +310,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          fulfillment_location_code?: string;
           id?: string;
           is_negotiable?: boolean;
           negotiated_unit_price?: number | null;
@@ -282,6 +326,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          fulfillment_location_code?: string;
           id?: string;
           is_negotiable?: boolean;
           negotiated_unit_price?: number | null;
@@ -296,6 +341,13 @@ export type Database = {
           unit_price_snapshot?: number | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "order_items_fulfillment_location_code_fkey";
+            columns: ["fulfillment_location_code"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["code"];
+          },
           {
             foreignKeyName: "order_items_order_id_fkey";
             columns: ["order_id"];
