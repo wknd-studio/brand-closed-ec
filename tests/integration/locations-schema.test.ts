@@ -89,6 +89,8 @@ async function cleanup() {
     await adminClient.from("orders").delete().in("id", orderIds);
   }
   await adminClient.from("users").delete().eq("id", USER_ID);
+  // RLSの退行で会員のINSERTが通ってしまった場合に、次の実行へ行を残さない
+  await adminClient.from("locations").delete().eq("code", "member_inserted");
 }
 
 beforeAll(async () => {
