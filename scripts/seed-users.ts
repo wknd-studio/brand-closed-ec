@@ -84,6 +84,7 @@ export type SeedClerk = {
       emailAddress: string[];
       password: string;
       skipPasswordChecks: boolean;
+      skipLegalChecks: boolean;
       firstName: string;
       lastName: string;
       publicMetadata: Record<string, unknown>;
@@ -131,6 +132,8 @@ async function upsertClerkUser(
     emailAddress: [def.email],
     password,
     skipPasswordChecks: true,
+    // インスタンスはLegal Consentが必須で、Backend APIから作るときは同意日時か省略の指定が要る（422になる）
+    skipLegalChecks: true,
     firstName: def.firstName,
     lastName: def.lastName,
     publicMetadata: def.role === "admin" ? { role: "admin" } : {},
