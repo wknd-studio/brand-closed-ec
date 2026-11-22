@@ -166,6 +166,22 @@ describe("seedUsers", () => {
     expect(clerk.users.updateUser).not.toHaveBeenCalled();
   });
 
+  it("Clerk の規約同意（Legal Consent）が必須のインスタンスでも作れるよう、同意の確認を省略して作る", async () => {
+    const clerk = makeClerk();
+    const { supabase } = makeSupabase();
+
+    await seedUsers({
+      clerk,
+      supabase,
+      password: PASSWORD,
+      logger: makeLogger(),
+    });
+
+    for (const [params] of clerk.users.createUser.mock.calls) {
+      expect(params.skipLegalChecks).toBe(true);
+    }
+  });
+
   it("既存のアカウントは、毎回パスワードを環境変数の値に更新する", async () => {
     const clerk = makeClerk(SEED_USERS.map((u) => u.email));
     const { supabase } = makeSupabase();
