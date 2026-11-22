@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { CartProvider, useCart } from "@/components/cart/cart-provider";
-import { readCart } from "@/lib/cart/cookie";
+import { COOKIE_NAME, parseCart } from "@/lib/cart/cookie";
 import type { Cart, CartItem } from "@/lib/cart/types";
 
 (
@@ -11,6 +11,14 @@ import type { Cart, CartItem } from "@/lib/cart/types";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 type CartValue = ReturnType<typeof useCart>;
+
+// CartProvider が書き込んだ Cookie を読み直して確かめる
+function readCart(): Cart {
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${COOKIE_NAME}=`));
+  return parseCart(match?.split("=").slice(1).join("="));
+}
 
 function Probe({ onRender }: { onRender: (value: CartValue) => void }) {
   onRender(useCart());

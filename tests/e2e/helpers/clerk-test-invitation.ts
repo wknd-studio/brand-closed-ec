@@ -186,46 +186,6 @@ export async function signUpAsIndividual(
   await page.getByLabel("電話番号").fill("09012345678");
 }
 
-/**
- * `signUpAsIndividual`に加え、プラン選択画面で実際にSTARTERプランを
- * 選択して`selectPlan`サーバーアクションを実行させ（実際のauth()が返す
- * 正しいclerk_user_idでusersテーブルの行が作成される）、Stripeでの
- * 実決済は行わず本テストの前提として必要な「決済完了・オンボーディング
- * 完了済み」の状態だけをSupabase経由で作る（`checkout.spec.ts`・
- * `invoice.spec.ts`で重複していた処理を共通化）。
- */
-export async function signUpAndCompleteOnboarding(
-  page: Page,
-  emailAddress: string,
-  password: string
-): Promise<void> {
-  await signUpAsIndividual(page, emailAddress, password);
-
-  await page.getByRole("radio", { name: /STARTER/ }).check();
-  await page.getByRole("button", { name: /このプランで始める/ }).click();
-
-  // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
-  // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ
-  // サーバーリダイレクトされる中継点のため、どちらかへの遷移を待てばよい。
-  // 中継点のURLを経ずにStripeへ着くこともあるため、待ち時間はStripeまでの分を取る
-  await expect(page).toHaveURL(/\/onboarding\/payment|checkout\.stripe\.com/, {
-    timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
-  });
-
-  const { error } = await supabaseAdmin()
-    .from("users")
-    .update({
-      onboarding_completed: true,
-      billing_anchor_day: Math.min(new Date().getDate(), 28),
-    })
-    .eq("email", emailAddress);
-  if (error) {
-    throw new Error(`テスト用会員行の更新に失敗しました: ${error.message}`);
-  }
-
-  await page.goto("/shop");
-}
-
 export async function cleanupTestUser(emailAddress: string) {
   // Clerkユーザーより先にusersの行を消す。有効な行を残したままClerkユーザーを消すと、
   // stgのuser.deleted Webhookが「退会処理を通らない削除」としてSentryに通知するため（#531）。
