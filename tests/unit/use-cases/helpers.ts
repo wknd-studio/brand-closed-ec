@@ -12,10 +12,12 @@ import { AdminMembership } from "@/domain/entities/admin-membership";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
+import type { MemberRankRepository } from "@/repositories/member-rank-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
 import type { FavoriteRepository } from "@/repositories/favorite-repository";
 import type {
@@ -150,7 +152,7 @@ export function makeOrder(overrides?: {
     shippingAddress: makeAddressSnapshot(),
     billingAddress: makeAddressSnapshot(),
     rankAtOrder: MemberRank.of("standard"),
-    monthlyLimitAtOrder: Money.of(5_000_000),
+    monthlyLimitAtOrder: MonthlyLimit.of(5_000_000),
     items: overrides?.items ?? [makeOrderItem()],
     settlements: overrides?.settlements ?? [makeSettlement()],
     createdAt: new Date(2026, 5, 1),
@@ -196,6 +198,15 @@ export function makeUserRepo(user = makeUser()): UserRepository {
     insertIfAbsent: vi.fn().mockResolvedValue(undefined),
     hasWithdrawnByClerkUserId: vi.fn().mockResolvedValue(false),
     saveStripeCustomerId: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+// 上限の既定値は standard ランクの member_ranks の値
+export function makeMemberRankRepo(
+  monthlyLimit: MonthlyLimit = MonthlyLimit.of(5_000_000)
+): MemberRankRepository {
+  return {
+    findMonthlyLimit: vi.fn().mockResolvedValue(monthlyLimit),
   };
 }
 
