@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 
+type ReturnsInsert = Database["public"]["Tables"]["returns"]["Insert"];
+
 // returns / return_items（#232）: 注文確定後のキャンセル・返品・返金の申請。
 // 業務ルールの正は docs/domain/returns.md。会員は自分の注文への requested の申請の
 // INSERT と参照だけができ、運営者の書き込みは管理画面API（service role）に一本化する
@@ -464,18 +466,24 @@ describe("returns / return_items", () => {
       }
     );
 
-    it.each([
-      ["stripe_refund_id", "re_test_returns_schema_member"],
-      ["refund_amount", 10_000],
-      ["reviewed_by_admin_user_id", ADMIN_USER_ID],
-      ["created_by_admin_user_id", ADMIN_USER_ID],
-      ["admin_note", "会員が書いたメモ"],
-      ["approved_at", new Date().toISOString()],
-      ["received_at", new Date().toISOString()],
-      ["refunded_at", new Date().toISOString()],
-    ] as const)(
+    it.each<[string, Partial<ReturnsInsert>]>([
+      [
+        "stripe_refund_id",
+        { stripe_refund_id: "re_test_returns_schema_member" },
+      ],
+      ["refund_amount", { refund_amount: 10_000 }],
+      [
+        "reviewed_by_admin_user_id",
+        { reviewed_by_admin_user_id: ADMIN_USER_ID },
+      ],
+      ["created_by_admin_user_id", { created_by_admin_user_id: ADMIN_USER_ID }],
+      ["admin_note", { admin_note: "会員が書いたメモ" }],
+      ["approved_at", { approved_at: new Date().toISOString() }],
+      ["received_at", { received_at: new Date().toISOString() }],
+      ["refunded_at", { refunded_at: new Date().toISOString() }],
+    ])(
       "運営が記録する項目（%s）を入れた申請はINSERTできない",
-      async (column, value) => {
+      async (_column, adminFields) => {
         const { error } = await clientAs(CLERK_A)
           .from("returns")
           .insert({
@@ -483,7 +491,7 @@ describe("returns / return_items", () => {
             order_id: ORDER_A_ID,
             requested_by_user_id: USER_A_ID,
             reason: "不良品",
-            [column]: value,
+            ...adminFields,
           });
         expect(error?.message).toMatch(/permission denied/);
         expect(await returnExists(REJECTED_ID)).toBe(false);
