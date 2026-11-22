@@ -1,6 +1,6 @@
 /**
  * Clerk + Supabaseに開発用ユーザーをシードする。
- * 各ランク1人ずつの会員 + 管理者3人を、存在しなければClerk側も新規作成する。会員はオンボーディングを
+ * 各ランク1人ずつの個人会員 + standardの法人会員1人 + 管理者1人を、存在しなければClerk側も新規作成する。会員はオンボーディングを
  * 終えた状態のusersの行を、有効な行があれば更新し、無ければ作る（べき等・何度実行しても同じ結果）。
  * 管理者はClerkの publicMetadata.role = "admin" だけで、usersの行は持たない。
  * 1件でも失敗すれば、残りを続けたうえで終了コード1で終わる。
@@ -31,7 +31,15 @@ type SeedUserDef = {
   email: string;
   firstName: string;
   lastName: string;
-} & ({ role: "member"; rank: MemberRankValue } | { role: "admin" });
+} & (
+  | {
+      role: "member";
+      rank: MemberRankValue;
+      // 法人会員のときだけ持つ。無ければ個人会員
+      corporate?: { companyName: string; invoiceRegistrationNumber: string };
+    }
+  | { role: "admin" }
+);
 
 const RANK_SEED_USERS: SeedUserDef[] = RANK_ORDER.map((rank) => ({
   email: `info+test_${rank}@wknd-studio.com`,
@@ -41,16 +49,29 @@ const RANK_SEED_USERS: SeedUserDef[] = RANK_ORDER.map((rank) => ({
   rank,
 }));
 
-const ADMIN_SEED_USERS: SeedUserDef[] = [1, 2, 3].map((n) => ({
-  email: `info+test_admin${n}@wknd-studio.com`,
+const CORPORATE_SEED_USER: SeedUserDef = {
+  email: "info+test_corporate@wknd-studio.com",
+  firstName: "Corporate",
+  lastName: "テストユーザー",
+  role: "member",
+  rank: "standard",
+  corporate: {
+    companyName: "株式会社テスト",
+    invoiceRegistrationNumber: "T1234567890123",
+  },
+};
+
+const ADMIN_SEED_USER: SeedUserDef = {
+  email: "info+test_admin1@wknd-studio.com",
   firstName: "管理者",
-  lastName: `テスト${n}`,
+  lastName: "テスト1",
   role: "admin",
-}));
+};
 
 export const SEED_USERS: SeedUserDef[] = [
   ...RANK_SEED_USERS,
-  ...ADMIN_SEED_USERS,
+  CORPORATE_SEED_USER,
+  ADMIN_SEED_USER,
 ];
 
 // テストでモックに差し替えられるよう、使うメソッドだけに絞った型
@@ -117,7 +138,7 @@ async function upsertClerkUser(
   return { userId: created.id, created: true };
 }
 
-// オンボーディング（個人・決済完了）を終えた状態にする列。何度実行しても同じ状態になるよう、
+// オンボーディング（決済完了）を終えた状態にする列。何度実行しても同じ状態になるよう、
 // 前回の値や user.created Webhook が作った行の値に関係なく全て上書きする
 function onboardedMemberProfile(
   def: SeedUserDef & { role: "member" }
@@ -128,9 +149,10 @@ function onboardedMemberProfile(
     last_name: def.lastName,
     phone_number: "09012345678",
     rank_code: def.rank,
-    member_type: "individual",
-    company_name: null,
-    invoice_registration_number: null,
+    member_type: def.corporate ? "corporate" : "individual",
+    company_name: def.corporate?.companyName ?? null,
+    invoice_registration_number:
+      def.corporate?.invoiceRegistrationNumber ?? null,
     onboarding_completed: true,
     billing_anchor_day: 1,
   };
