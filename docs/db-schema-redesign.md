@@ -115,7 +115,8 @@ erDiagram
     admin_users |o--o{ order_status_changes : "changed_by_admin_user_id"
 
     orders ||--o{ returns : "order_id"
-    users ||--o{ returns : "requested_by_user_id"
+    users |o--o{ returns : "requested_by_user_id"
+    admin_users |o--o{ returns : "created_by_admin_user_id"
     admin_users |o--o{ returns : "reviewed_by_admin_user_id"
     returns ||--o{ return_items : "return_id"
     order_items |o--o{ return_items : "order_item_id"
@@ -248,7 +249,8 @@ erDiagram
         uuid id PK
         uuid order_id FK
         text status
-        uuid requested_by_user_id FK
+        uuid requested_by_user_id FK "NULL可"
+        uuid created_by_admin_user_id FK "NULL可"
         uuid reviewed_by_admin_user_id FK "NULL可"
         text admin_note "NULL可"
         text stripe_refund_id UK "NULL可"
@@ -332,10 +334,11 @@ erDiagram
 | `orders` → `order_status_changes`（`order_id`）                            | `orders.status`は現在値のみのため、いつ・誰が・何から何に変えたかを追跡できない。`rank_changes`と同じ「現在値/来歴の分離」（設計原則2）を`orders.status`にも適用するため                                                                                                              |
 | `admin_users` → `order_status_changes`（`changed_by_admin_user_id`、任意） | 運営スタッフが手動でステータスを変更した場合に、誰が変更したかを特定するため。Webhook等システムによる自動遷移や顧客操作の場合はNULL                                                                                                                                                   |
 | `orders` → `returns`（`order_id`）                                         | 注文確定後に発生する「返品・返金」という別の出来事（不良品対応、支払い後・未発送でのキャンセル）を、注文本体の状態遷移とは別のライフサイクルとして扱うため                                                                                                                            |
-| `users` → `returns`（`requested_by_user_id`）                              | 誰が返品を申請したかを特定するため。カスタマーサポート対応・不正申請の調査に必要                                                                                                                                                                                                      |
+| `users` → `returns`（`requested_by_user_id`、任意）                        | 誰が返品を申請したかを特定するため。カスタマーサポート対応・不正申請の調査に必要。運営者が直接作る回収不能処理ではNULL（代わりに`created_by_admin_user_id`を持つ）                                                                                                                    |
+| `admin_users` → `returns`（`created_by_admin_user_id`、任意）              | 回収不能処理（会員の申請を経ず運営者が直接作る）で、誰が起票したかを特定するため。会員の申請ではNULL                                                                                                                                                                                  |
 | `admin_users` → `returns`（`reviewed_by_admin_user_id`、任意）             | 誰が承認/却下したかを特定するため。未処理のうちはNULL                                                                                                                                                                                                                                 |
 | `returns` → `return_items`（`return_id`）                                  | 1回の返品申請が複数明細にまたがりうるため（`orders`/`order_items`と同じ多対1の構造）                                                                                                                                                                                                  |
-| `order_items` → `return_items`（`order_item_id`、任意）                    | 元の注文のどの明細に対する返品かを特定するため。同じ明細に対して複数回の部分返品が起きうるため多対多ではなく「多」側を`return_items`が持つ                                                                                                                                            |
+| `order_items` → `return_items`（`order_item_id`）                          | 元の注文のどの明細に対する返品かを特定するため。同じ明細に対して複数回の部分返品が起きうるため多対多ではなく「多」側を`return_items`が持つ                                                                                                                                            |
 | `locations` → `order_items`（`fulfillment_location_code`）                 | 商品ごとに「事務所経由か仕入れ先直送か」という配送ルートが異なるため。FKにすることで存在しないロケーションコードが紛れ込むのを防ぐ                                                                                                                                                    |
 | `locations` → `shipments`（`origin_location_code`）                        | 実際にこの出荷がどのロケーションから発送されたかを記録するため。`order_items.fulfillment_location_code`から辿れば分かる情報だが、出荷一覧・配送トラブル対応時に`shipments`単体で判断できるようにするため                                                                              |
 
@@ -659,35 +662,38 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 ---
 
-### `returns`（新設、2026-09-20: `admin_note`追加、顧客都合の返品は原則不可という方針を反映）
+### `returns`（新設、2026-09-20: `admin_note`追加、顧客都合の返品は原則不可という方針を反映。2026-11-23: [[returns]]の2026-09-21改訂（支払い前提の廃止・回収不能処理）に合わせて更新）
 
-**このテーブルが必要な理由**: 注文確定後に発生する「お客さんにお金を返す」出来事を記録する。以下の3パターンのうち、②③をこのテーブルで扱う（①は支払いも発送も発生していないため、単に`orders.status='cancelled'`にするだけで完結し、このテーブルは使わない）。
+**このテーブルが必要な理由**: 注文確定後に発生するキャンセル・返品・返金を「申請」という1つの出来事として記録する。以下の3パターンのうち、②③をこのテーブルで扱う（①は調達も支払いも始まっていないため、単に`orders.status='cancelled'`にするだけで完結し、このテーブルは使わない）。判定基準は「支払いの有無」ではなく「調達がどこまで進んでいるか」（詳細は[[returns]]）。
 
-| パターン                          | 支払い         | 商品の返送     | 扱い                                                 |
-| --------------------------------- | -------------- | -------------- | ---------------------------------------------------- |
-| ①支払い前のキャンセル             | 発生していない | 発生していない | `orders.status='cancelled'`のみ。`returns`は使わない |
-| ②支払い後・未発送でのキャンセル   | 発生している   | 発生しない     | `returns`（`received`ステップを飛ばす）              |
-| ③発送後の返品（不良品・誤配送等） | 発生している   | 発生する       | `returns`（`received`まで進める）                    |
+| パターン                                                           | 支払い                 | 商品の返送 | 扱い                                                 |
+| ------------------------------------------------------------------ | ---------------------- | ---------- | ---------------------------------------------------- |
+| ①`at_order`の支払い完了前のキャンセル                              | 発生していない         | 発生しない | `orders.status='cancelled'`のみ。`returns`は使わない |
+| ②未発送のキャンセル（`at_order`で支払い済み、または`after_order`） | 問わない（未払いも可） | 発生しない | `returns`（`received`ステップを飛ばす）              |
+| ③発送後の返品（不良品・誤配送等）                                  | 問わない               | 発生する   | `returns`（`received`まで進める）                    |
+
+**回収不能処理（2026-09-21新設）**: `after_order`の請求書を顧客が支払わず督促にも応じない場合、運営者が会員の申請を待たずに`approved`の状態で直接作成する（`requested`を経由しない）。このとき`requested_by_user_id`はNULLで、起票した運営者を`created_by_admin_user_id`に記録する。
 
 **顧客都合のキャンセル・返品は原則不可（2026-09-14確定）**: 御社は無在庫転売型モデルであり、一度仕入れ先へ正式発注した商品は返品されても在庫として再利用できない。加えてStripeは返金してもカード決済手数料が返ってこないため、安易な返品受付はそのまま損失になる。承認するかどうかの判断基準は「不良品・誤配送など運営側／仕入れ先側に起因する理由か」に限定し、この基準はシステムでは強制せず運営者の承認判断に委ねる（詳細は[[returns]]）。
 
-②③はどちらも最終的にStripeへのRefund実行という同じ処理に帰着するため、テーブルを分けない。決済単位（`order_settlements`）が`checkout`/`invoice`のどちらでも、返品・返金が発生する時点では両者とも「支払い済み（`paid`）」であるという前提は共通なので、`flow`による分岐は持たない（返金額の算出時に参照する単価は`order_items.unit_price_snapshot`。Ver1では要相談商品を扱わないため`negotiated_unit_price`は関与しない）。
+②③はどちらも「解決確定」で`refunded`になるという同じライフサイクルを持つため、テーブルを分けない。解決確定の際、対象の決済単位（`order_settlements`）が`paid`ならStripe Refundを実行し、`paid`に至っていなければ（未払い、または決済単位がまだ無い）お金は動いていないため、Stripe Invoiceがあれば`voidInvoice`で無効化するだけで完結する（`refund_amount`は0またはNULL）。この分岐は決済単位の状態で決まるため、`returns`に`flow`は持たない（返金額の算出時に参照する単価は`order_items.unit_price_snapshot`。Ver1では要相談商品を扱わないため`negotiated_unit_price`は関与しない）。
 
-| カラム                      | 型          | 制約                                                                                                                        | なぜ必要か                                                                                                                                                                                                 |
-| --------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                        | UUID        | PK                                                                                                                          | サロゲートキー                                                                                                                                                                                             |
-| `order_id`                  | UUID        | NOT NULL, FK → `orders(id)`                                                                                                 | どの注文に対する返品・返金かを特定する本体データ                                                                                                                                                           |
-| `status`                    | TEXT        | NOT NULL, CHECK IN (`'requested'`,`'approved'`,`'rejected'`,`'received'`,`'refunded'`,`'cancelled'`), DEFAULT `'requested'` | 申請→承認/却下→（商品がある場合のみ）返送受領→返金完了、という返品固有のライフサイクルを追う。`'received'`は物理的な返送があるパターン③でのみ通過し、パターン②では`'approved'`から直接`'refunded'`へ進める |
-| `requested_by_user_id`      | UUID        | NOT NULL, FK → `users(id)`                                                                                                  | 誰が返品・返金を申請したかを特定するため                                                                                                                                                                   |
-| `reviewed_by_admin_user_id` | UUID        | NULL可, FK → `admin_users(id)`                                                                                              | 誰が承認/却下したかを特定するため。未処理のうちはNULL。**承認権限は管理者ロールのみ**（2026-09-14確定、[[admin-rbac]]参照）                                                                                |
-| `reason`                    | TEXT        | NOT NULL                                                                                                                    | 返品・返金の理由（不良品・誤配送等）。顧客対応・仕入れ先へのクレームの根拠として必須                                                                                                                       |
-| `admin_note`                | TEXT        | NULL可                                                                                                                      | **新設（2026-09-14）**: 返送の物流フロー（着払い伝票の発行方法、先払いラベル、返送料の精算方法等）はシステムで手順を固定せず運営者の裁量に委ねるため、実際にどう対応したかを記録する自由記述欄             |
-| `stripe_refund_id`          | TEXT        | NULL可, UNIQUE                                                                                                              | Stripe側のRefundオブジェクトとの突合、および同じ返金を二重実行しないためのべき等性キー。返金確定前はNULL                                                                                                   |
-| `refund_amount`             | BIGINT      | NULL可                                                                                                                      | 実際に返金した合計金額（単価×数量のみ、送料は関与しない。2026-09-14確定）。返金確定前はNULL                                                                                                                |
-| `approved_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 承認された日時                                                                                                                                                                                             |
-| `received_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 商品の返送を受領した日時（返送先は`locations`の`'office'`をそのまま使う）。パターン②（返送なし）では常にNULLのまま                                                                                         |
-| `refunded_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 実際に返金した日時                                                                                                                                                                                         |
-| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                                                                      | 監査証跡                                                                                                                                                                                                   |
+| カラム                      | 型          | 制約                                                                                                                        | なぜ必要か                                                                                                                                                                                                                                                                |
+| --------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | UUID        | PK                                                                                                                          | サロゲートキー                                                                                                                                                                                                                                                            |
+| `order_id`                  | UUID        | NOT NULL, FK → `orders(id)`                                                                                                 | どの注文に対する返品・返金かを特定する本体データ                                                                                                                                                                                                                          |
+| `status`                    | TEXT        | NOT NULL, CHECK IN (`'requested'`,`'approved'`,`'rejected'`,`'received'`,`'refunded'`,`'cancelled'`), DEFAULT `'requested'` | 申請→承認/却下→（商品がある場合のみ）返送受領→返金完了、という返品固有のライフサイクルを追う。`'received'`は物理的な返送があるパターン③でのみ通過し、パターン②では`'approved'`から直接`'refunded'`へ進める                                                                |
+| `requested_by_user_id`      | UUID        | NULL可, FK → `users(id)`                                                                                                    | 誰が返品・返金を申請したかを特定するため。回収不能処理（運営者が直接作る）ではNULL。`created_by_admin_user_id`とどちらか一方だけを持つ（CHECK `returns_requester_check`）                                                                                                 |
+| `created_by_admin_user_id`  | UUID        | NULL可, FK → `admin_users(id)`                                                                                              | **新設（2026-11-23、#232）**: 回収不能処理で、誰が起票したかを特定するため。会員の申請ではNULL                                                                                                                                                                            |
+| `reviewed_by_admin_user_id` | UUID        | NULL可, FK → `admin_users(id)`                                                                                              | 誰が承認/却下したかを特定するため。未処理のうちはNULL。**承認権限は管理者ロールのみ**（2026-09-14確定、[[admin-rbac]]参照）                                                                                                                                               |
+| `reason`                    | TEXT        | NOT NULL                                                                                                                    | 返品・返金の理由（不良品・誤配送等）。顧客対応・仕入れ先へのクレームの根拠として必須                                                                                                                                                                                      |
+| `admin_note`                | TEXT        | NULL可                                                                                                                      | **新設（2026-09-14）**: 返送の物流フロー（着払い伝票の発行方法、先払いラベル、返送料の精算方法等）はシステムで手順を固定せず運営者の裁量に委ねるため、実際にどう対応したかを記録する自由記述欄。運営の内部メモのため会員からは読めない（下記「RLSポリシー方針への影響」） |
+| `stripe_refund_id`          | TEXT        | NULL可, UNIQUE                                                                                                              | Stripe側のRefundオブジェクトとの突合、および同じ返金を二重実行しないためのべき等性キー。返金確定前はNULL                                                                                                                                                                  |
+| `refund_amount`             | BIGINT      | NULL可, CHECK `>= 0`                                                                                                        | 実際に返金した合計金額（単価×数量のみ、送料は関与しない。2026-09-14確定）。返金確定前はNULL。未払いのまま解決確定した場合（`voidInvoice`のみ）は0またはNULL                                                                                                               |
+| `approved_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 承認された日時                                                                                                                                                                                                                                                            |
+| `received_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 商品の返送を受領した日時（返送先は`locations`の`'office'`をそのまま使う）。パターン②（返送なし）では常にNULLのまま                                                                                                                                                        |
+| `refunded_at`               | TIMESTAMPTZ | NULL可                                                                                                                      | 実際に返金した日時                                                                                                                                                                                                                                                        |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL DEFAULT NOW()                                                                                                      | 監査証跡                                                                                                                                                                                                                                                                  |
 
 ---
 
@@ -697,13 +703,14 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 
 **このテーブルが必要な理由**: 1回の返品・返金申請は複数の注文明細にまたがりうる（`orders`/`order_items`と同じ多対1の構造）ため、`returns`本体とは別に明細を持つ必要がある。
 
-| カラム          | 型      | 制約                             | なぜ必要か                                                                                                                   |
-| --------------- | ------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `id`            | UUID    | PK                               | サロゲートキー                                                                                                               |
-| `return_id`     | UUID    | NOT NULL, FK → `returns(id)`     | どの返品・返金申請の明細かを特定する本体データ                                                                               |
-| `order_item_id` | UUID    | NOT NULL, FK → `order_items(id)` | 元の注文のどの商品明細に対する返品かを特定するため                                                                           |
-| `quantity`      | INTEGER | NOT NULL, CHECK `> 0`            | 一部数量のみの返品に対応するため（例: 3枚のうち1枚のみ）。`order_items.quantity`以下であることはアプリ層で検証               |
-| `refund_amount` | BIGINT  | NULL可                           | この明細分の返金額。`order_items.unit_price_snapshot`または`negotiated_unit_price`（Invoiceフローの場合）×`quantity`から算出 |
+| カラム          | 型          | 制約                             | なぜ必要か                                                                                                                                                        |
+| --------------- | ----------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | UUID        | PK                               | サロゲートキー                                                                                                                                                    |
+| `return_id`     | UUID        | NOT NULL, FK → `returns(id)`     | どの返品・返金申請の明細かを特定する本体データ                                                                                                                    |
+| `order_item_id` | UUID        | NOT NULL, FK → `order_items(id)` | 元の注文のどの商品明細に対する返品かを特定するため                                                                                                                |
+| `quantity`      | INTEGER     | NOT NULL, CHECK `> 0`            | 一部数量のみの返品に対応するため（例: 3枚のうち1枚のみ）。`order_items.quantity`以下であることはアプリ層で検証                                                    |
+| `refund_amount` | BIGINT      | NULL可, CHECK `>= 0`             | この明細分の返金額。`order_items.unit_price_snapshot`×`quantity`から算出する（送料は含めない。Ver1では要相談商品を扱わないため`negotiated_unit_price`は使わない） |
+| `created_at`    | TIMESTAMPTZ | NOT NULL DEFAULT NOW()           | 監査証跡                                                                                                                                                          |
 
 ---
 
@@ -800,7 +807,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 - `shipments`：`orders`と同じ「本人 or 同一組織」ポリシーを流用し、顧客は自分（または所属組織）の注文に紐づく出荷をSELECTのみ可能にする（追跡番号・配送状況の確認用途）。書き込みは`procurement_tasks`と同様に管理画面API（service role経由）に一本化し、ユーザー向けINSERT/UPDATE/DELETEポリシーは設けない。`order_items.shipment_id`の更新も同じAPI経由に統一する。
 - `order_status_changes`：`orders`と同じ「本人 or 同一組織」ポリシーでSELECTのみ許可（注文の進捗履歴を顧客にも見せる用途）。書き込みは`orders.status`の更新と同一トランザクションで行うアプリケーションコード経由のみ。
 - `order_settlements`：`orders`と同じ「本人 or 同一組織」ポリシーでSELECTのみ許可（決済状況の確認用途）。書き込みはStripe Webhookハンドラー・「請求作成」ユースケース経由のみで、ユーザー向けINSERT/UPDATE/DELETEポリシーは設けない。
-- `returns` / `return_items`：顧客は自分（または所属組織）の注文に対する返品・返金申請をSELECT、および`requested`状態でのINSERTのみ許可する（「返品したい」という申請自体は顧客の操作であるため、他の運営専用テーブルとは異なり顧客からの書き込みを認める）。承認・却下・返金実行（`status`の`requested`以降への遷移、`stripe_refund_id`/`refund_amount`のセット）は管理画面API（service role経由）に一本化し、顧客からの直接UPDATEは許可しない。
+- `returns` / `return_items`：顧客は自分の注文（`orders.user_id = get_current_user_id()`）に対する返品・返金申請をSELECT、および`requested`状態でのINSERTのみ許可する（「返品したい」という申請自体は顧客の操作であるため、他の運営専用テーブルとは異なり顧客からの書き込みを認める）。`return_items`のINSERTは、自分の`requested`の申請に、その申請と同じ注文の明細を指す場合だけ許可する。承認・却下・返金実行（`status`の`requested`以降への遷移、`stripe_refund_id`/`refund_amount`のセット）は管理画面API（service role経由）に一本化し、運営者向けのポリシーは作らず、顧客からのUPDATE/DELETEも許可しない。RLSは行単位のため、運営の内部情報（`admin_note`・`created_by_admin_user_id`・`reviewed_by_admin_user_id`）の秘匿と、顧客が運営の記録する項目（`stripe_refund_id`・`refund_amount`・`approved_at`等）を入れられないことは、`authenticated`ロールへのカラム単位のGRANT（SELECT・INSERTできるカラムを列挙する）で守る。顧客側の参照は`select('*')`ではなく、読めるカラムを指定する（2026-11-23、#232）。
 - `locations`：運営内部の発送拠点情報であり、顧客がこのテーブルを直接参照する必要はない（`member_ranks`と異なりカタログ表示等に使われないため）。顧客向けSELECTポリシーは設けず、参照・書き込みともに管理画面API（service role経由）に一本化する。
 
 ---
@@ -853,7 +860,7 @@ CREATE UNIQUE INDEX ON subscriptions(organization_id) WHERE organization_id IS N
 9. ⬜ [#172](https://github.com/wknd-studio/brand-closed-ec/issues/172) `procurement_tasks`を新設し、`order_items.procurement_task_id`・`received_at`を追加する（`admin_users`が存在した後でないと`procurement_tasks.assigned_admin_user_id`のFKが張れないため7の後、また`order_items.settlement_id`を参照する対応待ちキューの入場条件があるため8の後に実施する）。`status`のCHECK制約は`('pending','claimed','ordered','cancelled')`の4値（`'received'`は明細単位の`received_at`に置き換えたため含めない）。`orders.procurement_due_at`は削除済みのため追加しない
 10. ⬜ [#173](https://github.com/wknd-studio/brand-closed-ec/issues/173) `shipments`を新設し、`order_items.shipment_id`を追加する。`status`のCHECK制約は`('pending','preparing','shipped','delivered')`の4値、`assigned_admin_user_id`（FK→`admin_users`）も追加する。`orders.status`のCHECK制約変更はステップ8で完了済みのため本ステップでは不要
 11. ✅ [#174](https://github.com/wknd-studio/brand-closed-ec/issues/174)（[#237](https://github.com/wknd-studio/brand-closed-ec/issues/237)で実装）`order_status_changes`を新設する（実データが無いためバックフィル不要）。（`supabase/migrations/20261110215518_create_order_status_changes.sql`で実装済み。注文の保存を`save_order`関数にまとめ、`orders.status`が変わったときだけ同じトランザクションで1行追記する。注文確定時の最初の1行は`place_order_with_limit_check`が`changed_by = 'customer'`で記録する。UPDATE/DELETEはトリガーで拒否し、注文確定の補償削除（`delete_order`）に伴う`ON DELETE CASCADE`だけを通す。RLSは本人の注文の履歴の参照のみ（組織は削除済み）。`reason`を画面から渡すのは#271）
-12. ⬜ [#175](https://github.com/wknd-studio/brand-closed-ec/issues/175) `returns`/`return_items`を新設する。`returns.admin_note`（自由記述の備考欄）も含める
+12. ✅ [#175](https://github.com/wknd-studio/brand-closed-ec/issues/175)（[#232](https://github.com/wknd-studio/brand-closed-ec/issues/232)で実装）`returns`/`return_items`を新設する。`returns.admin_note`（自由記述の備考欄）も含める。（`supabase/migrations/20261122214830_create_returns_return_items.sql`で実装済み。回収不能処理のため`requested_by_user_id`をNULL可にして`created_by_admin_user_id`を追加し、どちらか一方だけを持つCHECKを付けた。運営の内部情報はカラム単位のGRANTで会員から隠す）
 13. ⬜ [#176](https://github.com/wknd-studio/brand-closed-ec/issues/176) `locations`を新設し、`('office', ...)`/`('supplier_direct', ...)`の初期2行を投入する。`order_items.fulfillment_location_code`・`shipments.origin_location_code`を追加する（実データが無いためバックフィル不要）。
 
 この設計に問題なければ、上記の移行方針をベースに実際のマイグレーションファイル作成に進みます。ステップ8は2026-09-20時点でまだGitHub issueが存在しないため、他のステップと合わせてissue化する際に新規発行する。
