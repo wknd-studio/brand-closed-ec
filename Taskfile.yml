@@ -82,6 +82,11 @@ tasks:
       - git fetch -q origin develop main
       - pnpm -s tsx scripts/check-github-secrets.ts
 
+  clerk:admin-rbac:check:
+    desc: Clerk（開発インスタンス。dev・stg 共用）の運営組織のロール・権限が docs/domain/admin-rbac.md の権限マトリクスどおりかを確かめる（直すときは scripts/clerk-admin-rbac.ts setup。#390）
+    cmds:
+      - doppler run -c dev -- pnpm -s tsx scripts/clerk-admin-rbac.ts check
+
   deps:graph:
     desc: オープンなissueの依存グラフをHTMLで開く（`-- --json` でAI・スクリプト向けのJSONを出力）。依存の正はGitHubのBlocked by
     cmds:
