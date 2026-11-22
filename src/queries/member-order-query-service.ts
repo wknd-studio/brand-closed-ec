@@ -1,4 +1,5 @@
 import type { MemberRank } from "@/domain/value-objects/member-rank";
+import type { OrderStatus } from "@/domain/value-objects/order-status";
 
 // 注文確認画面で選ぶ住所
 export type CheckoutAddressDto = {
@@ -43,6 +44,26 @@ export type InvoiceRequestedOrderDto = {
   items: CompletedOrderItemDto[];
 };
 
+// 注文履歴の1行。fixedTotal は要相談でない明細の小計の合計で、要相談の明細を含む注文は
+// includesNegotiable が true（金額が未確定の分を含むと表示する。#275 と同じ0円扱いを避ける）
+export type OrderHistoryItemDto = {
+  orderId: string;
+  createdAt: string;
+  status: OrderStatus;
+  fixedTotal: number;
+  includesNegotiable: boolean;
+  // 商品点数（明細の数量の合計）
+  itemCount: number;
+};
+
+// 注文履歴画面（/orders）。新しい順に page ページ目（1始まり）の pageSize 件
+export type OrderHistoryDto = {
+  orders: OrderHistoryItemDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+};
+
 // 会員の注文系画面の読み取り。他の会員のデータを返さないよう、どのメソッドも会員（clerkUserId）を必須にする
 export interface MemberOrderQueryService {
   // 退会済み・存在しない会員は null
@@ -57,4 +78,10 @@ export interface MemberOrderQueryService {
     clerkUserId: string;
     orderId: string;
   }): Promise<InvoiceRequestedOrderDto | null>;
+  // キャンセル済み・支払い済みを含む本人の注文。退会済み・存在しない会員・最後より後のページは注文が空
+  findOrderHistory(input: {
+    clerkUserId: string;
+    page: number;
+    pageSize: number;
+  }): Promise<OrderHistoryDto>;
 }
