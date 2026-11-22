@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-// knip でデッドコード（未使用のファイル・export・依存・クラスのメソッド）を検出する（#683）。
+// knip でデッドコード（未使用のファイル・export・依存）を検出する（#683）。
 // 普通のモードに加え、テストからしか呼ばれていない本番のコードを production モードで検出する。
 // CI（Deploy の Knip ジョブ）と task check の両方で、2つのモードを実行していることを確かめる
 
