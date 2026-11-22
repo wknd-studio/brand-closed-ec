@@ -560,6 +560,131 @@ export type Database = {
           },
         ];
       };
+      return_items: {
+        Row: {
+          created_at: string;
+          id: string;
+          order_item_id: string;
+          quantity: number;
+          refund_amount: number | null;
+          return_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          order_item_id: string;
+          quantity: number;
+          refund_amount?: number | null;
+          return_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          order_item_id?: string;
+          quantity?: number;
+          refund_amount?: number | null;
+          return_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "return_items_order_item_id_fkey";
+            columns: ["order_item_id"];
+            isOneToOne: false;
+            referencedRelation: "order_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "return_items_return_id_fkey";
+            columns: ["return_id"];
+            isOneToOne: false;
+            referencedRelation: "returns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      returns: {
+        Row: {
+          admin_note: string | null;
+          approved_at: string | null;
+          created_at: string;
+          created_by_admin_user_id: string | null;
+          id: string;
+          order_id: string;
+          reason: string;
+          received_at: string | null;
+          refund_amount: number | null;
+          refunded_at: string | null;
+          requested_by_user_id: string | null;
+          reviewed_by_admin_user_id: string | null;
+          status: string;
+          stripe_refund_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          admin_note?: string | null;
+          approved_at?: string | null;
+          created_at?: string;
+          created_by_admin_user_id?: string | null;
+          id?: string;
+          order_id: string;
+          reason: string;
+          received_at?: string | null;
+          refund_amount?: number | null;
+          refunded_at?: string | null;
+          requested_by_user_id?: string | null;
+          reviewed_by_admin_user_id?: string | null;
+          status?: string;
+          stripe_refund_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          admin_note?: string | null;
+          approved_at?: string | null;
+          created_at?: string;
+          created_by_admin_user_id?: string | null;
+          id?: string;
+          order_id?: string;
+          reason?: string;
+          received_at?: string | null;
+          refund_amount?: number | null;
+          refunded_at?: string | null;
+          requested_by_user_id?: string | null;
+          reviewed_by_admin_user_id?: string | null;
+          status?: string;
+          stripe_refund_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "returns_created_by_admin_user_id_fkey";
+            columns: ["created_by_admin_user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "returns_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "returns_requested_by_user_id_fkey";
+            columns: ["requested_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "returns_reviewed_by_admin_user_id_fkey";
+            columns: ["reviewed_by_admin_user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       stripe_webhook_events: {
         Row: {
           error: string | null;
