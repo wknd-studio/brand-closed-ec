@@ -1,0 +1,51 @@
+// デッドコード（未使用のファイル・export・依存）の検出の設定（#683）。書き方と誤検出の対応は docs/knip.md
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // 名前で読み込まれるため import からはたどれないファイル。Next.js・Vitest・Playwright・Storybook・
+  // GitHub Actions・Taskfile・package.json から呼ばれるものは、knip のプラグインが自動で入口にする。
+  // 末尾の ! は production モード（pnpm knip:production）でも入口にする印
+  "entry": [
+    // Sanity Studio（本番にデプロイする）。sanity プラグインは設定ファイル扱いにして production モードで
+    // 入口から外してしまうため、プラグインを切ってここに書く
+    "sanity.config.ts!",
+    "sanity.cli.ts!",
+    // 手元・CI・Taskfile から pnpm tsx で直接実行するスクリプト。src/ のコードを使うものがあるため、
+    // production モードでも入口にする
+    "scripts/*.ts!",
+    "scripts/ci/{check-stg-e2e,collect-supabase-logs,encrypt-artifact,pr-diff-summary,verify-mechanical-changes}.ts!",
+    "scripts/product-import/*.ts!",
+    // export-csv.ts が --adapter=<id> で動的に import する
+    "scripts/product-import/vendors/*/scraper.ts!",
+    // @opennextjs/cloudflare がファイル名で読み込む
+    "open-next.config.ts",
+    // playwright.config.ts の setup プロジェクトが testMatch の正規表現で読み込む（プラグインは正規表現を解釈しない）
+    "tests/e2e/global.setup.ts",
+  ],
+  "sanity": false,
+  // 検査の対象。末尾に ! が付いた src/ だけが production モードの対象（本番のコード）
+  "project": [
+    "src/**/*.{ts,tsx}!",
+    // production モードで「テストと Storybook からしか使われていない」と出るが、消すには判断が要るもの。
+    // 先頭の ! で production モードの対象から外す
+    // デザインシステムのプリミティブ（Storybook に載せ、画面で使う前に用意している）
+    "!src/components/ui/{checkbox,radio}.tsx!",
+    // 承認ステータスの値オブジェクト。本番のコードからはまだ使っていない
+    "!src/domain/value-objects/approval-status.ts!",
+    "src/**/*.{css,mdx}",
+    "scripts/**/*.ts",
+    "*.{ts,mjs,cjs}",
+    "tests/**/*.{ts,tsx}",
+  ],
+  // 同じファイルの中で使っていて、テストのためにも export している関数・定数は報告しない。
+  // テストのためだけに export したものを production モードで誤検出にしないため
+  "ignoreExportsUsedInFile": true,
+  // package.json に入れない、OS に入れて使うコマンド
+  "ignoreBinaries": ["doppler", "age", "jq"],
+  // 無視のリスト。1件ずつ理由を書く
+  "ignoreIssues": {
+    // supabase gen types の生成物。生成される export を手で消さない
+    "src/types/database.types.ts": ["exports", "types"],
+    // SCHEDULED_SYNC_CRON は product-data-sync.yml の cron の値の正として置いている定数（spec.md から参照）
+    "src/sanity/tools/product-import/config.ts": ["exports"],
+  },
+}

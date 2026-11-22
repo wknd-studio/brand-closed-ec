@@ -56,6 +56,22 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
 
+  knip:
+    name: Knip
+    runs-on: ubuntu-24.04
+    # デッドコード（未使用のファイル・export・依存）を検出する（#683。docs/knip.md）。
+    # 別々に通ったPRの組み合わせで最後の利用箇所が消えることもあるため、Lintと同じくdevelopへのpushでも動かす
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm knip
+      # テストのファイルを入口から外し、テストからしか呼ばれていない本番のコードを検出する
+      - run: pnpm knip:production
+
   schema-types-drift:
     name: Schema Types Drift
     runs-on: ubuntu-24.04
@@ -337,10 +353,10 @@ jobs:
   deploy-stg:
     name: Deploy (staging)
     runs-on: ubuntu-24.04
-    # マージごとのチェック（TypeScript・Lint・Unit Tests）が通ったコミットだけをstgに出す。
+    # マージごとのチェック（TypeScript・Lint・Knip・Unit Tests）が通ったコミットだけをstgに出す。
     # 待つ分デプロイは数分遅れるが、壊れたものをstgに出してE2E (stg)を無駄に落とさずに済む。
     # チェックはconcurrencyの外で動くので、ここで待っても取り消されない
-    needs: [typecheck, lint, test]
+    needs: [typecheck, lint, knip, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     environment: staging
     # developへの複数マージがほぼ同時に発生すると、stgデプロイとE2E検証が
