@@ -71,6 +71,13 @@ describe("parseAdminRbacMatrix", () => {
     expect(() => parseAdminRbacMatrix(doc)).toThrow("△");
   });
 
+  it("「権限マトリクス」の節に表が無ければ、後ろの節の表を読まずに例外にする", () => {
+    const doc = DOC.replace(/\| 機能 \| 権限キー \| 管理者[\s\S]*?\n\n/, "");
+    expect(() => parseAdminRbacMatrix(doc)).toThrow(
+      "「権限マトリクス」の節に表がありません"
+    );
+  });
+
   it("同じ権限キーの行が2つあれば例外にする（1行 = 1権限キー）", () => {
     const doc = DOC.replace("`org:returns:manage`", "`org:orders:read`");
     expect(() => parseAdminRbacMatrix(doc)).toThrow("重複");
@@ -95,6 +102,7 @@ describe("findAdminRbacDrift", () => {
         domainPermissions,
         clerkRoles,
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([]);
   });
@@ -106,6 +114,7 @@ describe("findAdminRbacDrift", () => {
         domainPermissions: ["org:orders:read"],
         clerkRoles,
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([
       "権限マトリクスにあるが src/domain に無い権限キー: org:returns:manage",
@@ -119,6 +128,7 @@ describe("findAdminRbacDrift", () => {
         domainPermissions: [...domainPermissions, "org:invoices:create"],
         clerkRoles,
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([
       "src/domain にあるが権限マトリクスに無い権限キー: org:invoices:create",
@@ -135,6 +145,7 @@ describe("findAdminRbacDrift", () => {
           { key: "org:ops_unknown", permissions: ["org:orders:read"] },
         ],
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([
       "運営組織の Role Set に権限マトリクスに無いロールがある（未知のロール）: org:ops_unknown",
@@ -148,6 +159,7 @@ describe("findAdminRbacDrift", () => {
         domainPermissions,
         clerkRoles: [clerkRoles[0]],
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([
       "権限マトリクスのロールが運営組織の Role Set に無い: org:ops_procurement",
@@ -171,6 +183,7 @@ describe("findAdminRbacDrift", () => {
           },
         ],
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([
       "org:ops_admin に権限が足りない: org:returns:manage",
@@ -190,9 +203,30 @@ describe("findAdminRbacDrift", () => {
             roles: ["org:admin", "org:member", "org:ops_admin"],
           },
         ],
+        otherRoles: [],
       })
     ).toEqual([
       "運営者のロールが運営組織以外の Role Set にも入っている（顧客の組織で付けられてしまう）: role_set:default の org:ops_admin",
+    ]);
+  });
+
+  it("運営組織以外のロール（顧客の組織のロール）に運営の権限が付いていれば、ずれとして返す", () => {
+    expect(
+      findAdminRbacDrift({
+        matrix,
+        domainPermissions,
+        clerkRoles,
+        otherRoleSets: [],
+        otherRoles: [
+          {
+            key: "org:admin",
+            permissions: ["org:sys_profile:manage", "org:returns:manage"],
+          },
+          { key: "org:member", permissions: ["org:sys_memberships:read"] },
+        ],
+      })
+    ).toEqual([
+      "運営組織以外のロールに運営の権限が付いている（顧客の組織で使えてしまう）: org:admin の org:returns:manage",
     ]);
   });
 });
@@ -224,6 +258,7 @@ describe("docs/domain/admin-rbac.md の権限マトリクス", () => {
             .map((row) => row.permission),
         })),
         otherRoleSets: [],
+        otherRoles: [],
       })
     ).toEqual([]);
   });
