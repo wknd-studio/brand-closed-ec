@@ -193,7 +193,7 @@ describe("seedUsers", () => {
     }
   });
 
-  it("会員7人の users の行を、オンボーディングを終えた状態で作る", async () => {
+  it("各ランクの個人会員7人の users の行を、オンボーディングを終えた状態で作る", async () => {
     const clerk = makeClerk([MEMBER_SEED_USERS[0].email]);
     const { supabase, rows } = makeSupabase();
 
@@ -204,8 +204,8 @@ describe("seedUsers", () => {
       logger: makeLogger(),
     });
 
-    expect(MEMBER_SEED_USERS).toHaveLength(7);
     expect(rows).toHaveLength(MEMBER_SEED_USERS.length);
+    const individualRows = rows.filter((r) => r.member_type === "individual");
     expect(rows[0]).toEqual(
       expect.objectContaining({
         clerk_user_id: `user_existing_${MEMBER_SEED_USERS[0].email}`,
@@ -215,7 +215,7 @@ describe("seedUsers", () => {
         onboarding_completed: true,
       })
     );
-    expect(rows.map((r) => r.rank_code)).toEqual([
+    expect(individualRows.map((r) => r.rank_code)).toEqual([
       "starter",
       "basic",
       "standard",
@@ -225,6 +225,49 @@ describe("seedUsers", () => {
       "enterprise",
     ]);
     expect(rows[0]).not.toHaveProperty("rank");
+    for (const row of individualRows) {
+      expect(row).toEqual(
+        expect.objectContaining({
+          company_name: null,
+          invoice_registration_number: null,
+        })
+      );
+    }
+  });
+
+  it("standard の法人会員1人の行を、会社名・インボイス登録番号つきで作る", async () => {
+    const { supabase, rows } = makeSupabase();
+
+    await seedUsers({
+      clerk: makeClerk(),
+      supabase,
+      password: PASSWORD,
+      logger: makeLogger(),
+    });
+
+    expect(rows.filter((r) => r.member_type === "corporate")).toEqual([
+      expect.objectContaining({
+        email: "info+test_corporate@wknd-studio.com",
+        rank_code: "standard",
+        onboarding_completed: true,
+        company_name: expect.stringMatching(/\S/),
+        invoice_registration_number: expect.stringMatching(/^T\d{13}$/),
+      }),
+    ]);
+  });
+
+  it("シードするのは、個人会員7人・法人会員1人・運営者1人だけ", () => {
+    expect(SEED_USERS.map((u) => u.email)).toEqual([
+      "info+test_starter@wknd-studio.com",
+      "info+test_basic@wknd-studio.com",
+      "info+test_standard@wknd-studio.com",
+      "info+test_pro@wknd-studio.com",
+      "info+test_advanced@wknd-studio.com",
+      "info+test_premium@wknd-studio.com",
+      "info+test_enterprise@wknd-studio.com",
+      "info+test_corporate@wknd-studio.com",
+      "info+test_admin1@wknd-studio.com",
+    ]);
   });
 
   it("既存の有効な行は更新し、何度実行しても行を増やさない", async () => {
@@ -293,7 +336,7 @@ describe("seedUsers", () => {
       logger: makeLogger(),
     });
 
-    expect(ADMIN_SEED_USERS).toHaveLength(3);
+    expect(ADMIN_SEED_USERS).toHaveLength(1);
     const adminEmails = ADMIN_SEED_USERS.map((u) => u.email);
     expect(rows.filter((r) => adminEmails.includes(r.email as string))).toEqual(
       []

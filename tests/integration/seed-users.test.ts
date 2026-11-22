@@ -40,7 +40,7 @@ async function seededRows() {
   const { data, error } = await supabase
     .from("users")
     .select(
-      "id, clerk_user_id, email, rank_code, member_type, onboarding_completed, phone_number, billing_anchor_day, deleted_at"
+      "id, clerk_user_id, email, rank_code, member_type, company_name, invoice_registration_number, onboarding_completed, phone_number, billing_anchor_day, deleted_at"
     )
     .like("clerk_user_id", `${CLERK_ID_PREFIX}%`)
     .order("email");
@@ -62,11 +62,11 @@ const members = SEED_USERS.filter((u) => u.role === "member");
 const admins = SEED_USERS.filter((u) => u.role === "admin");
 
 describe("seedUsers（実DB）", () => {
-  it("会員7人の行を、オンボーディングを終えた状態で入れる。運営者の行は作らない", async () => {
+  it("個人会員7人・法人会員1人の行を、オンボーディングを終えた状態で入れる。運営者の行は作らない", async () => {
     await seedUsers({ clerk, supabase, password: "unused", logger });
 
     const rows = await seededRows();
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(8);
     expect(rows.map((r) => [r.email, r.rank_code])).toEqual(
       members
         .map((u) => [u.email, u.rank])
@@ -76,7 +76,6 @@ describe("seedUsers（実DB）", () => {
       expect(row).toEqual(
         expect.objectContaining({
           clerk_user_id: clerkUserId(row.email),
-          member_type: "individual",
           onboarding_completed: true,
           deleted_at: null,
         })
@@ -84,6 +83,19 @@ describe("seedUsers（実DB）", () => {
       expect(row.phone_number).not.toBe("");
       expect(row.billing_anchor_day).not.toBeNull();
     }
+    expect(
+      rows.map((r) => [
+        r.member_type,
+        r.company_name !== null,
+        r.invoice_registration_number !== null,
+      ])
+    ).toEqual(
+      rows.map((r) =>
+        r.email === "info+test_corporate@wknd-studio.com"
+          ? ["corporate", true, true]
+          : ["individual", false, false]
+      )
+    );
     const adminIds = admins.map((u) => clerkUserId(u.email));
     expect(rows.filter((r) => adminIds.includes(r.clerk_user_id))).toEqual([]);
   });
@@ -91,7 +103,7 @@ describe("seedUsers（実DB）", () => {
   it("何度実行しても同じ状態になる（既存の有効な行を更新し、増やさない）", async () => {
     await seedUsers({ clerk, supabase, password: "unused", logger });
     const first = await seededRows();
-    expect(first).toHaveLength(7);
+    expect(first).toHaveLength(8);
 
     // 別の状態に崩してから再実行する（user.created Webhook が作った未入会の行など）
     await supabase
