@@ -119,7 +119,7 @@ erDiagram
     admin_users |o--o{ returns : "created_by_admin_user_id"
     admin_users |o--o{ returns : "reviewed_by_admin_user_id"
     returns ||--o{ return_items : "return_id"
-    order_items |o--o{ return_items : "order_item_id"
+    order_items ||--o{ return_items : "order_item_id"
 
     locations ||--o{ order_items : "fulfillment_location_code"
     locations ||--o{ shipments : "origin_location_code"
@@ -333,7 +333,7 @@ erDiagram
 | `shipments` → `order_items`（`shipment_id`、任意）                         | どの明細がどの出荷（箱）に載ったかを記録するため。1明細は同時に1つの出荷にしか属さない前提（数量単位でさらに分割して送ることは当面想定しない）。まだ発送されていない明細はNULLのまま「未発送」として一覧できる（`procurement_task_id`と同じパターン）                                 |
 | `orders` → `order_status_changes`（`order_id`）                            | `orders.status`は現在値のみのため、いつ・誰が・何から何に変えたかを追跡できない。`rank_changes`と同じ「現在値/来歴の分離」（設計原則2）を`orders.status`にも適用するため                                                                                                              |
 | `admin_users` → `order_status_changes`（`changed_by_admin_user_id`、任意） | 運営スタッフが手動でステータスを変更した場合に、誰が変更したかを特定するため。Webhook等システムによる自動遷移や顧客操作の場合はNULL                                                                                                                                                   |
-| `orders` → `returns`（`order_id`）                                         | 注文確定後に発生する「返品・返金」という別の出来事（不良品対応、支払い後・未発送でのキャンセル）を、注文本体の状態遷移とは別のライフサイクルとして扱うため                                                                                                                            |
+| `orders` → `returns`（`order_id`）                                         | 注文確定後に発生する「返品・返金」という別の出来事（不良品対応、未発送のキャンセル、回収不能処理）を、注文本体の状態遷移とは別のライフサイクルとして扱うため                                                                                                                          |
 | `users` → `returns`（`requested_by_user_id`、任意）                        | 誰が返品を申請したかを特定するため。カスタマーサポート対応・不正申請の調査に必要。運営者が直接作る回収不能処理ではNULL（代わりに`created_by_admin_user_id`を持つ）                                                                                                                    |
 | `admin_users` → `returns`（`created_by_admin_user_id`、任意）              | 回収不能処理（会員の申請を経ず運営者が直接作る）で、誰が起票したかを特定するため。会員の申請ではNULL                                                                                                                                                                                  |
 | `admin_users` → `returns`（`reviewed_by_admin_user_id`、任意）             | 誰が承認/却下したかを特定するため。未処理のうちはNULL                                                                                                                                                                                                                                 |
