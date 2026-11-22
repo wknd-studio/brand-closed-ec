@@ -48,13 +48,17 @@ function matrixTable(markdown: string): string[][] {
   if (start < 0) {
     throw new Error(`「権限マトリクス」の節（${MATRIX_HEADING}）がありません`);
   }
-  const headerIndex = lines.findIndex(
-    (line, i) => i > start && line.trim().startsWith("|")
-  );
+  // 次の見出しより後ろ（別の節）の表は読まない
+  const end = lines.findIndex((line, i) => i > start && /^#{1,2} /.test(line));
+  const section = lines.slice(start + 1, end < 0 ? lines.length : end);
+  const headerIndex = section.findIndex((line) => line.trim().startsWith("|"));
+  if (headerIndex < 0) {
+    throw new Error("「権限マトリクス」の節に表がありません");
+  }
   const tableLines: string[] = [];
-  for (let i = headerIndex; i < lines.length; i++) {
-    if (!lines[i].trim().startsWith("|")) break;
-    tableLines.push(lines[i]);
+  for (let i = headerIndex; i < section.length; i++) {
+    if (!section[i].trim().startsWith("|")) break;
+    tableLines.push(section[i]);
   }
   return tableLines.map(cellsOf);
 }
@@ -106,8 +110,11 @@ export function findAdminRbacDrift(input: {
   domainPermissions: string[];
   clerkRoles: ClerkAdminRole[];
   otherRoleSets: ClerkRoleSet[];
+  /** 運営組織の Role Set に入っていないロール（顧客の組織のロール等） */
+  otherRoles: ClerkAdminRole[];
 }): string[] {
-  const { matrix, domainPermissions, clerkRoles, otherRoleSets } = input;
+  const { matrix, domainPermissions, clerkRoles, otherRoleSets, otherRoles } =
+    input;
   const problems: string[] = [];
   const matrixPermissions = matrix.rows.map((row) => row.permission);
 
@@ -159,6 +166,16 @@ export function findAdminRbacDrift(input: {
     for (const role of roleSet.roles.filter((r) => matrix.roles.includes(r))) {
       problems.push(
         `運営者のロールが運営組織以外の Role Set にも入っている（顧客の組織で付けられてしまう）: ${roleSet.key} の ${role}`
+      );
+    }
+  }
+
+  for (const role of otherRoles) {
+    for (const permission of role.permissions.filter((p) =>
+      matrixPermissions.includes(p)
+    )) {
+      problems.push(
+        `運営組織以外のロールに運営の権限が付いている（顧客の組織で使えてしまう）: ${role.key} の ${permission}`
       );
     }
   }
@@ -248,6 +265,7 @@ async function check(): Promise<string[]> {
     );
   }
   const roles = await listAll<ApiRole>("/organization_roles");
+  const adminRoleKeys = adminRoleSet.roles.map((r) => r.key);
   const clerkRoles = adminRoleSet.roles.map(({ key }) => ({
     key,
     permissions: (
@@ -262,6 +280,12 @@ async function check(): Promise<string[]> {
     otherRoleSets: roleSets
       .filter((set) => set.key !== adminRoleSet.key)
       .map((set) => ({ key: set.key, roles: set.roles.map((r) => r.key) })),
+    otherRoles: roles
+      .filter((role) => !adminRoleKeys.includes(role.key))
+      .map((role) => ({
+        key: role.key,
+        permissions: role.permissions.map((p) => p.key),
+      })),
   });
   if (organization.role_set_key !== ADMIN_ROLE_SET_KEY) {
     problems.push(
@@ -278,6 +302,7 @@ async function setup(): Promise<void> {
     domainPermissions: domainPermissions(),
     clerkRoles: [],
     otherRoleSets: [],
+    otherRoles: [],
   }).filter((problem) => problem.includes("src/domain"));
   if (keyDrift.length > 0) throw new Error(keyDrift.join("\n"));
 
