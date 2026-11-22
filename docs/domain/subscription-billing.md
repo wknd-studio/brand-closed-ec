@@ -85,20 +85,20 @@
 - 状態の遷移（Stripeの仕様）: 2回目以降の月額の支払いに失敗すると`active`→`past_due`になる。再請求のうちどれかが成功すれば`active`に戻る。再請求がすべて失敗すると、Stripeの設定（下記）により`canceled`になる。`past_due`の間もStripeは次の請求期間の請求書を作り続ける
 - `subscriptions.status`はStripeの値をそのまま写し、判定はアプリ側の下表で行う（`docs/db-schema-redesign.md`「subscriptions」節）
 
-| `subscriptions.status`                                  | 会員から見た状態 | 新規注文                       | 表示                                                                                     | ログイン                       |
-| ------------------------------------------------------- | ---------------- | ------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------ |
-| `active`・`trialing`                                    | 通常             | できる                         | 通常                                                                                     | できる                         |
-| `past_due`（支払い失敗中）                              | 支払い失敗中     | できない（進行中の注文は続く） | 会員画面の共通レイアウトに、カードの更新の案内とBilling Portal（#216）へのボタン（#379） | できる                         |
-| `unpaid`（使わない設定だが、万一なった場合）            | 支払い失敗中     | できない                       | `past_due`と同じ                                                                         | できる                         |
-| `canceled`・`incomplete_expired`（有効な行が1つも無い） | 利用停止         | できない                       | 利用停止の案内画面だけ（#380）                                                           | できる（案内画面だけ見られる） |
-| `incomplete`                                            | —                | —                              | —                                                                                        | —                              |
+| `subscriptions.status`                                                      | 会員から見た状態 | 新規注文                       | 表示                                                                                     | ログイン                       |
+| --------------------------------------------------------------------------- | ---------------- | ------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------ |
+| `active`・`trialing`                                                        | 通常             | できる                         | 通常                                                                                     | できる                         |
+| `past_due`（支払い失敗中）                                                  | 支払い失敗中     | できない（進行中の注文は続く） | 会員画面の共通レイアウトに、カードの更新の案内とBilling Portal（#216）へのボタン（#379） | できる                         |
+| `unpaid`（使わない設定だが、万一なった場合）                                | 支払い失敗中     | できない                       | `past_due`と同じ                                                                         | できる                         |
+| `canceled`・`incomplete_expired`（入会済みで、解約済みでない行が1つも無い） | 利用停止         | できない                       | 利用停止の案内画面だけ（#380）                                                           | できる（案内画面だけ見られる） |
+| `incomplete`                                                                | —                | —                              | —                                                                                        | —                              |
 
-- `incomplete`は入会の初回の支払いが終わっていない状態で、`subscriptions`の行は入会の`checkout.session.completed`（支払い済み）で作るため、行としては現れない。入会前の会員はオンボーディングに送る（[[membership]]）
+- `incomplete`は入会の初回の支払いが終わっていない状態で、`subscriptions`の行は入会の`checkout.session.completed`（支払い済み）で作るため、行としては現れない。入会前かどうかは`users.onboarding_completed`で判定し、入会前の会員はオンボーディングに送る（[[membership]]「Stripe側の解約による利用停止」の判定の順）
 - Stripeの`paused`はv1では起きない（再請求後の設定で「一時停止」を選ばず、`subscriptions.status`のCHECK制約にも無い）。管理者による停止（#206、post-v1）でStripeの一時停止を使う場合は、そのときにCHECK制約とこの表に足す
-- 「有効な行が1つも無い」の判定は、退会（`deleted_at`）の判定の後に行う。退会でStripeのサブスクリプションを解約しても`customer.subscription.deleted`が届いて`canceled`になるが、その会員は退会済みとして`/withdrawn`に送る
+- 利用停止の判定は、退会（`deleted_at`）・入会前（`onboarding_completed`）の判定の後に行う。退会でStripeのサブスクリプションを解約しても`customer.subscription.deleted`が届いて`canceled`になるが、その会員は退会済みとして`/withdrawn`に送る
 - **支払い失敗中にしてよい操作**: 進行中の注文の続き（請求書払いの支払い、運営者による請求作成など）は止めない（管理者による停止中の扱いと揃える。[[membership]]）。カートへの追加も止めない（カードを更新すればそのまま注文できるようにする）。プラン変更（#209）は止め、先にカードの更新を促す（支払い失敗中にアップグレードすると、日割りの請求も同じカードで失敗するため）
 - **状態を同期するWebhook**（#377）:
-  - `customer.subscription.updated`: `status`・`current_period_start`/`current_period_end`・`cancel_at_period_end`をStripeの値に更新する。`past_due`になったとき・再請求の成功で`active`に戻ったとき・月額の更新で請求期間が進んだときのいずれもこれで拾う。プラン変更の確定（`docs/plan-change-flow.md`）も同じイベントで判定する
+  - `customer.subscription.updated`: `status`・`current_period_start`/`current_period_end`・`cancel_at_period_end`をStripeの値に更新する。`past_due`になったとき・再請求の成功で`active`に戻ったとき・月額の更新で請求期間が進んだときのいずれもこれで拾う。プラン変更の確定（#209）も同じイベントで判定する
   - `customer.subscription.deleted`: `status='canceled'`・`canceled_at`を記録する（再請求が尽きた解約・退会による解約のどちらでも届く）
   - `invoice.payment_failed`は処理しない（下記「支払い失敗の会員への通知」でStripeの自動メールに任せるため。状態は`customer.subscription.updated`で分かる）
   - 再配信・順序の入れ替わりで古い状態に戻らないよう、`stripe_webhook_events`で冪等にし、Stripeから取り直した最新のSubscriptionで更新する（詳細は#377）
