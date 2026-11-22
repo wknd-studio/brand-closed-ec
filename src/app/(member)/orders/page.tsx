@@ -8,10 +8,10 @@ type Props = {
   searchParams: Promise<{ page?: string }>;
 };
 
-// URL の page が数字でない・1未満なら1ページ目にする
+// URL の page が数字でない・1未満・offset が安全な整数に収まらないなら1ページ目にする
 function parsePage(value: string | undefined): number {
   const page = Number(value);
-  return Number.isInteger(page) && page >= 1 ? page : 1;
+  return Number.isSafeInteger(page * PAGE_SIZE) && page >= 1 ? page : 1;
 }
 
 export default async function OrdersPage({ searchParams }: Props) {
