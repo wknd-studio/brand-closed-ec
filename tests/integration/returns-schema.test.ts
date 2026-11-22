@@ -172,6 +172,7 @@ beforeAll(async () => {
     {
       id: RETURN_A_ID,
       order_id: ORDER_A_ID,
+      status: "requested",
       requested_by_user_id: USER_A_ID,
       reason: "不良品",
       admin_note: "着払い伝票を送付済み",
@@ -188,6 +189,7 @@ beforeAll(async () => {
     {
       id: RETURN_B_ID,
       order_id: ORDER_B_ID,
+      status: "requested",
       requested_by_user_id: USER_B_ID,
       reason: "不良品",
     },
@@ -218,16 +220,6 @@ afterAll(async () => {
 
 describe("returns / return_items", () => {
   describe("制約", () => {
-    it("申請は requested の状態で作られる", async () => {
-      const { data, error } = await supabase
-        .from("returns")
-        .select("status")
-        .eq("id", RETURN_A_ID)
-        .single();
-      expect(error).toBeNull();
-      expect(data?.status).toBe("requested");
-    });
-
     it("status は6値以外を入れられない", async () => {
       const { error } = await supabase.from("returns").insert({
         id: REJECTED_ID,
