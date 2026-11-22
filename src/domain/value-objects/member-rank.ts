@@ -1,5 +1,3 @@
-import { Money } from "./money";
-
 export const RANK_ORDER = [
   "starter",
   "basic",
@@ -30,23 +28,6 @@ export type PricingRankValue = Exclude<
 function isIndividualContract(rank: MemberRankValue): boolean {
   return (INDIVIDUAL_CONTRACT_RANKS as readonly string[]).includes(rank);
 }
-
-// TODO: 月間仕入れ上限は未確定（TBD）の暫定値。確定次第更新する
-// （specs/001-seven-rank-pricing/research.md参照）。
-// standard/pro/enterpriseは名称が旧モデルから引き継がれるため、旧モデルの数値を
-// そのまま流用した（starter/basic/advanced/premiumは新規ランクのため新規に暫定設定）。
-// 同じ値をsupabase/migrations/20260816151000_create_member_ranks.sqlの
-// member_ranks.monthly_limit_amountにも投入している。DB参照化するまでは
-// 二重管理になるため、値を変える場合は両方揃えること。
-const MONTHLY_LIMITS: Record<MemberRankValue, number> = {
-  starter: 300_000,
-  basic: 1_000_000,
-  standard: 5_000_000,
-  pro: 20_000_000,
-  advanced: 50_000_000,
-  premium: 100_000_000,
-  enterprise: Number.MAX_SAFE_INTEGER,
-};
 
 export class MemberRank {
   private constructor(readonly value: MemberRankValue) {}
@@ -92,15 +73,6 @@ export class MemberRank {
   /** 掛け率・ランク別価格を設定するランクか */
   hasRankPricing(): boolean {
     return !isIndividualContract(this.value);
-  }
-
-  /** 月間仕入れ上限の金額が無制限のランクのものか（画面で「無制限」と出し分けるため） */
-  static isUnlimitedMonthlyLimit(amount: number): boolean {
-    return amount === MONTHLY_LIMITS.enterprise;
-  }
-
-  getMonthlyLimit(): Money {
-    return Money.of(MONTHLY_LIMITS[this.value]);
   }
 
   canAccess(minRank: MemberRank): boolean {

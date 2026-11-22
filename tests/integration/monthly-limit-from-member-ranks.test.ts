@@ -285,6 +285,7 @@ describe("place_order_with_limit_check（DB関数）の上限0", () => {
       p_cart_fixed_total: 1,
       p_order: {},
       p_items: [],
+      p_settlement: null,
     });
 
     expect(error?.message).toContain("monthly_limit_exceeded");
