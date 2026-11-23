@@ -98,9 +98,9 @@ describe("Sync Wrangler Secrets & Deploy", () => {
     expect(users.sort()).toEqual([
       `deploy.yml:deploy-prod:${SYNC}`,
       `deploy.yml:deploy-stg:${SYNC}`,
-      // プレビューのビルドは PR のコードを動かすため、Cloudflare のトークンが入っていない stg の値だけで動かす（#727）
-      "preview.yml:deploy:Build",
-      `preview.yml:deploy:${SYNC}`,
+      // プレビュー（#727）。PRのコードを動かすビルドは、Cloudflare のトークンが入っていない stg の値だけで動かす
+      `preview-deploy.yml:reconcile:${SYNC}`,
+      "preview.yml:build:Build",
     ]);
   });
 });

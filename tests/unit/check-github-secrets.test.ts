@@ -52,12 +52,14 @@ describe("findUnusedSecrets", () => {
 });
 
 describe("checkDeploymentBranches", () => {
-  it("production は main、staging は develop、preview は feature/* だけ", () => {
+  it("production は main、staging は develop、preview は develop、preview-build は feature/* だけ", () => {
     expect(EXPECTED_DEPLOYMENT_BRANCHES).toEqual({
       production: ["main"],
       staging: ["develop"],
-      // PRごとのプレビュー（#727）。Dependabot のブランチ（dependabot/*）からは stg の値を読めない
-      preview: ["feature/*"],
+      // PRごとのプレビュー（#727）。Cloudflare のトークンは develop の定義で動く workflow_run だけが読む。
+      // ビルドの stg の値は feature/* だけ（Dependabot のブランチ（dependabot/*）からは読めない）
+      preview: ["develop"],
+      "preview-build": ["feature/*"],
     });
   });
 
@@ -67,7 +69,12 @@ describe("checkDeploymentBranches", () => {
         [
           { name: "production", restricted: true, branches: ["main"] },
           { name: "staging", restricted: true, branches: ["develop"] },
-          { name: "preview", restricted: true, branches: ["feature/*"] },
+          { name: "preview", restricted: true, branches: ["develop"] },
+          {
+            name: "preview-build",
+            restricted: true,
+            branches: ["feature/*"],
+          },
         ],
         EXPECTED_DEPLOYMENT_BRANCHES
       )
