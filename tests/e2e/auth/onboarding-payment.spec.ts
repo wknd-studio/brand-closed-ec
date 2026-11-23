@@ -60,7 +60,7 @@ test.describe.serial("プラン選択後にURLのプランを書き換える", (
 
   test("Checkoutは保存したプラン（PREMIUM）で作られる", async () => {
     await page.getByRole("radio", { name: /PREMIUM/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
     await expect(page).toHaveURL(/checkout\.stripe\.com/, {
       timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
     });
