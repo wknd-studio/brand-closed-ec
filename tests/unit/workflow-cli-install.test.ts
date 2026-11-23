@@ -55,7 +55,10 @@ const EXPECTED_VERSIONS: Record<string, Record<string, string>> = {
     "deploy.yml/deploy-stg": "3.77.1",
     "deploy.yml/deploy-prod": "3.77.1",
     "deploy.yml/e2e": "3.77.1",
+    "deploy.yml/smoke-prod": "3.77.1",
     "product-data-sync.yml/scheduled-sync": "3.77.1",
+    "preview.yml/build": "3.77.1",
+    "preview-deploy.yml/reconcile": "3.77.1",
   },
   // #663 の時点の版
   gitleaks: {

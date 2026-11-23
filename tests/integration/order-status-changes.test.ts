@@ -225,11 +225,12 @@ describe("order_status_changes", () => {
       expect(await historyOf(ORDER_A_ID)).toHaveLength(1);
     });
 
-    it("運営者が状態を変えたときは、changed_by='admin' と admin_users.id が記録される", async () => {
+    it("運営者が状態を変えたときは、changed_by='admin' と admin_users.id と理由が記録される", async () => {
       const order = await repo.findById(ORDER_A_ID);
       await repo.save(order!.cancel(new Date()), {
         type: "admin",
         adminUserId: ADMIN_USER_ID,
+        reason: "顧客都合によるキャンセル",
       });
 
       const history = await historyOf(ORDER_A_ID);
@@ -239,7 +240,7 @@ describe("order_status_changes", () => {
         to_status: "cancelled",
         changed_by: "admin",
         changed_by_admin_user_id: ADMIN_USER_ID,
-        reason: null,
+        reason: "顧客都合によるキャンセル",
       });
     });
 
@@ -250,6 +251,7 @@ describe("order_status_changes", () => {
         repo.save(order!.cancel(new Date()), {
           type: "admin",
           adminUserId: MISSING_ADMIN_USER_ID,
+          reason: null,
         })
       ).rejects.toThrow("Order保存に失敗");
 

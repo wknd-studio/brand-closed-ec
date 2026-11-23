@@ -1,12 +1,15 @@
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
+import { clerk } from "@clerk/testing/playwright";
 import { test, expect, type Page } from "@playwright/test";
 import { getClerkUserIdByEmail } from "../helpers/clerk-test-invitation";
 
 /**
  * デプロイした環境（環境変数・秘密鍵・Cloudflare Workers上のビルド・外部サービスの設定）が
- * 動いているかを、データを書き換えずに確かめる（#649）。stgのデプロイ直後、全部のE2Eの前に
- * `pnpm test:e2e:smoke` で流す（deploy.yml の「環境の確認（スモークテスト）」）。
+ * 動いているかを、ログインして・データを書き換えずに確かめる（#649）。stgのデプロイ直後、全部のE2Eの前に
+ * ログインしないもの（public.spec.ts）と一緒に `pnpm test:e2e:smoke` で流す（deploy.yml の「環境の確認（スモークテスト）」）。
  * 会員・注文・参加希望などは作らない・変えない（ログインのセッションを除く）。
+ *
+ * ログインにはClerkの開発用インスタンスでしか使えないTesting Tokenを使うため、本番では流せない。
+ * 本番でのログインした後の確認は、人間が手で行う（docs/cicd.md「本番のデプロイ後の確認」）。
  *
  * ログインには、新しく作らず `scripts/seed-users.ts` が作る既存のアカウント（docs/seed-data.md）を使う。
  * ほかのE2Eの会員は実行ごとに別のメールアドレス（`slotEmail`）で作って消すため、後片付けで消されない。
@@ -16,7 +19,7 @@ import { getClerkUserIdByEmail } from "../helpers/clerk-test-invitation";
  * （`task sanity:seed` のシードで足りる）も前提にする。
  *
  * 使い捨てのDBで動くPRのE2Eにはこのアカウントが無いため、`pnpm test:e2e` には含めない
- * （playwright.config.ts の smoke のproject）
+ * （playwright.config.ts の smoke-signed-in のproject）
  */
 const MEMBER_EMAIL = "info+test_starter@wknd-studio.com";
 const ADMIN_EMAIL = "info+test_admin1@wknd-studio.com";
@@ -33,25 +36,7 @@ async function signInAs(page: Page, email: string): Promise<void> {
   await clerk.signIn({ page, emailAddress: email });
 }
 
-test.describe("スモークテスト", { tag: "@smoke" }, () => {
-  test("トップが表示される", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("憧れ");
-  });
-
-  test("/waitlist が表示される", async ({ page }) => {
-    await setupClerkTestingToken({ page });
-    await page.goto("/waitlist");
-    // Clerkの<Waitlist>が描画されれば、ClerkのJSと公開鍵が読み込めている
-    await expect(page.locator("#emailAddress-field")).toBeVisible();
-  });
-
-  test("/sign-in が表示される", async ({ page }) => {
-    await setupClerkTestingToken({ page });
-    await page.goto("/sign-in");
-    await expect(page.locator("#identifier-field")).toBeVisible();
-  });
-
+test.describe("スモークテスト（ログインする）", { tag: "@smoke" }, () => {
   test("入会済みのテスト会員でログインすると /shop にブランド・商品が表示される", async ({
     page,
   }) => {
