@@ -7,23 +7,23 @@ import {
 describe("AdminPermission", () => {
   describe("requiredFor()", () => {
     it.each<[AdminOperation, string]>([
-      ["suspendMember", "org:members:suspend"],
-      ["forceWithdrawMember", "org:members:force_withdraw"],
-      ["manageInvitationCodes", "org:invitation_codes:manage"],
-      ["viewMembers", "org:members:read"],
-      ["setMemberInvitationStatus", "org:members:set_invitation_status"],
-      ["manageProducts", "org:products:manage"],
-      ["viewOrders", "org:orders:read"],
-      ["cancelOrder", "org:orders:cancel"],
-      ["createInvoice", "org:invoices:create"],
-      ["cancelSettlement", "org:settlements:cancel"],
-      ["manageProcurement", "org:procurement:manage"],
-      ["recordReceiving", "org:receiving:record"],
-      ["manageShipment", "org:shipments:manage"],
-      ["recordDelivery", "org:deliveries:record"],
-      ["handleReturn", "org:returns:manage"],
-      ["postAnnouncement", "org:announcements:manage"],
-      ["manageStaff", "org:staff:manage"],
+      ["suspendMember", "members:suspend"],
+      ["forceWithdrawMember", "members:force_withdraw"],
+      ["manageInvitationCodes", "invitation_codes:manage"],
+      ["viewMembers", "members:read"],
+      ["setMemberInvitationStatus", "members:set_invitation_status"],
+      ["manageProducts", "products:manage"],
+      ["viewOrders", "orders:read"],
+      ["cancelOrder", "orders:cancel"],
+      ["createInvoice", "invoices:create"],
+      ["cancelSettlement", "settlements:cancel"],
+      ["manageProcurement", "procurement:manage"],
+      ["recordReceiving", "receiving:record"],
+      ["manageShipment", "shipments:manage"],
+      ["recordDelivery", "deliveries:record"],
+      ["handleReturn", "returns:manage"],
+      ["postAnnouncement", "announcements:manage"],
+      ["manageStaff", "staff:manage"],
     ])("%s には %s が要る", (operation, key) => {
       expect(AdminPermission.requiredFor(operation).key).toBe(key);
     });
@@ -48,10 +48,9 @@ describe("AdminPermission", () => {
       expect(new Set(keys).size).toBe(keys.length);
     });
 
-    it("全ての権限キーが Clerk のカスタム権限の形式（org:<対象>:<操作>・org:sys_ 以外）である", () => {
+    it("全ての権限キーが <対象>:<操作> の形式で、認証基盤（Clerk）の形式に依存しない", () => {
       for (const { key } of AdminPermission.all()) {
-        expect(key).toMatch(/^org:[a-z0-9_]+:[a-z0-9_]+$/);
-        expect(key.startsWith("org:sys_")).toBe(false);
+        expect(key).toMatch(/^[a-z0-9_]+:[a-z0-9_]+$/);
       }
     });
   });
