@@ -1,6 +1,7 @@
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { CartItem } from "@/domain/value-objects/cart-item";
 import {
@@ -26,7 +27,7 @@ interface OrderProps {
   shippingAddress: AddressSnapshot;
   billingAddress: AddressSnapshot;
   rankAtOrder: MemberRank;
-  monthlyLimitAtOrder: Money;
+  monthlyLimitAtOrder: MonthlyLimit;
   items: OrderItem[];
   /** 決済単位。at_orderのCheckout・後から作られるInvoiceを含め、1注文に複数ありうる */
   settlements: OrderSettlement[];
@@ -34,8 +35,10 @@ interface OrderProps {
 }
 
 interface PlaceOrderProps {
-  /** 注文する会員。ランク・月次上限は注文時点の値をスナップショットする */
+  /** 注文する会員。ランクは注文時点の値をスナップショットする */
   user: User;
+  /** 会員のランクの月次上限（member_ranks の値）。注文時点の値をスナップショットする */
+  monthlyLimit: MonthlyLimit;
   /** サーバー側の商品情報で検証済みのカートの明細 */
   cartItems: CartItem[];
   shippingAddress: AddressSnapshot;
@@ -59,7 +62,7 @@ export class Order {
   readonly shippingAddress: AddressSnapshot;
   readonly billingAddress: AddressSnapshot;
   readonly rankAtOrder: MemberRank;
-  readonly monthlyLimitAtOrder: Money;
+  readonly monthlyLimitAtOrder: MonthlyLimit;
   readonly items: OrderItem[];
   readonly settlements: OrderSettlement[];
   readonly createdAt: Date;
@@ -151,7 +154,7 @@ export class Order {
       shippingAddress: props.shippingAddress,
       billingAddress: props.billingAddress,
       rankAtOrder: user.rank,
-      monthlyLimitAtOrder: user.getMonthlyLimit(),
+      monthlyLimitAtOrder: props.monthlyLimit,
       items: [
         ...toOrderItems(atOrderItems, "at_order", settlement?.id ?? null),
         ...toOrderItems(afterOrderItems, "after_order", null),

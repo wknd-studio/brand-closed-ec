@@ -5,9 +5,9 @@ import { useCart } from "@/components/cart/cart-provider";
 export default function CartHeaderControls() {
   const { cart, totalUsed, monthlyLimit, openCart } = useCart();
   const cartCount = cart.items.length;
-  const isUnlimited = monthlyLimit === Number.MAX_SAFE_INTEGER;
+  const isUnlimited = monthlyLimit === null;
   const usageRate =
-    monthlyLimit > 0 && !isUnlimited
+    monthlyLimit !== null && monthlyLimit > 0
       ? Math.min(totalUsed / monthlyLimit, 1)
       : 0;
 
@@ -34,7 +34,10 @@ export default function CartHeaderControls() {
           ¥{totalUsed.toLocaleString()}
           <span className="text-gray-400">
             {" "}
-            / {isUnlimited ? "無制限" : `¥${monthlyLimit.toLocaleString()}`}
+            /{" "}
+            {monthlyLimit === null
+              ? "無制限"
+              : `¥${monthlyLimit.toLocaleString()}`}
           </span>
         </span>
       </div>
