@@ -25,8 +25,9 @@ export async function cancelOrder(
   );
   if (!adminUser) throw new Error("運営者が見つかりません");
   // キャンセルできない注文は Order.cancel() が OrderNotCancellableError を投げる
-  // 読んだ後に注文が変わっていれば OrderConcurrentlyModifiedError をそのまま投げ、読み直してやり直さない。
-  // 運営者が画面で見た注文と違う注文（その間に作られた請求を含む）を黙ってキャンセルしないため（#721）
+  // 上の findById から保存までの間に注文が変わっていれば OrderConcurrentlyModifiedError をそのまま投げ、
+  // 読み直してやり直さない。その間に作られた請求（Stripe Invoice）まで黙ってキャンセルしないため（#721）。
+  // 運営者が画面を開いた時点からの変更は、ここでは検出しない（比べる版は findById で読んだもの）
   await deps.orderRepo.save(order.cancel(new Date()), {
     type: "admin",
     adminUserId: adminUser.id,
