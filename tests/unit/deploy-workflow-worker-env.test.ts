@@ -21,7 +21,12 @@ type Step = {
   shell?: string;
   env?: Record<string, string>;
 };
-type Workflow = { jobs: Record<string, { steps: Step[] }> };
+type Job = {
+  needs?: string[];
+  concurrency?: { group?: string; "cancel-in-progress"?: boolean };
+  steps: Step[];
+};
+type Workflow = { jobs: Record<string, Job> };
 
 const workflowsDir = path.join(ROOT, ".github/workflows");
 const workflows = readdirSync(workflowsDir)
@@ -57,7 +62,7 @@ describe("Sync Wrangler Secrets & Deploy", () => {
     ["deploy-stg", "wrangler.stg.jsonc"],
     ["deploy-prod", "wrangler.prod.jsonc"],
   ])(
-    "%s は Worker 用の config の値だけを wrangler secret bulk に渡す",
+    "%s は Worker 用の config の値だけを、wrangler deploy --secrets-file でコードと一緒に上げる",
     (id, config) => {
       const step = deploy.jobs[id].steps.find((s) => s.name === SYNC);
       expect(step).toBeDefined();
@@ -66,9 +71,15 @@ describe("Sync Wrangler Secrets & Deploy", () => {
       );
       // ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まず、Worker 用のトークンだけで読む
       expect(step!.run).toContain(
-        `doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f ${FILTER} | doppler run -- pnpm exec wrangler secret bulk --config ${config}`
+        `doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f ${FILTER} | doppler run -- pnpm exec wrangler deploy --config ${config} --secrets-file /dev/stdin`
       );
-      // 途中で失敗したら、secrets を更新しないまま deploy に進まない
+      // secret とコードを1つの版で出す（#708）。wrangler rollback で戻している間は secret bulk・secret put が
+      // 「最新の版が出ていない」で失敗するため、secret だけを変えるコマンドを使わない。
+      // secret の値はファイルに書かず、パイプで渡す
+      const commands = step!.run!.split("\n").filter((l) => l.trim() !== "");
+      expect(commands).toHaveLength(1);
+      expect(step!.run).not.toMatch(/wrangler secret /);
+      // 途中（Doppler・jq の検査）で失敗したら、デプロイしない
       expect(step!.shell).toBe("bash");
     }
   );
@@ -81,9 +92,10 @@ describe("Sync Wrangler Secrets & Deploy", () => {
       .filter(
         (l) =>
           l.includes("wrangler secret bulk") ||
+          l.includes("--secrets-file") ||
           l.includes("scripts/ci/deploy-preview-worker.sh")
       );
-    // stg・本番のデプロイ（wrangler secret bulk）と、PRごとのプレビュー（#727。stg の値を上げる。
+    // stg・本番のデプロイ（#708 から wrangler deploy --secrets-file）と、PRごとのプレビュー（#727。stg の値を上げる。
     // #731 から wrangler deploy --secrets-file で上げる）
     expect(lines).toHaveLength(3);
     for (const line of lines) {
@@ -107,6 +119,19 @@ describe("Sync Wrangler Secrets & Deploy", () => {
       `preview-deploy.yml:reconcile:${SYNC}`,
       "preview.yml:build:Build",
     ]);
+  });
+});
+
+describe("E2E Tests (stg) の DISABLE_EMAIL_SENDING", () => {
+  // wrangler secret put・delete は、wrangler rollback で戻している間（最新の版が出ていない間）は失敗する（#708）。
+  // E2E は Deploy (staging) の直後に、同じ concurrency のグループで動かす。Deploy (staging) は
+  // wrangler deploy --secrets-file で「最新の版 = 出ている版」に戻すため、その直後の put・delete は通る
+  it("Deploy (staging) の後に、同じグループで直列に動く", () => {
+    const e2e = deploy.jobs["e2e"];
+    expect(e2e.needs).toEqual(["deploy-stg"]);
+    expect(e2e.concurrency?.group).toBeDefined();
+    expect(e2e.concurrency).toEqual(deploy.jobs["deploy-stg"].concurrency);
+    expect(e2e.concurrency?.["cancel-in-progress"]).toBe(false);
   });
 });
 

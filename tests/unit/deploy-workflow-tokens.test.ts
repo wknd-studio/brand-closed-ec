@@ -53,7 +53,7 @@ describe("デプロイのマイグレーション", () => {
       )?.run;
       // Worker には、デプロイ用の config（SUPABASE_DB_URL がある）ではなく、Worker 用の config の値だけを上げる（#672）
       expect(run).toMatch(
-        /doppler secrets download --no-read-env --token "\$DOPPLER_TOKEN_WORKER"[^|]*\| jq -f scripts\/ci\/filter-worker-env\.jq \| doppler run -- pnpm exec wrangler secret bulk/
+        /doppler secrets download --no-read-env --token "\$DOPPLER_TOKEN_WORKER"[^|]*\| jq -f scripts\/ci\/filter-worker-env\.jq \| doppler run -- pnpm exec wrangler deploy .*--secrets-file \/dev\/stdin/
       );
     }
   );
