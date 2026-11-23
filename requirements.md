@@ -98,12 +98,12 @@
 | サービス     | dev（ローカル）                                      | stg                          | prod                         |
 | ------------ | ---------------------------------------------------- | ---------------------------- | ---------------------------- |
 | **Supabase** | ローカル Docker（`127.0.0.1:54321`）                 | 専用 `stg` プロジェクト      | 専用 `prod` プロジェクト     |
-| **Clerk**    | Development インスタンス（stg と共用）               | Development インスタンス     | Production インスタンス      |
+| **Clerk**    | ローカル用 application の Development インスタンス   | Development インスタンス     | Production インスタンス      |
 | **Stripe**   | テストモード (`sk_test_...`)                         | テストモード (`sk_test_...`) | ライブモード (`sk_live_...`) |
 | **Sanity**   | `staging` データセット（stg と共用・無料プラン制限） | `staging` データセット       | `production` データセット    |
 | **Sentry**   | `dev` 環境タグ                                       | `stg` 環境タグ               | `prod` 環境タグ              |
 
-> **Clerk の共用について**: Clerk の無料プランおよび小規模構成では dev と stg で同一の Development インスタンスを使用する。prod のみ独立した Production インスタンスで完全分離する。
+> **Clerk の分け方について**: Webhook の送り先はインスタンスごとに1つのため、データの行き先（接続する DB）ごとに Clerk の application を分ける（#686）。stg と prod は同じ application「EQ Mart」の Development・Production インスタンス、ローカル開発は「EQ Mart (local)」、PR の CI は「EQ Mart (CI)」の Development インスタンスを使う（#299）。dev と stg で同じインスタンスを使っていたときは、ローカルの E2E が作った Clerk ユーザーの user.created Webhook が stg に届き、stg の `users` に未入会の行が溜まっていた。
 
 > **Sanity の共用について**: Sanity 無料プランはデータセット2つまでのため、`staging`（dev/stg 共用）と `production` の2つで運用する。ローカルでの開発作業で作成したコンテンツが stg に反映される点に注意する。
 

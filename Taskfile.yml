@@ -82,6 +82,11 @@ tasks:
       - git fetch -q origin develop main
       - pnpm -s tsx scripts/check-github-secrets.ts
 
+  env:check:
+    desc: Doppler の config（`-- stg` か `-- prod`）の名前・値と、Stripe・Clerk・Supabase の設定がそろっているかを確かめる（値は出さない。prod の読み取り権限が要るため CI では流さない。#698）
+    cmds:
+      - pnpm -s tsx scripts/check-env.ts {{.CLI_ARGS}}
+
   deps:graph:
     desc: オープンなissueの依存グラフをHTMLで開く（`-- --json` でAI・スクリプト向けのJSONを出力）。依存の正はGitHubのBlocked by
     cmds:
@@ -131,7 +136,7 @@ tasks:
       - doppler run -- pnpm tsx scripts/seed-users.ts
 
   supabase:seed-users:stg:
-    desc: stg Supabaseに各ランク+管理者の開発用ユーザーをシード（Clerk/Sanityはlocalと共用）
+    desc: stgのClerk・Supabaseに各ランク+管理者の開発用ユーザーをシード（Clerkはlocalと別のインスタンス）
     cmds:
       - doppler run -c stg_deploy -- pnpm tsx scripts/seed-users.ts
 

@@ -1,6 +1,5 @@
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
-import { Money } from "@/domain/value-objects/money";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { PhoneNumber } from "@/domain/value-objects/phone-number";
 import type { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
@@ -154,10 +153,6 @@ export class User {
 
   getMonthlyPeriod(now: Date = new Date()): MonthlyPeriod {
     return MonthlyPeriod.fromBillingAnchorDay(this.billingAnchorDay, now);
-  }
-
-  getMonthlyLimit(): Money {
-    return this.rank.getMonthlyLimit();
   }
 
   // 入会手続き中（未入会）の会員がプラン選択をやり直したときに、申込内容で書き換える。

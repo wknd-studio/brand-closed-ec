@@ -23,6 +23,7 @@ import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 
 function toOrderRowForInsert(order: Order) {
   const addrToJson = (s: AddressSnapshot): Json =>
@@ -97,7 +98,7 @@ type OrderRow = {
   shipping_address_snapshot: Json;
   billing_address_snapshot: Json;
   rank_at_order: string;
-  monthly_limit_at_order: number;
+  monthly_limit_at_order: number | null;
   created_at: string;
   order_items: OrderItemRow[];
   order_settlements: OrderSettlementRow[];
@@ -180,7 +181,7 @@ function toOrder(row: OrderRow): Order {
     shippingAddress: toAddressSnapshot(row.shipping_address_snapshot),
     billingAddress: toAddressSnapshot(row.billing_address_snapshot),
     rankAtOrder: MemberRank.of(row.rank_at_order),
-    monthlyLimitAtOrder: Money.of(row.monthly_limit_at_order),
+    monthlyLimitAtOrder: MonthlyLimit.fromNullable(row.monthly_limit_at_order),
     items: (row.order_items ?? []).map(toOrderItem),
     settlements: (row.order_settlements ?? []).map(toOrderSettlement),
     createdAt: new Date(row.created_at),
@@ -408,7 +409,7 @@ export class SupabaseOrderRepository implements OrderRepository {
   async saveNewOrderWithLimitCheck(
     order: Order,
     period: MonthlyPeriod,
-    monthlyLimit: Money,
+    monthlyLimit: MonthlyLimit,
     cartFixedTotal: Money
   ): Promise<void> {
     const settlementRows = toSettlementRowsForInsert(order);
@@ -424,7 +425,9 @@ export class SupabaseOrderRepository implements OrderRepository {
       p_user_id: order.userId,
       p_period_start: period.start.toISOString(),
       p_period_end: period.end.toISOString(),
-      p_monthly_limit: monthlyLimit.amount,
+      // 無制限は NULL で渡す（関数は NULL のとき上限の判定をしない）。supabase gen types は
+      // 関数の引数を NULL 可として出さないため、型だけ number に合わせる
+      p_monthly_limit: monthlyLimit.amount as number,
       p_cart_fixed_total: cartFixedTotal.amount,
       p_order: toOrderRowForInsert(order) as unknown as Json,
       p_items: toItemRowsForInsert(order) as unknown as Json,
@@ -433,9 +436,10 @@ export class SupabaseOrderRepository implements OrderRepository {
 
     if (error) {
       if (error.message.includes("monthly_limit_exceeded")) {
+        // 関数は上限が NULL（無制限）のときは判定しないため、ここでは必ず金額がある
         throw new LimitExceededError(
           cartFixedTotal.amount,
-          monthlyLimit.amount
+          monthlyLimit.amount ?? 0
         );
       }
       throw new Error(`Order保存（上限チェック込み）に失敗: ${error.message}`);

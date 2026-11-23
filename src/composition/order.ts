@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";
 import { SanityProductRepository } from "@/infrastructure/sanity/sanity-product-repository";
@@ -22,6 +23,7 @@ export function placeOrder(input: PlaceOrderInput) {
   return placeOrderUseCase(input, {
     userRepo: new SupabaseUserRepository(supabase),
     orderRepo: new SupabaseOrderRepository(supabase),
+    memberRankRepo: new SupabaseMemberRankRepository(supabase),
     addressRepo: new SupabaseAddressRepository(supabase),
     productRepo: new SanityProductRepository(),
     paymentGateway: new StripePaymentGateway(),

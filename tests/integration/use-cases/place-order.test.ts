@@ -4,6 +4,7 @@ import type { Database } from "@/types/database.types";
 import { placeOrder } from "@/use-cases/place-order";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import type {
   ProductRepository,
@@ -136,6 +137,7 @@ describe("placeOrder（実DB・7ランクのスナップショット）", () => 
         paymentGateway,
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+        memberRankRepo: new SupabaseMemberRankRepository(supabase),
       }
     );
 
@@ -277,6 +279,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         paymentGateway,
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+        memberRankRepo: new SupabaseMemberRankRepository(supabase),
       }
     );
 
@@ -361,6 +364,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         paymentGateway,
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+        memberRankRepo: new SupabaseMemberRankRepository(supabase),
       }
     );
 
@@ -407,6 +411,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         paymentGateway,
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+        memberRankRepo: new SupabaseMemberRankRepository(supabase),
       }
     );
 
@@ -518,6 +523,7 @@ describe("placeOrder（実DB・住所の持ち主。#619）", () => {
         paymentGateway,
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+        memberRankRepo: new SupabaseMemberRankRepository(supabase),
       }
     );
   }

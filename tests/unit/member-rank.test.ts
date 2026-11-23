@@ -2,47 +2,6 @@ import { describe, it, expect } from "vitest";
 import { MemberRank, RANK_ORDER } from "@/domain/value-objects/member-rank";
 
 describe("MemberRank", () => {
-  describe("getMonthlyLimit()", () => {
-    it("starterは暫定値（TBD確定まで）が設定されている", () => {
-      expect(MemberRank.of("starter").getMonthlyLimit().amount).toBeGreaterThan(
-        0
-      );
-    });
-    it("enterpriseは上限なし（MAX_SAFE_INTEGER）", () => {
-      expect(MemberRank.of("enterprise").getMonthlyLimit().amount).toBe(
-        Number.MAX_SAFE_INTEGER
-      );
-    });
-    it("上位ランクほど上限額が大きい（enterprise除く）", () => {
-      const nonEnterprise = RANK_ORDER.filter((r) => r !== "enterprise");
-      for (let i = 1; i < nonEnterprise.length; i++) {
-        const prev = MemberRank.of(nonEnterprise[i - 1]).getMonthlyLimit()
-          .amount;
-        const current = MemberRank.of(nonEnterprise[i]).getMonthlyLimit()
-          .amount;
-        expect(current).toBeGreaterThan(prev);
-      }
-    });
-  });
-
-  describe("isUnlimitedMonthlyLimit()", () => {
-    it("enterprise の月間仕入れ上限は無制限と判定する", () => {
-      expect(
-        MemberRank.isUnlimitedMonthlyLimit(
-          MemberRank.of("enterprise").getMonthlyLimit().amount
-        )
-      ).toBe(true);
-    });
-
-    it("enterprise 以外の月間仕入れ上限は無制限と判定しない", () => {
-      expect(
-        MemberRank.isUnlimitedMonthlyLimit(
-          MemberRank.of("premium").getMonthlyLimit().amount
-        )
-      ).toBe(false);
-    });
-  });
-
   describe("canAccess()", () => {
     it("同ランクはアクセス可能", () => {
       expect(MemberRank.of("basic").canAccess(MemberRank.of("basic"))).toBe(
