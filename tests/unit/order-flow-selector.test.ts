@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
+import {
+  settlementTimingOf,
+  splitCartByPaymentTiming,
+} from "@/domain/services/order-flow-selector";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
 
@@ -70,5 +73,23 @@ describe("splitCartByPaymentTiming", () => {
     const result = splitCartByPaymentTiming([]);
     expect(result.atOrderItems).toEqual([]);
     expect(result.afterOrderItems).toEqual([]);
+  });
+});
+
+// 注文確認画面の支払い方法・支払い時期の表示（特定商取引法第12条の6）も、注文の保存と同じ規則で決める（#695）
+describe("settlementTimingOf", () => {
+  it("要相談でない商品は、商品の支払いタイミングのとおりになる", () => {
+    expect(
+      settlementTimingOf({ paymentTiming: "at_order", isNegotiable: false })
+    ).toBe("at_order");
+    expect(
+      settlementTimingOf({ paymentTiming: "after_order", isNegotiable: false })
+    ).toBe("after_order");
+  });
+
+  it("要相談の商品は、商品の支払いタイミングによらず注文後払いになる", () => {
+    expect(
+      settlementTimingOf({ paymentTiming: "at_order", isNegotiable: true })
+    ).toBe("after_order");
   });
 });

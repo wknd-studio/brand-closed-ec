@@ -38,7 +38,7 @@ describe("CartProvider", () => {
   }: {
     initialCart?: Cart;
     confirmedAmount?: number;
-    monthlyLimit: number;
+    monthlyLimit: number | null;
   }) {
     act(() => {
       root.render(
@@ -123,6 +123,23 @@ describe("CartProvider", () => {
 
     expect(result).toEqual({});
     expect(latest.cart.items).toEqual([{ ...product, quantity: 2 }]);
+  });
+
+  it("上限が無制限（null）なら、大きな金額の追加も数量変更もできる", () => {
+    render({ confirmedAmount: 1_000_000_000, monthlyLimit: null });
+
+    let addResult: { error?: string } = {};
+    let updateResult: { error?: string } = {};
+    act(() => {
+      addResult = latest.addToCart(product, 1_000);
+    });
+    act(() => {
+      updateResult = latest.updateItemQuantity("product-1", 1_000_000);
+    });
+
+    expect(addResult).toEqual({});
+    expect(updateResult).toEqual({});
+    expect(latest.cart.items).toEqual([{ ...product, quantity: 1_000_000 }]);
   });
 
   it("上限0のときは、追加も数量を増やす変更も同じく上限超過として扱う", () => {

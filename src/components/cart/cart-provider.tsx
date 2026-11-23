@@ -24,7 +24,8 @@ import type { Cart, CartItem } from "@/lib/cart/types";
 type CartContextValue = {
   cart: Cart;
   confirmedAmount: number;
-  monthlyLimit: number;
+  // null なら無制限
+  monthlyLimit: number | null;
   totalUsed: number;
   isOpen: boolean;
   openCart: () => void;
@@ -46,7 +47,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 type Props = {
   children: ReactNode;
   confirmedAmount: number;
-  monthlyLimit: number;
+  monthlyLimit: number | null;
   initialCart: Cart;
 };
 
@@ -79,7 +80,7 @@ export function CartProvider({
         })
       ) {
         return {
-          error: `月間仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため追加できません`,
+          error: `月間仕入れ上限（¥${monthlyLimit?.toLocaleString()}）を超えるため追加できません`,
         };
       }
       updateCart(addItem(cart, item, quantity));
@@ -100,7 +101,7 @@ export function CartProvider({
         })
       ) {
         return {
-          error: `月間仕入れ上限（¥${monthlyLimit.toLocaleString()}）を超えるため変更できません`,
+          error: `月間仕入れ上限（¥${monthlyLimit?.toLocaleString()}）を超えるため変更できません`,
         };
       }
       updateCart(updateQuantity(cart, productId, quantity));

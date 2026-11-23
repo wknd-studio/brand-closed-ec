@@ -6,6 +6,7 @@ import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessibl
 import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import {
   makeUser,
   makeUserRepo,
@@ -19,6 +20,7 @@ import {
   afterOrderFixedProduct,
   makeErrorReporter,
   makeAddress,
+  makeMemberRankRepo,
 } from "./helpers";
 
 const baseInput = {
@@ -41,6 +43,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     const result = await placeOrder(baseInput, deps);
@@ -87,6 +90,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     const promise = placeOrder(
@@ -125,6 +129,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     const result = await placeOrder(
@@ -166,6 +171,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow(
@@ -173,6 +179,68 @@ describe("placeOrder", () => {
     );
     expect(deps.orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("上限はmember_ranksから会員のランクで読み、上限チェック・注文時の上限のスナップショット・DB関数に同じ値を使う", async () => {
+    const memberRankRepo = makeMemberRankRepo(MonthlyLimit.of(150_000));
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockResolvedValue(60_000);
+
+    const deps = {
+      userRepo: makeUserRepo(makeUser({ rank: "pro" })),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+      memberRankRepo,
+    };
+
+    // 確定額60,000 + 今回100,000 = 160,000 > member_ranks の上限150,000
+    await expect(placeOrder(baseInput, deps)).rejects.toThrow(
+      LimitExceededError
+    );
+    expect(memberRankRepo.findMonthlyLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ value: "pro" })
+    );
+    expect(orderRepo.saveNewOrderWithLimitCheck).not.toHaveBeenCalled();
+
+    // 上限内なら、同じ上限が注文のスナップショットと DB 関数の引数に渡る
+    vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockResolvedValue(50_000);
+    await placeOrder(baseInput, deps);
+
+    const [saved, , limit] = vi.mocked(orderRepo.saveNewOrderWithLimitCheck)
+      .mock.calls[0];
+    expect(saved.monthlyLimitAtOrder.amount).toBe(150_000);
+    expect(limit.amount).toBe(150_000);
+  });
+
+  it("上限が無制限（enterprise）なら、どれだけ大きな金額でも上限チェックで弾かれない", async () => {
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.sumConfirmedAmountByUserId).mockResolvedValue(
+      10_000_000_000
+    );
+
+    const deps = {
+      userRepo: makeUserRepo(makeUser({ rank: "enterprise" })),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([
+        { ...fixedProduct, unitPrice: Money.of(1_000_000_000) },
+      ]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(MonthlyLimit.unlimited()),
+    };
+
+    await placeOrder(baseInput, deps);
+
+    const [saved, , limit] = vi.mocked(orderRepo.saveNewOrderWithLimitCheck)
+      .mock.calls[0];
+    expect(saved.monthlyLimitAtOrder.isUnlimited()).toBe(true);
+    expect(limit.isUnlimited()).toBe(true);
   });
 
   it("確定額の集計が失敗したときは、上限チェックを通さずOrderを作成しない（#597）", async () => {
@@ -189,6 +257,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow(
@@ -218,6 +287,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(
@@ -253,6 +323,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(
@@ -282,6 +353,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     const error = await placeOrder(baseInput, deps).catch((e: unknown) => e);
@@ -308,6 +380,7 @@ describe("placeOrder", () => {
         paymentGateway: makePaymentGateway(),
         notificationService: makeNotificationService(),
         errorReporter: makeErrorReporter(),
+        memberRankRepo: makeMemberRankRepo(),
       };
 
       const promise = placeOrder(
@@ -353,6 +426,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     const result = await placeOrder(
@@ -414,6 +488,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await placeOrder(baseInput, deps);
@@ -435,6 +510,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("DB接続エラー");
@@ -459,6 +535,7 @@ describe("placeOrder", () => {
       paymentGateway,
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
@@ -486,6 +563,7 @@ describe("placeOrder", () => {
       paymentGateway,
       notificationService: makeNotificationService(),
       errorReporter,
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
@@ -507,6 +585,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     const tamperedInput = {
@@ -536,6 +615,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     });
 
     it("会員が見つからない", async () => {
@@ -591,6 +671,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     });
 
     expect(addressRepo.findByIdAndUserId).toHaveBeenCalledWith(
@@ -613,6 +694,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await placeOrder(
@@ -642,6 +724,7 @@ describe("placeOrder", () => {
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
     };
 
     await placeOrder(

@@ -1,6 +1,7 @@
 import type { Order } from "@/domain/entities/order";
 import type { Money } from "@/domain/value-objects/money";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 
 export type OrderWithUser = {
   id: string;
@@ -74,7 +75,8 @@ export interface OrderRepository {
   saveNewOrderWithLimitCheck(
     order: Order,
     period: MonthlyPeriod,
-    monthlyLimit: Money,
+    // 無制限なら上限の判定をしない
+    monthlyLimit: MonthlyLimit,
     cartFixedTotal: Money
   ): Promise<void>;
 
