@@ -295,6 +295,8 @@ export function makeSubscriptionGateway(): SubscriptionGateway {
       currentPeriodStart: new Date(2026, 0, 1),
       currentPeriodEnd: new Date(2026, 1, 1),
       startedAt: new Date(2026, 0, 1),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
     }),
   };
 }
@@ -324,6 +326,7 @@ export function makeSubscriptionRepo(
   return {
     findActiveByUserId: vi.fn().mockResolvedValue(snapshot),
     upsert: vi.fn().mockResolvedValue(undefined),
+    syncStatusByStripeSubscriptionId: vi.fn().mockResolvedValue("updated"),
   };
 }
 

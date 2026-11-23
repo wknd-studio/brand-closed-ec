@@ -137,6 +137,8 @@ describe("completeOnboardingCheckout", () => {
       currentPeriodEnd: new Date(2026, 3, 1),
       // JST 2026-03-05 10:00
       startedAt: new Date("2026-03-05T01:00:00Z"),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
     });
 
     const result = await completeOnboardingCheckout(INPUT, deps);
