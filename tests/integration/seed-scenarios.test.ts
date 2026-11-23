@@ -120,6 +120,8 @@ beforeAll(async () => {
         rank_code: "standard",
         member_type: key === "corporate" ? "corporate" : "individual",
         company_name: key === "corporate" ? "株式会社テスト" : null,
+        invoice_registration_number:
+          key === "corporate" ? "T1234567890123" : null,
         onboarding_completed: true,
       })
       .select("id")
