@@ -9,13 +9,13 @@ Clerk は local と stg で別のインスタンス（docs/cicd.md「環境構�
 
 ## テストアカウント（`scripts/seed-users.ts`）
 
-手動テスト用のアカウントで、各ランク1人ずつの個人会員 + standard の法人会員1人 + 管理者1人。存在しなければClerk側も新規作成する（べき等）。メールアドレスは local と stg で同じだが、Clerk のインスタンスが別のため、それぞれ別の Clerk ユーザー（`clerk_user_id` も別）になる。stg の Clerk と Supabase には、このアカウントだけを残す（それ以外は 2026-11-23 に削除した。ローカルの E2E が作る Clerk ユーザーはローカル用のインスタンスにできるため、stg には行が増えない。#686）。未入会・退会済みの状態を確かめるときは、使い回さずに毎回新しいアカウントで登録する。
+手動テスト用のアカウントで、各ランク1人ずつの個人会員 + standard の法人会員1人 + 管理者1人。存在しなければClerk側も新規作成する（べき等）。メールアドレスは local と stg で同じだが、Clerk のインスタンスが別のため、それぞれ別の Clerk ユーザー（`clerk_user_id` も別）になる。stg の Clerk と Supabase には、このアカウントだけを残す（それ以外は 2026-11-23 に削除した。ローカルの E2E が作る Clerk ユーザーはローカル用のインスタンスにできるため、ローカルの E2E では stg に行が増えない。#686。stg に対して走る `E2E Tests (stg)` では、後片付けのあとに Webhook が届いて行ができることがある）。未入会・退会済みの状態を確かめるときは、使い回さずに毎回新しいアカウントで登録する。
 
 - **会員**: Supabase の `users` に、オンボーディングを終えた状態（`rank_code` はランクどおり・`onboarding_completed = true`・電話番号 `09012345678`・請求基準日 1日。法人会員は会社名 `株式会社テスト`・インボイス登録番号 `T1234567890123`、個人会員は両方とも空）の行を入れる。`clerk_user_id` の有効な行があれば更新し、無ければ作る（user.created Webhook が作った未入会の行も、この状態に上書きする）。退会済みの行は触らない
 - **管理者**: スクリプトは `users` の行を作らない。Clerk の `publicMetadata.role = "admin"` だけ（Clerk で新規作成したときは、user.created Webhook が届く環境なら Webhook が未入会の行を作ることはある）
 - 1件でも失敗したら、残りのアカウントを続けたうえで終了コード1で終わる（「完了しました」は出ない）
 
-**パスワード**は全アカウント共通で、Doppler の `dev` と `stg` の両方の config の `SEED_USER_PASSWORD` に同じ値で入っている（local と stg で同じパスワードでログインできるようにするため）。リポジトリには書かない。実行するたびに既存のアカウントのパスワードもこの値に更新するので、値を変えたら `dev` と `stg` の両方を同じ値に変えてから `task supabase:seed-users` と `task supabase:seed-users:stg` を実行し直す。`SEED_USER_PASSWORD` が未設定ならアカウントを作らずに止まる。
+**パスワード**は全アカウント共通で、Doppler の `dev` と `stg_deploy` の両方の config の `SEED_USER_PASSWORD` に同じ値で入っている（local と stg で同じパスワードでログインできるようにするため）。リポジトリには書かない。実行するたびに既存のアカウントのパスワードもこの値に更新するので、値を変えたら `dev` と `stg_deploy` の両方を同じ値に変えてから `task supabase:seed-users` と `task supabase:seed-users:stg` を実行し直す。`SEED_USER_PASSWORD` が未設定ならアカウントを作らずに止まる。
 
 | メールアドレス                       | 種別     | rank_code  |
 | ------------------------------------ | -------- | ---------- |

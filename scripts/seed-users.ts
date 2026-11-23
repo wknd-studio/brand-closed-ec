@@ -6,7 +6,7 @@
  * 1件でも失敗すれば、残りを続けたうえで終了コード1で終わる。
  * Clerk・Supabaseともlocal/stgでインスタンス・プロジェクトが分かれている（#686）ため、
  * doppler configの切り替えで両方の接続先を変える（コード上の環境分岐は不要）。
- * パスワードは環境変数 SEED_USER_PASSWORD（Dopplerのdev・stgに同じ値）から読み、
+ * パスワードは環境変数 SEED_USER_PASSWORD（Dopplerのdev・stg_deployに同じ値）から読み、
  * 既存のアカウントも毎回その値に更新する。未設定ならClerk・Supabaseに接続せずに止まる。
  *
  * 実行:
