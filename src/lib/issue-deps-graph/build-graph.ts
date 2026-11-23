@@ -14,6 +14,13 @@ import {
 } from "./milestones";
 import { renderNextActions } from "./next-actions";
 import {
+  priorityInversions,
+  priorityOf,
+  priorityText,
+  renderPriorityInversions,
+  type Priority,
+} from "./priority";
+import {
   escapeLabel,
   filterGraph,
   nodeClasses,
@@ -80,6 +87,8 @@ export type LinkedPr = {
 
 export type GraphNode = IssueInput & {
   status: IssueStatus;
+  /** ラベル priority:P0〜P3 から読んだ優先度（priority.tsのpriorityOf） */
+  priority: Priority | null;
   kind: IssueKind;
   openBlockers: number[];
   prs: LinkedPr[];
@@ -178,6 +187,7 @@ export function buildGraph(
     return {
       ...i,
       kind,
+      priority: priorityOf(i.labels),
       openBlockers,
       prs: linkedPrs,
       downstream: 0,
@@ -265,21 +275,43 @@ export const STATUS_LABELS: Record<IssueStatus, string> = {
   waiting: "外部待ち",
 };
 
+/** 優先度の逆転の辺とissueの色 */
+const INVERSION_COLOR = "#db2777";
+
 // ステータスの色の上に重ねる。後ろほど優先される（停止の赤枠を優先し、外部ノードは常に点線で薄く）
 const EXTRA_CLASS_DEFS = [
   "classDef non-dev stroke-dasharray:6 3",
   "classDef hub stroke-width:3px,font-weight:bold",
   "classDef stale stroke:#dc2626,stroke-width:3px",
+  `classDef inversion stroke:${INVERSION_COLOR},stroke-width:4px`,
   "classDef external opacity:0.5,stroke-dasharray:2 2",
+  "classDef out-of-range opacity:0.5,stroke-dasharray:1 3",
 ];
 
-/** 絞り込みの組み合わせ。キーはページ側で切り替えの状態から組み立てる */
-const FILTERS: Record<string, GraphFilter> = {
-  "00": { v1Only: false, hideNonDev: false },
-  "10": { v1Only: true, hideNonDev: false },
-  "01": { v1Only: false, hideNonDev: true },
-  "11": { v1Only: true, hideNonDev: true },
-};
+/** ページの優先度の選択欄で選べる範囲（P3までは「すべて」とほぼ同じなので出さない） */
+const PRIORITY_CHOICES: { value: Priority | undefined; label: string }[] = [
+  { value: undefined, label: "すべて" },
+  { value: "P0", label: "P0だけ" },
+  { value: "P1", label: "P1まで" },
+  { value: "P2", label: "P2まで" },
+];
+
+/**
+ * 絞り込みの組み合わせ。キーはページ側で切り替えの状態から組み立てる
+ * （v1だけ・開発外を隠すの0/1と、優先度の選択欄の値。例: "10P0"）
+ */
+const FILTERS: Record<string, GraphFilter> = Object.fromEntries(
+  ["00", "10", "01", "11"].flatMap((flags) =>
+    PRIORITY_CHOICES.map(({ value }) => [
+      `${flags}${value ?? ""}`,
+      {
+        v1Only: flags[0] === "1",
+        hideNonDev: flags[1] === "1",
+        maxPriority: value,
+      },
+    ])
+  )
+);
 
 /** マイルストーンごとにまとめる（milestoneNamesの順。マイルストーンなしは末尾） */
 function groupByMilestone(
@@ -322,12 +354,21 @@ export function toMermaid(
     milestone === undefined
       ? { ...filtered, external: new Set<number>() }
       : sliceMilestone(filtered, milestone);
+  const outOfRange = filtered.outOfRange;
+  const inversions = priorityInversions(graph);
+  const isInversion = (e: Graph["edges"][number]) =>
+    inversions.some((i) => i.blocker === e.from && i.blocked === e.to);
+  const invertedEdges = view.edges.filter(isInversion);
+  const invertedNodes = new Set(invertedEdges.flatMap((e) => [e.from, e.to]));
 
   const lines = ["graph LR"];
   for (const node of view.nodes) {
-    const suffix = view.external.has(node.number)
-      ? `（${escapeLabel(milestoneOf(node))}）`
-      : "";
+    const suffix = [
+      view.external.has(node.number)
+        ? `（${escapeLabel(milestoneOf(node))}）`
+        : "",
+      outOfRange.has(node.number) ? "（範囲外）" : "",
+    ].join("");
     const label = `"${nodeLabel(node)}${suffix}"`;
     lines.push(
       `  I${node.number}${node.kind === "parent" ? `[[${label}]]` : `[${label}]`}`
@@ -336,9 +377,19 @@ export function toMermaid(
   for (const edge of view.edges) {
     lines.push(`  I${edge.from} --> I${edge.to}`);
   }
+  // linkStyleの番号は、上で辺を書いた順
+  view.edges.forEach((edge, index) => {
+    if (invertedEdges.includes(edge)) {
+      lines.push(
+        `  linkStyle ${index} stroke:${INVERSION_COLOR},stroke-width:4px`
+      );
+    }
+  });
   for (const node of view.nodes) {
     const classes = nodeClasses(node);
+    if (invertedNodes.has(node.number)) classes.push("inversion");
     if (view.external.has(node.number)) classes.push("external");
+    if (outOfRange.has(node.number)) classes.push("out-of-range");
     for (const c of classes) {
       lines.push(`  class I${node.number} ${c}`);
     }
@@ -384,6 +435,7 @@ function pageData(graph: Graph): string {
           url: n.url,
           milestone: milestoneOf(n),
           status: STATUS_LABELS[n.status],
+          priority: n.priority,
           prs: n.prs.map((p) => ({
             number: p.number,
             url: p.url,
@@ -406,6 +458,7 @@ function filterAttrs(node: GraphNode): string {
   return [
     node.labels.includes(V1_LABEL) ? "" : " data-not-v1",
     node.kind === "non-dev" ? " data-non-dev" : "",
+    node.priority === null ? "" : ` data-priority="${node.priority}"`,
   ].join("");
 }
 
@@ -424,7 +477,12 @@ export function renderHtml(
     '<span class="chip key-non-dev">破線: 開発外</span>',
     '<span class="chip key-parent">二重線: 親issue</span>',
     '<span class="chip key-external">点線・薄色: 他のマイルストーン（クリックで切り替え）</span>',
+    '<span class="chip key-out-of-range">細かい点線・薄色・（範囲外）: 優先度が範囲外の先行</span>',
+    '<span class="chip key-inversion">赤紫の太線: 優先度の逆転</span>',
   ].join("");
+  const priorityOptions = PRIORITY_CHOICES.map(
+    ({ value, label }) => `<option value="${value ?? ""}">${label}</option>`
+  ).join("");
   const milestoneOptions = [
     '<option value="">すべて</option>',
     ...milestoneNames(graph).map(
@@ -505,6 +563,11 @@ ${group
   .key-non-dev { border-style: dashed; }
   .key-parent { border-style: double; border-width: 3px; }
   .key-external { border-style: dotted; opacity: 0.6; }
+  .key-out-of-range { border-color: var(--muted); color: var(--sub); border-style: dotted; opacity: 0.6; }
+  .key-inversion { border: 3px solid ${INVERSION_COLOR}; color: ${INVERSION_COLOR}; }
+  .priority-inversions { margin-bottom: 24px; }
+  .priority-inversions li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; border-bottom: 1px solid var(--soft); overflow-wrap: anywhere; }
+  .priority-inversions li.empty { color: var(--muted); }
   .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
   .controls label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
   .controls input { width: 18px; height: 18px; margin: 0; }
@@ -537,6 +600,7 @@ ${group
 </header>
 ${renderCiStatus(ci)}
 ${renderNextActions(graph)}
+${renderPriorityInversions(graph)}
 <h2>依存グラフ</h2>
 <p class="meta">矢印は「先に終わらせる → 後に着手する」。ノードをクリックすると、待っているものと解放されるものを強調する（もう一度クリックで解除）。ホイール・ボタンで拡大縮小、ドラッグで移動。</p>
 <h3>マイルストーン同士の依存</h3>
@@ -545,6 +609,7 @@ ${renderNextActions(graph)}
 <div class="legend">${legend}</div>
 <div class="controls">
   <label>マイルストーン<select id="milestone">${milestoneOptions}</select></label>
+  <label>優先度<select id="priority">${priorityOptions}</select></label>
   <label><input type="checkbox" id="v1-only">v1だけ</label>
   <label><input type="checkbox" id="hide-non-dev">開発外を隠す</label>
 </div>
@@ -566,6 +631,7 @@ ${independent}
   const panel = document.getElementById("selection");
   const v1Only = document.getElementById("v1-only");
   const hideNonDev = document.getElementById("hide-non-dev");
+  const prioritySelect = document.getElementById("priority");
   const milestoneSelect = document.getElementById("milestone");
   const overview = document.querySelector(".overview");
   let panZoom = null;
@@ -600,7 +666,7 @@ ${independent}
     const clear = el("button", { type: "button", textContent: "選択を解除" });
     clear.addEventListener("click", () => select(null));
     panel.replaceChildren(
-      el("p", {}, [el("strong", {}, [issueLink(selected)]), " ", node.status + " / " + (node.milestone ?? "マイルストーンなし"), ...prs, " ", clear]),
+      el("p", {}, [el("strong", {}, [issueLink(selected)]), " ", node.status + " / " + (node.priority ?? "${priorityText(null)}") + " / " + (node.milestone ?? "マイルストーンなし"), ...prs, " ", clear]),
       issueList("待っているもの", rel.before),
       issueList("解放されるもの", rel.after),
     );
@@ -654,7 +720,7 @@ ${independent}
 
   async function draw() {
     const drawId = ++latestDraw;
-    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0");
+    const key = (v1Only.checked ? "1" : "0") + (hideNonDev.checked ? "1" : "0") + prioritySelect.value;
     const definition = data.variants[current][key];
     const hasNodes = /^  I\\d+\\[/m.test(definition);
     const [overviewSvg, graphSvg] = await Promise.all([
@@ -665,6 +731,10 @@ ${independent}
 
     document.body.classList.toggle("v1-only", v1Only.checked);
     document.body.classList.toggle("hide-non-dev", hideNonDev.checked);
+    // 優先度の値は "P0" < "P1" < … の文字列の順で比べられる
+    for (const li of document.querySelectorAll(".independent li")) {
+      li.hidden = prioritySelect.value !== "" && !(li.dataset.priority && li.dataset.priority <= prioritySelect.value);
+    }
     for (const section of document.querySelectorAll(".independent section")) {
       section.hidden = current !== "" && section.dataset.milestone !== current;
     }
@@ -717,6 +787,7 @@ ${independent}
   addEventListener("popstate", () => setMilestone(milestoneFromHash(), false));
   v1Only.addEventListener("change", draw);
   hideNonDev.addEventListener("change", draw);
+  prioritySelect.addEventListener("change", draw);
   await setMilestone(milestoneFromHash(), false);
 </script>
 </body>

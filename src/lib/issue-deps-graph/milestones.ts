@@ -5,6 +5,7 @@
  */
 
 import type { Graph, GraphNode } from "./build-graph";
+import { priorityInversions, type PriorityInversion } from "./priority";
 import { escapeLabel, filterGraph, type GraphFilter } from "./view";
 
 export const NO_MILESTONE = "マイルストーンなし";
@@ -114,10 +115,14 @@ export type MilestoneSummary = {
   blocking: string[];
 };
 
-/** `task deps:graph -- --json` の出力。AI・スクリプトがマイルストーン間の依存を引けるようにする */
+/**
+ * `task deps:graph -- --json` の出力。AI・スクリプトがマイルストーン間の依存と、
+ * 優先度の逆転（ノードごとの優先度はnodes[].priority）を引けるようにする
+ */
 export function jsonOutput(graph: Graph): Graph & {
   milestones: MilestoneSummary[];
   milestoneEdges: MilestoneEdge[];
+  priorityInversions: PriorityInversion[];
 } {
   const crossing = milestoneEdges(graph);
   return {
@@ -132,5 +137,6 @@ export function jsonOutput(graph: Graph): Graph & {
       blocking: crossing.filter((e) => e.from === name).map((e) => e.to),
     })),
     milestoneEdges: crossing,
+    priorityInversions: priorityInversions(graph),
   };
 }
