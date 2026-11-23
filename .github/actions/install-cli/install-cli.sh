@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Supabase CLI・Doppler CLI を、GitHub のリリースから API 経由で取得してインストールする（#546）。
+# Supabase CLI・Doppler CLI・gitleaks を、GitHub のリリースから API 経由で取得してインストールする（#546・#663）。
 # `github.com/<repo>/releases/download/<tag>/<file>` が一部のリリースで504を返し続け、
 # それを通る `supabase/setup-cli`・`dopplerhq/cli-action` でCIが止まった。同じファイルを
 # `api.github.com/repos/<repo>/releases/assets/<id>`（`gh release download` と同じ経路）から取り、
@@ -9,7 +9,7 @@
 # Supabase CLI は v2.102.0 から、シムの supabase と本体の supabase-go の2つが同じディレクトリに
 # 無いと動かない（#549）。tarball の LICENSE・completions 等は要らないため、丸ごとは展開しない。
 #
-# 使い方: bash install-cli.sh <supabase|doppler> <版>
+# 使い方: bash install-cli.sh <supabase|doppler|gitleaks> <版>
 #   例: bash install-cli.sh supabase 2.116.0
 # 環境変数: GH_TOKEN（任意。あれば API の認証に使う）・INSTALL_CLI_DIR（展開先。既定は $RUNNER_TEMP 配下）
 #           INSTALL_CLI_MAX_ATTEMPTS（既定4）・INSTALL_CLI_RETRY_DELAY（1回目の待ち秒数。既定10、回ごとに倍）
@@ -21,24 +21,35 @@ release_repo() {
   case "$1" in
     supabase) echo "supabase/cli" ;;
     doppler) echo "DopplerHQ/cli" ;;
+    gitleaks) echo "gitleaks/gitleaks" ;;
     *)
-      echo "::error::知らないCLIです: $1（supabase か doppler）" >&2
+      echo "::error::知らないCLIです: $1（supabase・doppler・gitleaks のどれか）" >&2
       return 1
       ;;
   esac
 }
 
-# Supabase のタグは v付き、Doppler は v無し
+# Supabase・gitleaks のタグは v付き、Doppler は v無し
 release_tag() {
   case "$1" in
-    supabase) echo "v$2" ;;
+    supabase | gitleaks) echo "v$2" ;;
     *) echo "$2" ;;
   esac
 }
 
-# 引数: <CLI> <版> <OS> <アーキテクチャ>
+# 引数: <CLI> <版> <OS> <アーキテクチャ>。gitleaks だけ amd64 を x64 と書く
 asset_name() {
-  echo "$1_$2_$3_$4.tar.gz"
+  local arch="$4"
+  [[ "$1" == "gitleaks" && "$arch" == "amd64" ]] && arch="x64"
+  echo "$1_$2_$3_$arch.tar.gz"
+}
+
+# 引数: <CLI> <版>。リリースの checksums のファイル名（gitleaks だけ版付き）
+checksums_name() {
+  case "$1" in
+    gitleaks) echo "$1_$2_checksums.txt" ;;
+    *) echo "checksums.txt" ;;
+  esac
 }
 
 # 引数: <curlの終了コード> <HTTPステータス>。やり直すなら0を返す
@@ -186,7 +197,7 @@ main() {
   fetch_with_retry "$API/repos/$repo/releases/tags/$tag" "$work/release.json" "application/vnd.github+json"
   url="$(asset_url "$work/release.json" "$name")"
   fetch_with_retry "$url" "$work/$name" "application/octet-stream"
-  url="$(asset_url "$work/release.json" checksums.txt)"
+  url="$(asset_url "$work/release.json" "$(checksums_name "$tool" "$version")")"
   fetch_with_retry "$url" "$work/checksums.txt" "application/octet-stream"
   verify_checksum "$work/$name" "$name" "$work/checksums.txt"
 

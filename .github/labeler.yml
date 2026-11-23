@@ -67,6 +67,10 @@ risk:gate:
           - "vitest*.config.ts"
           # デッドコードの検出の設定（#683）。入口・無視のリストを足すとゲートを弱められる
           - "knip.jsonc"
+          # 機密情報の漏れの検査（#663）。allowlist を広げる・hook を外すとゲートを弱められる
+          - ".gitleaks.toml"
+          - ".husky/**"
+          - "scripts/gitleaks-staged.sh"
 
 # 依存の追加・更新（スクリプトだけの変更も区別できないため対象にする）
 risk:deps:
@@ -116,6 +120,10 @@ high-risk:
           - "vitest*.config.ts"
           # デッドコードの検出の設定（#683）。入口・無視のリストを足すとゲートを弱められる
           - "knip.jsonc"
+          # 機密情報の漏れの検査（#663）。allowlist を広げる・hook を外すとゲートを弱められる
+          - ".gitleaks.toml"
+          - ".husky/**"
+          - "scripts/gitleaks-staged.sh"
           # risk:deps
           - "package.json"
           - "pnpm-lock.yaml"
