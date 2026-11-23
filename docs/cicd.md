@@ -58,6 +58,7 @@ develop 向けの同じリポジトリの `feature/*` のPRに push すると、
 | Preview（`preview.yml`）               | PRの作成・push・再オープン・クローズ | PR側（PRのコードを動かす）                          | stg の値だけでビルドし、成果物（`preview-build`）と PR番号（`preview-pr`）を artifact に上げる。書き込みの権限・Cloudflare のトークンを持たない                                                                                             |
 | Preview Deploy（`preview-deploy.yml`） | Preview の完了（`workflow_run`）     | 既定のブランチ（develop）。PR側から書き換えられない | PRの今の状態を API で読み（`scripts/ci/preview.ts` の `decidePreviewAction`）、デプロイ・削除・コメントをする。PRのコードは動かさず、成果物はそのまま Worker に上げるだけ（展開して `.open-next` だけ・シンボリックリンク無しかを確かめる） |
 
+- **Preview Deploy のデプロイの間、ランナーに平文のシークレットのファイルを置かない**: `wrangler deploy` は成果物の `.open-next/worker.js` を esbuild でまとめる。成果物はPRのコードが作れるため、絶対パスの import でランナーのファイルを取り込める。checkout は `persist-credentials: false`、トークンは環境変数だけで渡す
 - **Preview Deploy は develop にマージされてから動く**: `workflow_run` のワークフローは既定のブランチの定義だけが動くため。Preview Deploy 自体を変えるPRでは、その変更はプレビューで試せない（マージ後の次のPRで確かめる）
 - **stg の DB・Clerk・Stripe・Sanity を共有する**: Worker の secrets・ビルド時の `NEXT_PUBLIC_*` は Doppler の `stg` の値を使う。アプリ自身のURL（`NEXT_PUBLIC_APP_URL`）だけをプレビューのURLに、Sentry の環境（`NEXT_PUBLIC_SENTRY_ENVIRONMENT`）を `preview` にする（Stripe Checkout の戻り先・招待リンクが stg に飛ばないように）。stg のテストアカウントでログインできる
 - **マイグレーション（`supabase/migrations/`）を含むPRは出さない**: 「マイグレーションを含むためプレビューは出さない（メインのチェックアウトで確かめる）」とコメントし、前の push で出したプレビューがあれば削除する。stg の DB にマイグレーションを適用しない（ワークフローに DB の操作は無い）
