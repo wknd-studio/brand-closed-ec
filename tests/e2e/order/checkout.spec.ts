@@ -178,9 +178,10 @@ test.describe("注文の最終確認画面の表示", () => {
     await page.goto("/order/checkout");
     await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
 
-    // 分量（数量）と販売価格（対価）
-    await expect(page.getByText(/¥[\d,]+ × 1/)).toBeVisible();
-    await expect(page.getByText("合計（固定価格）")).toBeVisible();
+    // 分量（数量）と販売価格（対価）。カートのサイドバーにも同じ表示があるため、画面の本文に絞る
+    const content = page.getByRole("main").first();
+    await expect(content.getByText(/¥[\d,]+ × 1/)).toBeVisible();
+    await expect(content.getByText("合計（固定価格）")).toBeVisible();
 
     const terms = page.getByRole("region", {
       name: "お支払い・お届け・キャンセルについて",
