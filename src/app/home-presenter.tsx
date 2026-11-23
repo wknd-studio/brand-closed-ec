@@ -386,13 +386,6 @@ export function HomePresenter() {
           </Link>
         </div>
       </Section>
-
-      <footer className="border-t border-neutral-200 pt-7 pb-10">
-        <Container className="flex flex-wrap items-center justify-between gap-3 text-[0.78rem] text-neutral-600">
-          <span>&copy; {new Date().getFullYear()} EQ×Mart</span>
-          <span>招待制のプライベートEC</span>
-        </Container>
-      </footer>
     </main>
   );
 }
