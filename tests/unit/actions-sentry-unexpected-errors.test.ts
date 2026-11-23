@@ -160,7 +160,8 @@ describe("deleteAccount", () => {
     );
 
     expect(await deleteAccount()).toEqual({
-      error: "入会から6ヶ月間は退会できません。2026年11月15日から退会できます",
+      error:
+        "入会から6ヶ月間は退会できません。2026年11月15日から退会できます。それより前に退会をご希望の場合は、運営までお問い合わせください",
     });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
