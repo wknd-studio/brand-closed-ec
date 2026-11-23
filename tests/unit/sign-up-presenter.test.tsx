@@ -117,8 +117,14 @@ describe("SignUpPresenter", () => {
   it("Clerkの登録フォームに共通の見た目を当て、見出しとサインインへのリンクを隠す", () => {
     render();
 
+    // 共通の指定は残したうえで、効かないものを!付きで足す（#757）
+    for (const [element, className] of Object.entries(
+      clerkAppearance.elements
+    )) {
+      if (element === "footerAction") continue;
+      expect(signUpAppearance?.elements[element]).toContain(className);
+    }
     expect(signUpAppearance?.elements).toMatchObject({
-      ...clerkAppearance.elements,
       header: "!hidden",
       // サインインへのリンクを押すとticketが引き継がれてサインアップへ戻されるため（既存の挙動）
       footerAction: "!hidden",
