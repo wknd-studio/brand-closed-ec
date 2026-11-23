@@ -5,6 +5,9 @@ import type { NextConfig } from "next";
 initOpenNextCloudflareForDev();
 
 const nextConfig: NextConfig = {
+  // next dev が AI エージェントからの起動を検出すると AGENTS.md を自動生成するのを止める。
+  // エージェント向けの Next.js の指示は docs/ai-prompts/nextjs.md に置いている（CLAUDE.md から参照）
+  agentRules: false,
   env: {
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in",
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up",

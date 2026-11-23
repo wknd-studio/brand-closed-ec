@@ -22,6 +22,8 @@ push (develop・main)
 | push → develop      | migrate stg → deploy stg → E2E             |
 | push → main         | migrate prod → deploy prod                 |
 
+本番で不具合が出たときの戻し方（アプリ・DB・secret 等）と、マイグレーションを含むデプロイの前に確かめることは `docs/runbooks/production-rollback.md`。
+
 > **PR時のE2Eについて**: `docs/`・`specs/`・`*.md`のみの変更（ドキュメントのみのPR）ではE2Eジョブをスキップする（`dorny/paths-filter`で判定）。実行する場合もstgの本物のDBには触れず、CI実行環境内でSupabaseをローカル起動してテスト用データを使う（PRごとに独立、他のPRのテストと干渉しない）。
 
 > GitHub 無料プランの private リポジトリは branch protection が使えないため、PR なし直接 push のリスクは運用でカバーする。チェックは PR 時のみ実行し、push 時はデプロイのみ行う。
@@ -55,7 +57,7 @@ GitHub リポジトリの Settings → Secrets and variables → Actions に設�
 | ---------------------- | ------------------------------------------------ | ----------------- | --------------------------------------------------------------------------------------------- |
 | `DOPPLER_TOKEN_PR`     | リポジトリの Actions secrets・Dependabot secrets | `ci`（環境 `CI`） | Integration Tests・Build (Cloudflare)・E2E Tests (PR)                                         |
 | `DOPPLER_TOKEN`        | `staging` environment                            | `stg_deploy`      | Deploy (staging)・E2E Tests (stg)・商品データの同期                                           |
-| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期                                                         |
+| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期・Smoke Tests (production)（本番のURLだけを読む）        |
 | `DOPPLER_TOKEN_WORKER` | `staging` environment                            | `stg`             | Deploy (staging) の Sync Wrangler Secrets & Deploy だけ（Worker の secrets に上げる値を読む） |
 | `DOPPLER_TOKEN_WORKER` | `production` environment                         | `prod`            | Deploy (production) の Sync Wrangler Secrets & Deploy だけ                                    |
 
@@ -216,13 +218,30 @@ doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler 
 
 ## E2E テスト
 
-### CI での実行タイミング（2種類）
+### CI での実行タイミング（3種類）
 
 1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`ci`、GitHub Secretsの`DOPPLER_TOKEN_PR`で参照）から取得する（下の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。`ci`のClerkのキーはCI専用のClerk開発インスタンスのもので、ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）はローカル用のインスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
-   全部のE2Eの前に、「環境の確認（スモークテスト）」のステップでデータを書き換えないスモークテスト（`tests/e2e/smoke/`、`pnpm test:e2e:smoke`）だけを流す（#649）。ここで失敗したら全部のE2Eは流さずにジョブが失敗するので、ステップ名から振る舞いの不具合ではなく環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）の問題と分かる。スモークテストは `scripts/seed-users.ts` の既存のアカウント（`docs/seed-data.md`）でログインするため、それが無い使い捨てのDBで動く `pnpm test:e2e`（PRのE2E）には含めない。stgにアカウントが無いときの入れ方は `tests/e2e/smoke/smoke.spec.ts` の冒頭
+   全部のE2Eの前に、「環境の確認（スモークテスト）」のステップでデータを書き換えないスモークテスト（`tests/e2e/smoke/`、`pnpm test:e2e:smoke`）だけを流す（#649）。ここで失敗したら全部のE2Eは流さずにジョブが失敗するので、ステップ名から振る舞いの不具合ではなく環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）の問題と分かる。スモークテストは、ログインしないもの（`public.spec.ts`）とするもの（`signed-in.spec.ts`）に分かれていて、stgでは両方を流す。ログインするものは `scripts/seed-users.ts` の既存のアカウント（`docs/seed-data.md`）でログインするため、それが無い使い捨てのDBで動く `pnpm test:e2e`（PRのE2E）には含めない。stgにアカウントが無いときの入れ方は `tests/e2e/smoke/signed-in.spec.ts` の冒頭
+3. **`main`へのpush後**（`smoke-prod`ジョブ。`Smoke Tests (production)`）: 本番のデプロイ（`deploy-prod`）が完了してから、本番に向けてログインしないスモークテスト（`pnpm test:e2e:smoke:public`）だけを流す（#696）。データを作らない・変えない。ログインするものはClerkの開発用インスタンスでしか使えないTesting Tokenでログインするため、本番では流せない。ログインした後の確認は「[本番のデプロイ後の確認](#本番のデプロイ後の確認)」の手順で人間が手で行う
 
-どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
+どれもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`・`playwright-report-prod-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
+
+### 本番のデプロイ後の確認
+
+`smoke-prod` のジョブ（上記3.）が確かめるのは、ログインしないで分かる範囲（トップ・`/waitlist`・`/sign-in` に Clerk のフォームが出る、未ログインで `/shop` を開くと `/sign-in` に飛ばされる、`/legal/*` が表示される、Stripe・Clerk の Webhook の受け口が署名の正しくないリクエストを 400 で拒否する）だけ。Sanity の商品データを読む画面はどれもログインが要るため、ログインした後の確認と一緒に手で確かめる。
+
+本番へのデプロイ（main へのマージ）のたびに、`Smoke Tests (production)` が green になったあと、次を手で確かめる。会員・注文などのデータは作らない・変えない。
+
+1. 本番の確認用の会員アカウント（入会済みで、ランクで見られる商品があるもの。本番の環境を作るときに用意する）で、本番の `/sign-in` からログインする
+2. `/shop` に「ブランドから探す」とブランドが表示される（Supabase の会員のランクと Sanity の商品の両方を読めている）
+3. ブランドを1つ開き、商品が1つ以上表示される。商品を1つ開き、商品の画像が表示される（Sanity の画像の CDN を読めている）
+4. ログアウトし、本番の運営者のアカウントでログインする
+5. `/admin` に移り「管理メニュー」が表示される
+
+どれかで失敗したら、stg で同じ操作が通るかを先に確かめ、通るなら本番の環境変数（Doppler の `prod`）・Clerk・Sanity の本番の設定を疑う。
+
+Webhook の受け口には署名の正しくないリクエストを送るが、受け口は署名の検証に失敗したときは Sentry に送らずに 400 を返す（秘密鍵が無いときだけ例外になり、Sentry に送られる）。スモークテストのリクエストには `x-smoke-test: 1` のヘッダーを付けている。
 
 ### main への PR で stg の E2E の結果を確かめる（`Stg E2E Check`）
 
@@ -238,7 +257,8 @@ main への PR（develop → main のリリース）では、`.github/workflows/
 ```bash
 pnpm test:e2e       # pnpm dev を自動起動してテスト
 pnpm test:e2e --ui  # Playwright UI モード（ブラウザの動きをリアルタイムで確認できる）
-pnpm test:e2e:smoke # スモークテストだけ（docs/seed-data.md のアカウントが要る。ワークツリーでは bash scripts/with-worktree-db.sh を通す）
+pnpm test:e2e:smoke # スモークテストだけ（ログインするものは docs/seed-data.md のアカウントが要る。ワークツリーでは bash scripts/with-worktree-db.sh を通す）
+BASE_URL=<URL> pnpm test:e2e:smoke:public # ログインしないスモークテストだけ（BASE_URL 以外の環境変数は要らない）
 ```
 
 失敗したテストの動画・トレースはローカルでも`test-results/`配下に自動保存される（`playwright.config.ts`の`video: "retain-on-failure"` / `trace: "retain-on-failure"`）。
