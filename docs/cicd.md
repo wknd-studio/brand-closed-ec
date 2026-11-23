@@ -192,6 +192,10 @@ gh api repos/{owner}/{repo}/environments/production/deployment-branch-policies -
 - main の `deploy.yml` が develop より古い間は、main からだけ参照される secret（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）も「参照されている」と扱う。develop を main に出したあとで消す
 - 消すときは `gh secret delete <名前>`（environment は `--env <名前>`、Dependabot は `--app dependabot`）
 
+### 本番の環境の設定がそろっているか（`task env:check`）
+
+`task env:check -- prod` が、Doppler の `prod`・`prod_deploy` の名前・値（値は出さない）が `stg`・`stg_deploy` とそろっているか・キーが live か、と、Stripe・Clerk・Supabase の本番の設定を、各サービスの API の読み取りで確かめる（`scripts/check-env.ts`。#698）。Doppler の `prod` の読み取り権限が要るため CI では流さず、手元で動かす。確かめる項目と、機械で確かめられない項目のチェックリストは `docs/runbooks/prod-env-checklist.md`。
+
 ---
 
 ## Cloudflare Workers ランタイムシークレット
