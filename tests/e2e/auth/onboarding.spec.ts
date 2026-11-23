@@ -195,7 +195,7 @@ test.describe.serial("認証済みアクセス", () => {
       .getByRole("button", { name: "ログアウト" })
       .click();
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/");
     await page.goto("/onboarding/plan");
     await expect(page).toHaveURL(/\/sign-in/);
   });
