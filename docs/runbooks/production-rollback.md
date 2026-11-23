@@ -46,14 +46,14 @@ doppler run -c prod_deploy -- pnpm exec wrangler deployments list --config wrang
 # 今出ている版
 doppler run -c prod_deploy -- pnpm exec wrangler deployments status --config wrangler.prod.jsonc
 
-# 戻す（--message を付けると確認を聞かずに進む）
+# 戻す（--message を付けると確認を聞かずに進む。Cloudflare のドキュメント）
 doppler run -c prod_deploy -- pnpm exec wrangler rollback <版のID> \
   --message "<issue番号> <理由>" --config wrangler.prod.jsonc
 ```
 
 **版の ID は必ず指定する。** 省略すると「最新の 1 つ前の版」に戻るが、1 デプロイで版は複数できる（`wrangler secret bulk` で 1 つ・`wrangler deploy` で 1 つ。stg は E2E の前後の `secret put`・`secret delete` でさらに 2 つ）。省略すると、コードは同じで secret だけが違う版に戻ることがある（stg で確かめた。stg の最新は E2E の後の `secret delete` の版で、1 つ前はメールの送信を止めた版だった）。
 
-戻す先は「壊れたデプロイの前に出ていた版」= `deployments list` で、壊れたデプロイの最初の `Secret Change`（Sync のステップの `secret bulk`）の **1 つ前** のデプロイの版。コードが違うことは `versions view <版のID> --json` の `resources.script.etag` で確かめられる（同じコードなら同じ値）。
+戻す先は「壊れたデプロイの前に出ていた版」= `deployments list` で、壊れたデプロイの Deploy (production) の実行が始まった時刻より **前の最後のデプロイ** の版（その実行の Sync の `secret bulk` と `wrangler deploy` でできた版は含めない）。コードが違うことは `versions view <版のID> --json` の `resources.script.etag` で確かめられる（同じコードなら同じ値）。
 
 **戻せないとき**（Cloudflare のドキュメント）:
 
@@ -74,7 +74,7 @@ doppler run -c prod_deploy -- pnpm exec wrangler rollback <版のID> \
 
 直したものを CI で出す前に、次のどちらかで「最新の版 = 出ている版」に戻す。
 
-- **直したコードを手でデプロイする**（推奨）: hotfix を `main` にマージした後、CI の Deploy (production) が Sync で失敗したら、メインのチェックアウトでそのコミットを `git switch --detach origin/main` で取り、`doppler run -c prod_deploy -- pnpm build:cloudflare` → `doppler run -c prod_deploy -- pnpm exec wrangler deploy --config wrangler.prod.jsonc --message "<issue番号> hotfix"` を行う。そのあと失敗したジョブを Re-run する（secret を同期して同じコードを出し直す）
+- **直したコードを手でデプロイする**（推奨）: hotfix を `main` にマージした後、CI の Deploy (production) が Sync で失敗したら、メインのチェックアウトでそのコミットを `git switch --detach origin/main` で取り、`doppler run -c prod_deploy -- pnpm build:cloudflare` → `doppler run -c prod_deploy -- pnpm exec wrangler deploy --config wrangler.prod.jsonc --message "<issue番号> hotfix"` を行う。そのあと失敗したジョブを Re-run する（secret を同期して同じコードを出し直す）。手でデプロイした版は最新の（壊れた）版の secret を引き継ぐため、壊れたデプロイで secret の値も変えていたなら、Re-run の Sync が終わるまではその値で動く（先に Doppler の値を直しておく。5 章）
 - 壊れた版に戻す（`wrangler rollback <最新の版のID>`）: 壊れた版がまた出るので、本番では使わない。stg で試した後に元へ戻すときに使う
 
 CI が `wrangler deploy --secrets-file` で secret とコードを 1 つの版で出すように変えれば、この手作業は要らなくなる（#708。ロールバック中に `--secrets-file` で出せることは stg で確かめた）。
@@ -130,7 +130,9 @@ supabase migration new revert_<元の名前>
 | 列の削除・データの書き換え | スキーマは書き戻せるが、データは戻らない。バックアップから戻す（6 章）                 |
 
 - 打ち消すマイグレーションもローカルで `bash scripts/with-worktree-db.sh supabase db reset` を通し、`supabase gen types typescript --local > src/types/database.types.ts` を再生成する（`Schema Types Drift`）
-- タイムスタンプは `develop` の最新より新しくする（`Migration Order`）。hotfix を `develop` にバックマージするときに順番が崩れていないかを見る
+- タイムスタンプは `develop` の最新より新しくする（`Migration Order`）。ただし `Migration Order` は `develop` 向けの PR でしか動かず、`hotfix/*` → `main` の PR では検査されない
+- **`develop` にまだ本番に出ていないマイグレーションがあるときは、打ち消すマイグレーションを hotfix に入れない**。`supabase db push` は適用済みの最新より古いファイルを拒否するため、hotfix のマイグレーションを `develop` の未リリースのものより新しくすると次の `develop` → `main` で本番の Migrate DB が止まり、古くするとバックマージした後の stg で止まる。この場合は、アプリだけを `wrangler rollback` で戻して（4-2 で戻せると確かめた変更なら）、打ち消すマイグレーションは `feature/*` → `develop` → `main` の通常の流れで出す。それでは間に合わないときは、どちらかの環境で一度だけ `supabase db push --include-all` を手で行うことになるので、人間が判断する
+- 本番に出ていないマイグレーションの有無: `git log origin/main..origin/develop --oneline -- supabase/migrations/`
 
 ### 4-2. マイグレーションを含むデプロイの前に確かめること
 
@@ -146,7 +148,7 @@ CI は Migrate DB → Build → Deploy の順に動く。マイグレーショ�
 
 ## 5. Worker の secret
 
-secret は Worker の版に含まれる。`wrangler rollback` で戻した版は、その版を作った時点の secret の一覧（`versions view` の `resources.bindings`）で動く。値まで戻るかは Cloudflare のドキュメントに書かれていないが、版は作った後に変わらないため、値も戻した版のものと考えてよい（`secret list` は最新の版を出すので、確かめるのに使えない）。
+secret は Worker の版に含まれる。`wrangler rollback` で戻した版は、その版を作った時点の secret の一覧（`versions view` の `resources.bindings`）で動く。一覧が戻ることは stg で確かめた（記録 3）。値まで戻るかは Cloudflare のドキュメントに書かれておらず、確かめていない。版は作った後に変わらないため、値も戻した版のもの（secret を変える前の値）になる前提で判断する（`secret list` は最新の版を出すので、確かめるのに使えない）。
 
 secret の値だけを誤って変えたとき（アプリのコードは正しい）:
 
@@ -184,9 +186,9 @@ Worker の secret を Cloudflare のダッシュボードや `wrangler secret pu
 
 ## 7. Sanity
 
-- **Studio**（`sanity deploy`）: 版の履歴・ロールバックは無い。前のコードで出し直す。メインのチェックアウトで `git switch --detach <前のコミット>` → `doppler run -c prod_deploy -- pnpm sanity deploy`。正式には revert して hotfix の流れ（2-2）で直す（CI の Deploy Sanity Studio は Deploy (staging) にだけあり、Deploy (production) には無いため、本番の Studio はどちらにしても手で出す）
+- **Studio**（`sanity deploy`）: 版の履歴・ロールバックは無い。Studio は stg（`/staging`）と本番（`/production`）の workspace を持つ **1 つのアプリ**（`sanity.cli.ts` の `appId`・`sanity.config.ts`）で、Deploy (staging) が `develop` から出している（Deploy (production) には無い）。そのため、戻すときは `develop` で原因のコミットを revert する（`feature/*` → `develop` の PR。マージすると CI の Deploy Sanity Studio が出し直す）。急ぐなら、メインのチェックアウトで `git switch --detach <壊れる前の develop のコミット>` → `doppler run -c stg_deploy -- pnpm sanity deploy`（`SANITY_AUTH_TOKEN` は `stg_deploy` にだけある）で先に出し、revert も必ず行う（行わないと、次に Studio のファイルが変わったときに CI が壊れたものを出し直す）。どちらも stg と本番の両方の workspace が戻る
 - **データ（商品）**: 各ドキュメントの History から前の版を開き、Restore する。履歴が残るのはプランによる（Free 3 日・Growth 90 日・Enterprise 365 日）。Growth のトライアルが終わる（2026-12-11 頃）と短くなるため、契約の判断（#674）の後に確かめる
-- 大きな作業の前は、データセットを書き出しておく: `doppler run -c prod_deploy -- pnpm sanity dataset export production <ファイル>.tar.gz`（戻すときは `sanity dataset import <ファイル> production --replace`）
+- 大きな作業の前は、データセットを書き出しておく: `pnpm sanity login` で自分のアカウントでログインしてから `pnpm sanity dataset export production <ファイル>.tar.gz`（戻すときは `pnpm sanity dataset import <ファイル> production --replace`）
 
 ## 8. Clerk・Stripe のダッシュボードの設定
 
