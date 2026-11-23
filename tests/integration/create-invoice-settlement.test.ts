@@ -278,6 +278,10 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
     });
     // 未払いの決済単位が増えるだけなので、orders.status は変わらず履歴も増えない
     expect(await statusOf(orderId)).toBe("processing");
+    // DB関数が書いた orders.status が、domain のロールアップ（Order.rollupStatus()）と一致する
+    expect((await repo.findById(orderId))!.rollupStatus().value).toBe(
+      await statusOf(orderId)
+    );
     expect(await historyOf(orderId)).toHaveLength(1);
   });
 
@@ -319,6 +323,10 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
       [itemIds[0]!]: settlementId,
     });
     expect(await statusOf(orderId)).toBe("limit_exceeded");
+    // DB関数が書いた orders.status が、domain のロールアップ（Order.rollupStatus()）と一致する
+    expect((await repo.findById(orderId))!.rollupStatus().value).toBe(
+      await statusOf(orderId)
+    );
     expect((await historyOf(orderId))[1]).toEqual({
       from_status: "processing",
       to_status: "limit_exceeded",
@@ -387,6 +395,25 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
       expect(
         await createInvoice(orderId, itemIds, MonthlyLimit.of(50_000))
       ).toBe("invoice_sent");
+    });
+
+    it("除外する明細に NULL を渡しても、除外なしとして数える", async () => {
+      await seedOrder([{ price: 40_000, timing: "after_order" }]);
+
+      for (const excluded of [null, [null]]) {
+        const { data, error } = await supabase.rpc(
+          "confirmed_amount_in_period",
+          {
+            p_user_id: USER_ID,
+            p_period_start: PERIOD.start.toISOString(),
+            p_period_end: PERIOD.end.toISOString(),
+            // supabase gen types は配列の引数を NULL 可として出さないため、型だけ合わせる
+            p_excluded_item_ids: excluded as unknown as string[],
+          }
+        );
+        if (error) throw error;
+        expect(data).toBe(40_000);
+      }
     });
 
     it("注文確定の上限チェックも、同じ集計で他の注文の未請求の後払い明細を数える", async () => {
