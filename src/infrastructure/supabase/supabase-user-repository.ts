@@ -24,6 +24,7 @@ type UserRow = {
   company_name: string | null;
   invoice_registration_number: string | null;
   initial_fee_paid_rank_code: string | null;
+  created_at: string;
 };
 
 function toUser(row: UserRow): User {
@@ -51,11 +52,12 @@ function toUser(row: UserRow): User {
     initialFeePaidRank: row.initial_fee_paid_rank_code
       ? MemberRank.of(row.initial_fee_paid_rank_code)
       : null,
+    createdAt: new Date(row.created_at),
   });
 }
 
 const SELECT_FIELDS =
-  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id, member_type, company_name, invoice_registration_number, initial_fee_paid_rank_code";
+  "id, clerk_user_id, email, first_name, last_name, phone_number, profile_completed_at, rank_code, billing_anchor_day, onboarding_completed, deleted_at, stripe_customer_id, member_type, company_name, invoice_registration_number, initial_fee_paid_rank_code, created_at";
 
 // 部分UNIQUE（WHERE deleted_at IS NULL）。supabase-jsのonConflictは部分インデックスの
 // 述語を書けないため、一意制約違反（23505）をこのインデックス名で判別する

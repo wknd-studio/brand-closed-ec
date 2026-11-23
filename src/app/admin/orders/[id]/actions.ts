@@ -19,7 +19,6 @@ async function requireAdmin(): Promise<
 
 export async function cancelOrder(
   orderId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   reason: string
 ): Promise<ActionResult | void> {
   const admin = await requireAdmin();
@@ -29,6 +28,7 @@ export async function cancelOrder(
     await cancelOrderUseCase({
       orderId,
       adminClerkUserId: admin.adminClerkUserId,
+      reason,
     });
   } catch (err) {
     // キャンセルできない状態等の業務ルールの違反（DomainError）は想定内の失敗のため送らない

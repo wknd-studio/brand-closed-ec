@@ -83,12 +83,22 @@ export default defineConfig({
       dependencies: ["setup"],
       testIgnore: /smoke\//,
     },
-    // デプロイした環境を、データを書き換えずに確かめるスモークテスト（#649）。
-    // 事前に用意した固定のアカウントを使うため、使い捨てのDBで動くPRのE2Eでは流せない。
-    // `pnpm test:e2e`（--project=chromium）には含めず、`pnpm test:e2e:smoke` で流す
+    // デプロイした環境を、データを書き換えずに確かめるスモークテスト（#649・#696）。
+    // `pnpm test:e2e`（--project=chromium）には含めない。stgでは `pnpm test:e2e:smoke` で両方を、
+    // 本番では `pnpm test:e2e:smoke:public` でログインしないものだけを流す。
+    // ログインしないもの: 本番でも流すため、Clerkの開発用インスタンスでしか使えないTesting Tokenを
+    // 用意するsetup（global.setup.ts の clerkSetup）に依存させない
     {
-      name: "smoke",
+      name: "smoke-public",
       testDir: "./tests/e2e/smoke",
+      testMatch: /public\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // ログインするもの: 事前に用意した固定のアカウントを使うため、使い捨てのDBで動くPRのE2Eでは流せない
+    {
+      name: "smoke-signed-in",
+      testDir: "./tests/e2e/smoke",
+      testMatch: /signed-in\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
     },

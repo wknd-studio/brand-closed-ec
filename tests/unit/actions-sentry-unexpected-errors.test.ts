@@ -49,6 +49,7 @@ import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-er
 import { InvalidPostalCodeError } from "@/domain/errors/invalid-postal-code-error";
 import { MissingRequiredAddressFieldsError } from "@/domain/errors/missing-required-address-fields-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import {
   createAddressAction,
@@ -148,6 +149,19 @@ describe("deleteAccount", () => {
 
     expect(await deleteAccount()).toEqual({
       error: "進行中の注文があるため退会できません",
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("入会から6ヶ月経っていない（MinimumMembershipPeriodError）なら、退会できる日（JST）を示し、Sentry に送らない", async () => {
+    // JST 2026-11-15 00:00
+    vi.mocked(withdraw).mockRejectedValue(
+      new MinimumMembershipPeriodError(new Date("2026-11-14T15:00:00Z"))
+    );
+
+    expect(await deleteAccount()).toEqual({
+      error:
+        "入会から6ヶ月間は退会できません。2026年11月15日から退会できます。それより前に退会をご希望の場合は、運営までお問い合わせください",
     });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });

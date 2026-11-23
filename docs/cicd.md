@@ -8,7 +8,8 @@ PR (develop・main)
   ├─ Lint / Format チェック
   ├─ Unit Tests
   ├─ Gitleaks（PR の commit の機密情報の漏れ）
-  └─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
+  ├─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
+  └─ Preview → Preview Deploy（develop 向けの feature/* のみ。マイグレーションを含むPRは出さない。下の「PRごとのプレビュー」）
 
 push (develop・main)
   └─ Deploy
@@ -19,6 +20,7 @@ push (develop・main)
 | トリガー            | 実行されるジョブ                           |
 | ------------------- | ------------------------------------------ |
 | PR → develop / main | typecheck・lint・test・E2E（コード変更時） |
+| PR → develop        | プレビューのデプロイ（閉じたら削除）       |
 | push → develop      | migrate stg → deploy stg → E2E             |
 | push → main         | migrate prod → deploy prod                 |
 
@@ -45,6 +47,90 @@ push (develop・main)
 
 ---
 
+## PRごとのプレビュー
+
+develop 向けの同じリポジトリの `feature/*` のPRに push すると、そのPRのコードを別名の Worker（`brand-closed-ec-pr-<PR番号>`）に出し、URL（`https://brand-closed-ec-pr-<PR番号>.white-night-bb71.workers.dev`）をPRにコメントする（#727）。push のたびに同じURLへ上書きし、コメントも更新する。PRを閉じたら（マージ・クローズ）Worker を削除する。人間の確かめ方は `docs/manual-check.md`。
+
+デプロイしたら、PRの head のコミットに GitHub の Deployment も記録する（#731）。PRの会話の流れとマージボタンの上の欄に「View deployment」が出る。
+
+- 環境名はPRごと（`preview-pr-<PR番号>`、`transient_environment`）。共通の名前にすると、別のPRのデプロイで前のPRの表示が inactive になるため
+- push のたびに新しいコミットへ記録し、前の push の Deployment を inactive にする。PRを閉じた・マイグレーションを含むようになってプレビューを消したら、そのPRの Deployment をすべて inactive にする（`scripts/ci/preview.ts` の `recordPreviewDeployment`・`deactivatePreviewDeployments`）
+- ジョブの `environment:` の url で記録しないのは、`workflow_run` のジョブが develop の上で動き、記録が develop のコミットに付いてPRに出ないため
+- PRごとの environment（Settings → Environments の `preview-pr-<番号>`）は消さずに残る。削除にはリポジトリの管理（Administration）の権限が要り、`GITHUB_TOKEN` には付けられないため。環境の保護ルールも secrets も無いため、残っても何も読めない
+
+2つのワークフローに分けている。Cloudflare のトークン（`CLOUDFLARE_API_TOKEN`）はアカウント単位で本番の Worker にも届くため、PRのコードを動かすワークフローには渡さない。
+
+| ワークフロー                           | きっかけ                             | 定義・コード                                        | すること                                                                                                                                                                                                                                                       |
+| -------------------------------------- | ------------------------------------ | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preview（`preview.yml`）               | PRの作成・push・再オープン・クローズ | PR側（PRのコードを動かす）                          | stg の値だけでビルドし、成果物（`preview-build`）と PR番号（`preview-pr`）を artifact に上げる。書き込みの権限・Cloudflare のトークンを持たない                                                                                                                |
+| Preview Deploy（`preview-deploy.yml`） | Preview の完了（`workflow_run`）     | 既定のブランチ（develop）。PR側から書き換えられない | PRの今の状態を API で読み（`scripts/ci/preview.ts` の `decidePreviewAction`）、デプロイ・削除・コメント・Deployment の記録をする。PRのコードは動かさず、成果物はそのまま Worker に上げるだけ（展開して `.open-next` だけ・シンボリックリンク無しかを確かめる） |
+
+- **Preview Deploy のデプロイの間、ランナーに平文のシークレットのファイルを置かない**: `wrangler deploy` は成果物の `.open-next/worker.js` を esbuild でまとめる。成果物はPRのコードが作れるため、絶対パスの import でランナーのファイルを取り込める。checkout は `persist-credentials: false`、トークンは環境変数だけで渡す
+- **Preview Deploy は develop にマージされてから動く**: `workflow_run` のワークフローは既定のブランチの定義だけが動くため。Preview Deploy 自体を変えるPRでは、その変更はプレビューで試せない（マージ後の次のPRで確かめる）
+- **stg の DB・Clerk・Stripe・Sanity を共有する**: Worker の secrets・ビルド時の `NEXT_PUBLIC_*` は Doppler の `stg` の値を使う。アプリ自身のURL（`NEXT_PUBLIC_APP_URL`）だけをプレビューのURLに、Sentry の環境（`NEXT_PUBLIC_SENTRY_ENVIRONMENT`）を `preview` にする（Stripe Checkout の戻り先・招待リンクが stg に飛ばないように）。stg のテストアカウントでログインできる
+- **マイグレーション（`supabase/migrations/`）を含むPRは出さない**: 「マイグレーションを含むためプレビューは出さない（メインのチェックアウトで確かめる）」とコメントし、前の push で出したプレビューがあれば削除する。stg の DB にマイグレーションを適用しない（ワークフローに DB の操作は無い）
+- **fork のPR・Dependabot のPRでは動かさない**: stg のシークレットをPRのコードに渡さないため。Preview のビルドのジョブの条件（同じリポジトリ・Dependabot 以外・`feature/*`）で飛ばす。fork・Dependabot のPRの実行には、environment の secrets もそもそも渡らない。Preview Deploy も、API で読んだPRが同じリポジトリの `feature/*` から develop へのPRで、Dependabot のものでないときだけ動く
+- **`preview-build` の environment は PR のマージ用の ref（`refs/pull/*/merge`）だけ**: `pull_request` のジョブの environment の制限は、head のブランチ名ではなく `refs/pull/<番号>/merge` で判定される（PR #729 で確かめた）。そのため `feature/*` には絞れない。push の権限がある人はどの名前のブランチでも作れるので、もともと `feature/*` に絞っても守りにはならない。push のイベントからは使えない
+- **stg の Worker（`brand-closed-ec-stg`）は書き換えない**: 名前を変えた別の Worker のため、デプロイ・secrets・Durable Objects（OpenNext のキャッシュ）は Worker ごとに別になる。レート制限の名前空間も、同じ `namespace_id` だと同じアカウントの Worker どうしで回数を共有するため、`wrangler.preview.jsonc` で stg と分けている。`wrangler.preview.jsonc` は名前とレート制限の名前空間のほかは `wrangler.stg.jsonc` と同じにする（`tests/unit/preview-workflow.test.ts`）
+- **Webhook は stg（develop のコード）で処理される**: Clerk・Stripe の Webhook の送り先は stg のままのため、プレビューで決済すると、決済確定の処理は develop のコードで走る。Webhook の変更を含むPRはプレビューで確かめられない
+- **「サブスクを管理」の転送先は stg**: Checkout の戻り先（`success_url`・`cancel_url`）はプレビューのURLになるが、すでに入会済みの会員が Checkout で止められた画面の「サブスクを管理」の転送先は、Stripe のダッシュボードで stg に固定している（`docs/signup-flow.md`）
+- **プレビューでの操作は stg のデータに残る**: ローンチ前で利用者がいないため許容する。stg のテストアカウントで退会などの戻せない操作をすると、そのアカウントは stg でも使えなくなる。メールも stg と同じく実際に送られる
+- **Clerk**: stg の Clerk は Development インスタンスのため、プレビューのドメインを許可する設定は要らない（本番のインスタンスのプレビューは作らない）
+
+### 方式を選んだ理由
+
+Cloudflare の Workers の Version の preview URL（`wrangler versions upload --preview-alias`）は、Durable Objects を持つ Worker では作られない。この Worker は OpenNext のキャッシュ用に Durable Objects を持つ。残る候補のうち、PRごとに別名の Worker を `wrangler deploy --name` で出す方にした。
+
+- stg と同じ `wrangler deploy` で出すため、OpenNext のビルドがそのまま動くと分かっている。シークレットは、stg の「`wrangler secret bulk` → `wrangler deploy`」と違い、`wrangler deploy --secrets-file` でデプロイと一緒に上げる（`scripts/ci/deploy-preview-worker.sh`。Worker がまだ無ければこれが作る）。前は stg と同じ形にしていたが、新しいPRの最初のデプロイで失敗した（#731。下）
+
+#### 新しいPRの最初のデプロイの失敗（#731）
+
+PR #720 の最初のプレビューで、`wrangler deploy` がコードを上げ終えた直後に「This Worker does not exist on your account. [code: 10007]」で失敗し、再実行すると成功した。
+
+- 失敗した呼び出しは `GET /accounts/<id>/workers/workers/<名前>`。wrangler 4.166.0 の `wrangler deploy` が、コードを上げた後に workers.dev の設定を読むところ（`subdomainDeploy` → `getWorkerSubdomain`）で、404 は再試行しない
+- その前に `wrangler secret bulk` が、Worker が無いため中身の無いコードの下書きの Worker を `PUT /workers/scripts/<名前>` で作っていた（wrangler の `createDraftWorker`）
+- 使い捨ての Worker（Durable Objects・assets を含む同じ形の設定）で、`secret bulk` → `deploy` と `deploy --secrets-file` を11回試したが、どちらも再現しなかった。作成の直後に新しい Workers の API から一時的に見えないことがある、と見ている
+- `wrangler deploy --secrets-file` は、Cloudflare のドキュメント（[Upload secrets alongside code](https://developers.cloudflare.com/workers/configuration/secrets/#upload-secrets-alongside-code)）と wrangler 自身のエラー文が、新しい Worker をシークレットと一緒に出す方法として案内している。下書きの Worker を作らず、シークレットの無い Worker が動く瞬間も無い。ファイルに含めなかったシークレットは前の版から残る（`secret bulk` と同じ）
+- それでも 10007 が出たときに限り、15秒空けて3回まで試す（実際に再実行で成功したため）。ほかのエラーは再試行しない
+- シークレットはランナーにファイルとして置かず（上の決まり）、スクリプトの変数に持って試すたびに `--secrets-file /dev/stdin` へ流す
+- Cloudflare の Previews（`wrangler preview`。2026-11 時点で open beta）は、Durable Objects をプレビューごとに分けるが、設定ファイルに `previews` の節で Durable Objects のバインディングを書き直す必要があり、`--json` の出力の形・シークレットの入れ方（作成前に入れられるか）がドキュメントに無い
+- 上限: Workers の無料プランでも、アカウントの Worker の数は 100 まで。開いているPRの数だけ増え、閉じたら消える
+
+### シークレット
+
+| Secret                 | environment（使えるブランチ）          | Doppler の config                                          | 使うステップ                                                                                     |
+| ---------------------- | -------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DOPPLER_TOKEN_WORKER` | `preview-build`（`refs/pull/*/merge`） | `stg`                                                      | Preview の Build（`NEXT_PUBLIC_*` を埋め込む）                                                   |
+| `DOPPLER_TOKEN`        | `preview`（`develop`）                 | `stg_preview`（`stg` の branch。Cloudflare の2つだけ足す） | Preview Deploy の wrangler の認証（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）。Sync・削除 |
+| `DOPPLER_TOKEN_WORKER` | `preview`（`develop`）                 | `stg`                                                      | Preview Deploy の Sync で Worker の secrets に上げる値                                           |
+
+`workflow_run` のジョブは既定のブランチ（develop）の上で動くため、`preview` は develop だけが使える。PRのワークフローに `environment: preview` と書いても Cloudflare のトークンは読めない。
+
+`stg_preview` には `stg_deploy` の管理用のトークン（`SUPABASE_DB_URL`・`SENTRY_AUTH_TOKEN`・Sanity の書き込みトークン等）を入れない。プレビューは stg の DB のスキーマを変えず、ソースマップも上げないため。`CLOUDFLARE_API_TOKEN` は `stg_deploy` と同じ値で、作り直したら `stg_preview` にも入れる。
+
+PRのコード（ビルド・Worker）には `stg` の値（Supabase の service role key 等）が渡る。同じリポジトリのブランチ（push の権限がある人）に限ることで受け入れている（issue #727）。
+
+```bash
+doppler secrets get CLOUDFLARE_API_TOKEN -p brand-closed-ec -c stg_deploy --plain \
+  | doppler secrets set CLOUDFLARE_API_TOKEN -p brand-closed-ec -c stg_preview --silent
+# トークンを作り直すとき
+doppler configs tokens create github-actions-preview-build -p brand-closed-ec -c stg --access read --plain | gh secret set DOPPLER_TOKEN_WORKER --env preview-build
+doppler configs tokens create github-actions-preview -p brand-closed-ec -c stg_preview --access read --plain | gh secret set DOPPLER_TOKEN --env preview
+doppler configs tokens create github-actions-preview-worker -p brand-closed-ec -c stg --access read --plain | gh secret set DOPPLER_TOKEN_WORKER --env preview
+```
+
+### 残ったプレビューを消す
+
+PRを閉じたときの削除が失敗した（取り消された）ら、`Preview Deploy` の失敗した実行を再実行するか、手元で消す（手元で消したときは、PRの Deployment は active のまま残る。`Preview Deploy` を再実行すれば inactive になる）。PRを閉じる前に向け先を develop 以外に変えたPRも、Preview Deploy が扱わないため残る。`scripts/ci/delete-preview-worker.sh` は、プレビューの名前の形（`brand-closed-ec-pr-<数字>`）以外は消さない。
+
+```bash
+# 残っているプレビューの Worker の一覧
+doppler run -p brand-closed-ec -c stg_preview -- sh -c 'curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" | jq -r ".result[].id | select(startswith(\"brand-closed-ec-pr-\"))"'
+doppler run -p brand-closed-ec -c stg_preview -- bash scripts/ci/delete-preview-worker.sh brand-closed-ec-pr-<PR番号>
+```
+
+---
+
 ## GitHub Actions Secrets
 
 GitHub リポジトリの Settings → Secrets and variables → Actions に設定する。
@@ -57,9 +143,12 @@ GitHub リポジトリの Settings → Secrets and variables → Actions に設�
 | ---------------------- | ------------------------------------------------ | ----------------- | --------------------------------------------------------------------------------------------- |
 | `DOPPLER_TOKEN_PR`     | リポジトリの Actions secrets・Dependabot secrets | `ci`（環境 `CI`） | Integration Tests・Build (Cloudflare)・E2E Tests (PR)                                         |
 | `DOPPLER_TOKEN`        | `staging` environment                            | `stg_deploy`      | Deploy (staging)・E2E Tests (stg)・商品データの同期                                           |
-| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期                                                         |
+| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期・Smoke Tests (production)（本番のURLだけを読む）        |
 | `DOPPLER_TOKEN_WORKER` | `staging` environment                            | `stg`             | Deploy (staging) の Sync Wrangler Secrets & Deploy だけ（Worker の secrets に上げる値を読む） |
 | `DOPPLER_TOKEN_WORKER` | `production` environment                         | `prod`            | Deploy (production) の Sync Wrangler Secrets & Deploy だけ                                    |
+| `DOPPLER_TOKEN_WORKER` | `preview-build` environment                      | `stg`             | Preview の Build だけ（上の「[PRごとのプレビュー](#prごとのプレビュー)」）                    |
+| `DOPPLER_TOKEN`        | `preview` environment                            | `stg_preview`     | Preview Deploy（wrangler の認証だけ）                                                         |
+| `DOPPLER_TOKEN_WORKER` | `preview` environment                            | `stg`             | Preview Deploy の Sync Wrangler Secrets & Deploy だけ                                         |
 
 `DOPPLER_TOKEN_PR` は Actions secrets と Dependabot secrets に同じ値で登録している（Dependabot の PR のワークフローは Dependabot secrets しか読めないため）。作り直すときは両方を入れ替える。
 
@@ -176,8 +265,8 @@ done
 
 Cloudflare・Sanity のトークンは、stg 用でも本番に届く。そのため、トークンを読めるジョブを絞って補う。
 
-- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は `staging`・`production` の environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging` は `develop` だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
-- PR のジョブは environment を使わない（上の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）
+- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging`・`preview` は `develop` だけ、`preview-build` は `refs/pull/*/merge`（PRのジョブ）だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
+- PR のジョブは environment を使わない（上の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。例外は PRごとのプレビューのビルド（`preview-build`。`stg` の値だけで、Cloudflare のトークンは無い）だけ
 - 商品データの同期（`product-data-sync.yml`）の定期実行は、GitHub の仕様で既定ブランチ（develop）でしか動かない。本番の同期は、develop の実行が `gh workflow run product-data-sync.yml --ref main` で main の上に起動し直して行う（main にこのワークフローが無い間は飛ばす）
 
 ```bash
@@ -218,13 +307,30 @@ doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler 
 
 ## E2E テスト
 
-### CI での実行タイミング（2種類）
+### CI での実行タイミング（3種類）
 
 1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`ci`、GitHub Secretsの`DOPPLER_TOKEN_PR`で参照）から取得する（下の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。`ci`のClerkのキーはCI専用のClerk開発インスタンスのもので、ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）はローカル用のインスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
-   全部のE2Eの前に、「環境の確認（スモークテスト）」のステップでデータを書き換えないスモークテスト（`tests/e2e/smoke/`、`pnpm test:e2e:smoke`）だけを流す（#649）。ここで失敗したら全部のE2Eは流さずにジョブが失敗するので、ステップ名から振る舞いの不具合ではなく環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）の問題と分かる。スモークテストは `scripts/seed-users.ts` の既存のアカウント（`docs/seed-data.md`）でログインするため、それが無い使い捨てのDBで動く `pnpm test:e2e`（PRのE2E）には含めない。stgにアカウントが無いときの入れ方は `tests/e2e/smoke/smoke.spec.ts` の冒頭
+   全部のE2Eの前に、「環境の確認（スモークテスト）」のステップでデータを書き換えないスモークテスト（`tests/e2e/smoke/`、`pnpm test:e2e:smoke`）だけを流す（#649）。ここで失敗したら全部のE2Eは流さずにジョブが失敗するので、ステップ名から振る舞いの不具合ではなく環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）の問題と分かる。スモークテストは、ログインしないもの（`public.spec.ts`）とするもの（`signed-in.spec.ts`）に分かれていて、stgでは両方を流す。ログインするものは `scripts/seed-users.ts` の既存のアカウント（`docs/seed-data.md`）でログインするため、それが無い使い捨てのDBで動く `pnpm test:e2e`（PRのE2E）には含めない。stgにアカウントが無いときの入れ方は `tests/e2e/smoke/signed-in.spec.ts` の冒頭
+3. **`main`へのpush後**（`smoke-prod`ジョブ。`Smoke Tests (production)`）: 本番のデプロイ（`deploy-prod`）が完了してから、本番に向けてログインしないスモークテスト（`pnpm test:e2e:smoke:public`）だけを流す（#696）。データを作らない・変えない。ログインするものはClerkの開発用インスタンスでしか使えないTesting Tokenでログインするため、本番では流せない。ログインした後の確認は「[本番のデプロイ後の確認](#本番のデプロイ後の確認)」の手順で人間が手で行う
 
-どちらもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
+どれもE2Eの失敗でジョブが失敗する（PRはマージをブロックされる）。また、E2Eが失敗したときだけ、Playwrightのレポート（`playwright-report/`・`test-results/`。動画・トレースを含む）をageで暗号化して、GitHub ActionsのArtifacts（`playwright-report-pr-<試行回数>`・`playwright-report-stg-<試行回数>`・`playwright-report-prod-<試行回数>`、保持期間3日）としてアップロードする。成功したときは何も残さない。復号して開く手順は「[失敗時のアーティファクト（暗号化）](#失敗時のアーティファクト暗号化)」。
+
+### 本番のデプロイ後の確認
+
+`smoke-prod` のジョブ（上記3.）が確かめるのは、ログインしないで分かる範囲（トップ・`/waitlist`・`/sign-in` に Clerk のフォームが出る、未ログインで `/shop` を開くと `/sign-in` に飛ばされる、`/legal/*` が表示される、Stripe・Clerk の Webhook の受け口が署名の正しくないリクエストを 400 で拒否する）だけ。Sanity の商品データを読む画面はどれもログインが要るため、ログインした後の確認と一緒に手で確かめる。
+
+本番へのデプロイ（main へのマージ）のたびに、`Smoke Tests (production)` が green になったあと、次を手で確かめる。会員・注文などのデータは作らない・変えない。
+
+1. 本番の確認用の会員アカウント（入会済みで、ランクで見られる商品があるもの。本番の環境を作るときに用意する）で、本番の `/sign-in` からログインする
+2. `/shop` に「ブランドから探す」とブランドが表示される（Supabase の会員のランクと Sanity の商品の両方を読めている）
+3. ブランドを1つ開き、商品が1つ以上表示される。商品を1つ開き、商品の画像が表示される（Sanity の画像の CDN を読めている）
+4. ログアウトし、本番の運営者のアカウントでログインする
+5. `/admin` に移り「管理メニュー」が表示される
+
+どれかで失敗したら、stg で同じ操作が通るかを先に確かめ、通るなら本番の環境変数（Doppler の `prod`）・Clerk・Sanity の本番の設定を疑う。
+
+Webhook の受け口には署名の正しくないリクエストを送るが、受け口は署名の検証に失敗したときは Sentry に送らずに 400 を返す（秘密鍵が無いときだけ例外になり、Sentry に送られる）。スモークテストのリクエストには `x-smoke-test: 1` のヘッダーを付けている。
 
 ### main への PR で stg の E2E の結果を確かめる（`Stg E2E Check`）
 
@@ -240,7 +346,8 @@ main への PR（develop → main のリリース）では、`.github/workflows/
 ```bash
 pnpm test:e2e       # pnpm dev を自動起動してテスト
 pnpm test:e2e --ui  # Playwright UI モード（ブラウザの動きをリアルタイムで確認できる）
-pnpm test:e2e:smoke # スモークテストだけ（docs/seed-data.md のアカウントが要る。ワークツリーでは bash scripts/with-worktree-db.sh を通す）
+pnpm test:e2e:smoke # スモークテストだけ（ログインするものは docs/seed-data.md のアカウントが要る。ワークツリーでは bash scripts/with-worktree-db.sh を通す）
+BASE_URL=<URL> pnpm test:e2e:smoke:public # ログインしないスモークテストだけ（BASE_URL 以外の環境変数は要らない）
 ```
 
 失敗したテストの動画・トレースはローカルでも`test-results/`配下に自動保存される（`playwright.config.ts`の`video: "retain-on-failure"` / `trace: "retain-on-failure"`）。
@@ -372,11 +479,13 @@ gitleaks git --log-opts="--all" --redact --no-banner .
 
 `.github/workflows/` のアップロードを足すときは、暗号化するか、ここに理由を書いて対象外にする。`tests/unit/workflow-artifacts-encrypted.test.ts` が、全てのアップロードが `.age` だけを置くか、対象外の一覧にあるかを検査する（一覧は同ファイルの `EXEMPT`）。
 
-| アーティファクト           | ワークフロー            | 対象外にする理由                                                                                                                     |
-| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `pr-diff-summary`          | PR Diff Summary         | PRの差分を区分ごとに集計したMarkdownで、同じ内容をPRのコメントに公開している。publicなPRの差分から作るだけで、シークレットを読まない |
-| `mechanical-change-report` | Mechanical Change Check | 機械的な変更の再実行結果のMarkdownで、同じ内容をPRのコメントに公開している。シークレットを読まない                                   |
-| `github-pages`             | Issue Deps Graph        | 依存グラフのページで、GitHub Pagesとして公開するためのもの                                                                           |
+| アーティファクト           | ワークフロー            | 対象外にする理由                                                                                                                                                                                                                                        |
+| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-diff-summary`          | PR Diff Summary         | PRの差分を区分ごとに集計したMarkdownで、同じ内容をPRのコメントに公開している。publicなPRの差分から作るだけで、シークレットを読まない                                                                                                                    |
+| `mechanical-change-report` | Mechanical Change Check | 機械的な変更の再実行結果のMarkdownで、同じ内容をPRのコメントに公開している。シークレットを読まない                                                                                                                                                      |
+| `github-pages`             | Issue Deps Graph        | 依存グラフのページで、GitHub Pagesとして公開するためのもの                                                                                                                                                                                              |
+| `preview-pr`               | Preview                 | PR番号だけ。シークレットを読まない。Preview Deploy が API で読んだPRの状態と照らして使う                                                                                                                                                                |
+| `preview-build`            | Preview                 | プレビューのビルドの成果物で、そのまま Worker に上げてブラウザに配る。埋め込まれるのは `NEXT_PUBLIC_*` だけ（サーバー側のシークレットは実行時に Worker の secrets から読む）。Preview Deploy が復号するには CI に秘密鍵を置くことになるため暗号化しない |
 
 ### 鍵を作る・追加する
 
