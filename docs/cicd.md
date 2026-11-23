@@ -31,13 +31,14 @@ push (develop・main)
 
 詳細は `requirements.md` の「3. 環境構成」を参照。
 
-| 環境            | ブランチ    | Supabase         | Clerk                                |
-| --------------- | ----------- | ---------------- | ------------------------------------ |
-| dev（ローカル） | `feature/*` | ローカル Docker  | Development インスタンス（stg 共用） |
-| stg             | `develop`   | 専用プロジェクト | Development インスタンス（dev 共用） |
-| prod            | `main`      | 専用プロジェクト | Production インスタンス              |
+| 環境            | ブランチ    | Supabase          | Clerk                                                                     |
+| --------------- | ----------- | ----------------- | ------------------------------------------------------------------------- |
+| dev（ローカル） | `feature/*` | ローカル Docker   | 「EQ Mart (local)」の Development インスタンス（`legible-swan-6757`）     |
+| stg             | `develop`   | 専用プロジェクト  | 「EQ Mart」の Development インスタンス（`natural-griffon-10`）            |
+| prod            | `main`      | 専用プロジェクト  | 「EQ Mart」の Production インスタンス                                     |
+| PR の CI        | —           | ジョブ内の Docker | 「EQ Mart (CI)」の Development インスタンス（`happy-terrier-8249`、#299） |
 
-> **Clerk の dev/stg 共用について**: ngrok でローカルを公開している間は Webhook が stg にも届く可能性がある。ローカルで Webhook テストをする際は Clerk ダッシュボードで stg の Webhook エンドポイントを一時的に無効化すること。
+> **Clerk の application の分け方**: Webhook の送り先はインスタンスごとに1つのため、データの行き先（接続する DB）ごとに application を分けている（#686）。ローカルで Clerk ユーザーを作っても、その Webhook は stg には届かない。ローカル用のインスタンスの Webhook はメインのチェックアウトの ngrok（`https://buffing-flaccid-nutty.ngrok-free.dev/api/webhooks/clerk`）に届く。Doppler の `dev`（と、それを継承する `dev_personal`）の Clerk のキー・`CLERK_ADMIN_ORGANIZATION_ID` はローカル用のインスタンスのもの、`stg`・`stg_deploy` は stg のもの。ローカル用のインスタンスの設定（サインアップの方式・規約同意・Organization・運営組織のロール等）は stg と同じにしてある。ただし captcha（`auth_attack_protection.bot_protection.captcha_enabled`）は API で有効にできず、ローカル用だけ無効のまま（E2E は Testing Token で captcha を通らないため影響しない）。stg の設定を変えたら、ローカル用・CI 用にも同じ変更をする（`clerk config pull --app <application ID>` で比べられる）。運営組織のロール・権限・Role Set はインスタンスごとに作る（`scripts/clerk-admin-rbac.ts setup`、#390）
 
 ---
 
@@ -212,7 +213,7 @@ doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler 
 
 ### CI での実行タイミング（2種類）
 
-1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`ci`、GitHub Secretsの`DOPPLER_TOKEN_PR`で参照）から取得する（下の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。`ci`のClerkのキーはCI専用のClerk開発インスタンスのもので、ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）は共有インスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
+1. **PR作成・更新時**（`e2e-pr`ジョブ）: `docs/`・`specs/`・`*.md`のみの変更を除き、PRを作成・更新するたびにTypeScript/Lint/Unit Testsと同じタイミングで自動実行される。CI実行環境内でSupabaseをローカル起動し、まっさらなDBにマイグレーションを適用してテストする（本物のstg DBには触れない）。Clerk・Stripe・Sanity等のテスト用シークレットはDopplerのCI専用config（`ci`、GitHub Secretsの`DOPPLER_TOKEN_PR`で参照）から取得する（下の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。`ci`のClerkのキーはCI専用のClerk開発インスタンスのもので、ローカル開発とClerk Backend APIのレート制限の枠を共有しないためのもの（#299）。ローカルSupabaseのClerk連携（`supabase/config.toml`の`[auth.third_party.clerk] domain`）はローカル用のインスタンスを指しているため、ジョブ内でSupabase起動前にCI専用インスタンスのドメインへ差し替える。
 2. **`develop`へのpush後**（`e2e`ジョブ、従来通り）: stg デプロイが完了してから自動実行される。stg の応答を最大2分待ってから Playwright を起動し、実際にデプロイされたstg環境に対してテストする。
    全部のE2Eの前に、「環境の確認（スモークテスト）」のステップでデータを書き換えないスモークテスト（`tests/e2e/smoke/`、`pnpm test:e2e:smoke`）だけを流す（#649）。ここで失敗したら全部のE2Eは流さずにジョブが失敗するので、ステップ名から振る舞いの不具合ではなく環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）の問題と分かる。スモークテストは `scripts/seed-users.ts` の既存のアカウント（`docs/seed-data.md`）でログインするため、それが無い使い捨てのDBで動く `pnpm test:e2e`（PRのE2E）には含めない。stgにアカウントが無いときの入れ方は `tests/e2e/smoke/smoke.spec.ts` の冒頭
 
@@ -377,11 +378,6 @@ pnpm exec playwright show-trace /tmp/playwright-report/test-results/<テスト�
 
 ## ローカル開発での Webhook テスト
 
-Clerk Webhook をローカルでテストするには ngrok が必要。
+Clerk Webhook をローカルでテストするには ngrok が必要。メインのチェックアウトの `task dev` が ngrok（`buffing-flaccid-nutty.ngrok-free.dev` → `localhost:3000`）も起動する。ローカル用の Clerk インスタンスの Webhook エンドポイントはこの URL に登録済みなので、ダッシュボードでの操作は要らない。ngrok が止まっている間に届かなかったイベントは、Clerk（Svix）が間隔を空けて再送を試みる。
 
-```bash
-ngrok http 3000
-# 表示された URL を Clerk ダッシュボードの Webhook エンドポイントに登録
-```
-
-> **注意**: ngrok 起動中は stg の Webhook エンドポイントにも同じイベントが届く。Clerk ダッシュボードで stg エンドポイントを一時的に無効化してから作業すること。
+ローカル用のインスタンスは stg と別のため、ローカルのイベントが stg に届くことも、stg のイベントがローカルに届くことも無い（#686）。
