@@ -262,7 +262,9 @@ describe("order_status_changes", () => {
     });
 
     it("状態の更新が失敗したら、履歴も記録されない", async () => {
-      // OrderStatus は不正な値を作れないため、関数を直接呼んで orders の CHECK 制約で失敗させる
+      // OrderStatus は不正な値を作れないため、関数を直接呼んで orders の CHECK 制約で失敗させる。
+      // 版の確認（#721）を通すため、今の版を渡す
+      const { version } = (await repo.findById(ORDER_B_ID))!;
       const { error } = await supabase.rpc("save_order", {
         p_order: {
           id: ORDER_B_ID,
@@ -273,6 +275,7 @@ describe("order_status_changes", () => {
           rank_at_order: "basic",
           monthly_limit_at_order: 1_000_000,
           created_at: new Date(2026, 5, 12).toISOString(),
+          version,
         },
         p_settlements: [],
         p_items: [],
