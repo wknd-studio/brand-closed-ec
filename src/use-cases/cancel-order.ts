@@ -5,6 +5,8 @@ export type CancelOrderInput = {
   orderId: string;
   /** キャンセルを操作した運営者の Clerk のユーザーID（セッションから取る） */
   adminClerkUserId: string;
+  /** 運営者が入力したキャンセル理由（任意。空白だけなら理由なしとして扱う） */
+  reason: string;
 };
 export type CancelOrderDeps = {
   orderRepo: OrderRepository;
@@ -26,5 +28,6 @@ export async function cancelOrder(
   await deps.orderRepo.save(order.cancel(new Date()), {
     type: "admin",
     adminUserId: adminUser.id,
+    reason: input.reason.trim() || null,
   });
 }
