@@ -90,6 +90,7 @@ describe(".github/workflows/ のアーティファクトのアップロード", 
       expect.arrayContaining([
         "deploy.yml/e2e-pr/playwright-report-pr-${{ github.run_attempt }}",
         "deploy.yml/e2e/playwright-report-stg-${{ github.run_attempt }}",
+        "deploy.yml/smoke-prod/playwright-report-prod-${{ github.run_attempt }}",
         ...Object.keys(EXEMPT),
       ])
     );
