@@ -39,6 +39,9 @@
   --color-primary: #a9791d;
   --color-primary-foreground: #2a1f08;
   --color-primary-light: #e8c766;
+  /* 白地の小さい文字（「必須」の印等）に使う濃いゴールド。--color-primaryは白地とのコントラストが
+     約3.6:1で小さい文字の基準（4.5:1）に届かないため、文字にはこちらを使う */
+  --color-primary-strong: #8a6215;
   --color-secondary: #746c5c;
   --color-success: #15803d;
   --color-warning: #b45309;
