@@ -17,6 +17,15 @@ const CANCELLABLE_STATUSES: Set<OrderStatusValue> = new Set([
   "limit_exceeded",
 ]);
 
+// 会員向けの画面（注文履歴・注文詳細）に出す表示ラベル。processing は一部の決済単位だけ
+// 支払い済みの場合も含むため、「未払い」ではなく手続き中と表す（docs/domain/settlement.md）
+const LABELS: Record<OrderStatusValue, string> = {
+  cancelled: "キャンセル済み",
+  processing: "お支払い手続き中",
+  limit_exceeded: "ご利用上限超過のため保留中",
+  paid: "お支払い済み",
+};
+
 export class OrderStatus {
   private constructor(readonly value: OrderStatusValue) {}
 
@@ -33,6 +42,10 @@ export class OrderStatus {
 
   isCancellable(): boolean {
     return CANCELLABLE_STATUSES.has(this.value);
+  }
+
+  label(): string {
+    return LABELS[this.value];
   }
 
   equals(other: OrderStatus): boolean {

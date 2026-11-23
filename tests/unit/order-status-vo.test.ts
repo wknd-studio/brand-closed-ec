@@ -63,3 +63,15 @@ describe("OrderStatus", () => {
     });
   });
 });
+
+// 会員向けの画面（注文履歴 #364・注文詳細 #365）に出す日本語の表示ラベル
+describe("OrderStatus.label()", () => {
+  it.each([
+    ["cancelled", "キャンセル済み"],
+    ["processing", "お支払い手続き中"],
+    ["limit_exceeded", "ご利用上限超過のため保留中"],
+    ["paid", "お支払い済み"],
+  ])("%s は「%s」", (status, label) => {
+    expect(OrderStatus.of(status).label()).toBe(label);
+  });
+});
