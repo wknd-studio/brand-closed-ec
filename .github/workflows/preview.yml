@@ -1,40 +1,54 @@
 name: Preview
 
-# PRごとのプレビュー（#727）。マイグレーションを含まない develop 向けのPRのコードを、stg の DB・Clerk・Stripe・
-# Sanity を共有したまま、別名の Worker（brand-closed-ec-pr-<PR番号>）に出し、URLをPRにコメントする。
+# PRごとのプレビュー（#727）のビルド。マイグレーションを含まない develop 向けのPRのコードを、stg の値でビルドし、
+# 成果物を artifact に上げる。デプロイ・削除・PRへのコメントは、この実行の完了で動く preview-deploy.yml が行う。
 # 方式・シークレットの置き場所は docs/cicd.md の「PRごとのプレビュー」、人間の確かめ方は docs/manual-check.md。
 #
-# - stg の Worker 本体のデプロイ・シークレットは書き換えない。Durable Objects・レート制限の
-#   名前空間も Worker ごとに別になる（wrangler.preview.jsonc）
-# - マイグレーション（supabase/migrations/）を含むPRは出さない。stg の DB にマイグレーションを適用しない
-# - fork のPR・Dependabot のPRでは動かさない（stg のシークレットをPRのコードに渡さない）。preview の
-#   environment も feature/* だけがデプロイできるよう絞る
-# - PRを閉じたら（マージ・クローズ）Worker を削除する
+# pull_request のワークフローはPR側の定義で動き、PRのコードを動かす。Cloudflare のトークンはアカウント単位で
+# 本番の Worker にも届くため、このワークフローには渡さない（stg の値を読むトークンだけ）。書き込みの権限も持たない。
+# - fork のPR・Dependabot のPR・feature/* 以外のブランチではビルドしない（stg のシークレットをPRのコードに渡さない）。
+#   preview-build の environment も feature/* だけが使えるよう絞る
+# - マイグレーション（supabase/migrations/）を含むPRはビルドしない
 on:
   pull_request:
     branches: [develop]
     types: [opened, synchronize, reopened, closed]
 
-# push が続いたら最後のコードだけを出す。PRを閉じたら、出している途中のデプロイを取り消して削除する
+# push が続いたら最後のコードだけをビルドする
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-env:
-  PR_NUMBER: ${{ github.event.pull_request.number }}
-
 jobs:
-  deploy:
-    name: Deploy preview
+  record:
+    name: Record PR
+    # preview-deploy.yml がどのPRの実行かを知るため、PR番号を毎回（閉じたときも）上げる。
+    # PRのコードが中身を変えられるため、preview-deploy.yml は API で読んだPRの状態と照らして使う
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - run: echo "$PR_NUMBER" > pr-number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview-pr
+          path: pr-number
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Build preview
     runs-on: ubuntu-24.04
     if: >-
       github.event.action != 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]'
-    environment: preview
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      startsWith(github.event.pull_request.head.ref, 'feature/')
+    environment: preview-build
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -54,18 +68,12 @@ jobs:
       - name: Resolve preview name and URL
         id: preview
         run: pnpm -s tsx scripts/ci/preview.ts names "$PR_NUMBER" >> "$GITHUB_OUTPUT"
-      - name: Delete preview (migrations)
-        # マイグレーションを含むようになったPRで、前の push で出したプレビュー（古いコード）を残さない
-        if: steps.migrations.outputs.migrations == 'true'
-        run: doppler run -- bash scripts/ci/delete-preview-worker.sh "$PREVIEW_NAME"
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          PREVIEW_NAME: ${{ steps.preview.outputs.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
       - name: Build
         # NEXT_PUBLIC_* はビルド時にバンドルへ埋め込まれるため、アプリのURLをプレビューのURLにしてPRごとにビルドする
-        # （Stripe Checkout の戻り先・招待リンクが stg に飛ばないように）。PRのコードを動かすため、Cloudflare の
-        # トークンが入っていない Worker 用の config（stg）だけを読む。SENTRY_AUTH_TOKEN も無いため、ソースマップは
-        # Sentry に上げない。Sentry のイベントは stg と分ける
+        # （Stripe Checkout の戻り先・招待リンクが stg に飛ばないように）。Worker 用の config（stg）だけを読む。
+        # SENTRY_AUTH_TOKEN が無いため、ソースマップは Sentry に上げない。Sentry のイベントは stg と分ける
         if: steps.migrations.outputs.migrations != 'true'
         run: |
           doppler run -- env \
@@ -75,83 +83,19 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_WORKER }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
-      - name: Sync Wrangler Secrets & Deploy
-        # deploy.yml の deploy-stg と同じ形。Worker の secrets には stg の Worker 用の config の値を
-        # filter-worker-env.jq で検査してから上げ、アプリのURL・Sentry の環境だけをプレビューのものにする。
-        # DOPPLER_TOKEN（stg_preview）は wrangler の認証（CLOUDFLARE_API_TOKEN・CLOUDFLARE_ACCOUNT_ID）にだけ使う。
-        # Worker がまだ無ければ wrangler secret bulk が作る
+      - name: Package build output
+        # .open-next にはリンク切れのシンボリックリンク（node_modules）があり、Worker のバンドルには要らない。
+        # デプロイ側でランナーのファイルを指すリンクを読ませないよう、消してから固める
         if: steps.migrations.outputs.migrations != 'true'
-        shell: bash
         run: |
-          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | jq --arg url "$PREVIEW_URL" '.NEXT_PUBLIC_APP_URL = $url | .NEXT_PUBLIC_SENTRY_ENVIRONMENT = "preview"' | doppler run -- pnpm exec wrangler secret bulk --config wrangler.preview.jsonc --name "$PREVIEW_NAME"
-          doppler run -- pnpm exec wrangler deploy --config wrangler.preview.jsonc --name "$PREVIEW_NAME"
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
-          PREVIEW_NAME: ${{ steps.preview.outputs.name }}
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
-      - name: Comment on the PR
-        # push のたびに同じコメントを更新する（scripts/ci/preview.ts の PREVIEW_COMMENT_MARKER で見つける）
-        run: |
-          pnpm -s tsx scripts/ci/preview.ts comment "$PREVIEW_STATUS" "$PR_NUMBER" "$HEAD_SHA" > "$RUNNER_TEMP/preview-comment.md"
-          marker='<!-- pr-preview -->'
-          comment_id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
-          if [[ -n "$comment_id" ]]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$comment_id" -F body=@"$RUNNER_TEMP/preview-comment.md" > /dev/null
-          else
-            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/preview-comment.md" > /dev/null
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PREVIEW_STATUS: ${{ steps.migrations.outputs.migrations == 'true' && 'skipped-migrations' || 'deployed' }}
-
-  cleanup:
-    name: Delete preview
-    runs-on: ubuntu-24.04
-    if: >-
-      github.event.action == 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login != 'dependabot[bot]'
-    environment: preview
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      # 閉じたPRのコードは動かさず、マージ先のブランチのスクリプトで消す
-      - uses: actions/checkout@v4
+          find .open-next -type l -delete
+          tar -czf "$RUNNER_TEMP/preview-build.tgz" .open-next
+      - name: Upload build output
+        # 中身は NEXT_PUBLIC_* だけが埋め込まれたビルドの成果物（サーバー側のシークレットは実行時に読む）
+        if: steps.migrations.outputs.migrations != 'true'
+        uses: actions/upload-artifact@v4
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "22", cache: "pnpm" }
-      - uses: ./.github/actions/install-cli
-        with: { tool: doppler, version: 3.77.1 }
-      - run: pnpm install --frozen-lockfile
-      - name: Resolve preview name and URL
-        id: preview
-        run: pnpm -s tsx scripts/ci/preview.ts names "$PR_NUMBER" >> "$GITHUB_OUTPUT"
-      - name: Delete preview
-        run: doppler run -- bash scripts/ci/delete-preview-worker.sh "$PREVIEW_NAME"
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          PREVIEW_NAME: ${{ steps.preview.outputs.name }}
-      - name: Comment on the PR
-        run: |
-          pnpm -s tsx scripts/ci/preview.ts comment "$PREVIEW_STATUS" "$PR_NUMBER" "$HEAD_SHA" > "$RUNNER_TEMP/preview-comment.md"
-          marker='<!-- pr-preview -->'
-          comment_id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
-          if [[ -n "$comment_id" ]]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$comment_id" -F body=@"$RUNNER_TEMP/preview-comment.md" > /dev/null
-          else
-            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/preview-comment.md" > /dev/null
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PREVIEW_STATUS: deleted
+          name: preview-build
+          path: ${{ runner.temp }}/preview-build.tgz
+          if-no-files-found: error
+          retention-days: 1

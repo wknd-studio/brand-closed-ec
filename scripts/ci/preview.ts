@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /**
@@ -9,6 +10,8 @@ import { pathToFileURL } from "node:url";
  * 使い方:
  *   pnpm -s tsx scripts/ci/preview.ts names <PR番号>                  # name=… と url=…（GITHUB_OUTPUT 向け）
  *   pnpm -s tsx scripts/ci/preview.ts comment <状態> <PR番号> <コミット> # PRのコメントの本文
+ *   pnpm -s tsx scripts/ci/preview.ts decide <PRのJSON> <変更したファイルの一覧>
+ *     # action=… と status=…（GITHUB_OUTPUT 向け）。環境変数 GITHUB_REPOSITORY・RUN_HEAD_SHA・RUN_CONCLUSION を読む
  */
 
 /** push のたびに同じコメントを更新するため、コメントをこのマーカーで見つける */
@@ -60,6 +63,65 @@ export function renderPreviewComment({
   return lines.join("\n\n") + "\n";
 }
 
+/** デプロイ・削除をどうするか。preview-deploy.yml が、Preview のワークフローの実行ごとに決める */
+export type PreviewAction = "deploy" | "delete-migrations" | "delete" | "skip";
+
+/** GitHub の API（GET /repos/{owner}/{repo}/pulls/{number}）の、判定に使う部分 */
+export type PullRequest = {
+  state: string;
+  user: { login: string };
+  base: { ref: string };
+  head: { sha: string; ref: string; repo: { full_name: string } | null };
+};
+
+/**
+ * PRの今の状態から、プレビューをどうするかを決める。Preview のワークフローの artifact（PR番号）は
+ * PRのコードが作るため信じず、API で読んだPRの状態と、実行したコミット（workflow_run.head_sha）で決める。
+ */
+export function decidePreviewAction({
+  repository,
+  runHeadSha,
+  runConclusion,
+  pr,
+  changedFiles,
+}: {
+  repository: string;
+  runHeadSha: string;
+  runConclusion: string;
+  pr: PullRequest;
+  changedFiles: string[];
+}): { action: PreviewAction; reason: string } {
+  if (pr.head.repo?.full_name !== repository) {
+    return { action: "skip", reason: "fork のPR" };
+  }
+  if (pr.user.login === "dependabot[bot]") {
+    return { action: "skip", reason: "Dependabot のPR" };
+  }
+  if (pr.base.ref !== "develop" || !pr.head.ref.startsWith("feature/")) {
+    return { action: "skip", reason: "feature/* から develop へのPRではない" };
+  }
+  if (pr.state === "closed") {
+    return { action: "delete", reason: "PRを閉じた" };
+  }
+  if (pr.head.sha !== runHeadSha) {
+    return { action: "skip", reason: "PRの先端より古いコミットの実行" };
+  }
+  if (changedFiles.some((f) => f.startsWith("supabase/migrations/"))) {
+    return { action: "delete-migrations", reason: "マイグレーションを含む" };
+  }
+  if (runConclusion !== "success") {
+    return { action: "skip", reason: `ビルドが ${runConclusion}` };
+  }
+  return { action: "deploy", reason: "マイグレーションを含まないPR" };
+}
+
+const STATUS_OF: Record<PreviewAction, PreviewStatus | ""> = {
+  deploy: "deployed",
+  "delete-migrations": "skipped-migrations",
+  delete: "deleted",
+  skip: "",
+};
+
 function parsePr(arg: string | undefined): number {
   const pr = Number(arg);
   if (!/^\d+$/.test(arg ?? "")) throw new Error(`PR番号が不正: ${arg}`);
@@ -85,6 +147,18 @@ function main(argv: string[]): void {
         url: previewUrl(pr),
         sha: sha ?? "",
       })
+    );
+  } else if (command === "decide") {
+    const [prFile, filesFile] = args;
+    const { action, reason } = decidePreviewAction({
+      repository: process.env.GITHUB_REPOSITORY ?? "",
+      runHeadSha: process.env.RUN_HEAD_SHA ?? "",
+      runConclusion: process.env.RUN_CONCLUSION ?? "",
+      pr: JSON.parse(readFileSync(prFile, "utf8")) as PullRequest,
+      changedFiles: readFileSync(filesFile, "utf8").split("\n").filter(Boolean),
+    });
+    process.stdout.write(
+      `action=${action}\nstatus=${STATUS_OF[action]}\nreason=${reason}\n`
     );
   } else {
     throw new Error(`不明なコマンド: ${command}`);

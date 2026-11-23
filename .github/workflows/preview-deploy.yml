@@ -1,0 +1,134 @@
+name: Preview Deploy
+
+# PRごとのプレビュー（#727）のデプロイ・削除。Preview（preview.yml）の実行が終わるたびに動き、PRの今の状態から
+# どうするかを決める（scripts/ci/preview.ts の decidePreviewAction）。
+# - 開いている・マイグレーションを含まないPR: ビルドの成果物を別名の Worker（brand-closed-ec-pr-<PR番号>）に出す
+# - マイグレーションを含むPR: 前に出したプレビューを消し、出さないことをコメントする
+# - 閉じたPR: Worker を消す
+#
+# workflow_run のワークフローは、既定のブランチ（develop）の定義・checkout で動く。PR側から書き換えられないため、
+# Cloudflare のトークン（アカウント単位で本番の Worker にも届く）はここでだけ読む。PRのコードは動かさず、
+# PRのコードが作った artifact は、成果物（Worker にそのまま上げる）と PR番号（API で照らす）としてだけ使う。
+# stg の Worker 本体のデプロイ・シークレットは書き換えない。Durable Objects・レート制限の名前空間も
+# Worker ごとに別になる（wrangler.preview.jsonc）。stg の DB にマイグレーションを適用しない。
+on:
+  workflow_run:
+    workflows: [Preview]
+    types: [completed]
+
+# 同じブランチの古い実行は取り消す（新しい実行が、PRの今の状態から決め直す）
+concurrency:
+  group: preview-deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    name: Deploy or delete preview
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    environment: preview
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
+      - run: pnpm install --frozen-lockfile
+      - name: Read PR number
+        id: pr
+        run: |
+          gh run download "$RUN_ID" --name preview-pr --dir "$RUNNER_TEMP/preview-pr"
+          pr="$(cat "$RUNNER_TEMP/preview-pr/pr-number")"
+          if [[ ! "$pr" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::PR番号が不正"
+            exit 1
+          fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+      - name: Decide
+        id: decide
+        run: |
+          gh api "repos/$GH_REPO/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pr.json"
+          gh api "repos/$GH_REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' > "$RUNNER_TEMP/files.txt"
+          pnpm -s tsx scripts/ci/preview.ts decide "$RUNNER_TEMP/pr.json" "$RUNNER_TEMP/files.txt" | tee -a "$GITHUB_OUTPUT"
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      - name: Resolve preview name and URL
+        id: preview
+        if: steps.decide.outputs.action != 'skip'
+        run: pnpm -s tsx scripts/ci/preview.ts names "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+      - name: Download build output
+        # PRのコードが作った成果物のため、空のディレクトリに展開し、.open-next だけ・シンボリックリンク無しで
+        # あることを確かめてから checkout（develop）の直下に置く
+        if: steps.decide.outputs.action == 'deploy'
+        run: |
+          gh run download "$RUN_ID" --name preview-build --dir "$RUNNER_TEMP/preview-artifact"
+          mkdir "$RUNNER_TEMP/preview-build"
+          tar -xzf "$RUNNER_TEMP/preview-artifact/preview-build.tgz" -C "$RUNNER_TEMP/preview-build" --no-same-owner --no-same-permissions
+          if [[ "$(ls -A "$RUNNER_TEMP/preview-build")" != ".open-next" ]]; then
+            echo "::error::成果物に .open-next 以外がある"
+            exit 1
+          fi
+          if [[ -n "$(find "$RUNNER_TEMP/preview-build" -type l -print -quit)" ]]; then
+            echo "::error::成果物にシンボリックリンクがある"
+            exit 1
+          fi
+          mv "$RUNNER_TEMP/preview-build/.open-next" .open-next
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+      - name: Sync Wrangler Secrets & Deploy
+        # deploy.yml の deploy-stg と同じ形。Worker の secrets には stg の Worker 用の config の値を
+        # filter-worker-env.jq で検査してから上げ、アプリのURL・Sentry の環境だけをプレビューのものにする。
+        # DOPPLER_TOKEN（stg_preview）は wrangler の認証（CLOUDFLARE_API_TOKEN・CLOUDFLARE_ACCOUNT_ID）にだけ使う。
+        # Worker がまだ無ければ wrangler secret bulk が作る
+        if: steps.decide.outputs.action == 'deploy'
+        shell: bash
+        run: |
+          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | jq --arg url "$PREVIEW_URL" '.NEXT_PUBLIC_APP_URL = $url | .NEXT_PUBLIC_SENTRY_ENVIRONMENT = "preview"' | doppler run -- pnpm exec wrangler secret bulk --config wrangler.preview.jsonc --name "$PREVIEW_NAME"
+          doppler run -- pnpm exec wrangler deploy --config wrangler.preview.jsonc --name "$PREVIEW_NAME"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
+          PREVIEW_NAME: ${{ steps.preview.outputs.name }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+      - name: Delete preview
+        # 閉じたPR、またはマイグレーションを含むようになったPRの、前に出したプレビュー（古いコード）を残さない
+        if: steps.decide.outputs.action == 'delete' || steps.decide.outputs.action == 'delete-migrations'
+        run: doppler run -- bash scripts/ci/delete-preview-worker.sh "$PREVIEW_NAME"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          PREVIEW_NAME: ${{ steps.preview.outputs.name }}
+      - name: Comment on the PR
+        # push のたびに同じコメントを更新する（scripts/ci/preview.ts の PREVIEW_COMMENT_MARKER で見つける）。
+        # 閉じたときは、プレビューのコメントがあるPRだけを更新する
+        if: steps.decide.outputs.action != 'skip'
+        run: |
+          pnpm -s tsx scripts/ci/preview.ts comment "$PREVIEW_STATUS" "$PR_NUMBER" "$HEAD_SHA" > "$RUNNER_TEMP/preview-comment.md"
+          marker='<!-- pr-preview -->'
+          comment_id="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
+          if [[ -n "$comment_id" ]]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$comment_id" -F body=@"$RUNNER_TEMP/preview-comment.md" > /dev/null
+          elif [[ "$PREVIEW_STATUS" != "deleted" ]]; then
+            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/preview-comment.md" > /dev/null
+          fi
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PREVIEW_STATUS: ${{ steps.decide.outputs.status }}
