@@ -55,6 +55,31 @@ describe("StripePaymentGateway - 冪等性キー", () => {
     });
   });
 
+  it("createCheckoutSessionは、決済されずに放置されたセッションを失効させるため、作成から31分後のexpires_atを指定する", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-24T00:00:00Z"));
+    try {
+      const gateway = new StripePaymentGateway();
+
+      await gateway.createCheckoutSession(
+        makeOrder(),
+        [{ productName: "商品A", unitPrice: 1000, quantity: 1 }],
+        "http://localhost:3000"
+      );
+
+      expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expires_at:
+            Math.floor(new Date("2026-11-24T00:00:00Z").getTime() / 1000) +
+            31 * 60,
+        }),
+        expect.any(Object)
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("createInvoiceForOrderは、invoice作成と各商品のinvoiceItem作成それぞれに別々のidempotencyKeyを付与する", async () => {
     const gateway = new StripePaymentGateway();
     const order = makeOrder({

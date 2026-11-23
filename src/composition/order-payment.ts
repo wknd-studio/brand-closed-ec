@@ -11,6 +11,10 @@ import {
   markInvoiceOrderAsPaid as markInvoiceOrderAsPaidUseCase,
   type MarkInvoiceOrderAsPaidInput,
 } from "@/use-cases/mark-invoice-order-as-paid";
+import {
+  cancelExpiredCheckoutSettlement as cancelExpiredCheckoutSettlementUseCase,
+  type CancelExpiredCheckoutSettlementInput,
+} from "@/use-cases/cancel-expired-checkout-settlement";
 
 // 決済完了のWebhook（Checkout・請求書）で注文を支払い済みにする
 function paidOrderDeps() {
@@ -29,4 +33,13 @@ export function markCheckoutOrderAsPaid(input: MarkCheckoutOrderAsPaidInput) {
 
 export function markInvoiceOrderAsPaid(input: MarkInvoiceOrderAsPaidInput) {
   return markInvoiceOrderAsPaidUseCase(input, paidOrderDeps());
+}
+
+// 決済されずに期限切れになったCheckoutの決済単位をキャンセルする（Webhook）
+export function cancelExpiredCheckoutSettlement(
+  input: CancelExpiredCheckoutSettlementInput
+) {
+  return cancelExpiredCheckoutSettlementUseCase(input, {
+    orderRepo: new SupabaseOrderRepository(createAdminClient()),
+  });
 }

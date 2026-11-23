@@ -6,6 +6,8 @@ import type {
 } from "@/repositories/payment-gateway";
 import type { Order } from "@/domain/entities/order";
 
+const CHECKOUT_SESSION_EXPIRES_IN_SECONDS = 31 * 60;
+
 export class StripePaymentGateway implements PaymentGateway {
   async createCheckoutSession(
     order: Order,
@@ -27,6 +29,10 @@ export class StripePaymentGateway implements PaymentGateway {
         success_url: `${baseUrl}/order/complete?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/order/checkout`,
         metadata: { order_id: order.id },
+        // 決済されずに放置されたセッションを失効させ、checkout.session.expired で決済単位をキャンセルする（#202）。
+        // Stripeの下限は作成から30分で、リクエストが届くまでの時間で下回らないよう1分の余裕を持たせる
+        expires_at:
+          Math.floor(Date.now() / 1000) + CHECKOUT_SESSION_EXPIRES_IN_SECONDS,
       },
       { idempotencyKey: `checkout-session-${order.id}` }
     );
