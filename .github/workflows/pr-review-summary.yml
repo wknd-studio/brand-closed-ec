@@ -13,14 +13,14 @@ on:
     branches: [develop]
     types: [opened, edited, synchronize, reopened]
 
-# 本文を続けて編集したとき、古い本文での結果が後から表示されないようにする
-concurrency:
-  group: pr-review-summary-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   pr-review-summary:
     name: PR Review Summary
+    # 本文を続けて編集したとき、古い本文での結果が後から表示されないようにする。
+    # ワークフロー全体ではなくこのジョブにだけ付ける（ラベルのジョブを取り消すと、付けるはずのラベルが付かないまま残るため）
+    concurrency:
+      group: pr-review-summary-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -41,7 +41,8 @@ jobs:
     name: Manual Check Label
     # fork のPRはトークンに書き込みの権限が無いため対象外。Dependabot のPRは本文を検査しないため付けない。
     # synchronize（push）では本文が変わらないため動かさない。edited は本文が変わったときだけ動かす（タイトルの編集等では動かさない）。
-    # 閉じたPRの本文を後から編集しても、人間が外したラベルを付け直さない
+    # 閉じたPRの本文を後から編集しても、人間が外したラベルを付け直さない。
+    # concurrency で取り消さない（各実行が自分のイベントの前後の本文で判定するため、取り消すと書き換えを取りこぼす）
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
@@ -81,7 +82,7 @@ jobs:
               ;;
             remove)
               # 付いていなければ何もしない
-              if gh api "repos/${GH_REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | grep -qx "$label"; then
+              if gh api "repos/${GH_REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | grep -x "$label" >/dev/null; then
                 gh api -X DELETE "repos/${GH_REPO}/issues/${PR_NUMBER}/labels/${label}" --silent
               fi
               ;;
