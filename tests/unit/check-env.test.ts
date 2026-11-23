@@ -477,6 +477,12 @@ describe("checkMigrations", () => {
     expect(checkMigrations(["1", "2"], ["1", "2"])[0].status).toBe("ok");
   });
 
+  it("未適用が多いときは、件数と最初・最後のものだけを出す", () => {
+    const local = Array.from({ length: 37 }, (_, k) => String(1000 + k));
+    const [result] = checkMigrations(local, []);
+    expect(result.detail).toBe("未適用: 37個（1000 〜 1036）");
+  });
+
   it("未適用・リモートにだけあるものを NG にする", () => {
     const [result] = checkMigrations(["1", "2", "3"], ["1", "9"]);
     expect(result.status).toBe("ng");
@@ -545,7 +551,8 @@ describe("formatResults", () => {
     const body = lines.filter((l) => l.includes("STRIPE_PRICE_ID_"));
     expect(body.length).toBeGreaterThan(1);
     for (const line of body) expect(width(line)).toBeLessThanOrEqual(80);
-    const indent = columnOf(lines[0], "内容");
+    // 折り返した続きの行は2桁下げ、次の問題の行と見分けられるようにする
+    const indent = columnOf(lines[0], "内容") + 2;
     for (const line of body.slice(1)) {
       expect(line.length - line.trimStart().length).toBe(indent);
     }
