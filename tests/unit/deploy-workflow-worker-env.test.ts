@@ -73,13 +73,18 @@ describe("Sync Wrangler Secrets & Deploy", () => {
     }
   );
 
-  it("wrangler secret bulk は、どのワークフローでも Worker 用の config の値だけを受け取る", () => {
+  it("Worker の secrets を上げるコマンドは、どのワークフローでも Worker 用の config の値だけを受け取る", () => {
     const lines = workflows
       .flatMap(({ wf }) => Object.values(wf.jobs))
       .flatMap((j) => j.steps ?? [])
       .flatMap((s) => (s.run ?? "").split("\n"))
-      .filter((l) => l.includes("wrangler secret bulk"));
-    // stg・本番のデプロイと、PRごとのプレビュー（#727。stg の値を上げる）
+      .filter(
+        (l) =>
+          l.includes("wrangler secret bulk") ||
+          l.includes("scripts/ci/deploy-preview-worker.sh")
+      );
+    // stg・本番のデプロイ（wrangler secret bulk）と、PRごとのプレビュー（#727。stg の値を上げる。
+    // #731 から wrangler deploy --secrets-file で上げる）
     expect(lines).toHaveLength(3);
     for (const line of lines) {
       expect(line).toContain('--token "$DOPPLER_TOKEN_WORKER"');

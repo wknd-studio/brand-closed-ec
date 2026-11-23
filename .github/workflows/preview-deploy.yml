@@ -5,6 +5,8 @@ name: Preview Deploy
 # - 開いている・マイグレーションを含まないPR: ビルドの成果物を別名の Worker（brand-closed-ec-pr-<PR番号>）に出す
 # - マイグレーションを含むPR: 前に出したプレビューを消し、出さないことをコメントする
 # - 閉じたPR: Worker を消す
+# デプロイしたら、PRの head のコミットに GitHub の Deployment（PRごとの環境 preview-pr-<PR番号>）を記録し、
+# 消したら inactive にする（#731）。ジョブの environment の url では記録が develop のコミットに付き、PRに出ないため。
 #
 # workflow_run のワークフローは、既定のブランチ（develop）の定義・checkout で動く。PR側から書き換えられないため、
 # Cloudflare のトークン（アカウント単位で本番の Worker にも届く）はここでだけ読む。PRのコードは動かさず、
@@ -32,6 +34,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      deployments: write
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
@@ -99,15 +102,15 @@ jobs:
         env:
           RUN_ID: ${{ github.event.workflow_run.id }}
       - name: Sync Wrangler Secrets & Deploy
-        # deploy.yml の deploy-stg と同じ形。Worker の secrets には stg の Worker 用の config の値を
-        # filter-worker-env.jq で検査してから上げ、アプリのURL・Sentry の環境だけをプレビューのものにする。
+        # Worker の secrets には stg の Worker 用の config の値を filter-worker-env.jq で検査してから上げ、
+        # アプリのURL・Sentry の環境だけをプレビューのものにする。
         # DOPPLER_TOKEN（stg_preview）は wrangler の認証（CLOUDFLARE_API_TOKEN・CLOUDFLARE_ACCOUNT_ID）にだけ使う。
-        # Worker がまだ無ければ wrangler secret bulk が作る
+        # Worker の作成とシークレットの登録は wrangler deploy --secrets-file の1回で行う（scripts/ci/deploy-preview-worker.sh。
+        # wrangler secret bulk で先に作ると、新しいPRの最初のデプロイが失敗することがあった。#731）
         if: steps.decide.outputs.action == 'deploy'
         shell: bash
         run: |
-          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | jq --arg url "$PREVIEW_URL" '.NEXT_PUBLIC_APP_URL = $url | .NEXT_PUBLIC_SENTRY_ENVIRONMENT = "preview"' | doppler run -- pnpm exec wrangler secret bulk --config wrangler.preview.jsonc --name "$PREVIEW_NAME"
-          doppler run -- pnpm exec wrangler deploy --config wrangler.preview.jsonc --name "$PREVIEW_NAME"
+          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | jq --arg url "$PREVIEW_URL" '.NEXT_PUBLIC_APP_URL = $url | .NEXT_PUBLIC_SENTRY_ENVIRONMENT = "preview"' | doppler run -- bash scripts/ci/deploy-preview-worker.sh "$PREVIEW_NAME"
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
@@ -138,3 +141,17 @@ jobs:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           PREVIEW_STATUS: ${{ steps.decide.outputs.status }}
+      - name: Record deployment
+        # PRの会話の流れとマージボタンの上の欄に「View deployment」を出す。前の push の Deployment は inactive にする。
+        # コメントの後に置き、Deployments の API が失敗してもコメントは出す
+        if: steps.decide.outputs.action == 'deploy'
+        run: pnpm -s tsx scripts/ci/preview.ts deployment record "$PR_NUMBER" "$HEAD_SHA"
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      - name: Deactivate deployments
+        # PRごとの environment（preview-pr-<PR番号>）は残る。削除にはリポジトリの管理の権限が要り、GITHUB_TOKEN に付けられない
+        if: steps.decide.outputs.action == 'delete' || steps.decide.outputs.action == 'delete-migrations'
+        run: pnpm -s tsx scripts/ci/preview.ts deployment deactivate "$PR_NUMBER"
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
