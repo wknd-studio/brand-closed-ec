@@ -64,7 +64,7 @@ develop 向けの同じリポジトリの `feature/*` のPRに push すると、
 - **fork のPR・Dependabot のPRでは動かさない**: stg のシークレットをPRのコードに渡さないため。Preview のビルドのジョブの条件（同じリポジトリ・Dependabot 以外・`feature/*`）に加えて、`preview-build` の environment を使えるブランチを `feature/*` だけに絞っている。Preview Deploy も、API で読んだPRが同じリポジトリの `feature/*` から develop へのPRで、Dependabot のものでないときだけ動く
 - **stg の Worker（`brand-closed-ec-stg`）は書き換えない**: 名前を変えた別の Worker のため、デプロイ・secrets・Durable Objects（OpenNext のキャッシュ）は Worker ごとに別になる。レート制限の名前空間も、同じ `namespace_id` だと同じアカウントの Worker どうしで回数を共有するため、`wrangler.preview.jsonc` で stg と分けている。`wrangler.preview.jsonc` は名前とレート制限の名前空間のほかは `wrangler.stg.jsonc` と同じにする（`tests/unit/preview-workflow.test.ts`）
 - **Webhook は stg（develop のコード）で処理される**: Clerk・Stripe の Webhook の送り先は stg のままのため、プレビューで決済すると、決済確定の処理は develop のコードで走る。Webhook の変更を含むPRはプレビューで確かめられない
-- **Stripe のカスタマーポータルの戻り先は stg**: Checkout の戻り先（`success_url`・`cancel_url`）はプレビューのURLになるが、「サブスクを管理」の画面からの戻り先は Stripe のダッシュボードで stg に固定している（`docs/signup-flow.md`）
+- **「サブスクを管理」の転送先は stg**: Checkout の戻り先（`success_url`・`cancel_url`）はプレビューのURLになるが、すでに入会済みの会員が Checkout で止められた画面の「サブスクを管理」の転送先は、Stripe のダッシュボードで stg に固定している（`docs/signup-flow.md`）
 - **プレビューでの操作は stg のデータに残る**: ローンチ前で利用者がいないため許容する。stg のテストアカウントで退会などの戻せない操作をすると、そのアカウントは stg でも使えなくなる。メールも stg と同じく実際に送られる
 - **Clerk**: stg の Clerk は Development インスタンスのため、プレビューのドメインを許可する設定は要らない（本番のインスタンスのプレビューは作らない）
 
