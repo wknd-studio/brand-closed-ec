@@ -42,10 +42,6 @@ async function cleanup() {
     .eq("user_id", TEST_USER_ID);
   const orderIds = orders?.map((o) => o.id) ?? [];
   if (orderIds.length > 0) {
-    await supabase
-      .from("order_status_changes")
-      .delete()
-      .in("order_id", orderIds);
     await supabase.from("order_items").delete().in("order_id", orderIds);
     await supabase.from("order_settlements").delete().in("order_id", orderIds);
     await supabase.from("orders").delete().in("id", orderIds);
