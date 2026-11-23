@@ -4,6 +4,10 @@ import { RANK_OPTIONS, PRICING_RANK_OPTIONS } from "./rank-options";
 import { ProductPriceRateInput } from "./product-price-rate-input";
 import { ProductPricesDisplay } from "./product-prices-display";
 import { FormattedYenInput } from "./formatted-yen-input";
+import {
+  DEFAULT_FULFILLMENT_LOCATION,
+  FULFILLMENT_LOCATION_OPTIONS,
+} from "./fulfillment-location-options";
 
 // Enterpriseランクは個別契約のため、固定価格商品でも価格入力の必須対象外
 const REQUIRED_PRICE_RANKS = PRICING_RANK_OPTIONS.map((option) => option.value);
@@ -165,6 +169,16 @@ export const product = defineType({
               document as { is_negotiable?: boolean } | undefined
             )
           ),
+    }),
+    defineField({
+      name: "fulfillment_location",
+      title: "発送拠点",
+      description:
+        "事務所経由（事務所で受領してから発送）か仕入れ先直送かを商品ごとに設定します。注文確定時の値が注文明細に残ります",
+      type: "string",
+      options: { list: [...FULFILLMENT_LOCATION_OPTIONS] },
+      initialValue: DEFAULT_FULFILLMENT_LOCATION,
+      validation: (r) => r.required(),
     }),
     defineField({
       name: "price_settings",
