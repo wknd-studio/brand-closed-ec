@@ -399,8 +399,7 @@ export class SupabaseOrderRepository implements OrderRepository {
         changed_by: changedBy.type,
         changed_by_admin_user_id:
           changedBy.type === "admin" ? changedBy.adminUserId : null,
-        // キャンセル理由を画面から渡すのは #271
-        reason: null,
+        reason: changedBy.type === "admin" ? changedBy.reason : null,
       },
     });
     if (error) throw new Error(`Order保存に失敗: ${error.message}`);

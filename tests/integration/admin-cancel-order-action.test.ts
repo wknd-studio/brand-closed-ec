@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
-// 管理画面の注文キャンセルが、操作した運営者を order_status_changes に記録すること（#237）
+// 管理画面の注文キャンセルが、操作した運営者とキャンセル理由を order_status_changes に記録すること（#237・#271）
 
 const ADMIN_CLERK_USER_ID = "clerk_test_admin_cancel_order";
 
@@ -117,7 +117,7 @@ afterAll(async () => {
 });
 
 describe("管理画面の注文キャンセル（cancelOrder Server Action・実DB）", () => {
-  it("changed_by='admin' と操作した運営者の admin_users.id を記録する", async () => {
+  it("changed_by='admin' と操作した運営者の admin_users.id と、入力したキャンセル理由を記録する", async () => {
     expect(await cancelOrder(ORDER_ID, "顧客から電話で依頼")).toBeUndefined();
 
     const { data: order } = await supabase
@@ -129,7 +129,9 @@ describe("管理画面の注文キャンセル（cancelOrder Server Action・実
 
     const { data: history } = await supabase
       .from("order_status_changes")
-      .select("from_status, to_status, changed_by, changed_by_admin_user_id")
+      .select(
+        "from_status, to_status, changed_by, changed_by_admin_user_id, reason"
+      )
       .eq("order_id", ORDER_ID);
     expect(history).toEqual([
       {
@@ -137,6 +139,7 @@ describe("管理画面の注文キャンセル（cancelOrder Server Action・実
         to_status: "cancelled",
         changed_by: "admin",
         changed_by_admin_user_id: ADMIN_USER_ID,
+        reason: "顧客から電話で依頼",
       },
     ]);
   });
