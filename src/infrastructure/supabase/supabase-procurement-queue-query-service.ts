@@ -54,7 +54,8 @@ export class SupabaseProcurementQueueQueryService implements ProcurementQueueQue
 
   // 対応待ちキューへの入場条件（docs/domain/procurement.md・settlement.md）: どの発注タスクにも入っておらず、
   // 注文がキャンセルされていない明細のうち、after_order は注文確定と同時に、at_order は決済単位が paid になってから入る。
-  // PostgREST の or は埋め込んだ表（order_settlements）の列を条件に使えないため、支払いタイミングごとに取得して合わせる
+  // PostgREST の or は埋め込んだ表（order_settlements）の列を条件に使えないため、支払いタイミングごとに取得して合わせる。
+  // 1回の取得は max_rows（supabase/config.toml の1000件）で切られるため、超えたときに古い明細が残るよう、クエリでも注文日時の古い順にする
   async findQueueItems({
     sort,
   }: {
@@ -92,6 +93,7 @@ export class SupabaseProcurementQueueQueryService implements ProcurementQueueQue
       .is("procurement_task_id", null)
       .neq("orders.status", "cancelled")
       .eq("payment_timing", "after_order")
+      .order("orders(created_at)")
       .returns<QueueItemRow[]>();
     if (error) throw error;
     return data;
@@ -105,6 +107,7 @@ export class SupabaseProcurementQueueQueryService implements ProcurementQueueQue
       .neq("orders.status", "cancelled")
       .eq("payment_timing", "at_order")
       .eq("order_settlements.status", "paid")
+      .order("orders(created_at)")
       .returns<QueueItemRow[]>();
     if (error) throw error;
     return data;
