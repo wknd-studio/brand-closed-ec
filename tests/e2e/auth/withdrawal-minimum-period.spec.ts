@@ -28,7 +28,11 @@ test.describe.serial("最低利用期間内の会員の退会欄", () => {
     await cleanupTestUser(email);
     const created = await (
       await clerkClient()
-    ).users.createUser({ emailAddress: [email], skipLegalChecks: true });
+    ).users.createUser({
+      emailAddress: [email],
+      password: "TestPassw0rd!12345",
+      skipLegalChecks: true,
+    });
     await ensureOnboardedMember(supabaseAdmin(), created.id, email);
     // 前回の実行の行が残っていても期間内になるよう、入会日を今にする
     joinedAt = new Date();

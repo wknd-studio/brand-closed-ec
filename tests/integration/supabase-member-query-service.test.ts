@@ -213,6 +213,7 @@ beforeAll(async () => {
       onboarding_completed: true,
       billing_anchor_day: 1,
       deleted_at: "2026-07-01T00:00:00.000Z",
+      created_at: JOINED_LONG_AGO.toISOString(),
     },
     {
       id: PENDING_USER_ID,
@@ -224,6 +225,8 @@ beforeAll(async () => {
       rank_code: "basic",
       onboarding_completed: false,
       billing_anchor_day: 1,
+      // 一括の insert は列を揃える（欠けた列は既定値ではなく null になる）
+      created_at: JOINED_RECENTLY.toISOString(),
     },
   ]);
   await insert("addresses", [
