@@ -82,11 +82,6 @@ tasks:
       - git fetch -q origin develop main
       - pnpm -s tsx scripts/check-github-secrets.ts
 
-  clerk:admin-rbac:check:
-    desc: Clerk（開発インスタンス。dev・stg 共用）の運営組織のロール・権限が docs/domain/admin-rbac.md の権限マトリクスどおりかを確かめる（直すときは scripts/clerk-admin-rbac.ts setup。#390）
-    cmds:
-      - doppler run -c dev -- pnpm -s tsx scripts/clerk-admin-rbac.ts check
-
   env:check:
     desc: Doppler の config（`-- stg` か `-- prod`）の名前・値と、Stripe・Clerk・Supabase の設定がそろっているかを確かめる（値は出さない。prod の読み取り権限が要るため CI では流さない。#698）
     cmds:
