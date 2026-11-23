@@ -78,6 +78,39 @@
 - 選択プラン ＞ 支払い済み最高ランク → 差分を請求
 - 退会・再入会をまたいでも`initial_fee_paid_rank_code`は保持される（[[membership]]の退会ルールと関連）
 
+**支払い失敗・Stripe側の解約**（2026-10-18決定、親issue #375・#376）
+
+月額費用の支払いに失敗している間（Stripeが再請求している間）は新規注文を止めてカードの更新を促し、再請求が尽きてStripeがサブスクリプションを解約したら会員の利用を止める。解約されても退会（`users.deleted_at`）にはしない（[[membership]]「Stripe側の解約による利用停止」）。
+
+- 状態の遷移（Stripeの仕様）: 2回目以降の月額の支払いに失敗すると`active`→`past_due`になる。再請求のうちどれかが成功すれば`active`に戻る。再請求がすべて失敗すると、Stripeの設定（下記）により`canceled`になる。`past_due`の間もStripeは次の請求期間の請求書を作り続ける
+- `subscriptions.status`はStripeの値をそのまま写し、判定はアプリ側の下表で行う（`docs/db-schema-redesign.md`「subscriptions」節）
+
+| `subscriptions.status`                                                      | 会員から見た状態 | 新規注文                       | 表示                                                                                     | ログイン                       |
+| --------------------------------------------------------------------------- | ---------------- | ------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------ |
+| `active`・`trialing`                                                        | 通常             | できる                         | 通常                                                                                     | できる                         |
+| `past_due`（支払い失敗中）                                                  | 支払い失敗中     | できない（進行中の注文は続く） | 会員画面の共通レイアウトに、カードの更新の案内とBilling Portal（#216）へのボタン（#379） | できる                         |
+| `unpaid`（使わない設定だが、万一なった場合）                                | 支払い失敗中     | できない                       | `past_due`と同じ                                                                         | できる                         |
+| `canceled`・`incomplete_expired`（入会済みで、解約済みでない行が1つも無い） | 利用停止         | できない                       | 利用停止の案内画面だけ（#380）                                                           | できる（案内画面だけ見られる） |
+| `incomplete`                                                                | —                | —                              | —                                                                                        | —                              |
+
+- `incomplete`は入会の初回の支払いが終わっていない状態で、`subscriptions`の行は入会の`checkout.session.completed`（支払い済み）で作るため、行としては現れない。入会前かどうかは`users.onboarding_completed`で判定し、入会前の会員はオンボーディングに送る（[[membership]]「Stripe側の解約による利用停止」の判定の順）
+- Stripeの`paused`はv1では起きない（再請求後の設定で「一時停止」を選ばず、`subscriptions.status`のCHECK制約にも無い）。管理者による停止（#206、post-v1）でStripeの一時停止を使う場合は、そのときにCHECK制約とこの表に足す
+- 利用停止の判定は、退会（`deleted_at`）・入会前（`onboarding_completed`）の判定の後に行う。退会でStripeのサブスクリプションを解約しても`customer.subscription.deleted`が届いて`canceled`になるが、その会員は退会済みとして`/withdrawn`に送る
+- **支払い失敗中にしてよい操作**: 進行中の注文の続き（請求書払いの支払い、運営者による請求作成など）は止めない（管理者による停止中の扱いと揃える。[[membership]]）。カートへの追加も止めない（カードを更新すればそのまま注文できるようにする）。プラン変更（#209）は止め、先にカードの更新を促す（支払い失敗中にアップグレードすると、日割りの請求も同じカードで失敗するため）
+- **状態を同期するWebhook**（#377）:
+  - `customer.subscription.updated`: `status`・`current_period_start`/`current_period_end`・`cancel_at_period_end`をStripeの値に更新する。`past_due`になったとき・再請求の成功で`active`に戻ったとき・月額の更新で請求期間が進んだときのいずれもこれで拾う。プラン変更の確定（#209）も同じイベントで判定する
+  - `customer.subscription.deleted`: `status='canceled'`・`canceled_at`を記録する（再請求が尽きた解約・退会による解約のどちらでも届く）
+  - `invoice.payment_failed`は処理しない（下記「支払い失敗の会員への通知」でStripeの自動メールに任せるため。状態は`customer.subscription.updated`で分かる）
+  - 再配信・順序の入れ替わりで古い状態に戻らないよう、`stripe_webhook_events`で冪等にし、Stripeから取り直した最新のSubscriptionで更新する（詳細は#377）
+  - StripeダッシュボードのWebhookエンドポイント（テストモード・本番それぞれ）の購読イベントに`customer.subscription.updated`・`customer.subscription.deleted`を加える
+- **Stripe側の設定**（テストモード・本番それぞれ、ダッシュボードで設定する）:
+  - 再請求（Smart Retries）: 「請求 → 売上回収 → 再試行」で、Stripeの既定（2週間で最大8回）を使う。会員が支払い失敗に気づいてからカードを更新するまでの猶予として2週間あれば足り、それより延ばすと支払われない月額の期間が長くなるため
+  - 再請求がすべて失敗した後: 同じ画面で「サブスクリプションをキャンセルする」を選ぶ（`canceled`にする）。「未払いとしてマーク」（`unpaid`。Stripeは請求書を下書きのまま作り続け、支払いを試みない）・「期日超過のままにする」（`past_due`のまま請求書を作り続ける）・「一時停止」は使わない。解約された会員の扱いを1通りにするため
+  - 支払い失敗時のメール: 「売上回収 → メール」で「カード支払いが失敗した場合にメールを送信」を有効にし、リンク先にStripeのホストするページを選ぶ（会員がアプリにログインしなくても、メールから直接カードを更新して支払える）。テストモードでは、チームメンバーの確認済みのメールアドレスにしか届かない
+  - メニュー名はStripeの公式ドキュメント（[Smart Retries](https://docs.stripe.com/billing/revenue-recovery/smart-retries)・[顧客へのメール](https://docs.stripe.com/billing/revenue-recovery/customer-emails)・[サブスクリプションの仕組み](https://docs.stripe.com/billing/subscriptions/overview)）の表記。画面の表記が違えば、ここを直す
+- **支払い失敗の会員への通知**（2026-11-23決定、#376）: Stripeの自動メール（上記）を使い、`invoice.payment_failed`を受けてResendで自前のメールを送ることはしない。会員への請求書メールもStripeの自動送信に任せている（[[ordering]]「通知」）のと揃い、Webhookの処理を増やさずに済むため。アプリ内の案内は#379の表示で行う
+- **再請求の期限の表示**: 会員画面の案内（#379）には具体的な日付を出さず、「お支払い方法を更新しないと、最初の支払い失敗から2週間ほどでご利用が止まります」程度にとどめる。再請求の日程はStripeが決める（Smart Retriesは失敗の傾向から日時を選ぶ）ため。正確な日付が必要になれば、StripeのInvoiceの`next_payment_attempt`を使う
+
 ### まだ決まっていない・要確認事項
 
 - ✅ ~~月間仕入れ上限（`monthly_limit_amount`）の確定値~~（2026-09-21解決）: 現状ハードコードされている値（starter:30万/basic:100万/standard:500万/pro:2000万/advanced:5000万/premium:1億/enterprise:実質無制限）を正式な暫定値として採用。`member_ranks`テーブル参照への切り替え（issue #210）が完了すれば、以後の変更はDB更新のみで済む
@@ -90,6 +123,8 @@
 ### [[membership]]との境界
 
 会員登録時のプラン選択画面（STARTER〜PREMIUMの6ランクを選択肢として表示する動線）・退会時のサブスクリプション解約・停止中の課金一時停止は[[membership]]の責務。本ドキュメントは「登録後・退会前」の期間における、ランクそのものの管理・変更ルールを扱う。
+
+支払い失敗・Stripe側の解約は、`subscriptions.status`の値ごとに会員に何が起きるか・Webhook・Stripeの設定までを本ドキュメントが扱い、Stripe側の解約による利用停止が退会・停止とどう違うか・再契約や退会をどう扱うかは[[membership]]が扱う。新規注文を止める条件は[[ordering]]にも書く。
 
 ### `catalog.md`（未着手）との境界
 

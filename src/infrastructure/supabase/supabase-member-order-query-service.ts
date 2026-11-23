@@ -7,8 +7,11 @@ import type {
   CompletedOrderItemDto,
   InvoiceRequestedOrderDto,
   MemberOrderQueryService,
+  OrderHistoryDto,
 } from "@/queries/member-order-query-service";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { OrderStatus } from "@/domain/value-objects/order-status";
+import { sumFixedTotal } from "@/domain/services/fixed-total";
 import type { OrderItem } from "@/domain/entities/order-item";
 import {
   ORDER_ITEM_COLUMNS,
@@ -55,6 +58,11 @@ function toItemDto(item: OrderItem): CompletedOrderItemDto {
 // 残りうるので、有効な行（deleted_at IS NULL）の会員の注文だけにする
 // 明細は OrderItem に変換し、後払いかどうかの振り分けを domain（OrderItem.isAfterOrder）に任せる
 const ORDER_SELECT = `id, created_at, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at), order_items(${ORDER_ITEM_COLUMNS})`;
+
+// PostgREST は件数を超える範囲（最後より後のページ）を 416（PGRST103）で返す
+function isRangeNotSatisfiable(error: PostgrestError): boolean {
+  return error.code === "PGRST103";
+}
 
 // URL から来た注文IDが UUID の形でないとき（invalid_text_representation）
 function isInvalidUuid(error: PostgrestError): boolean {
@@ -147,5 +155,70 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
       createdAt: new Date(data.created_at).toISOString(),
       items: afterOrderItems.map(toItemDto),
     };
+  }
+
+  async findOrderHistory({
+    clerkUserId,
+    page,
+    pageSize,
+  }: {
+    clerkUserId: string;
+    page: number;
+    pageSize: number;
+  }): Promise<OrderHistoryDto> {
+    const from = (page - 1) * pageSize;
+    const { data, count, error } = await this.db
+      .from("orders")
+      .select(`status, ${ORDER_SELECT}`, { count: "exact" })
+      .eq("users.clerk_user_id", clerkUserId)
+      .is("users.deleted_at", null)
+      // 同じ日時の注文の並びを固定するため、ID でも並べる
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      if (isRangeNotSatisfiable(error)) {
+        return {
+          orders: [],
+          totalCount: await this.countOrders(clerkUserId),
+          page,
+          pageSize,
+        };
+      }
+      throw error;
+    }
+
+    return {
+      orders: data.map((row) => {
+        const items = (row.order_items as OrderItemRow[]).map(toOrderItem);
+        return {
+          orderId: row.id,
+          createdAt: new Date(row.created_at).toISOString(),
+          status: OrderStatus.of(row.status),
+          fixedTotal: sumFixedTotal(items).amount,
+          includesNegotiable: items.some((i) => i.isNegotiable),
+          itemCount: items.reduce((sum, i) => sum + i.quantity, 0),
+        };
+      }),
+      totalCount: count ?? 0,
+      page,
+      pageSize,
+    };
+  }
+
+  private async countOrders(clerkUserId: string): Promise<number> {
+    const { count, error } = await this.db
+      .from("orders")
+      .select(
+        "id, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at)",
+        {
+          count: "exact",
+          head: true,
+        }
+      )
+      .eq("users.clerk_user_id", clerkUserId)
+      .is("users.deleted_at", null);
+    if (error) throw error;
+    return count ?? 0;
   }
 }

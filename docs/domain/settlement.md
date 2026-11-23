@@ -156,7 +156,7 @@ flowchart TD
 1. 注文自体がキャンセル済み（決済単位が1件も作られる前にキャンセルされた） → `cancelled`
 2. いずれかの決済単位が`limit_exceeded` → `limit_exceeded`
 3. 全ての明細が、`paid`の決済単位に属している（またはキャンセルされた決済単位に属し完了判定から除外されている） → `paid`
-4. 上記以外（1件でも`settlement_id IS NULL`の明細が残っている、または`pending_payment`/`invoice_sent`の決済単位が残っている） → `processing`（マイページでは「一部お支払い手続き中」等の文言で表示する想定）
+4. 上記以外（1件でも`settlement_id IS NULL`の明細が残っている、または`pending_payment`/`invoice_sent`の決済単位が残っている） → `processing`（マイページでは「お支払い手続き中」と表示する。一部の決済単位だけ支払い済みの場合も含むため「未払い」とは書かない。会員向けの表示ラベルは4値とも`src/domain/value-objects/order-status.ts`の`OrderStatus.label()`が正。#364）
 
 ```mermaid
 flowchart TD

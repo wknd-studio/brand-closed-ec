@@ -18,6 +18,12 @@ export default function Header() {
             お気に入り
           </Link>
           <Link
+            href="/orders"
+            className="text-sm text-gray-500 hover:text-gray-900"
+          >
+            注文履歴
+          </Link>
+          <Link
             href="/settings"
             className="text-sm text-gray-500 hover:text-gray-900"
           >

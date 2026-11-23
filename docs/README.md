@@ -24,6 +24,7 @@
 | `adr/`                    | アーキテクチャ決定記録   | 各技術選定の理由・代替案・トレードオフを記録する。AI が既存の技術決定と矛盾する提案をしないための参照元                                                                             | ✅ 完成     |
 | `seed-data.md`            | シードデータ一覧         | `scripts/seed-users.ts` / `scripts/seed-products.ts` が投入するテストアカウント・商品カタログの一覧                                                                                 | ✅ 完成     |
 | `runbooks/`               | 運用手順                 | Sentry 等の通知を受けた運営者が行う手作業の手順                                                                                                                                     | ✅ 随時追加 |
+| `manual-check.md`         | PRの動作確認             | PR本文の「動作確認の手順」の書き方と、人間がマージ前（メインのチェックアウト）・マージ後（stg）に確かめる手順。`needs-manual-check` ラベルの運用                                    | ✅ 完成     |
 | `archive/`                | 凍結済みドキュメント     | `service-spec.md` ・`user-stories.md` ・`data-model.md` ・`order-flow.md` ・`operations-order.md`。移行時点のスナップショットとして保持し直接編集しない。今後の変更は`specs/`で行う | 🔒 凍結済み |
 
 トピックごとの「今の正」は `overview.md` を参照。個別の変更は `specs/NNN-topic/` に積み上げる（`spec-driven-workflow.md` 参照）。
