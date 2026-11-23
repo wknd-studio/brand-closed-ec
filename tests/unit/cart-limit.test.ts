@@ -5,7 +5,6 @@ import {
   canChangeCartQuantity,
   monthlyLimitStatus,
 } from "@/domain/services/cart-limit";
-import { MemberRank } from "@/domain/value-objects/member-rank";
 
 const lines = [
   { productId: "p1", unitPrice: 10_000, quantity: 2 },
@@ -77,6 +76,18 @@ describe("canAddToCart", () => {
         quantity: 100,
         confirmedAmount: 200_000,
         monthlyLimit: 100_000,
+      })
+    ).toBe(true);
+  });
+
+  it("上限が無制限（null）なら、どれだけ大きな金額でも追加できる", () => {
+    expect(
+      canAddToCart({
+        lines,
+        unitPrice: 1_000_000_000,
+        quantity: 1_000,
+        confirmedAmount: 1_000_000_000,
+        monthlyLimit: null,
       })
     ).toBe(true);
   });
@@ -171,6 +182,18 @@ describe("canChangeCartQuantity", () => {
     ).toBe(true);
   });
 
+  it("上限が無制限（null）なら、数量をいくら増やしても変更できる", () => {
+    expect(
+      canChangeCartQuantity({
+        lines,
+        productId: "p1",
+        newQuantity: 1_000_000,
+        confirmedAmount: 1_000_000_000,
+        monthlyLimit: null,
+      })
+    ).toBe(true);
+  });
+
   it("上限0は上限無しとして扱わず、数量を増やせない（追加と同じ扱い）", () => {
     expect(
       canChangeCartQuantity({
@@ -216,13 +239,13 @@ describe("monthlyLimitStatus", () => {
     ).toEqual({ isUnlimited: false, remaining: -5_000, isOver: true });
   });
 
-  it("無制限のランクの上限なら、無制限とする", () => {
+  it("上限が無制限（null）なら、無制限とし、残量・超過は持たない", () => {
     expect(
       monthlyLimitStatus({
         lines,
         confirmedAmount: 80_000,
-        monthlyLimit: MemberRank.of("enterprise").getMonthlyLimit().amount,
-      }).isUnlimited
-    ).toBe(true);
+        monthlyLimit: null,
+      })
+    ).toEqual({ isUnlimited: true });
   });
 });

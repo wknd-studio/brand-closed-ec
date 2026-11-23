@@ -37,6 +37,7 @@ import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
@@ -101,7 +102,7 @@ function makeOrder() {
     shippingAddress: addressSnapshot,
     billingAddress: addressSnapshot,
     rankAtOrder: MemberRank.of("standard"),
-    monthlyLimitAtOrder: Money.of(5_000_000),
+    monthlyLimitAtOrder: MonthlyLimit.of(5_000_000),
     items: [
       reconstituteOrderItem({
         id: "item-paid",
