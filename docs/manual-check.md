@@ -37,7 +37,7 @@ ngrok・Stripe CLI はメインのチェックアウトの `task dev` にしか�
 2. 「準備」に書かれた `supabase db reset`・`task supabase:seed-users` 等を実行する
 3. `task dev` で起動し、ngrok のURL（`https://buffing-flaccid-nutty.ngrok-free.dev`）を開く
 4. 「アカウント」のメールアドレスでログインし（パスワードは Doppler の `SEED_USER_PASSWORD`）、「手順と期待する結果」を順に確かめる
-5. 確かめ終わったら `needs-manual-check` ラベルを外す（`gh pr edit <PR番号> --remove-label needs-manual-check`）。問題があればPRにコメントする
+5. 確かめ終わったら `needs-manual-check` ラベルを外す（PRの画面の Labels から外す。CLIなら `gh api -X DELETE repos/{owner}/{repo}/issues/<PR番号>/labels/needs-manual-check`。`gh pr edit --remove-label` は Projects (classic) の廃止のエラーで失敗することがある）。問題があればPRにコメントする
 6. メインのチェックアウトを `develop` に戻す: `git switch develop`
 
 ## stg で確かめる（`要（stg）`）
@@ -47,4 +47,4 @@ ngrok・Stripe CLI はメインのチェックアウトの `task dev` にしか�
 1. マージ済みで未確認のPRを出す: `gh pr list --state merged --label needs-manual-check`
 2. develop への push で動いた `Deploy (staging)` が終わっていることを確かめる
 3. 1のPRを順に開き、stg（`https://brand-closed-ec-stg.white-night-bb71.workers.dev/`。`docs/collaboration.md`）で「アカウント」のメールアドレスでログインし（パスワードは同じ `SEED_USER_PASSWORD`）、「手順と期待する結果」を確かめる。stg では「準備」のうち DB の操作は要らない（マイグレーションは `Deploy (staging)` が適用する）
-4. 確かめ終わったPRから `needs-manual-check` ラベルを外す。問題があれば修正のissueを起票する
+4. 確かめ終わったPRから `needs-manual-check` ラベルを外す（外し方はマージ前と同じ）。問題があれば修正のissueを起票する
