@@ -16,6 +16,7 @@ import {
   clerkFrontendApiHost,
   formatResults,
   handledEventTypes,
+  parseJsonWithoutLeak,
   parseRemoteMigrations,
   parseTarget,
   requireValues,
@@ -568,5 +569,36 @@ describe("requireValues", () => {
         ["STRIPE_SECRET_KEY", "NEXT_PUBLIC_APP_URL"]
       )
     ).toBeNull();
+  });
+});
+
+describe("checkLiveKeys の値の出し方", () => {
+  it("決まった接頭辞でない値は「不明な形式」、無ければ「未設定」とだけ出す", () => {
+    const [result] = checkLiveKeys({
+      STRIPE_SECRET_KEY: "abc_def_secretvalue",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "",
+      CLERK_SECRET_KEY: "sk_live_x",
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_x",
+    });
+    expect(result.detail).toBe(
+      "STRIPE_SECRET_KEY（不明な形式） / NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY（未設定）"
+    );
+  });
+});
+
+describe("checkValuesDiffer の区分の名前", () => {
+  it("config の名前を付けると、区分の名前に入る", () => {
+    expect(
+      checkValuesDiffer({ K: "a" }, { K: "a" }, ["K"], "prod")[0].name
+    ).toBe("prod: 値が stg と違う");
+  });
+});
+
+describe("parseJsonWithoutLeak", () => {
+  it("読めない JSON は、入力の断片を含まない決まったメッセージで失敗する", () => {
+    expect(() =>
+      parseJsonWithoutLeak("sk_live_secret{", "Doppler の出力")
+    ).toThrow(/^Doppler の出力 を JSON として読めない$/);
+    expect(parseJsonWithoutLeak('{"a":1}', "x")).toEqual({ a: 1 });
   });
 });
