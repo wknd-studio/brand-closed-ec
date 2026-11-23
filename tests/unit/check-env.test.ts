@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkClerkInstance,
   checkClerkWebhook,
+  checkEmptyValues,
   checkExpectedValues,
   checkLiveKeys,
   checkMigrations,
@@ -17,6 +18,7 @@ import {
   handledEventTypes,
   parseRemoteMigrations,
   parseTarget,
+  requireValues,
   type CheckResult,
 } from "../../scripts/check-env";
 
@@ -522,5 +524,41 @@ describe("parseRemoteMigrations", () => {
         'Connecting...\n{"migrations":[{"local":"1","remote":"1"},{"local":"2","remote":""}]}'
       )
     ).toEqual(["1"]);
+  });
+});
+
+describe("checkEmptyValues", () => {
+  it("名前だけあって値が空のものを NG にする", () => {
+    const results = checkEmptyValues("prod", { A: "x", B: "", C: "" });
+    expect(statuses(results)).toEqual(["ng prod: 値が空"]);
+    expect(results[0].detail).toBe("B, C");
+  });
+
+  it("空が無ければ OK", () => {
+    expect(checkEmptyValues("prod", { A: "x" })[0].status).toBe("ok");
+  });
+});
+
+describe("requireValues", () => {
+  it("API を読む前に、要る値が空・URL でないものを NG にする", () => {
+    const [result] = requireValues(
+      "Stripe",
+      { STRIPE_SECRET_KEY: "", NEXT_PUBLIC_APP_URL: "not a url" },
+      ["STRIPE_SECRET_KEY", "NEXT_PUBLIC_APP_URL"]
+    )!;
+    expect(result.status).toBe("ng");
+    expect(result.detail).toContain("STRIPE_SECRET_KEY が空");
+    expect(result.detail).toContain("NEXT_PUBLIC_APP_URL が URL でない");
+    expect(result.detail).not.toContain("not a url");
+  });
+
+  it("そろっていれば null（API を読む）", () => {
+    expect(
+      requireValues(
+        "Stripe",
+        { STRIPE_SECRET_KEY: "sk", NEXT_PUBLIC_APP_URL: "https://a.example" },
+        ["STRIPE_SECRET_KEY", "NEXT_PUBLIC_APP_URL"]
+      )
+    ).toBeNull();
   });
 });
