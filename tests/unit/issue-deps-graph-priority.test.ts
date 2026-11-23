@@ -218,7 +218,7 @@ describe("toMermaid: 優先度", () => {
       hideNonDev: false,
       maxPriority: "P0",
     });
-    expect(m).toContain('I3["P2 #3 issue 3 ↓3（範囲外）"]');
+    expect(m).toContain('I3["P2 #3 issue 3 ↓2（範囲外）"]');
     expect(m).toContain("class I3 out-of-range");
     expect(m).not.toContain("class I2 out-of-range");
     expect(m).not.toContain("I4 --> I3");
