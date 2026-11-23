@@ -36,6 +36,7 @@ const USES_CLI: Record<string, RegExp> = {
   supabase:
     /(^|[\s'"(|&;])supabase (start|stop|status|db|link|gen|migration)\b/m,
   doppler: /(^|[\s'"(|&;])doppler (run|secrets)\b/m,
+  gitleaks: /(^|[\s'"(|&;])gitleaks (git|dir)\b/m,
 };
 
 // 今の版のまま固定する（#546 の時点の版）
@@ -56,6 +57,10 @@ const EXPECTED_VERSIONS: Record<string, Record<string, string>> = {
     "deploy.yml/e2e": "3.77.1",
     "product-data-sync.yml/scheduled-sync": "3.77.1",
   },
+  // #663 の時点の版
+  gitleaks: {
+    "secret-scan.yml/gitleaks": "8.30.1",
+  },
 };
 
 function installIndex(steps: Step[], tool: string): number {
@@ -69,12 +74,14 @@ function installIndex(steps: Step[], tool: string): number {
 
 describe("CI の CLI のインストール", () => {
   it.each(workflows.map((w) => w.file))(
-    "%s は supabase/setup-cli・dopplerhq/cli-action を使わない",
+    "%s は supabase/setup-cli・dopplerhq/cli-action・gitleaks-action を使わない",
     (file) => {
       const raw = workflows.find((w) => w.file === file)!.raw;
       expect(raw).not.toMatch(/supabase\/setup-cli/);
       expect(raw).not.toMatch(/dopplerhq\/cli-action/i);
       expect(raw).not.toMatch(/cli\.doppler\.com/);
+      // Organization のリポジトリでは有料のライセンスキーが要る（#663）
+      expect(raw).not.toMatch(/gitleaks\/gitleaks-action/);
     }
   );
 

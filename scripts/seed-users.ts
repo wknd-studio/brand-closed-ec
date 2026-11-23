@@ -4,9 +4,9 @@
  * 終えた状態のusersの行を、有効な行があれば更新し、無ければ作る（べき等・何度実行しても同じ結果）。
  * 管理者はClerkの publicMetadata.role = "admin" だけで、usersの行は持たない。
  * 1件でも失敗すれば、残りを続けたうえで終了コード1で終わる。
- * Clerk/Sanityはlocal/stgで共用のため環境分岐は不要だが、Supabaseはlocal/stgで
- * プロジェクトが分かれているため、doppler configの切り替えで接続先を変える。
- * パスワードは環境変数 SEED_USER_PASSWORD（Dopplerのdev・stgに同じ値）から読み、
+ * Clerk・Supabaseともlocal/stgでインスタンス・プロジェクトが分かれている（#686）ため、
+ * doppler configの切り替えで両方の接続先を変える（コード上の環境分岐は不要）。
+ * パスワードは環境変数 SEED_USER_PASSWORD（Dopplerのdev・stg_deployに同じ値）から読み、
  * 既存のアカウントも毎回その値に更新する。未設定ならClerk・Supabaseに接続せずに止まる。
  *
  * 実行:

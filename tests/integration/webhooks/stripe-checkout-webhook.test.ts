@@ -12,6 +12,7 @@ import type { Database } from "@/types/database.types";
 import { placeOrder } from "@/use-cases/place-order";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
@@ -163,6 +164,7 @@ beforeAll(async () => {
       paymentGateway,
       notificationService,
       errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+      memberRankRepo: new SupabaseMemberRankRepository(supabase),
     }
   );
 });

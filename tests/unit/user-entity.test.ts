@@ -49,13 +49,6 @@ describe("User", () => {
     });
   });
 
-  describe("getMonthlyLimit()", () => {
-    it("ランクに対応した月次上限 Money を返す", () => {
-      const user = makeUser({ rank: MemberRank.of("standard") });
-      expect(user.getMonthlyLimit().amount).toBe(5_000_000);
-    });
-  });
-
   describe("withdraw()", () => {
     const now = new Date(2026, 9, 24, 12, 0, 0);
     const unresolved = (status: "invoice_sent" | "limit_exceeded") =>
