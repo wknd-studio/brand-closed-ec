@@ -2,7 +2,7 @@
 
 子セッションがPR本文の「動作確認の手順」に確かめ方を書き、人間はPRを開けば各ワークツリーのClaudeに聞かずに確かめられるようにする（issue #711）。
 
-マイグレーションを含まない develop 向けの `feature/*` のPRには、stg の DB・Clerk・Stripe・Sanity を共有したまま、PRのコードだけを動かすプレビューURLが出る（issue #727。仕組みは `docs/cicd.md` の「PRごとのプレビュー」）。URLは `Preview Deploy` ワークフローがPRにコメントする。DB（スキーマ）・Webhook の送り先は stg と同じため、マイグレーション・Webhook の変更を含むPRは、プレビューでは確かめられない。
+マイグレーションを含まない develop 向けの `feature/*` のPRには、stg の DB・Clerk・Stripe・Sanity を共有したまま、PRのコードだけを動かすプレビューURLが出る（issue #727。仕組みは `docs/cicd.md` の「PRごとのプレビュー」）。URLは `Preview Deploy` ワークフローがPRにコメントし、PRの「View deployment」（会話の流れとマージボタンの上の欄）にも出る。DB（スキーマ）・Webhook の送り先は stg と同じため、マイグレーション・Webhook の変更を含むPRは、プレビューでは確かめられない。
 
 ## PR本文の「動作確認の手順」
 
@@ -37,7 +37,7 @@ CIの `PR Review Summary`（`scripts/ci/check-pr-review-summary.sh`）が、手�
 
 マイグレーションを含まない `feature/*` のPR（`Preview Deploy` ワークフローのコメントにURLが出ているPR）。
 
-1. PRのコメント「プレビュー」のURLを開く。コメントのコミットがPRの最新のコミットであることを確かめる（push の後は数分で更新される）
+1. PRの「View deployment」（マージボタンの上の欄、または会話の流れの最新のコミットの下）か、コメント「プレビュー」のURLを開く。「View deployment」は最新のコミットのデプロイだけが出る。コメントで開くときは、コメントのコミットがPRの最新のコミットであることを確かめる（push の後は数分で更新される）
 2. 「アカウント」のメールアドレスでログインし（stg と同じアカウント。パスワードは Doppler の `SEED_USER_PASSWORD`）、「手順と期待する結果」を順に確かめる。DB の準備（`supabase db reset` 等）は要らない
 3. 確かめ終わったら `needs-manual-check` ラベルを外す（外し方は下のメインのチェックアウトの5と同じ）。問題があればPRにコメントする
 

@@ -51,12 +51,19 @@ push (develop・main)
 
 develop 向けの同じリポジトリの `feature/*` のPRに push すると、そのPRのコードを別名の Worker（`brand-closed-ec-pr-<PR番号>`）に出し、URL（`https://brand-closed-ec-pr-<PR番号>.white-night-bb71.workers.dev`）をPRにコメントする（#727）。push のたびに同じURLへ上書きし、コメントも更新する。PRを閉じたら（マージ・クローズ）Worker を削除する。人間の確かめ方は `docs/manual-check.md`。
 
+デプロイしたら、PRの head のコミットに GitHub の Deployment も記録する（#731）。PRの会話の流れとマージボタンの上の欄に「View deployment」が出る。
+
+- 環境名はPRごと（`preview-pr-<PR番号>`、`transient_environment`）。共通の名前にすると、別のPRのデプロイで前のPRの表示が inactive になるため
+- push のたびに新しいコミットへ記録し、前の push の Deployment を inactive にする。PRを閉じた・マイグレーションを含むようになってプレビューを消したら、そのPRの Deployment をすべて inactive にする（`scripts/ci/preview.ts` の `recordPreviewDeployment`・`deactivatePreviewDeployments`）
+- ジョブの `environment:` の url で記録しないのは、`workflow_run` のジョブが develop の上で動き、記録が develop のコミットに付いてPRに出ないため
+- PRごとの environment（Settings → Environments の `preview-pr-<番号>`）は消さずに残る。削除にはリポジトリの管理（Administration）の権限が要り、`GITHUB_TOKEN` には付けられないため。環境の保護ルールも secrets も無いため、残っても何も読めない
+
 2つのワークフローに分けている。Cloudflare のトークン（`CLOUDFLARE_API_TOKEN`）はアカウント単位で本番の Worker にも届くため、PRのコードを動かすワークフローには渡さない。
 
-| ワークフロー                           | きっかけ                             | 定義・コード                                        | すること                                                                                                                                                                                                                                    |
-| -------------------------------------- | ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Preview（`preview.yml`）               | PRの作成・push・再オープン・クローズ | PR側（PRのコードを動かす）                          | stg の値だけでビルドし、成果物（`preview-build`）と PR番号（`preview-pr`）を artifact に上げる。書き込みの権限・Cloudflare のトークンを持たない                                                                                             |
-| Preview Deploy（`preview-deploy.yml`） | Preview の完了（`workflow_run`）     | 既定のブランチ（develop）。PR側から書き換えられない | PRの今の状態を API で読み（`scripts/ci/preview.ts` の `decidePreviewAction`）、デプロイ・削除・コメントをする。PRのコードは動かさず、成果物はそのまま Worker に上げるだけ（展開して `.open-next` だけ・シンボリックリンク無しかを確かめる） |
+| ワークフロー                           | きっかけ                             | 定義・コード                                        | すること                                                                                                                                                                                                                                                       |
+| -------------------------------------- | ------------------------------------ | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preview（`preview.yml`）               | PRの作成・push・再オープン・クローズ | PR側（PRのコードを動かす）                          | stg の値だけでビルドし、成果物（`preview-build`）と PR番号（`preview-pr`）を artifact に上げる。書き込みの権限・Cloudflare のトークンを持たない                                                                                                                |
+| Preview Deploy（`preview-deploy.yml`） | Preview の完了（`workflow_run`）     | 既定のブランチ（develop）。PR側から書き換えられない | PRの今の状態を API で読み（`scripts/ci/preview.ts` の `decidePreviewAction`）、デプロイ・削除・コメント・Deployment の記録をする。PRのコードは動かさず、成果物はそのまま Worker に上げるだけ（展開して `.open-next` だけ・シンボリックリンク無しかを確かめる） |
 
 - **Preview Deploy のデプロイの間、ランナーに平文のシークレットのファイルを置かない**: `wrangler deploy` は成果物の `.open-next/worker.js` を esbuild でまとめる。成果物はPRのコードが作れるため、絶対パスの import でランナーのファイルを取り込める。checkout は `persist-credentials: false`、トークンは環境変数だけで渡す
 - **Preview Deploy は develop にマージされてから動く**: `workflow_run` のワークフローは既定のブランチの定義だけが動くため。Preview Deploy 自体を変えるPRでは、その変更はプレビューで試せない（マージ後の次のPRで確かめる）
@@ -74,7 +81,18 @@ develop 向けの同じリポジトリの `feature/*` のPRに push すると、
 
 Cloudflare の Workers の Version の preview URL（`wrangler versions upload --preview-alias`）は、Durable Objects を持つ Worker では作られない。この Worker は OpenNext のキャッシュ用に Durable Objects を持つ。残る候補のうち、PRごとに別名の Worker を `wrangler deploy --name` で出す方にした。
 
-- stg と同じ「`wrangler secret bulk` → `wrangler deploy`」で出すため、OpenNext のビルドがそのまま動くと分かっている。Worker がまだ無ければ `wrangler secret bulk` が作る
+- stg と同じ `wrangler deploy` で出すため、OpenNext のビルドがそのまま動くと分かっている。シークレットは、stg の「`wrangler secret bulk` → `wrangler deploy`」と違い、`wrangler deploy --secrets-file` でデプロイと一緒に上げる（`scripts/ci/deploy-preview-worker.sh`。Worker がまだ無ければこれが作る）。前は stg と同じ形にしていたが、新しいPRの最初のデプロイで失敗した（#731。下）
+
+#### 新しいPRの最初のデプロイの失敗（#731）
+
+PR #720 の最初のプレビューで、`wrangler deploy` がコードを上げ終えた直後に「This Worker does not exist on your account. [code: 10007]」で失敗し、再実行すると成功した。
+
+- 失敗した呼び出しは `GET /accounts/<id>/workers/workers/<名前>`。wrangler 4.166.0 の `wrangler deploy` が、コードを上げた後に workers.dev の設定を読むところ（`subdomainDeploy` → `getWorkerSubdomain`）で、404 は再試行しない
+- その前に `wrangler secret bulk` が、Worker が無いため中身の無いコードの下書きの Worker を `PUT /workers/scripts/<名前>` で作っていた（wrangler の `createDraftWorker`）
+- 使い捨ての Worker（Durable Objects・assets を含む同じ形の設定）で、`secret bulk` → `deploy` と `deploy --secrets-file` を11回試したが、どちらも再現しなかった。作成の直後に新しい Workers の API から一時的に見えないことがある、と見ている
+- `wrangler deploy --secrets-file` は、Cloudflare のドキュメント（[Upload secrets alongside code](https://developers.cloudflare.com/workers/configuration/secrets/#upload-secrets-alongside-code)）と wrangler 自身のエラー文が、新しい Worker をシークレットと一緒に出す方法として案内している。下書きの Worker を作らず、シークレットの無い Worker が動く瞬間も無い。ファイルに含めなかったシークレットは前の版から残る（`secret bulk` と同じ）
+- それでも 10007 が出たときに限り、15秒空けて3回まで試す（実際に再実行で成功したため）。ほかのエラーは再試行しない
+- シークレットはランナーにファイルとして置かず（上の決まり）、スクリプトの変数に持って試すたびに `--secrets-file /dev/stdin` へ流す
 - Cloudflare の Previews（`wrangler preview`。2026-11 時点で open beta）は、Durable Objects をプレビューごとに分けるが、設定ファイルに `previews` の節で Durable Objects のバインディングを書き直す必要があり、`--json` の出力の形・シークレットの入れ方（作成前に入れられるか）がドキュメントに無い
 - 上限: Workers の無料プランでも、アカウントの Worker の数は 100 まで。開いているPRの数だけ増え、閉じたら消える
 
@@ -103,7 +121,7 @@ doppler configs tokens create github-actions-preview-worker -p brand-closed-ec -
 
 ### 残ったプレビューを消す
 
-PRを閉じたときの削除が失敗した（取り消された）ら、`Preview Deploy` の失敗した実行を再実行するか、手元で消す。PRを閉じる前に向け先を develop 以外に変えたPRも、Preview Deploy が扱わないため残る。`scripts/ci/delete-preview-worker.sh` は、プレビューの名前の形（`brand-closed-ec-pr-<数字>`）以外は消さない。
+PRを閉じたときの削除が失敗した（取り消された）ら、`Preview Deploy` の失敗した実行を再実行するか、手元で消す（手元で消したときは、PRの Deployment は active のまま残る。`Preview Deploy` を再実行すれば inactive になる）。PRを閉じる前に向け先を develop 以外に変えたPRも、Preview Deploy が扱わないため残る。`scripts/ci/delete-preview-worker.sh` は、プレビューの名前の形（`brand-closed-ec-pr-<数字>`）以外は消さない。
 
 ```bash
 # 残っているプレビューの Worker の一覧
