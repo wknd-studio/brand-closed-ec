@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, type ReactNode } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { selectPlan, type SelectPlanResult } from "./actions";
@@ -47,10 +47,18 @@ const PLANS = MemberRank.selfServiceRanks().map((rank) => ({
   ...PLAN_LABELS[rank],
 }));
 
+export type PlanFee = { monthlyFee: string; initialFee: string };
+
 export default function PlanSelector({
   isCorporate,
+  fees,
+  children,
 }: {
   isCorporate: boolean;
+  // 申込みの最終確認として、プランごとの月額・初期費用（税込）を出す（#724）
+  fees: Record<MemberRankValue, PlanFee>;
+  // 確定ボタンの直前に出す、申込みの条件
+  children: ReactNode;
 }) {
   const { session } = useClerk();
   const router = useRouter();
@@ -219,10 +227,15 @@ export default function PlanSelector({
             <div>
               <p className="font-medium">{plan.label}</p>
               <p className="text-sm text-gray-500">{plan.description}</p>
+              <p className="text-sm tabular-nums">
+                月額 ¥{fees[plan.id].monthlyFee}（税込）・初期費用 ¥
+                {fees[plan.id].initialFee}（税込）
+              </p>
             </div>
           </label>
         ))}
       </div>
+      {children}
       <button
         type="submit"
         disabled={isPending}
