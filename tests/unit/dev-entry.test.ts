@@ -201,14 +201,40 @@ describe("dev-entry.sh（入口の確保）", () => {
     expect(run(mainDir, "dev-entry.sh", ["dev"]).status).not.toBe(0);
   });
 
-  it("持ち主のワークツリーが削除されていれば、プロセスが動いていても回収して確保する", () => {
-    expect(run(worktreeDir, "dev-entry.sh", ["dev"]).status).toBe(0);
+  it("持ち主のワークツリーが削除され、プロセスも終了していれば、回収して確保する", () => {
+    expect(run(worktreeDir, "dev-entry.sh", ["dev"], DEAD_PID).status).toBe(0);
     rmSync(worktreeDir, { recursive: true, force: true });
     const result = run(mainDir, "dev-entry.sh", ["dev"]);
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(path.join(entryDir(), "owner"), "utf8").trim()).toBe(
       mainDir
     );
+  });
+
+  it("持ち主のワークツリーが削除されても、プロセス（別ウィンドウの ngrok 等）が残っていれば回収せず、task dev:clean を案内して止まる", () => {
+    expect(run(worktreeDir, "dev-entry.sh", ["dev"]).status).toBe(0);
+    rmSync(worktreeDir, { recursive: true, force: true });
+    const result = run(mainDir, "dev-entry.sh", ["dev"]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(worktreeDir);
+    expect(result.stderr).toContain("task dev:clean");
+  });
+
+  it("削除済みの場所のプロセスが残っていても、別の場所の task dev:clean は止まらずに入口を返せる", () => {
+    expect(run(worktreeDir, "dev-entry.sh", ["dev"]).status).toBe(0);
+    rmSync(worktreeDir, { recursive: true, force: true });
+    const clean = run(mainDir, "dev-entry.sh", ["dev:clean"]);
+    expect(clean.status, clean.stderr).toBe(0);
+    const release = run(mainDir, "dev-entry.sh", ["--release"]);
+    expect(release.status, release.stderr).toBe(0);
+    expect(existsSync(entryDir())).toBe(false);
+  });
+
+  it("確保の直後で持ち主がまだ記録されていなければ、使用中として扱う（回収しない）", () => {
+    mkdirSync(entryDir());
+    const result = run(mainDir, "dev-entry.sh", ["dev"]);
+    expect(result.status).not.toBe(0);
+    expect(existsSync(entryDir())).toBe(true);
   });
 });
 
@@ -323,6 +349,16 @@ describe("dev-run.sh（転送先のポート）", () => {
     expect(seed.stdout).toMatch(
       /^with-worktree-db.sh pnpm -s tsx scripts\/seed-if-missing.ts$/m
     );
+  });
+
+  it("メインのチェックアウトの supabase-stop は今までどおり Supabase を止め、ワークツリーでは止めない", () => {
+    const main = run(mainDir, "dev-run.sh", ["supabase-stop"]);
+    const wt = run(worktreeDir, "dev-run.sh", ["supabase-stop"]);
+    expect(main.status, main.stderr).toBe(0);
+    expect(main.stdout).toMatch(/^supabase stop$/m);
+    expect(wt.status, wt.stderr).toBe(0);
+    expect(wt.stdout).toBe("");
+    expect(wt.stderr).toContain("worktree-db-stop.sh");
   });
 
   it("知らないサブコマンドはエラーで止まる", () => {
