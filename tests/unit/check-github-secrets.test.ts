@@ -52,10 +52,12 @@ describe("findUnusedSecrets", () => {
 });
 
 describe("checkDeploymentBranches", () => {
-  it("production は main、staging は develop だけ", () => {
+  it("production は main、staging は develop、preview は feature/* だけ", () => {
     expect(EXPECTED_DEPLOYMENT_BRANCHES).toEqual({
       production: ["main"],
       staging: ["develop"],
+      // PRごとのプレビュー（#727）。Dependabot のブランチ（dependabot/*）からは stg の値を読めない
+      preview: ["feature/*"],
     });
   });
 
@@ -65,6 +67,7 @@ describe("checkDeploymentBranches", () => {
         [
           { name: "production", restricted: true, branches: ["main"] },
           { name: "staging", restricted: true, branches: ["develop"] },
+          { name: "preview", restricted: true, branches: ["feature/*"] },
         ],
         EXPECTED_DEPLOYMENT_BRANCHES
       )
@@ -76,9 +79,9 @@ describe("checkDeploymentBranches", () => {
       [
         { name: "production", restricted: false, branches: [] },
         { name: "staging", restricted: true, branches: ["develop", "main"] },
-        { name: "preview", restricted: true, branches: [] },
+        { name: "other", restricted: true, branches: [] },
       ],
-      { ...EXPECTED_DEPLOYMENT_BRANCHES, qa: ["develop"] }
+      { production: ["main"], staging: ["develop"], qa: ["develop"] }
     );
     expect(problems).toEqual([
       "production: デプロイできるブランチが制限されていない（期待: main）",
