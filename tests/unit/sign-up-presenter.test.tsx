@@ -114,7 +114,7 @@ describe("SignUpPresenter", () => {
     expect(container.querySelector("header button")).toBeNull();
   });
 
-  it("Clerkの登録フォームに共通の見た目を当て、見出しとサインインへのリンクを隠す", () => {
+  it("Clerkの登録フォームに共通の見た目を当て、登録フォームの見出しとサインインへのリンクを隠す", () => {
     render();
 
     // 共通の指定は残したうえで、効かないものを!付きで足す（#757）
@@ -125,7 +125,9 @@ describe("SignUpPresenter", () => {
       expect(signUpAppearance?.elements[element]).toContain(className);
     }
     expect(signUpAppearance?.elements).toMatchObject({
-      header: "!hidden",
+      // 隠すのは登録フォーム（signUp.continue）の見出しだけ。取り消し済みの招待で出る
+      // 「アクセス制限」（signUp.restrictedAccess）の見出しは隠さない
+      header: "[&:has([data-localization-key^='signUp.continue.'])]:!hidden",
       // サインインへのリンクを押すとticketが引き継がれてサインアップへ戻されるため（既存の挙動）
       footerAction: "!hidden",
     });
