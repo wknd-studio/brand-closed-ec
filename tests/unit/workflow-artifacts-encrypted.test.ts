@@ -20,6 +20,10 @@ const EXEMPT: Record<string, string> = {
     "機械的な変更の再実行結果のMarkdownで、同じ内容をPRのコメントに公開している（シークレットを読まない）",
   "issue-deps-graph.yml/deploy/github-pages":
     "依存グラフのページで、GitHub Pagesとして公開するためのもの",
+  "preview.yml/record/preview-pr":
+    "PR番号だけ（シークレットを読まない）。preview-deploy.yml が API で読んだPRの状態と照らして使う",
+  "preview.yml/build/preview-build":
+    "プレビューのビルドの成果物で、そのままプレビューの Worker に上げてブラウザに配る。埋め込まれるのは NEXT_PUBLIC_* だけ（サーバー側のシークレットは実行時に Worker の secrets から読む）。preview-deploy.yml が復号するには CI に秘密鍵を置くことになるため暗号化しない",
 };
 
 // 暗号化したファイルを書き出すスクリプト
@@ -90,6 +94,7 @@ describe(".github/workflows/ のアーティファクトのアップロード", 
       expect.arrayContaining([
         "deploy.yml/e2e-pr/playwright-report-pr-${{ github.run_attempt }}",
         "deploy.yml/e2e/playwright-report-stg-${{ github.run_attempt }}",
+        "deploy.yml/smoke-prod/playwright-report-prod-${{ github.run_attempt }}",
         ...Object.keys(EXEMPT),
       ])
     );

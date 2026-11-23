@@ -108,6 +108,7 @@ function makeUser() {
     onboardingCompleted: true,
     deletedAt: null,
     stripeCustomerId: null,
+    createdAt: new Date(2026, 0, 1),
   });
 }
 

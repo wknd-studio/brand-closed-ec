@@ -17,6 +17,7 @@ const supabase = createClient<Database>(
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000010";
 const TEST_CLERK_ID = "clerk_test_infra_001";
+const TEST_USER_CREATED_AT = "2026-01-15T03:00:00.000Z";
 
 // 退会済み行と有効な行の併存（部分UNIQUEが許す）・save時の衝突・insertIfAbsent用
 const COEXIST_CLERK_ID = "clerk_test_infra_coexist";
@@ -51,6 +52,7 @@ function newUser(
     onboardingCompleted: false,
     deletedAt: null,
     stripeCustomerId: null,
+    createdAt: new Date(),
     ...overrides,
   });
 }
@@ -81,6 +83,7 @@ beforeAll(async () => {
     onboarding_completed: true,
     billing_anchor_day: 10,
     initial_fee_paid_rank_code: "standard",
+    created_at: TEST_USER_CREATED_AT,
   });
 });
 
@@ -100,6 +103,11 @@ describe("SupabaseUserRepository", () => {
       expect(user!.email).toBe("infra-test@example.com");
       expect(user!.rank.value).toBe("basic");
       expect(user!.initialFeePaidRank?.value).toBe("standard");
+    });
+
+    it("created_at を入会日時（createdAt）として復元する", async () => {
+      const user = await repo.findByClerkUserId(TEST_CLERK_ID);
+      expect(user!.createdAt).toEqual(new Date(TEST_USER_CREATED_AT));
     });
 
     it("存在しないユーザーは null を返す", async () => {

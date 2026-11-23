@@ -68,6 +68,7 @@ const user = reconstituteUser({
   onboardingCompleted: true,
   deletedAt: null,
   stripeCustomerId: null,
+  createdAt: new Date(2026, 0, 1),
 });
 
 const settlement = reconstituteOrderSettlement({
