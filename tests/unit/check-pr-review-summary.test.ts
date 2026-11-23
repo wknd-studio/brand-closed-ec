@@ -42,10 +42,36 @@ function summary(items: {
     `- **一番危ない箇所**: ${items.risk ?? "`scripts/ci/check-pr-review-summary.sh:20` 判定が緩いと空欄を通す"}`,
     `- **人間に判断してほしいこと**: ${items.decision ?? "なし"}`,
     "",
+    manualCheck({}),
+    "",
     "## 目的（1行）",
     "",
     "要点を先に読めるようにする",
   ].join("\n");
+}
+
+// 「動作確認の手順」の節を組み立てる（#711）。手順は番号付きの続きの行に書く
+function manualCheck(items: {
+  need?: string;
+  prep?: string;
+  account?: string;
+  steps?: string;
+}) {
+  return [
+    "## 動作確認の手順",
+    "",
+    "<!-- 人間がPRを開けば聞かずに確かめられるように書く -->",
+    "",
+    `- **手動確認**: ${items.need ?? "要（マージ前）"}`,
+    `- **準備**: ${items.prep ?? "ブランチ `feature/711-pr-manual-check`。`supabase db reset` は不要"}`,
+    `- **アカウント**: ${items.account ?? "info+test_admin1@wknd-studio.com"}`,
+    `- **手順と期待する結果**:${items.steps ?? "\n  1. `/admin` を開く → 管理画面が表示される"}`,
+  ].join("\n");
+}
+
+// 「レビューの要点」と「動作確認の手順」の両方を持つ本文。動作確認の手順だけを差し替える
+function bodyWith(items: Parameters<typeof manualCheck>[0]) {
+  return summary({}).replace(manualCheck({}), manualCheck(items));
 }
 
 describe("judge_pr_review_summary", () => {
@@ -160,6 +186,279 @@ describe("judge_pr_review_summary", () => {
   );
 });
 
+describe("judge_pr_review_summary の「動作確認の手順」（#711）", () => {
+  it.each(["要（マージ前）", "要（stg）", "`要（stg）`", "要(マージ前)"])(
+    "手動確認が %s で、準備・アカウント・手順が埋まっていれば成功する",
+    (need) => {
+      expect(judge(bodyWith({ need })).status).toBe(0);
+    }
+  );
+
+  it.each(["prep", "account", "steps"] as const)(
+    "手動確認が要のとき、%s が空欄なら失敗し、項目名を出す",
+    (key) => {
+      const label = {
+        prep: "準備",
+        account: "アカウント",
+        steps: "手順と期待する結果",
+      }[key];
+      for (const need of ["要（マージ前）", "要（stg）"]) {
+        const { status, output } = judge(bodyWith({ need, [key]: "" }));
+        expect(status).toBe(1);
+        expect(output).toContain(`${label} が空欄`);
+      }
+    }
+  );
+
+  it("手動確認が不要で理由があれば、準備・アカウント・手順が空欄でも成功する", () => {
+    const body = bodyWith({
+      need: "不要（CIの設定だけ）",
+      prep: "",
+      account: "",
+      steps: "",
+    });
+    expect(judge(body).status).toBe(0);
+  });
+
+  it("手動確認が不要でも、理由が無ければ失敗する", () => {
+    for (const need of ["不要", "`不要`", "不要（）", "不要: "]) {
+      const { status, output } = judge(
+        bodyWith({ need, prep: "", account: "", steps: "" })
+      );
+      expect(status).toBe(1);
+      expect(output).toContain("理由");
+    }
+  });
+
+  it("手動確認が空欄なら失敗する", () => {
+    const { status, output } = judge(bodyWith({ need: "" }));
+    expect(status).toBe(1);
+    expect(output).toContain("手動確認 が空欄");
+  });
+
+  it("テンプレートのコメントだけの手動確認は空欄として扱う", () => {
+    const { status, output } = judge(
+      bodyWith({
+        need: "<!-- `要（マージ前）`・`要（stg）`・`不要` のどれか -->",
+      })
+    );
+    expect(status).toBe(1);
+    expect(output).toContain("手動確認 が空欄");
+  });
+
+  it.each(["要", "必要", "要（本番）", "済み", "あり"])(
+    "手動確認が3つの値以外（%s）なら失敗する",
+    (need) => {
+      const { status, output } = judge(bodyWith({ need }));
+      expect(status).toBe(1);
+      expect(output).toContain("要（マージ前）");
+    }
+  );
+
+  it("「動作確認の手順」の節が無ければ失敗する", () => {
+    const { status, output } = judge(summary({}).replace(manualCheck({}), ""));
+    expect(status).toBe(1);
+    expect(output).toContain("動作確認の手順");
+  });
+
+  it("項目の行が無ければ失敗する", () => {
+    const body = summary({}).replace(/^- \*\*アカウント\*\*.*$/m, "");
+    const { status, output } = judge(body);
+    expect(status).toBe(1);
+    expect(output).toContain("アカウント");
+  });
+
+  it("「レビューの要点」の空欄と一緒に、動作確認の手順の空欄も出す", () => {
+    const body = summary({ risk: "" }).replace(
+      manualCheck({}),
+      manualCheck({ steps: "" })
+    );
+    const { status, output } = judge(body);
+    expect(status).toBe(1);
+    expect(output).toContain("一番危ない箇所");
+    expect(output).toContain("手順と期待する結果");
+  });
+
+  it("CRLF改行の本文も判定できる", () => {
+    expect(judge(bodyWith({}).replace(/\n/g, "\r\n")).status).toBe(0);
+    expect(judge(bodyWith({ account: "" }).replace(/\n/g, "\r\n")).status).toBe(
+      1
+    );
+  });
+
+  it.each(["pull_request_template.md", "PULL_REQUEST_TEMPLATE/spec-change.md"])(
+    "%s を埋めずにそのまま使うと、手動確認の空欄で失敗する",
+    (file) => {
+      const { status, output } = judge(template(file));
+      expect(status).toBe(1);
+      expect(output).toContain("手動確認 が空欄");
+    }
+  );
+});
+
+// 標準入力の本文から、needs-manual-check ラベルをどうするか（add / remove / none）を出す
+function labelAction(env: {
+  EVENT_ACTION: string;
+  PR_BODY: string;
+  PR_PREVIOUS_BODY?: string;
+}) {
+  const result = spawnSync(
+    "bash",
+    ["-c", 'source "$0" && manual_check_label_action', SCRIPT],
+    { encoding: "utf8", env: { ...process.env, PR_PREVIOUS_BODY: "", ...env } }
+  );
+  expect(result.status).toBe(0);
+  return result.stdout.trim();
+}
+
+describe("manual_check_label_action（#711）", () => {
+  const need = (v: string) =>
+    bodyWith({
+      need: v,
+      ...(v.startsWith("不要") ? { prep: "", account: "", steps: "" } : {}),
+    });
+
+  it.each(["opened", "reopened"])(
+    "%s のとき、手動確認が要ならラベルを付け、不要なら外す",
+    (action) => {
+      expect(
+        labelAction({ EVENT_ACTION: action, PR_BODY: need("要（マージ前）") })
+      ).toBe("add");
+      expect(
+        labelAction({ EVENT_ACTION: action, PR_BODY: need("要（stg）") })
+      ).toBe("add");
+      expect(
+        labelAction({
+          EVENT_ACTION: action,
+          PR_BODY: need("不要（CIの設定だけ）"),
+        })
+      ).toBe("remove");
+    }
+  );
+
+  it("手動確認が空欄・3つの値以外・理由の無い不要のときは、ラベルを変えない", () => {
+    for (const v of ["", "要", "不要"]) {
+      expect(labelAction({ EVENT_ACTION: "opened", PR_BODY: need(v) })).toBe(
+        "none"
+      );
+    }
+    expect(labelAction({ EVENT_ACTION: "opened", PR_BODY: "" })).toBe("none");
+  });
+
+  it("本文の編集で不要から要に書き換えたらラベルを付け、要から不要に書き換えたら外す", () => {
+    expect(
+      labelAction({
+        EVENT_ACTION: "edited",
+        PR_PREVIOUS_BODY: need("不要（CIの設定だけ）"),
+        PR_BODY: need("要（stg）"),
+      })
+    ).toBe("add");
+    expect(
+      labelAction({
+        EVENT_ACTION: "edited",
+        PR_PREVIOUS_BODY: need("要（マージ前）"),
+        PR_BODY: need("不要（CIの設定だけ）"),
+      })
+    ).toBe("remove");
+  });
+
+  it("本文を編集しても手動確認の要・不要が変わらなければ、ラベルを変えない（人間が外したラベルを付け直さない）", () => {
+    expect(
+      labelAction({
+        EVENT_ACTION: "edited",
+        PR_PREVIOUS_BODY: need("要（マージ前）"),
+        PR_BODY: need("要（stg）"),
+      })
+    ).toBe("none");
+    expect(
+      labelAction({
+        EVENT_ACTION: "edited",
+        PR_PREVIOUS_BODY: need("不要（CIの設定だけ）"),
+        PR_BODY: need("不要（ドキュメントだけ）"),
+      })
+    ).toBe("none");
+  });
+
+  it("編集前が空欄・不正な値で、編集後に要・不要を書いたらラベルを合わせる", () => {
+    expect(
+      labelAction({
+        EVENT_ACTION: "edited",
+        PR_PREVIOUS_BODY: need(""),
+        PR_BODY: need("要（stg）"),
+      })
+    ).toBe("add");
+    expect(
+      labelAction({
+        EVENT_ACTION: "edited",
+        PR_PREVIOUS_BODY: need("要"),
+        PR_BODY: need("不要（CIの設定だけ）"),
+      })
+    ).toBe("remove");
+  });
+});
+
+type Workflow = {
+  jobs: Record<
+    string,
+    {
+      if?: string;
+      permissions?: Record<string, string>;
+      steps: { run?: string; env?: Record<string, string> }[];
+    }
+  >;
+};
+
+function workflow() {
+  return parse(
+    readFileSync(
+      path.resolve(__dirname, "../../.github/workflows/pr-review-summary.yml"),
+      "utf8"
+    )
+  ) as Workflow;
+}
+
+describe("pr-review-summary.yml のラベルのジョブ（#711）", () => {
+  const jobs = Object.values(workflow().jobs);
+  const labelJob = jobs.find((job) =>
+    job.steps.some((s) => s.run?.includes("manual_check_label_action"))
+  );
+
+  it("ラベルを付け外しするジョブがある", () => {
+    expect(labelJob).toBeDefined();
+    expect(
+      labelJob?.steps.some((s) => s.run?.includes("needs-manual-check"))
+    ).toBe(true);
+  });
+
+  it("書き込みの権限はラベルのジョブだけに付け、本文の検査のジョブは読み取りだけにする", () => {
+    expect(labelJob?.permissions?.["pull-requests"]).toBe("write");
+    const checkJob = jobs.find((job) =>
+      job.steps.some(
+        (s) => s.run === "bash scripts/ci/check-pr-review-summary.sh"
+      )
+    );
+    expect(checkJob?.permissions).toEqual({ contents: "read" });
+  });
+
+  it("fork のPR・Dependabot のPRではラベルのジョブを動かさない", () => {
+    expect(labelJob?.if).toContain(
+      "github.event.pull_request.head.repo.full_name == github.repository"
+    );
+    expect(labelJob?.if).toContain("dependabot[bot]");
+  });
+
+  it("編集前の本文は、本文が変わった編集のときだけ渡す", () => {
+    const step = labelJob?.steps.find((s) =>
+      s.run?.includes("manual_check_label_action")
+    );
+    expect(step?.env?.PR_PREVIOUS_BODY).toBe(
+      "${{ github.event.changes.body.from }}"
+    );
+    expect(step?.env?.PR_BODY).toBe("${{ github.event.pull_request.body }}");
+    expect(step?.env?.EVENT_ACTION).toBe("${{ github.event.action }}");
+  });
+});
+
 // ワークフローと同じく環境変数で本文・作成者を渡し、スクリプト全体を実行する
 function run(env: { PR_BODY: string; PR_AUTHOR?: string }) {
   // テストを実行している環境の PR_AUTHOR を持ち込まない
@@ -222,9 +521,13 @@ describe("Dependabot が作ったPR", () => {
 describe("pull_request_template.md", () => {
   const body = template("pull_request_template.md");
 
-  it("「レビューの要点」が「関連issue」の直後にある", () => {
+  it("「レビューの要点」が「関連issue」の直後にあり、その直後に「動作確認の手順」がある", () => {
     const headings = [...body.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
-    expect(headings.slice(0, 2)).toEqual(["関連issue", "レビューの要点"]);
+    expect(headings.slice(0, 3)).toEqual([
+      "関連issue",
+      "レビューの要点",
+      "動作確認の手順",
+    ]);
   });
 
   it.each([
@@ -236,5 +539,16 @@ describe("pull_request_template.md", () => {
       new RegExp(`<details>\\s*<summary>${title}[^<]*</summary>`)
     );
     expect(body).not.toMatch(new RegExp(`^## ${title}`, "m"));
+  });
+});
+
+describe("PULL_REQUEST_TEMPLATE/spec-change.md", () => {
+  it("「レビューの要点」の直後に「動作確認の手順」がある（#711）", () => {
+    const headings = [
+      ...template("PULL_REQUEST_TEMPLATE/spec-change.md").matchAll(
+        /^## (.+)$/gm
+      ),
+    ].map((m) => m[1]);
+    expect(headings.slice(0, 2)).toEqual(["レビューの要点", "動作確認の手順"]);
   });
 });
