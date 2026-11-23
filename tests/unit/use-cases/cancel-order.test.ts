@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { cancelOrder } from "@/use-cases/cancel-order";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
+import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
 import { AdminUser } from "@/domain/entities/admin-user";
 import {
   makeOrderRepo,
@@ -140,5 +141,29 @@ describe("cancelOrder", () => {
         }
       )
     ).rejects.toThrow("注文が見つかりません");
+  });
+
+  // 楽観ロック（issue #721）: 運営者が画面で見た注文と違う注文を黙ってキャンセルしない。
+  // 読み直してやり直すと、その間に作られた請求（Stripe Invoice）までキャンセルしうるため、
+  // 運営者に読み直してもらう
+  it("保存が競合したら、読み直してやり直さずに OrderConcurrentlyModifiedError を投げる", async () => {
+    const order = makeOrder();
+    const orderRepo = makeOrderRepo(order);
+    vi.mocked(orderRepo.save).mockRejectedValue(
+      new OrderConcurrentlyModifiedError(order.id)
+    );
+
+    await expect(
+      cancelOrder(
+        {
+          orderId: order.id,
+          adminClerkUserId: ADMIN_CLERK_USER_ID,
+          reason: "",
+        },
+        { orderRepo, adminUserRepo: makeAdminUserRepo(adminUser) }
+      )
+    ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
+    expect(orderRepo.findById).toHaveBeenCalledTimes(1);
+    expect(orderRepo.save).toHaveBeenCalledTimes(1);
   });
 });
