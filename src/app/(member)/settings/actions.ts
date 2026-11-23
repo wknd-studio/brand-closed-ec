@@ -3,7 +3,9 @@
 import * as Sentry from "@sentry/nextjs";
 import { requireAuth } from "@/lib/auth/current-user";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { withdraw } from "@/composition/member";
+import { startBillingPortalSession } from "@/composition/billing-portal";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import { DomainError } from "@/domain/errors/domain-error";
@@ -188,4 +190,23 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
     Sentry.captureException(err, { tags: { useCase: "withdraw" } });
     return { error: "退会処理に失敗しました" };
   }
+}
+
+// お支払い方法（カード）の変更。Stripe Billing Portal に移り、変更後は /settings に戻る（#216）
+export async function openBillingPortalAction(): Promise<ActionResult> {
+  const { userId } = await requireAuth();
+  if (!userId) return { error: "認証されていません" };
+
+  let url: string | null;
+  try {
+    ({ url } = await startBillingPortalSession({ clerkUserId: userId }));
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { useCase: "startBillingPortalSession" },
+    });
+    return { error: "お支払い方法の変更画面を開けませんでした" };
+  }
+  if (!url) return { error: "お支払い方法は入会のお手続き後に変更できます" };
+  // redirect は例外で遷移を伝えるため、try の外で呼ぶ
+  redirect(url);
 }

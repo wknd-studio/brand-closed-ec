@@ -108,6 +108,9 @@
   - 再請求がすべて失敗した後: 同じ画面で「サブスクリプションをキャンセルする」を選ぶ（`canceled`にする）。「未払いとしてマーク」（`unpaid`。Stripeは請求書を下書きのまま作り続け、支払いを試みない）・「期日超過のままにする」（`past_due`のまま請求書を作り続ける）・「一時停止」は使わない。解約された会員の扱いを1通りにするため
   - 支払い失敗時のメール: 「売上回収 → メール」で「カード支払いが失敗した場合にメールを送信」を有効にし、リンク先にStripeのホストするページを選ぶ（会員がアプリにログインしなくても、メールから直接カードを更新して支払える）。テストモードでは、チームメンバーの確認済みのメールアドレスにしか届かない
   - メニュー名はStripeの公式ドキュメント（[Smart Retries](https://docs.stripe.com/billing/revenue-recovery/smart-retries)・[顧客へのメール](https://docs.stripe.com/billing/revenue-recovery/customer-emails)・[サブスクリプションの仕組み](https://docs.stripe.com/billing/subscriptions/overview)）の表記。画面の表記が違えば、ここを直す
+- **お支払い方法（カード）の変更**（#216）: 会員は`/settings`の「お支払い方法を変更する」から、StripeのホストするBilling Portalでカードを変更する（生のカード情報はStripe側で扱い、SAQ Aのまま）。ボタンはStripe Customer（`users.stripe_customer_id`）がある会員にだけ出し、Sessionはログイン中の会員本人のCustomerでだけ作る。Portalから戻ると`/settings`に戻る
+  - Portalで有効にするのはカードの変更と請求履歴（月額の請求書・領収書）の閲覧だけ。解約は退会フロー（`withdraw.ts`。6ヶ月縛り・未解決の決済の確認がある）、プラン変更は#209に一本化するため無効にする。宛名・住所の変更（`customer_update`）も、請求書の宛名を`users`から作るため無効にする
+  - 設定はダッシュボードの既定の設定ではなく、`scripts/setup-stripe-billing-portal.ts`で作った設定を使う（テストモード・本番それぞれ、`doppler run --config <dev|stg|prod> -- pnpm tsx scripts/setup-stripe-billing-portal.ts`で作り、出力された`bpc_...`を同じconfigの`STRIPE_BILLING_PORTAL_CONFIGURATION_ID`に入れる）。Session作成時に必ずこのIDを指定し、未設定ならSessionを作らない（既定の設定は解約が有効なままのことがあるため）
 - **支払い失敗の会員への通知**（2026-11-23決定、#376）: Stripeの自動メール（上記）を使い、`invoice.payment_failed`を受けてResendで自前のメールを送ることはしない。会員への請求書メールもStripeの自動送信に任せている（[[ordering]]「通知」）のと揃い、Webhookの処理を増やさずに済むため。アプリ内の案内は#379の表示で行う
 - **再請求の期限の表示**: 会員画面の案内（#379）には具体的な日付を出さず、「お支払い方法を更新しないと、最初の支払い失敗から2週間ほどでご利用が止まります」程度にとどめる。再請求の日程はStripeが決める（Smart Retriesは失敗の傾向から日時を選ぶ）ため。正確な日付が必要になれば、StripeのInvoiceの`next_payment_attempt`を使う
 
