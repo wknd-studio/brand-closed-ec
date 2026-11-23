@@ -39,6 +39,7 @@ describe("PRのCIが読むDopplerのconfig", () => {
     ["deploy-stg", ["DOPPLER_TOKEN", "DOPPLER_TOKEN_WORKER"]],
     ["deploy-prod", ["DOPPLER_TOKEN", "DOPPLER_TOKEN_WORKER"]],
     ["e2e", ["DOPPLER_TOKEN"]],
+    ["smoke-prod", ["DOPPLER_TOKEN"]],
   ])("%s はenvironmentのトークンだけを読む", (id, expected) => {
     expect(workflow.jobs[id].environment).toBeDefined();
     expect(secretsOf(id).sort()).toEqual(expected);

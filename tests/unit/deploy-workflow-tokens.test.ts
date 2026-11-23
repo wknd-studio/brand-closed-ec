@@ -70,10 +70,11 @@ describe("production の environment を使うジョブ", () => {
     )
   );
 
-  it("deploy-prod と商品データの同期がある", () => {
+  it("deploy-prod・本番のスモークテスト・商品データの同期がある", () => {
     expect(productionJobs.map(([id]) => id).sort()).toEqual([
       "deploy-prod",
       "scheduled-sync",
+      "smoke-prod",
     ]);
   });
 

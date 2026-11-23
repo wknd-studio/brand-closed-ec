@@ -40,10 +40,10 @@ Next.js 16 App Router + TypeScript strict / Cloudflare Pages + Workers (`@cloudf
 ```
 main      →  本番（prod）自動デプロイ
 develop   →  ステージング（stg）自動デプロイ
-feature/* →  プレビューURLは無い（PRごとのデプロイはしない）
+feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Clerk・Stripe・Sanityを共有。マイグレーションを含むPRは出さない）
 ```
 
-動作確認は、マージ前ならメインのチェックアウトで `git switch` → `task dev` → ngrok、マージ後なら stg で行う（手順は `docs/manual-check.md`）。
+動作確認は、マージ前ならプレビューURL（マイグレーション・Webhookの変更を含むPRはメインのチェックアウトで `git switch` → `task dev` → ngrok）、マージ後なら stg で行う（手順は `docs/manual-check.md`。プレビューの仕組みは `docs/cicd.md` の「PRごとのプレビュー」）。
 
 **PR のターゲットブランチ**:
 
@@ -93,8 +93,8 @@ feature/* →  プレビューURLは無い（PRごとのデプロイはしない
   - 受け入れ条件ごとの確認結果・実行したチェック・レビューサブエージェントの指摘と対応は、`<details>` の中に今までどおり省略せず書く
 
   「レビューの要点」の直後の「動作確認の手順」は、人間がPRを開けば、どのアカウントで何を確かめるかをこのセッションに聞かずに分かるように書く（人間の確かめ方・`needs-manual-check` ラベルは `docs/manual-check.md`）。手動確認が空欄、または `要（…）` なのに残りの3項目が空欄だとCIの `PR Review Summary` が失敗する。
-  - **手動確認**: `要（マージ前）`（`high-risk`・画面が大きく変わるPR）・`要（stg）`（それ以外で人間が画面で確かめるべきもの）・`不要` のどれか。`不要` は理由を1行（例: `不要（CIの設定だけ）`）
-  - **準備**: ブランチ名、`supabase db reset`・`task supabase:seed-users` 等が要るか、必要な Doppler の値や外部の設定（Stripe CLI 等）
+  - **手動確認**: `要（マージ前）`（人間が画面で確かめるべきものがあるPRは原則これ）・`要（stg）`（プレビューが出ず、`high-risk` でも画面が大きく変わるのでもないPR）・`不要` のどれか。`不要` は理由を1行（例: `不要（CIの設定だけ）`）
+  - **準備**: どこで確かめるか（プレビューURL、またはマイグレーション・Webhookの変更を含むならメインのチェックアウト）、ブランチ名、`supabase db reset`・`task supabase:seed-users` 等が要るか、必要な Doppler の値や外部の設定（Stripe CLI 等）
   - **アカウント**: `docs/seed-data.md` の「テストアカウント」のメールアドレスで書く（例: `info+test_admin1@wknd-studio.com`）。新規登録が要るならそう書く。パスワードは書かない
   - **手順と期待する結果**: 「開くURLのパス → 操作 → 何が表示・変化すれば正しいか」を番号付きで。完了条件のうち人間が画面で確かめるべきものを含める
 

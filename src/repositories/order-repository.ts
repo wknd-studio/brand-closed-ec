@@ -34,12 +34,13 @@ export type OrderWithUser = {
 
 /**
  * orders.status を変えた主体（order_status_changes.changed_by）。
- * 運営者の操作では、誰が変えたかを admin_users.id で残す
+ * 運営者の操作では、誰が変えたかを admin_users.id で、なぜ変えたかを reason で残す
+ * （理由の入力は任意のため、無ければ null。#271）
  */
 export type OrderStatusChangedBy =
   | { type: "customer" }
   | { type: "system" }
-  | { type: "admin"; adminUserId: string };
+  | { type: "admin"; adminUserId: string; reason: string | null };
 
 export interface OrderRepository {
   findById(id: string): Promise<Order | null>;

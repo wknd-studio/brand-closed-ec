@@ -24,7 +24,7 @@ describe("cancelOrder", () => {
     const orderRepo = makeOrderRepo(order);
 
     await cancelOrder(
-      { orderId: order.id, adminClerkUserId: ADMIN_CLERK_USER_ID },
+      { orderId: order.id, adminClerkUserId: ADMIN_CLERK_USER_ID, reason: "" },
       { orderRepo, adminUserRepo: makeAdminUserRepo(adminUser) }
     );
 
@@ -34,13 +34,17 @@ describe("cancelOrder", () => {
     expect(saved?.settlements[0]?.cancelledAt).toBeInstanceOf(Date);
   });
 
-  it("操作した運営者の admin_users.id を、状態を変えた主体として保存に渡す", async () => {
+  it("操作した運営者の admin_users.id とキャンセル理由を、状態を変えた主体として保存に渡す", async () => {
     const order = makeOrder();
     const orderRepo = makeOrderRepo(order);
     const adminUserRepo = makeAdminUserRepo(adminUser);
 
     await cancelOrder(
-      { orderId: order.id, adminClerkUserId: ADMIN_CLERK_USER_ID },
+      {
+        orderId: order.id,
+        adminClerkUserId: ADMIN_CLERK_USER_ID,
+        reason: "  顧客から電話で依頼  ",
+      },
       { orderRepo, adminUserRepo }
     );
 
@@ -50,6 +54,27 @@ describe("cancelOrder", () => {
     expect(vi.mocked(orderRepo.save).mock.calls[0]?.[1]).toEqual({
       type: "admin",
       adminUserId: "admin-user-1",
+      reason: "顧客から電話で依頼",
+    });
+  });
+
+  it("キャンセル理由が空白だけなら、理由なし（null）として保存に渡す", async () => {
+    const order = makeOrder();
+    const orderRepo = makeOrderRepo(order);
+
+    await cancelOrder(
+      {
+        orderId: order.id,
+        adminClerkUserId: ADMIN_CLERK_USER_ID,
+        reason: " \n ",
+      },
+      { orderRepo, adminUserRepo: makeAdminUserRepo(adminUser) }
+    );
+
+    expect(vi.mocked(orderRepo.save).mock.calls[0]?.[1]).toEqual({
+      type: "admin",
+      adminUserId: "admin-user-1",
+      reason: null,
     });
   });
 
@@ -59,7 +84,7 @@ describe("cancelOrder", () => {
 
     await expect(
       cancelOrder(
-        { orderId: order.id, adminClerkUserId: "clerk_unknown" },
+        { orderId: order.id, adminClerkUserId: "clerk_unknown", reason: "" },
         { orderRepo, adminUserRepo: makeAdminUserRepo(null) }
       )
     ).rejects.toThrow("運営者が見つかりません");
@@ -75,7 +100,7 @@ describe("cancelOrder", () => {
     const orderRepo = makeOrderRepo(order);
 
     const result = cancelOrder(
-      { orderId: order.id, adminClerkUserId: ADMIN_CLERK_USER_ID },
+      { orderId: order.id, adminClerkUserId: ADMIN_CLERK_USER_ID, reason: "" },
       { orderRepo, adminUserRepo: makeAdminUserRepo(adminUser) }
     );
     await expect(result).rejects.toThrow(OrderNotCancellableError);
@@ -91,7 +116,11 @@ describe("cancelOrder", () => {
 
     await expect(
       cancelOrder(
-        { orderId: order.id, adminClerkUserId: ADMIN_CLERK_USER_ID },
+        {
+          orderId: order.id,
+          adminClerkUserId: ADMIN_CLERK_USER_ID,
+          reason: "",
+        },
         { orderRepo, adminUserRepo: makeAdminUserRepo(adminUser) }
       )
     ).rejects.toThrow("キャンセルできません");
@@ -100,7 +129,11 @@ describe("cancelOrder", () => {
   it("注文が存在しなければエラーを投げる", async () => {
     await expect(
       cancelOrder(
-        { orderId: "unknown", adminClerkUserId: ADMIN_CLERK_USER_ID },
+        {
+          orderId: "unknown",
+          adminClerkUserId: ADMIN_CLERK_USER_ID,
+          reason: "",
+        },
         {
           orderRepo: makeOrderRepo(),
           adminUserRepo: makeAdminUserRepo(adminUser),
