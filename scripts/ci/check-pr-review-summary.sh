@@ -88,7 +88,7 @@ extract_items() {
 # 標準入力: normalize_body を通した本文
 # 「手順と期待する結果」の項目ごとに「番号<TAB>内容」を出力する（#714）。
 # 番号付きの行（`1.`・`1)`）から次の番号付きの行までを1つの項目とし、字下げした補足などの続きの行も含める。
-# 番号付きの行が無ければ、全体を1つの項目とする
+# 番号付きの行が無ければ箇条書きの行（`- `・`* `）ごとに、それも無ければ全体を1つの項目とする
 step_items() {
   awk \
     -v heading="$MANUAL_HEADING" \
@@ -98,7 +98,7 @@ step_items() {
     BEGIN {
       split(items, list, "|")
       for (i in list) known[list[i]] = 1
-      in_section = 0; current = 0; n = 0; pre = ""
+      in_section = 0; current = 0; n = 0; b = 0; pre = ""
     }
     /^## / {
       in_section = (trim(substr($0, 4)) == heading)
@@ -124,10 +124,15 @@ step_items() {
       line = trim(line)
       if (line == "") next
       if (line ~ /^[0-9]+[.)][ \t]/) { n++; step[n] = line; next }
-      if (n == 0) { pre = (pre == "" ? line : pre " " line); next }
+      if (n == 0) {
+        pre = (pre == "" ? line : pre " " line)
+        if (line ~ /^[-*][ \t]/) { b++; bullet[b] = line } else if (b) bullet[b] = bullet[b] " " line
+        next
+      }
       step[n] = step[n] " " line
     }
     END {
+      if (n == 0 && b) { for (i = 1; i <= b; i++) printf "%d\t%s\n", i, bullet[i]; exit }
       if (n == 0) { if (pre != "") printf "1\t%s\n", pre; exit }
       for (i = 1; i <= n; i++) printf "%d\t%s\n", i, step[i]
     }
