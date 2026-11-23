@@ -15,7 +15,7 @@ PRごとのプレビューURL（PRごとのデプロイ）は無い。クラウ�
 
 `要（マージ前）` と `要（stg）` の分け方:
 
-- `要（マージ前）`: `high-risk` のPR・画面が大きく変わるPR。マージの前に、メインのチェックアウトで確かめる
+- `要（マージ前）`: `high-risk` のPR・画面が大きく変わるPR。マージの前に、そのPRのワークツリーで確かめる
 - `要（stg）`: それ以外で、人間が画面で確かめるべきものがあるPR。マージの後に stg でまとめて確かめる（ローンチ前で利用者がいないため）
 
 CIの `PR Review Summary`（`scripts/ci/check-pr-review-summary.sh`）が、手動確認が空欄・3つの値以外・理由の無い `不要` のとき、また `要（…）` なのに準備・アカウント・手順と期待する結果のどれかが空欄のときに失敗する。Dependabot のPRは検査しない。
@@ -31,14 +31,15 @@ CIの `PR Review Summary`（`scripts/ci/check-pr-review-summary.sh`）が、手�
 
 ## マージ前に確かめる（`要（マージ前）`）
 
-ngrok・Stripe CLI はメインのチェックアウトの `task dev` にしか無いため（`docs/dev-parallel-worktrees.md`）、メインのチェックアウトで確かめる。
+PRのブランチをチェックアウトしている Orca のワークツリーで確かめる（ブランチを切り替える必要は無い）。Webhook の入口（ngrok の固定URL・`stripe listen`）は同時に1か所でしか使えないため、`task dev` はそのワークツリーが入口を借りる形で動く（`docs/dev-parallel-worktrees.md`「Webhookの入口」）。
 
-1. メインのチェックアウトで、PRの「準備」のブランチに切り替える: `git fetch origin && git switch <ブランチ>`
-2. 「準備」に書かれた `supabase db reset`・`task supabase:seed-users` 等を実行する
-3. `task dev` で起動し、ngrok のURL（`https://buffing-flaccid-nutty.ngrok-free.dev`）を開く
-4. 「アカウント」のメールアドレスでログインし（パスワードは Doppler の `SEED_USER_PASSWORD`）、「手順と期待する結果」を順に確かめる
-5. 確かめ終わったら `needs-manual-check` ラベルを外す（PRの画面の Labels から外す。CLIなら `gh api -X DELETE repos/{owner}/{repo}/issues/<PR番号>/labels/needs-manual-check`。`gh pr edit --remove-label` は Projects (classic) の廃止のエラーで失敗することがある）。問題があればPRにコメントする
-6. メインのチェックアウトを `develop` に戻す: `git switch develop`
+1. PRのワークツリーのターミナルで（Orca の画面で開く。パスは `git worktree list` でも分かる）、「準備」に書かれた DB の操作を実行する。ワークツリーでは `bash scripts/with-worktree-db.sh supabase db reset` のように `with-worktree-db.sh` を通す（そのワークツリーのスロットのDBに対して行う）。テストアカウント（`task supabase:seed-users`・`task supabase:seed-scenarios`）は、無ければ次の `task dev` が投入するので要らない
+2. `task dev` で起動し、ngrok のURL（`https://buffing-flaccid-nutty.ngrok-free.dev`）を開く。別の場所（メインのチェックアウトを含む）が入口を使用中なら、使用中の場所（パス・issue）を出して止まるので、その場所で `task dev:clean` を実行してからやり直す
+3. 「アカウント」のメールアドレスでログインし（パスワードは Doppler の `SEED_USER_PASSWORD`）、「手順と期待する結果」を順に確かめる
+4. 確かめ終わったら `needs-manual-check` ラベルを外す（PRの画面の Labels から外す。CLIなら `gh api -X DELETE repos/{owner}/{repo}/issues/<PR番号>/labels/needs-manual-check`。`gh pr edit --remove-label` は Projects (classic) の廃止のエラーで失敗することがある）。問題があればPRにコメントする
+5. 同じワークツリーで `task dev:clean` を実行して、開発サーバーを止め、入口を返す（ワークツリーのSupabaseは止めない。片付けは `bash scripts/worktree-db-stop.sh`）
+
+ワークツリーが削除済みのPR（人間が作ったPR等）は、メインのチェックアウトで確かめる: `git fetch origin && git switch <ブランチ>` → 「準備」の DB の操作（`with-worktree-db.sh` は要らない）→ `task dev` → 2〜5 → `git switch develop`。
 
 ## stg で確かめる（`要（stg）`）
 

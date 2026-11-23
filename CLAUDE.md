@@ -43,7 +43,7 @@ develop   →  ステージング（stg）自動デプロイ
 feature/* →  プレビューURLは無い（PRごとのデプロイはしない）
 ```
 
-動作確認は、マージ前ならメインのチェックアウトで `git switch` → `task dev` → ngrok、マージ後なら stg で行う（手順は `docs/manual-check.md`）。
+動作確認は、マージ前ならそのブランチのワークツリー（またはメインのチェックアウト）で `task dev` → ngrok、マージ後なら stg で行う（手順は `docs/manual-check.md`）。
 
 **PR のターゲットブランチ**:
 
@@ -76,7 +76,7 @@ feature/* →  プレビューURLは無い（PRごとのデプロイはしない
 - **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
 - **依存の確認**: 着手前に `gh api repos/{owner}/{repo}/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
-- **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
+- **開発サーバー**: ワークツリーで `task dev` を実行すると、そのワークツリーのスロットのDB・ポート（3001〜）で起動し、ngrok の固定URLと `stripe listen` もそのポートに向く（テストアカウントが無ければ投入する）。ただし Webhook の入口（ngrok・`stripe listen`）を使える `task dev` は同時に1か所だけで、別の場所（メインのチェックアウトを含む）が使用中なら止まる。セッションが自分から `task dev` を起動しない（手動確認は人間が行う）。人間が使い終わったら `task dev:clean` で入口を返す
 - **担当外の問題**: 作業中に担当issueの範囲外の問題（不具合・設計の歪み等）を見つけたら、実装せずに起票する。見つけることは続ける
   - マイルストーンは付けない。担当issueと同じマイルストーンにも入れない。マイルストーンへの振り分けと優先度は、オーケストレーションのセッションが人間と決める（セッションがたまたま読んだ場所の順ではなく、危険度の順で直すため）
   - 同じ種類の問題が複数の箇所にあるときは、場所ごとに起票しない。lint・テストで検出して一度に直す1件として起票し、見つけた箇所を本文に並べる（1か所ずつ直しても、新しいコードで同じ書き方をすれば再発するため。「PRのレビュー」の「レビューをすり抜けたバグはlint・テストに変換する」と同じ考え方）

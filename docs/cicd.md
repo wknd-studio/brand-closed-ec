@@ -41,7 +41,7 @@ push (develop・main)
 | prod            | `main`      | 専用プロジェクト  | 「EQ Mart」の Production インスタンス                                     |
 | PR の CI        | —           | ジョブ内の Docker | 「EQ Mart (CI)」の Development インスタンス（`happy-terrier-8249`、#299） |
 
-> **Clerk の application の分け方**: Webhook の送り先はインスタンスごとに1つのため、データの行き先（接続する DB）ごとに application を分けている（#686）。ローカルで Clerk ユーザーを作っても、その Webhook は stg には届かない。ローカル用のインスタンスの Webhook はメインのチェックアウトの ngrok（`https://buffing-flaccid-nutty.ngrok-free.dev/api/webhooks/clerk`）に届く。Doppler の `dev`（と、それを継承する `dev_personal`）の Clerk のキー・`CLERK_ADMIN_ORGANIZATION_ID` はローカル用のインスタンスのもの、`stg`・`stg_deploy` は stg のもの。ローカル用のインスタンスの設定（サインアップの方式・規約同意・Organization・運営組織のロール等）は stg と同じにしてある。ただし captcha（`auth_attack_protection.bot_protection.captcha_enabled`）は API で有効にできず、ローカル用だけ無効のまま（E2E は Testing Token で captcha を通らないため影響しない）。stg の設定を変えたら、ローカル用・CI 用にも同じ変更をする（`clerk config pull --app <application ID>` で比べられる）。運営組織のロール・権限・Role Set と運営組織そのものもインスタンスごとにあり、ローカル用のものは PR #691（issue #390、2026-11-23 時点で未マージ）の `scripts/clerk-admin-rbac.ts setup` で作った
+> **Clerk の application の分け方**: Webhook の送り先はインスタンスごとに1つのため、データの行き先（接続する DB）ごとに application を分けている（#686）。ローカルで Clerk ユーザーを作っても、その Webhook は stg には届かない。ローカル用のインスタンスの Webhook は、その時点で `task dev` が入口を確保している場所（メインのチェックアウトかワークツリーのどれか1か所）の ngrok（`https://buffing-flaccid-nutty.ngrok-free.dev/api/webhooks/clerk`）に届く。Doppler の `dev`（と、それを継承する `dev_personal`）の Clerk のキー・`CLERK_ADMIN_ORGANIZATION_ID` はローカル用のインスタンスのもの、`stg`・`stg_deploy` は stg のもの。ローカル用のインスタンスの設定（サインアップの方式・規約同意・Organization・運営組織のロール等）は stg と同じにしてある。ただし captcha（`auth_attack_protection.bot_protection.captcha_enabled`）は API で有効にできず、ローカル用だけ無効のまま（E2E は Testing Token で captcha を通らないため影響しない）。stg の設定を変えたら、ローカル用・CI 用にも同じ変更をする（`clerk config pull --app <application ID>` で比べられる）。運営組織のロール・権限・Role Set と運営組織そのものもインスタンスごとにあり、ローカル用のものは PR #691（issue #390、2026-11-23 時点で未マージ）の `scripts/clerk-admin-rbac.ts setup` で作った
 
 ---
 
@@ -441,6 +441,6 @@ pnpm exec playwright show-trace /tmp/playwright-report/test-results/<テスト�
 
 ## ローカル開発での Webhook テスト
 
-Clerk Webhook をローカルでテストするには ngrok が必要。メインのチェックアウトの `task dev` が ngrok（`buffing-flaccid-nutty.ngrok-free.dev` → `localhost:3000`）も起動する。ローカル用の Clerk インスタンスの Webhook エンドポイントはこの URL に登録済みなので、ダッシュボードでの操作は要らない。ngrok が止まっている間に届かなかったイベントは、Clerk（Svix）が間隔を空けて再送を試みる。
+Clerk Webhook をローカルでテストするには ngrok が必要。`task dev` が ngrok（`buffing-flaccid-nutty.ngrok-free.dev` → `localhost` の開発サーバー。メインのチェックアウトは3000、Orca のワークツリーはそのスロットのポート。`docs/dev-parallel-worktrees.md`「Webhookの入口」）も起動する。ローカル用の Clerk インスタンスの Webhook エンドポイントはこの URL に登録済みなので、ダッシュボードでの操作は要らない。ngrok が止まっている間に届かなかったイベントは、Clerk（Svix）が間隔を空けて再送を試みる。
 
 ローカル用のインスタンスは stg と別のため、ローカルのイベントが stg に届くことも、stg のイベントがローカルに届くことも無い（#686）。

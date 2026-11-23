@@ -20,30 +20,46 @@
 | `scripts/worktree-db-stop.sh`    | Supabaseの停止とボリューム削除、`config.toml` の復元、スロットの解放                                                                |
 | `scripts/worktree-slot-lib.sh`   | スロット管理の共通処理                                                                                                              |
 | `scripts/patch-supabase-slot.py` | `config.toml` のポート・project_idをスロット用に書き換える                                                                          |
+| `scripts/dev-entry.sh`           | Webhookの入口（ngrok・`stripe listen`）の確保・返却（`task dev` 一式の最初と `task dev:clean` の最後）                              |
+| `scripts/dev-run.sh`             | `task dev` 一式のコマンド（Next.js・`stripe listen`・ngrok・Supabase・シード）を、実行した場所のDB・ポートで動かす                  |
+| `scripts/seed-if-missing.ts`     | ワークツリーで `task dev` するとき、スロットのDBにテストアカウントが無ければシード（テストアカウント・シナリオのデータ）を投入する  |
 
 `with-worktree-db.sh` が上書きする環境変数: `WORKTREE_SLOT`、`PORT`、`NEXT_PUBLIC_APP_URL`、`NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`。
 
 ## できること・できないこと
 
-| 分離対象                                  | 状態                                                                                                                          |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| ファイルシステム（git worktree、Orca）    | 完全分離                                                                                                                      |
-| ローカルSupabase（Docker）                | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす）                                        |
-| Next.js/Playwrightの開発サーバーポート    | 完全分離（`with-worktree-db.sh` が `PORT` を設定）                                                                            |
-| Clerk・Stripe・Sanity                     | **共有**（同じローカル用のClerkインスタンス・テストモードアカウントを全worktreeで使う。Clerkはstgとは別のインスタンス。#686） |
-| ngrok・Stripe CLI（`task dev`のフル構成） | **分離しない**。手動確認は同時に1ワークツリー（通常はメインのチェックアウト）で行う                                           |
+| 分離対象                               | 状態                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ファイルシステム（git worktree、Orca） | 完全分離                                                                                                                      |
+| ローカルSupabase（Docker）             | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす）                                        |
+| Next.js/Playwrightの開発サーバーポート | 完全分離（`with-worktree-db.sh` が `PORT` を設定）                                                                            |
+| Clerk・Stripe・Sanity                  | **共有**（同じローカル用のClerkインスタンス・テストモードアカウントを全worktreeで使う。Clerkはstgとは別のインスタンス。#686） |
+| ngrok・Stripe CLI（Webhookの入口）     | **分離しない**。入口を使える `task dev` は同時に1か所（メインのチェックアウトかワークツリー）だけ（下記「Webhookの入口」）    |
 
 Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。
 
+## Webhookの入口
+
+`task dev` は、メインのチェックアウトでも Orca のワークツリーでも動く。ワークツリーでは、そのワークツリーのスロットのDB・ポート（3001〜）で Next.js を起動し、ngrok の固定URL（`buffing-flaccid-nutty.ngrok-free.dev`）と `stripe listen` の転送先もそのポートにする（`scripts/dev-run.sh`）。マージ前の手動確認は、ブランチを切り替えずにそのPRのワークツリーで行う（`docs/manual-check.md`）。
+
+- **入口は同時に1か所**: Clerk の Webhook の送り先（ngrok の固定URL）と `stripe listen` は1つしか持てないため、`task dev` 一式（`dev`・`dev:services`・`dev:next`・`dev:stripe`・`dev:ngrok`・`dev:ngrok:spawn`・`dev:clean`）は最初に入口を確保する（`scripts/dev-entry.sh`）。別の場所（メインのチェックアウトを含む）が使用中なら、使用中の場所（パス・ブランチ・issue）を出して止まる
+- **確保の記録**: スロットと同じく、gitの共通ディレクトリ（`<git-common-dir>/dev-entry/`）に `mkdir` で作る。`owner`（場所の絶対パス）・`branch`・`pids`（確保した `task` のPID。別ウィンドウの `task dev:ngrok` の分も足す）を記録する
+- **返す**: `task dev:clean` が、Next.js・`stripe listen`・ngrok・Sanity Studio を止めてから入口を返す。メインのチェックアウトでは今までどおり Supabase も止める。ワークツリーの Supabase はテストでも使うため止めない（片付けは `worktree-db-stop.sh`）
+- **持ち主が消えた入口の回収**: 持ち主の場所が削除済み、または `pids` のプロセスがすべて終了していれば（`task dev` の異常終了等）、次に `task dev` した場所が回収して確保する。別ウィンドウの ngrok が動いている間は回収しない（固定URLを持ったままのため）
+- **ngrok の転送先**: `ngrok.yml` の `addr` をその場所のポートに書き換えた一時的な設定ファイルを作って渡す（`ngrok.yml` 自体は書き換えない）
+- **シード**: ワークツリーで `task dev` すると、スロットのDBにテストアカウント（`docs/seed-data.md`。オンボーディングを終えた会員の行）が揃っていなければ、テストアカウントとシナリオのデータを投入する（`scripts/seed-if-missing.ts`）。揃っていれば何もしない（手動確認で変えたデータを入れ直さないため）。メインのチェックアウトでは今までどおり投入しない
+- **Sanity Studio**（`sanity dev`、ポート3333）: ポートは固定だが、`task dev` 自体が同時に1か所だけのため衝突しない
+- **E2E との関係**: ワークツリーで `task dev` 中に同じワークツリーで `task test:e2e` を実行すると、E2E がそのポートのサーバーを使い回さない（スロット2〜9。下記）ため、ポート使用中のエラーで止まる。E2E の前に `task dev:clean` で止める
+
 ## スロット割り当て
 
-| スロット | 使う場所                             | アプリポート | Supabase API     | project_id                |
-| -------- | ------------------------------------ | ------------ | ---------------- | ------------------------- |
-| 1        | メインのチェックアウト（`task dev`） | 3000         | 54321            | `brand-closed-ec`（既定） |
-| 2〜9     | Orcaのワークツリー                   | 3000+(N-1)   | 54321+(N-1)×1000 | `brand-closed-ec-slotN`   |
+| スロット | 使う場所               | アプリポート | Supabase API     | project_id                |
+| -------- | ---------------------- | ------------ | ---------------- | ------------------------- |
+| 1        | メインのチェックアウト | 3000         | 54321            | `brand-closed-ec`（既定） |
+| 2〜9     | Orcaのワークツリー     | 3000+(N-1)   | 54321+(N-1)×1000 | `brand-closed-ec-slotN`   |
 
 - アプリポートは `scripts/worktree-slot-lib.sh` の `app_port_for_slot` で決める（3001〜3008）。1000刻みにするとスロット4が6000（ブラウザが接続を拒否するX11のポート）、スロット5が7000（macOSのAirPlayレシーバーが使うことがある）に当たるため、1つずつずらす。ブラウザのunsafe port・Supabaseのポートと重ならないことは `tests/unit/worktree-slot-port.test.ts` で確認している
-- メインのチェックアウトの開発サーバー（`task dev:next`・`pnpm dev`）は `--port 3000` を明示している。3000が使用中でも次の空きポート（スロット2の3001等）へ移らず、エラーで止まる
+- 開発サーバー（`task dev:next`・`pnpm dev`）はポート（メインのチェックアウトは3000、ワークツリーはそのスロットのポート）を明示している。使用中でも次の空きポート（別のスロットのポート）へ移らず、エラーで止まる
 - E2E（Playwright）が動いている開発サーバーを使い回す（`reuseExistingServer`）のはスロット1だけ。スロット2〜9は、そのポートが使用中ならエラーで止まる（別スロットのDBにつながったサーバーでテストが走らないようにするため）。いずれも `tests/unit/dev-server-port.test.ts` で確認している
 - スロットの確保状況は、全ワークツリーで共有されるgitの共通ディレクトリ（`<git-common-dir>/worktree-slots/<N>/owner`）に記録する。`mkdir` で確保するため、同時に確保が走っても重複しない
 - `worktree-db-stop.sh` を実行せずにワークツリーを削除した場合でも、次に別のワークツリーがスロットを確保するときに、持ち主が消えたスロットの残りのコンテナを停止してから再利用する
