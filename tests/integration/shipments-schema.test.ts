@@ -281,6 +281,13 @@ describe("shipments", () => {
         .update({ assigned_admin_user_id: NONEXISTENT_ID })
         .eq("id", SHIPMENT_B_ID);
       expect(error?.message).toMatch(/shipments_assigned_admin_user_id_fkey/);
+
+      const { data } = await supabase
+        .from("shipments")
+        .select("assigned_admin_user_id")
+        .eq("id", SHIPMENT_B_ID)
+        .single();
+      expect(data?.assigned_admin_user_id).toBeNull();
     });
 
     it("order_items.shipment_id は存在しない出荷を指せない", async () => {
