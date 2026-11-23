@@ -95,6 +95,8 @@ export interface OrderRepository {
    * 明細の合計が上限を超えれば limit_exceeded（注文も limit_exceeded になり、adminUserId を
    * 主体として履歴に残す）、超えなければ invoice_sent の決済単位を作る。Stripe Invoice は
    * 作らない（invoice_sent のときだけ呼び出し側が発行する）。
+   * period には、対象の注文の createdAt が入る月次の期間を渡す（確定額は注文日で数えるため。
+   * 請求作成の日の期間を渡すと、先月の注文の明細を今月の枠でも数えてしまう）。
    * 別の注文・at_order・請求済み・キャンセル済みの注文の明細を含むときは例外を投げ、何も保存しない
    */
   createInvoiceSettlementWithLimitCheck(input: {

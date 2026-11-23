@@ -37,7 +37,8 @@ AS $$
     AND o.created_at < p_period_end
     AND oi.unit_price_snapshot IS NOT NULL
     AND (os.id IS NULL OR os.status <> 'cancelled')
-    AND oi.id <> ALL (p_excluded_item_ids);
+    -- NULL・NULL を含む配列を渡されても、除外なしとして数える（<> ALL が NULL になり0円にならないように）
+    AND oi.id <> ALL (array_remove(COALESCE(p_excluded_item_ids, '{}'), NULL));
 $$;
 
 REVOKE ALL ON FUNCTION public.confirmed_amount_in_period FROM PUBLIC;
@@ -171,7 +172,9 @@ BEGIN
 
   -- 同一顧客の注文確定・請求作成を直列化する行ロック（place_order_with_limit_check と同じ行）
   PERFORM 1 FROM public.users WHERE id = v_user_id FOR UPDATE;
-  -- 同じ注文の保存（save_order。注文のキャンセル・Webhook 等）とも直列化する
+  -- 判定の前に読む注文・明細の状態を、この関数の実行中に変えさせない。
+  -- ただし save_order の呼び出し側はロック無しで読んだ注文を書き戻すため、それより前に
+  -- 読まれた注文の保存とは直列化できない（既知の制約。issue 本文・PR を参照）
   SELECT status INTO v_order_status FROM public.orders WHERE id = p_order_id FOR UPDATE;
   PERFORM 1 FROM public.order_items WHERE id = ANY (p_item_ids) FOR UPDATE;
 
