@@ -55,7 +55,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `SectionHeader`: Eyebrow+Heading+説明文のセット
 - `FeatureGrid`: 罫線区切りのカードグリッド（`columns`/`dense`で調整）
 - `Input` / `Select` / `Checkbox` / `Radio`: フォーム部品。すでにトークン参照で書かれているため追加対応不要
-- `FormField`: ラベル・入力欄・項目ごとのエラー文言の組。`error` を渡すと入力欄の下に文言を出し、ラベルの `htmlFor` と `aria-describedby` を自動で結び付ける。子は `{(field) => <Input name="..." {...field} />}` のように受け取った属性を `Input` / `Select` に展開する。項目ごとのエラーを出すフォームは `<p id="...-error">` を手書きせずこれを使う
+- `FormField`: ラベル・入力欄・項目ごとのエラー文言の組。`error` を渡すと入力欄の下に文言を出し、ラベルの `htmlFor` と `aria-describedby` を自動で結び付ける。子は `{(field) => <Input name="..." {...field} />}` のように受け取った属性を `Input` / `Select` に展開する。項目ごとのエラーを出すフォームは `<p id="...-error">` を手書きせずこれを使う。`required` でラベルの横に「必須」の印（ラベルの文字列・読み上げには含めない）、`hint` で入力のヒント（エラーのときはエラー文言に置き換わる）を出す。画面上部のエラーのまとめから項目へリンクするときは `id` を渡す（最初の利用は `/onboarding/plan`）
 - `Table`（`TableHeader` / `TableBody` / `TableRow` / `TableHead` / `TableCell`）: 管理画面の一覧用テーブル。角丸の枠付きで、狭い画面では横スクロールする（最初の利用は `/admin/procurement/queue`）
 - `Badge`: 状態・区分を示す小さなラベル。`tone`(neutral/primary/success/warning/danger)
 - `Steps`: 手続きの進み具合（`steps` のラベルの配列と、今の位置 `current`（0始まり））。`<nav aria-label="お手続きの進み具合">` で囲み、今のステップに `aria-current="step"` を付ける（最初の利用はオンボーディング）
