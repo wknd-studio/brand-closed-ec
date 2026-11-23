@@ -116,7 +116,7 @@ export type OrderItemRow = {
   settlement_id: string | null;
 };
 
-type OrderSettlementRow = {
+export type OrderSettlementRow = {
   id: string;
   order_id: string;
   flow: string;
@@ -128,7 +128,7 @@ type OrderSettlementRow = {
   cancelled_at: string | null;
 };
 
-function toAddressSnapshot(json: Json): AddressSnapshot {
+export function toAddressSnapshot(json: Json): AddressSnapshot {
   const data = json as AddressSnapshotJson;
   return AddressSnapshot.of({
     recipientLastName: data.recipientLastName,
@@ -159,7 +159,7 @@ export function toOrderItem(row: OrderItemRow): OrderItem {
   });
 }
 
-function toOrderSettlement(row: OrderSettlementRow): OrderSettlement {
+export function toOrderSettlement(row: OrderSettlementRow): OrderSettlement {
   return reconstituteOrderSettlement({
     id: row.id,
     orderId: row.order_id,
@@ -191,6 +191,10 @@ function toOrder(row: OrderRow): Order {
 // toOrderItem が読む order_items の列（Query Service の実装でも使う）
 export const ORDER_ITEM_COLUMNS =
   "id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price, payment_timing, settlement_id";
+
+// toOrderSettlement が読む order_settlements の列（Query Service の実装でも使う）
+export const ORDER_SETTLEMENT_COLUMNS =
+  "id, order_id, flow, status, stripe_checkout_session_id, stripe_invoice_id, amount_snapshot, paid_at, cancelled_at";
 
 const ORDER_SELECT = `*, order_items(${ORDER_ITEM_COLUMNS}), order_settlements(*)`;
 
