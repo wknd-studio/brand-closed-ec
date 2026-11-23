@@ -114,6 +114,7 @@ type Step = {
   name?: string;
   if?: string;
   run?: string;
+  env?: Record<string, string>;
   "continue-on-error"?: unknown;
 };
 type Job = {
@@ -180,10 +181,27 @@ describe("deploy.yml の本番のスモークテスト（smoke-prod）", () => {
   it("本番に向けて、ログインしないスモークテストだけを流す（Testing Tokenが要るものは流さない）", () => {
     expect(smokeIndex).toBeGreaterThanOrEqual(0);
     const runs = steps.map((step) => step.run ?? "").join("\n");
-    expect(runs).toMatch(
-      /BASE_URL=\$NEXT_PUBLIC_APP_URL pnpm test:e2e:smoke:public/
-    );
     expect(runs).not.toMatch(/pnpm test:e2e(:smoke)?(?![:\w])/);
+  });
+
+  it("Dopplerからは本番のURLだけを取り出し、管理用のトークンが入ったconfig（prod_deploy）の値をテストに渡さない", () => {
+    const urlStep = steps.find((step) => step.id === "app-url");
+    expect(urlStep?.run).toContain(
+      "doppler secrets get NEXT_PUBLIC_APP_URL --plain"
+    );
+    // 本番のURLがまだ無い（本番の環境ができる前）ときは、空のURLでテストを流さずに失敗する
+    expect(urlStep?.run).toMatch(/test -n/);
+    // DopplerのトークンはURLを取り出すステップでだけ読み、doppler run で全部の値を環境変数に入れない
+    const readers = steps.filter((step) =>
+      JSON.stringify(step).includes("secrets.DOPPLER_TOKEN")
+    );
+    expect(readers).toEqual([urlStep]);
+    expect(steps.some((step) => /doppler run/.test(step.run ?? ""))).toBe(
+      false
+    );
+    expect(steps[smokeIndex]?.env?.BASE_URL).toBe(
+      "${{ steps.app-url.outputs.url }}"
+    );
   });
 
   it("ステップ名から、環境の問題（スモークテスト）で失敗したと分かる", () => {
