@@ -75,6 +75,16 @@ export default function PlanSelector({
   const [planId, setPlanId] = useState(values?.plan);
   const selectedPlan = plans.find(({ id }) => id === planId);
 
+  // ブラウザが戻る・再読み込みで radio の選択を復元したときは onChange が呼ばれないため、
+  // 表示した時点で選ばれているプランをまとめに反映する
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const checked = formRef.current?.querySelector<HTMLInputElement>(
+      'input[name="plan"]:checked'
+    );
+    if (checked) setPlanId(checked.value);
+  }, []);
+
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // 確定ボタンが画面の下にあっても、エラーのまとめが見えるようにする
@@ -133,7 +143,11 @@ export default function PlanSelector({
           </div>
         </div>
       )}
-      <form action={action} className="flex flex-wrap items-start gap-6">
+      <form
+        ref={formRef}
+        action={action}
+        className="flex flex-wrap items-start gap-6"
+      >
         {isCorporate && (
           <input type="hidden" name="accountType" value="corporate" />
         )}
