@@ -951,6 +951,27 @@ export type Database = {
         };
         Returns: string;
       };
+      confirmed_amount_in_period: {
+        Args: {
+          p_excluded_item_ids?: string[];
+          p_period_end: string;
+          p_period_start: string;
+          p_user_id: string;
+        };
+        Returns: number;
+      };
+      create_invoice_settlement_with_limit_check: {
+        Args: {
+          p_admin_user_id: string;
+          p_item_ids: string[];
+          p_monthly_limit: number;
+          p_order_id: string;
+          p_period_end: string;
+          p_period_start: string;
+          p_settlement_id: string;
+        };
+        Returns: string;
+      };
       delete_order: { Args: { p_order_id: string }; Returns: undefined };
       get_current_admin_user_id: { Args: never; Returns: string };
       get_current_user_id: { Args: never; Returns: string };

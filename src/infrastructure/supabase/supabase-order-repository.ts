@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type {
+  InvoiceSettlementCreated,
   OrderRepository,
   OrderStatusChangedBy,
   OrderWithUser,
@@ -443,5 +444,30 @@ export class SupabaseOrderRepository implements OrderRepository {
       }
       throw new Error(`Order保存（上限チェック込み）に失敗: ${error.message}`);
     }
+  }
+
+  async createInvoiceSettlementWithLimitCheck(input: {
+    orderId: string;
+    itemIds: string[];
+    settlementId: string;
+    period: MonthlyPeriod;
+    monthlyLimit: MonthlyLimit;
+    adminUserId: string;
+  }): Promise<InvoiceSettlementCreated> {
+    const { data, error } = await this.db.rpc(
+      "create_invoice_settlement_with_limit_check",
+      {
+        p_order_id: input.orderId,
+        p_item_ids: input.itemIds,
+        p_settlement_id: input.settlementId,
+        p_period_start: input.period.start.toISOString(),
+        p_period_end: input.period.end.toISOString(),
+        // 無制限は NULL で渡す（saveNewOrderWithLimitCheck と同じ）
+        p_monthly_limit: input.monthlyLimit.amount as number,
+        p_admin_user_id: input.adminUserId,
+      }
+    );
+    if (error) throw new Error(`請求作成に失敗: ${error.message}`);
+    return data as InvoiceSettlementCreated;
   }
 }

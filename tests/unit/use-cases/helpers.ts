@@ -220,6 +220,9 @@ export function makeOrderRepo(order?: Order): OrderRepository {
     sumConfirmedAmountByUserId: vi.fn().mockResolvedValue(0),
     save: vi.fn().mockResolvedValue(undefined),
     saveNewOrderWithLimitCheck: vi.fn().mockResolvedValue(undefined),
+    createInvoiceSettlementWithLimitCheck: vi
+      .fn()
+      .mockResolvedValue("invoice_sent"),
     delete: vi.fn().mockResolvedValue(undefined),
     findByUserId: vi.fn().mockResolvedValue([]),
     findActiveOrdersWithUser: vi.fn().mockResolvedValue([]),
