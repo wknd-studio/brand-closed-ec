@@ -45,7 +45,7 @@ Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID
 - **入口は同時に1か所**: Clerk の Webhook の送り先（ngrok の固定URL）と `stripe listen` は1つしか持てないため、`task dev` 一式（`dev`・`dev:services`・`dev:next`・`dev:stripe`・`dev:ngrok`・`dev:ngrok:spawn`・`dev:clean`）は最初に入口を確保する（`scripts/dev-entry.sh`）。別の場所（メインのチェックアウトを含む）が使用中なら、使用中の場所（パス・ブランチ・issue）を出して止まる
 - **確保の記録**: スロットと同じく、gitの共通ディレクトリ（`<git-common-dir>/dev-entry/`）に `mkdir` で作る。`owner`（場所の絶対パス）・`branch`・`pids`（確保した `task` のPID。別ウィンドウの `task dev:ngrok` の分も足す）を記録する
 - **返す**: `task dev:clean` が、Next.js・`stripe listen`・ngrok・Sanity Studio を止めてから入口を返す。メインのチェックアウトでは今までどおり Supabase も止める。ワークツリーの Supabase はテストでも使うため止めない（片付けは `worktree-db-stop.sh`）
-- **持ち主が消えた入口の回収**: 持ち主の場所が削除済み、または `pids` のプロセスがすべて終了していれば（`task dev` の異常終了等）、次に `task dev` した場所が回収して確保する。別ウィンドウの ngrok が動いている間は回収しない（固定URLを持ったままのため）
+- **持ち主が消えた入口の回収**: `pids` のプロセスがすべて終了していれば（`task dev` の異常終了・ワークツリーの削除等）、次に `task dev` した場所が回収して確保する。別ウィンドウの ngrok が動いている間は、持ち主のワークツリーが削除済みでも回収しない（固定URLを古い ngrok が持ったままになるため）。その場合は止まって `task dev:clean` を案内し、`task dev:clean` はどこからでも残ったプロセスを止めて入口を返せる。生存はPIDで判定するため、PIDが無関係のプロセスに再利用されると回収されない（持ち主の場所で `task dev:clean` する）
 - **ngrok の転送先**: `ngrok.yml` の `addr` をその場所のポートに書き換えた一時的な設定ファイルを作って渡す（`ngrok.yml` 自体は書き換えない）
 - **シード**: ワークツリーで `task dev` すると、スロットのDBにテストアカウント（`docs/seed-data.md`。オンボーディングを終えた会員の行）が揃っていなければ、テストアカウントとシナリオのデータを投入する（`scripts/seed-if-missing.ts`）。揃っていれば何もしない（手動確認で変えたデータを入れ直さないため）。メインのチェックアウトでは今までどおり投入しない
 - **Sanity Studio**（`sanity dev`、ポート3333）: ポートは固定だが、`task dev` 自体が同時に1か所だけのため衝突しない
