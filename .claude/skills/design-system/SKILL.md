@@ -54,6 +54,8 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `SectionHeader`: Eyebrow+Heading+説明文のセット
 - `FeatureGrid`: 罫線区切りのカードグリッド（`columns`/`dense`で調整）
 - `Input` / `Select` / `Checkbox` / `Radio`: フォーム部品。すでにトークン参照で書かれているため追加対応不要
+- `Table`（`TableHeader` / `TableBody` / `TableRow` / `TableHead` / `TableCell`）: 管理画面の一覧用テーブル。角丸の枠付きで、狭い画面では横スクロールする（最初の利用は `/admin/procurement/queue`）
+- `Badge`: 状態・区分を示す小さなラベル。`tone`(neutral/primary/success/warning/danger)
 
 ## 注意事項
 
