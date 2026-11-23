@@ -25,13 +25,13 @@
 
 ## できること・できないこと
 
-| 分離対象                                  | 状態                                                                                   |
-| ----------------------------------------- | -------------------------------------------------------------------------------------- |
-| ファイルシステム（git worktree、Orca）    | 完全分離                                                                               |
-| ローカルSupabase（Docker）                | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす） |
-| Next.js/Playwrightの開発サーバーポート    | 完全分離（`with-worktree-db.sh` が `PORT` を設定）                                     |
-| Clerk・Stripe・Sanity                     | **共有**（同じdevインスタンス・テストモードアカウントを全worktreeで使う）              |
-| ngrok・Stripe CLI（`task dev`のフル構成） | **分離しない**。手動確認は同時に1ワークツリー（通常はメインのチェックアウト）で行う    |
+| 分離対象                                  | 状態                                                                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ファイルシステム（git worktree、Orca）    | 完全分離                                                                                                                      |
+| ローカルSupabase（Docker）                | 完全分離（`scripts/patch-supabase-slot.py`でスロットごとにポート・project_idをずらす）                                        |
+| Next.js/Playwrightの開発サーバーポート    | 完全分離（`with-worktree-db.sh` が `PORT` を設定）                                                                            |
+| Clerk・Stripe・Sanity                     | **共有**（同じローカル用のClerkインスタンス・テストモードアカウントを全worktreeで使う。Clerkはstgとは別のインスタンス。#686） |
+| ngrok・Stripe CLI（`task dev`のフル構成） | **分離しない**。手動確認は同時に1ワークツリー（通常はメインのチェックアウト）で行う                                           |
 
 Clerk/Sanityの固定テストID（メールアドレス・ブランド/商品ID）は`WORKTREE_SLOT`環境変数でスロットごとに一意化される（`tests/e2e/helpers/clerk-test-invitation.ts`の`slotEmail`/`withSlotSuffix`）。
 
