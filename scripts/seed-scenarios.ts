@@ -2,7 +2,7 @@
  * テスト用アカウント（scripts/seed-users.ts）に、各状態の注文（シナリオのデータ）を入れる。
  * local でも stg でも「ログインして見るだけ」で注文履歴・管理画面の注文を確かめられるようにする（issue #713）。
  *
- * - べき等: 目印（決まった範囲のID: SCENARIO_ID_RANGE）の付いた注文だけを消してから入れ直す。
+ * - べき等: 目印（決まった範囲のID: SCENARIO_ID_RANGE。古い形の LEGACY_SCENARIO_ID_RANGE も）の付いた注文だけを消してから入れ直す。
  *   目印の無い行（手で作った注文・E2E が作る行）は消さない
  * - 商品は scripts/seed-products.ts の商品（Sanity の seed-*）を使い、商品名・単価は会員のランクの価格にする
  * - Stripe の ID はダミー（seed_scenario_dummy を含む値）。Stripe のオブジェクトは作らない（理由: docs/seed-data.md）
@@ -43,14 +43,27 @@ export const SCENARIO_ACCOUNT_EMAILS: Record<ScenarioAccount, string> = {
 /** 「注文はまだありません」の確認用に、注文を入れずに残すアカウント */
 export const NO_ORDER_ACCOUNT_EMAIL = "info+test_starter@wknd-studio.com";
 
-// 目印: シナリオの行のIDはこの接頭辞で始める（ランダムなUUIDがこの範囲に入る確率は 1/2^32）
-const ID_PREFIX = "5eed0713";
+// 目印: シナリオの行のIDは、先頭8文字を `5eed` ＋種類（1文字）＋通し番号（10進3桁）にする。
+// 管理画面は注文IDの先頭8文字を注文番号として出すため、注文ごとに番号が違って見えるようにする（issue #736）。
+// 消すときは注文のIDの範囲で選び、明細・決済単位はその注文のものを消す。
+// ランダムなUUIDが注文の範囲（5eed1000〜5eed1999）に入る確率は 1/2^20 程度
+const ID_KIND = { order: "1", settlement: "2", item: "3" } as const;
+const MAX_SEQ = 999;
 export const SCENARIO_ID_RANGE = {
-  from: `${ID_PREFIX}-0000-0000-0000-000000000000`,
-  to: `${ID_PREFIX}-ffff-ffff-ffff-ffffffffffff`,
+  from: `5eed${ID_KIND.order}000-0000-0000-0000-000000000000`,
+  to: `5eed${ID_KIND.order}${MAX_SEQ}-ffff-ffff-ffff-ffffffffffff`,
 };
-const scenarioId = (kind: "order" | "settlement" | "item", n: number) =>
-  `${ID_PREFIX}-${{ order: "0001", settlement: "0002", item: "0003" }[kind]}-4000-8000-${String(n).padStart(12, "0")}`;
+// 古い形（issue #713 の時点。先頭8文字がすべて 5eed0713）の行も、入れ直すときに消す
+export const LEGACY_SCENARIO_ID_RANGE = {
+  from: "5eed0713-0000-0000-0000-000000000000",
+  to: "5eed0713-ffff-ffff-ffff-ffffffffffff",
+};
+const scenarioId = (kind: keyof typeof ID_KIND, n: number) => {
+  if (n > MAX_SEQ) {
+    throw new Error(`シナリオの${kind}が${MAX_SEQ}件を超えました`);
+  }
+  return `5eed${ID_KIND[kind]}${String(n).padStart(3, "0")}-0713-4000-8000-000000000000`;
+};
 
 const DAY = 24 * 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
@@ -388,31 +401,34 @@ function buildRows(members: Record<ScenarioAccount, Member>, now: Date): Rows {
   return rows;
 }
 
-// 目印の付いた注文だけを消す。履歴（order_status_changes）は注文の削除に合わせて消える
+// 目印の付いた注文（古い形を含む）だけを消す。履歴（order_status_changes）は注文の削除に合わせて消える
 async function deleteScenarioOrders(supabase: Supabase): Promise<void> {
-  const steps = [
-    () =>
-      supabase
-        .from("order_items")
-        .delete()
-        .gte("order_id", SCENARIO_ID_RANGE.from)
-        .lte("order_id", SCENARIO_ID_RANGE.to),
-    () =>
-      supabase
-        .from("order_settlements")
-        .delete()
-        .gte("order_id", SCENARIO_ID_RANGE.from)
-        .lte("order_id", SCENARIO_ID_RANGE.to),
-    () =>
-      supabase
-        .from("orders")
-        .delete()
-        .gte("id", SCENARIO_ID_RANGE.from)
-        .lte("id", SCENARIO_ID_RANGE.to),
-  ];
-  for (const step of steps) {
-    const { error } = await step();
-    if (error) throw new Error(`シナリオの注文の削除に失敗: ${error.message}`);
+  for (const range of [SCENARIO_ID_RANGE, LEGACY_SCENARIO_ID_RANGE]) {
+    const steps = [
+      () =>
+        supabase
+          .from("order_items")
+          .delete()
+          .gte("order_id", range.from)
+          .lte("order_id", range.to),
+      () =>
+        supabase
+          .from("order_settlements")
+          .delete()
+          .gte("order_id", range.from)
+          .lte("order_id", range.to),
+      () =>
+        supabase
+          .from("orders")
+          .delete()
+          .gte("id", range.from)
+          .lte("id", range.to),
+    ];
+    for (const step of steps) {
+      const { error } = await step();
+      if (error)
+        throw new Error(`シナリオの注文の削除に失敗: ${error.message}`);
+    }
   }
 }
 
