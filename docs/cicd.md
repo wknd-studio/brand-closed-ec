@@ -62,7 +62,8 @@ develop 向けの同じリポジトリの `feature/*` のPRに push すると、
 - **Preview Deploy は develop にマージされてから動く**: `workflow_run` のワークフローは既定のブランチの定義だけが動くため。Preview Deploy 自体を変えるPRでは、その変更はプレビューで試せない（マージ後の次のPRで確かめる）
 - **stg の DB・Clerk・Stripe・Sanity を共有する**: Worker の secrets・ビルド時の `NEXT_PUBLIC_*` は Doppler の `stg` の値を使う。アプリ自身のURL（`NEXT_PUBLIC_APP_URL`）だけをプレビューのURLに、Sentry の環境（`NEXT_PUBLIC_SENTRY_ENVIRONMENT`）を `preview` にする（Stripe Checkout の戻り先・招待リンクが stg に飛ばないように）。stg のテストアカウントでログインできる
 - **マイグレーション（`supabase/migrations/`）を含むPRは出さない**: 「マイグレーションを含むためプレビューは出さない（メインのチェックアウトで確かめる）」とコメントし、前の push で出したプレビューがあれば削除する。stg の DB にマイグレーションを適用しない（ワークフローに DB の操作は無い）
-- **fork のPR・Dependabot のPRでは動かさない**: stg のシークレットをPRのコードに渡さないため。Preview のビルドのジョブの条件（同じリポジトリ・Dependabot 以外・`feature/*`）に加えて、`preview-build` の environment を使えるブランチを `feature/*` だけに絞っている。Preview Deploy も、API で読んだPRが同じリポジトリの `feature/*` から develop へのPRで、Dependabot のものでないときだけ動く
+- **fork のPR・Dependabot のPRでは動かさない**: stg のシークレットをPRのコードに渡さないため。Preview のビルドのジョブの条件（同じリポジトリ・Dependabot 以外・`feature/*`）で飛ばす。fork・Dependabot のPRの実行には、environment の secrets もそもそも渡らない。Preview Deploy も、API で読んだPRが同じリポジトリの `feature/*` から develop へのPRで、Dependabot のものでないときだけ動く
+- **`preview-build` の environment は PR のマージ用の ref（`refs/pull/*/merge`）だけ**: `pull_request` のジョブの environment の制限は、head のブランチ名ではなく `refs/pull/<番号>/merge` で判定される（PR #729 で確かめた）。そのため `feature/*` には絞れない。push の権限がある人はどの名前のブランチでも作れるので、もともと `feature/*` に絞っても守りにはならない。push のイベントからは使えない
 - **stg の Worker（`brand-closed-ec-stg`）は書き換えない**: 名前を変えた別の Worker のため、デプロイ・secrets・Durable Objects（OpenNext のキャッシュ）は Worker ごとに別になる。レート制限の名前空間も、同じ `namespace_id` だと同じアカウントの Worker どうしで回数を共有するため、`wrangler.preview.jsonc` で stg と分けている。`wrangler.preview.jsonc` は名前とレート制限の名前空間のほかは `wrangler.stg.jsonc` と同じにする（`tests/unit/preview-workflow.test.ts`）
 - **Webhook は stg（develop のコード）で処理される**: Clerk・Stripe の Webhook の送り先は stg のままのため、プレビューで決済すると、決済確定の処理は develop のコードで走る。Webhook の変更を含むPRはプレビューで確かめられない
 - **「サブスクを管理」の転送先は stg**: Checkout の戻り先（`success_url`・`cancel_url`）はプレビューのURLになるが、すでに入会済みの会員が Checkout で止められた画面の「サブスクを管理」の転送先は、Stripe のダッシュボードで stg に固定している（`docs/signup-flow.md`）
@@ -79,13 +80,13 @@ Cloudflare の Workers の Version の preview URL（`wrangler versions upload -
 
 ### シークレット
 
-| Secret                 | environment（使えるブランチ）  | Doppler の config                                          | 使うステップ                                                                                     |
-| ---------------------- | ------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `DOPPLER_TOKEN_WORKER` | `preview-build`（`feature/*`） | `stg`                                                      | Preview の Build（`NEXT_PUBLIC_*` を埋め込む）                                                   |
-| `DOPPLER_TOKEN`        | `preview`（`develop`）         | `stg_preview`（`stg` の branch。Cloudflare の2つだけ足す） | Preview Deploy の wrangler の認証（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）。Sync・削除 |
-| `DOPPLER_TOKEN_WORKER` | `preview`（`develop`）         | `stg`                                                      | Preview Deploy の Sync で Worker の secrets に上げる値                                           |
+| Secret                 | environment（使えるブランチ）          | Doppler の config                                          | 使うステップ                                                                                     |
+| ---------------------- | -------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DOPPLER_TOKEN_WORKER` | `preview-build`（`refs/pull/*/merge`） | `stg`                                                      | Preview の Build（`NEXT_PUBLIC_*` を埋め込む）                                                   |
+| `DOPPLER_TOKEN`        | `preview`（`develop`）                 | `stg_preview`（`stg` の branch。Cloudflare の2つだけ足す） | Preview Deploy の wrangler の認証（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）。Sync・削除 |
+| `DOPPLER_TOKEN_WORKER` | `preview`（`develop`）                 | `stg`                                                      | Preview Deploy の Sync で Worker の secrets に上げる値                                           |
 
-`workflow_run` のジョブは既定のブランチ（develop）の上で動くため、`preview` は develop だけが使える。`feature/*` のPRのワークフローに `environment: preview` と書いても Cloudflare のトークンは読めない。
+`workflow_run` のジョブは既定のブランチ（develop）の上で動くため、`preview` は develop だけが使える。PRのワークフローに `environment: preview` と書いても Cloudflare のトークンは読めない。
 
 `stg_preview` には `stg_deploy` の管理用のトークン（`SUPABASE_DB_URL`・`SENTRY_AUTH_TOKEN`・Sanity の書き込みトークン等）を入れない。プレビューは stg の DB のスキーマを変えず、ソースマップも上げないため。`CLOUDFLARE_API_TOKEN` は `stg_deploy` と同じ値で、作り直したら `stg_preview` にも入れる。
 
@@ -246,7 +247,7 @@ done
 
 Cloudflare・Sanity のトークンは、stg 用でも本番に届く。そのため、トークンを読めるジョブを絞って補う。
 
-- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging`・`preview` は `develop` だけ、`preview-build` は `feature/*` だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
+- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging`・`preview` は `develop` だけ、`preview-build` は `refs/pull/*/merge`（PRのジョブ）だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
 - PR のジョブは environment を使わない（上の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。例外は PRごとのプレビューのビルド（`preview-build`。`stg` の値だけで、Cloudflare のトークンは無い）だけ
 - 商品データの同期（`product-data-sync.yml`）の定期実行は、GitHub の仕様で既定ブランチ（develop）でしか動かない。本番の同期は、develop の実行が `gh workflow run product-data-sync.yml --ref main` で main の上に起動し直して行う（main にこのワークフローが無い間は飛ばす）
 
