@@ -1,0 +1,48 @@
+{
+  // PRごとのプレビュー（#727。.github/workflows/preview.yml）。ワークフローが --name brand-closed-ec-pr-<PR番号> で
+  // 名前を上書きする。名前とレート制限の名前空間のほかは wrangler.stg.jsonc と同じにする
+  // （tests/unit/preview-workflow.test.ts が検査する）
+  "name": "brand-closed-ec-pr",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" },
+      {
+        "name": "NEXT_CACHE_DO_SHARDED_TAG_CACHE",
+        "class_name": "DOShardedTagCache",
+      },
+      {
+        "name": "NEXT_CACHE_DO_BUCKET_CACHE_PURGE",
+        "class_name": "BucketCachePurge",
+      },
+    ],
+  },
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      // 同じ namespace_id は同じアカウントの Worker どうしで回数を共有するため、stg（1001）と分ける
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 300,
+        "period": 60,
+      },
+    },
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "DOQueueHandler",
+        "DOShardedTagCache",
+        "BucketCachePurge",
+      ],
+    },
+  ],
+}

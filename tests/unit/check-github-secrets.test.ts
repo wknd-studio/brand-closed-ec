@@ -52,10 +52,15 @@ describe("findUnusedSecrets", () => {
 });
 
 describe("checkDeploymentBranches", () => {
-  it("production は main、staging は develop だけ", () => {
+  it("production は main、staging・preview は develop、preview-build は PR のマージ用の ref だけ", () => {
     expect(EXPECTED_DEPLOYMENT_BRANCHES).toEqual({
       production: ["main"],
       staging: ["develop"],
+      // PRごとのプレビュー（#727）。Cloudflare のトークンは develop の定義で動く workflow_run だけが読む。
+      // ビルドの stg の値は pull_request のジョブだけ（pull_request のジョブの ref は refs/pull/<番号>/merge
+      // のため、head のブランチ名では絞れない。push のイベントからは読めない）
+      preview: ["develop"],
+      "preview-build": ["refs/pull/*/merge"],
     });
   });
 
@@ -65,6 +70,12 @@ describe("checkDeploymentBranches", () => {
         [
           { name: "production", restricted: true, branches: ["main"] },
           { name: "staging", restricted: true, branches: ["develop"] },
+          { name: "preview", restricted: true, branches: ["develop"] },
+          {
+            name: "preview-build",
+            restricted: true,
+            branches: ["refs/pull/*/merge"],
+          },
         ],
         EXPECTED_DEPLOYMENT_BRANCHES
       )
@@ -76,9 +87,9 @@ describe("checkDeploymentBranches", () => {
       [
         { name: "production", restricted: false, branches: [] },
         { name: "staging", restricted: true, branches: ["develop", "main"] },
-        { name: "preview", restricted: true, branches: [] },
+        { name: "other", restricted: true, branches: [] },
       ],
-      { ...EXPECTED_DEPLOYMENT_BRANCHES, qa: ["develop"] }
+      { production: ["main"], staging: ["develop"], qa: ["develop"] }
     );
     expect(problems).toEqual([
       "production: デプロイできるブランチが制限されていない（期待: main）",

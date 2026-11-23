@@ -79,14 +79,15 @@ describe("Sync Wrangler Secrets & Deploy", () => {
       .flatMap((j) => j.steps ?? [])
       .flatMap((s) => (s.run ?? "").split("\n"))
       .filter((l) => l.includes("wrangler secret bulk"));
-    expect(lines).toHaveLength(2);
+    // stg・本番のデプロイと、PRごとのプレビュー（#727。stg の値を上げる）
+    expect(lines).toHaveLength(3);
     for (const line of lines) {
       expect(line).toContain('--token "$DOPPLER_TOKEN_WORKER"');
       expect(line).toContain(`jq -f ${FILTER}`);
     }
   });
 
-  it("DOPPLER_TOKEN_WORKER は Sync のステップでだけ読む", () => {
+  it("DOPPLER_TOKEN_WORKER は Sync のステップと、プレビューのビルドでだけ読む", () => {
     const users = workflows.flatMap(({ file, wf }) =>
       Object.entries(wf.jobs).flatMap(([id, j]) =>
         (j.steps ?? [])
@@ -97,6 +98,9 @@ describe("Sync Wrangler Secrets & Deploy", () => {
     expect(users.sort()).toEqual([
       `deploy.yml:deploy-prod:${SYNC}`,
       `deploy.yml:deploy-stg:${SYNC}`,
+      // プレビュー（#727）。PRのコードを動かすビルドは、Cloudflare のトークンが入っていない stg の値だけで動かす
+      `preview-deploy.yml:reconcile:${SYNC}`,
+      "preview.yml:build:Build",
     ]);
   });
 });
