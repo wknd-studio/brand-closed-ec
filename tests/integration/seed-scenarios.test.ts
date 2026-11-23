@@ -213,6 +213,12 @@ describe("seedScenarios（実DB）", () => {
       orders.filter((o) => o.user_id === userIds.corporate).length
     ).toBeGreaterThan(0);
     expect(orders.some((o) => o.order_status_changes.length >= 2)).toBe(true);
+    // 渡したアカウント以外（注文の無いまま残す会員など）には注文を入れない
+    expect(
+      orders.filter(
+        (o) => o.user_id !== userIds.standard && o.user_id !== userIds.corporate
+      )
+    ).toEqual([]);
     expect(Object.values(SCENARIO_ACCOUNT_EMAILS)).not.toContain(
       NO_ORDER_ACCOUNT_EMAIL
     );
