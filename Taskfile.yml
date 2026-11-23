@@ -64,10 +64,13 @@ tasks:
       - bash scripts/with-worktree-db.sh pnpm test:integration
 
   check:
-    desc: push・PR作成前の完了チェック（typecheck → lint → ユニットテスト → 統合テスト）。どれかが失敗すると中断する
+    desc: push・PR作成前の完了チェック（typecheck → lint → knip → ユニットテスト → 統合テスト）。どれかが失敗すると中断する
     cmds:
       - pnpm typecheck
       - pnpm lint
+      # デッドコード（未使用のファイル・export・依存）。production モードはテストからしか呼ばれていない本番のコードを見る（docs/knip.md）
+      - pnpm knip
+      - pnpm knip:production
       - pnpm test
       - task: test:integration
 

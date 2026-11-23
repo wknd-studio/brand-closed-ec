@@ -6,6 +6,7 @@
 PR (develop・main)
   ├─ TypeScript チェック
   ├─ Lint / Format チェック
+  ├─ Knip（デッドコードの検出。docs/knip.md）
   ├─ Unit Tests
   ├─ Gitleaks（PR の commit の機密情報の漏れ）
   └─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
@@ -16,11 +17,11 @@ push (develop・main)
        └─ [main]    DB マイグレーション (prod) → ビルド → デプロイ
 ```
 
-| トリガー            | 実行されるジョブ                           |
-| ------------------- | ------------------------------------------ |
-| PR → develop / main | typecheck・lint・test・E2E（コード変更時） |
-| push → develop      | migrate stg → deploy stg → E2E             |
-| push → main         | migrate prod → deploy prod                 |
+| トリガー            | 実行されるジョブ                                 |
+| ------------------- | ------------------------------------------------ |
+| PR → develop / main | typecheck・lint・knip・test・E2E（コード変更時） |
+| push → develop      | migrate stg → deploy stg → E2E                   |
+| push → main         | migrate prod → deploy prod                       |
 
 > **PR時のE2Eについて**: `docs/`・`specs/`・`*.md`のみの変更（ドキュメントのみのPR）ではE2Eジョブをスキップする（`dorny/paths-filter`で判定）。実行する場合もstgの本物のDBには触れず、CI実行環境内でSupabaseをローカル起動してテスト用データを使う（PRごとに独立、他のPRのテストと干渉しない）。
 

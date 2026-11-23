@@ -16,7 +16,7 @@
 
 ### 2. コード品質
 
-- `task check`（typecheck → lint → ユニットテスト → 統合テスト）が green である（push・PR 作成前に実行する）
+- `task check`（typecheck → lint → knip → ユニットテスト → 統合テスト）が green である（push・PR 作成前に実行する）
 - `pnpm format`（Prettier）を適用済み
 
 ### 3. テスト

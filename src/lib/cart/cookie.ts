@@ -19,14 +19,6 @@ export function serializeCart(cart: Cart): string {
   return encodeURIComponent(JSON.stringify(cart));
 }
 
-export function readCart(): Cart {
-  if (typeof document === "undefined") return { items: [] };
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${COOKIE_NAME}=`));
-  return parseCart(match?.split("=").slice(1).join("="));
-}
-
 export function writeCart(cart: Cart): void {
   if (typeof document === "undefined") return;
   document.cookie = `${COOKIE_NAME}=${serializeCart(cart)}; max-age=${MAX_AGE}; path=/; SameSite=Lax`;
