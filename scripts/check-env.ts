@@ -447,6 +447,12 @@ export function parseRemoteMigrations(out: string): string[] {
     .filter((v) => /^\d+$/.test(v));
 }
 
+/** 多すぎて読めない一覧は、件数と最初・最後だけにする */
+function summarize(items: string[]): string {
+  if (items.length <= 5) return items.join(", ");
+  return `${items.length}個（${items[0]} 〜 ${items[items.length - 1]}）`;
+}
+
 export function checkMigrations(
   local: string[],
   remote: string[]
@@ -460,23 +466,92 @@ export function checkMigrations(
   return ng(
     name,
     [
-      ...(pending.length ? [`未適用: ${pending.join(", ")}`] : []),
+      ...(pending.length ? [`未適用: ${summarize(pending)}`] : []),
       ...(unknown.length ? [`リモートにだけある: ${unknown.join(", ")}`] : []),
     ],
     "未適用のものは、対象のブランチ（本番は main）への push の Deploy の Migrate DB で適用する。リモートにだけあるものは、どこから入ったかを調べる"
   );
 }
 
-export function formatResults(results: CheckResult[]): {
-  text: string;
-  failed: boolean;
-} {
-  const lines: string[] = [];
-  for (const r of results) {
-    const label = { ok: "OK  ", ng: "NG  ", skip: "SKIP" }[r.status];
-    lines.push(`${label} ${r.name}${r.detail ? `: ${r.detail}` : ""}`);
-    if (r.status !== "ok" && r.fix) lines.push(`     直し方: ${r.fix}`);
+/** 端末での表示幅（全角は2桁） */
+function displayWidth(text: string): number {
+  let width = 0;
+  for (const c of text) {
+    width +=
+      /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(
+        c
+      )
+        ? 2
+        : 1;
   }
+  return width;
+}
+
+function padEnd(text: string, width: number): string {
+  return text + " ".repeat(Math.max(0, width - displayWidth(text)));
+}
+
+/**
+ * 表示幅 `width` に収まるよう折り返す。続きの行は2桁下げる。
+ * 名前を途中で切らないよう `, ` の区切りを優先し、それでも収まらないもの（日本語の文）だけ文字で切る
+ */
+function wrap(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  const limit = () => (lines.length === 0 ? width : width - 2);
+  const flush = () => {
+    lines.push(line.trimEnd());
+    line = "";
+  };
+  for (const piece of text.split(/(?<=, )/)) {
+    if (line && displayWidth(line + piece) > limit()) flush();
+    line += line ? piece : piece.trimStart();
+    while (displayWidth(line) > limit()) {
+      let cut = "";
+      for (const c of line) {
+        if (displayWidth(cut + c) > limit()) break;
+        cut += c;
+      }
+      const rest = line.slice(cut.length).trimStart();
+      line = cut;
+      flush();
+      line = rest;
+    }
+  }
+  if (line) flush();
+  return lines.map((l, k) => (k === 0 ? l : `  ${l}`));
+}
+
+/** 結果・項目・内容の表にする。内容は問題（` / ` 区切り）ごとに行を分け、直し方をその下に出す */
+export function formatResults(
+  results: CheckResult[],
+  width = 120
+): { text: string; failed: boolean } {
+  const label = { ok: "OK", ng: "NG", skip: "SKIP" } as const;
+  const statusWidth = 4;
+  const nameWidth = Math.max(4, ...results.map((r) => displayWidth(r.name)));
+  const indent = statusWidth + 2 + nameWidth + 2;
+  const contentWidth = Math.max(20, width - indent);
+  const row = (status: string, name: string, content: string) =>
+    `${padEnd(status, statusWidth)}  ${padEnd(name, nameWidth)}  ${content}`.trimEnd();
+
+  const lines = [
+    row("結果", "項目", "内容"),
+    row(
+      "-".repeat(statusWidth),
+      "-".repeat(nameWidth),
+      "-".repeat(contentWidth)
+    ),
+  ];
+  for (const r of results) {
+    const content = [
+      ...(r.detail ? r.detail.split(" / ") : []),
+      ...(r.status !== "ok" && r.fix ? [`→ 直し方: ${r.fix}`] : []),
+    ].flatMap((c) => wrap(c, contentWidth));
+    lines.push(row(label[r.status], r.name, content[0] ?? ""));
+    for (const c of content.slice(1)) lines.push(" ".repeat(indent) + c);
+  }
+
   const ngCount = results.filter((r) => r.status === "ng").length;
   const skipCount = results.filter((r) => r.status === "skip").length;
   lines.push(
@@ -773,7 +848,10 @@ async function main(): Promise<void> {
     )),
   ];
 
-  const { text, failed } = formatResults(results);
+  const { text, failed } = formatResults(
+    results,
+    process.stdout.columns || 120
+  );
   console.log(`対象: Doppler の ${target.config}・${target.deployConfig}\n`);
   console.log(text);
   if (failed) process.exit(1);
