@@ -602,3 +602,20 @@ describe("parseJsonWithoutLeak", () => {
     expect(parseJsonWithoutLeak('{"a":1}', "x")).toEqual({ a: 1 });
   });
 });
+
+describe("checkClerkInstance で NEXT_PUBLIC_APP_URL が空のとき", () => {
+  it("本番: インスタンス・キーの判定は続け、アプリの URL が URL でないことを NG に足す", () => {
+    const pk = `pk_live_${Buffer.from("clerk.example.com$").toString("base64")}`;
+    const [result] = checkClerkInstance({
+      environmentType: "production",
+      domains: [
+        { name: "example.com", frontend_api_url: "https://clerk.example.com" },
+      ],
+      publishableKey: pk,
+      appUrl: "",
+      production: true,
+    });
+    expect(result.status).toBe("ng");
+    expect(result.detail).toBe("NEXT_PUBLIC_APP_URL が URL でない");
+  });
+});
