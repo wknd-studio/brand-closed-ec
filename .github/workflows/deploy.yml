@@ -429,7 +429,7 @@ jobs:
       - name: Sync Wrangler Secrets & Deploy
         # Worker の secrets には、Worker 用の config（prod）の値だけを上げる。管理用のトークン（SUPABASE_DB_URL・
         # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、prod を引き継いだデプロイ用の config（prod_deploy。
-        # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md）。
+        # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md。smoke-prod は本番のURLだけを読む）。
         # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
         # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
         shell: bash
@@ -473,29 +473,38 @@ jobs:
       - name: Install Playwright OS依存パッケージのみ（ブラウザ本体はキャッシュ済み）
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
+      - name: Get production URL
+        # 本番のURLだけを Doppler から取り出す。doppler run で流すと、ログインしないテストしか流さないのに、
+        # デプロイ用の config（prod_deploy）の管理用のトークン（SUPABASE_DB_URL・CLOUDFLARE_API_TOKEN 等）まで
+        # テストのプロセスの環境変数に入るため（#672）。本番の環境ができる前でURLが空なら、ここで失敗する
+        id: app-url
+        run: |
+          url=$(doppler secrets get NEXT_PUBLIC_APP_URL --plain)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Wait for production to be ready
         run: |
-          doppler run -- sh -c '
-            for i in $(seq 1 12); do
-              if curl -sf "$NEXT_PUBLIC_APP_URL" > /dev/null; then
-                echo "production is ready"
-                exit 0
-              fi
-              echo "Waiting... ($i/12)"
-              sleep 10
-            done
-            echo "production did not become ready in time"
-            exit 1
-          '
+          for i in $(seq 1 12); do
+            if curl -sf "$BASE_URL" > /dev/null; then
+              echo "production is ready"
+              exit 0
+            fi
+            echo "Waiting... ($i/12)"
+            sleep 10
+          done
+          echo "production did not become ready in time"
+          exit 1
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          BASE_URL: ${{ steps.app-url.outputs.url }}
       - name: 環境の確認（スモークテスト）
         # ここで失敗したら、本番の環境変数・秘密鍵・外部サービスの設定を疑う（E2E Tests (stg) の同名のステップと同じ）。
-        # BASE_URL 以外の値は読まない。署名の正しくない Webhook を送るが、受け口は 400 を返すだけで Sentry には送らない
+        # BASE_URL 以外の値は渡さない。署名の正しくない Webhook を送るが、受け口は 400 を返すだけで Sentry には送らない
         id: smoke
-        run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e:smoke:public'
+        run: pnpm test:e2e:smoke:public
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          BASE_URL: ${{ steps.app-url.outputs.url }}
       - name: Install age (暗号化用・スモークテストの失敗時のみ)
         # Playwrightのレポートを暗号化するために使う（#513）
         if: failure() && steps.smoke.outcome == 'failure'

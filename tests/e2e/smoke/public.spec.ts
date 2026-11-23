@@ -36,10 +36,17 @@ test.describe("スモークテスト（ログインしない）", { tag: "@smoke
 
   test("未ログインで /shop を開くと /sign-in に飛ばされる", async ({
     page,
+    baseURL,
   }) => {
-    // middleware（clerkMiddleware）がClerkの秘密鍵でセッションを確かめられていれば、ログインに飛ばす
+    // middleware（clerkMiddleware）がClerkの秘密鍵でセッションを確かめられていれば、ログインに飛ばす。
+    // サイト自身の /sign-in に飛ぶこと（NEXT_PUBLIC_CLERK_SIGN_IN_URL の設定忘れで、Clerkが用意する
+    // 別ドメインのログイン画面に飛ばないこと）まで確かめる
     await page.goto("/shop");
-    await expect(page).toHaveURL(/\/sign-in/);
+    await expect(page).toHaveURL(
+      (url) =>
+        url.origin === new URL(baseURL!).origin &&
+        url.pathname.startsWith("/sign-in")
+    );
     await expect(page.locator("#identifier-field")).toBeVisible();
   });
 
