@@ -186,6 +186,19 @@ test.describe.serial("認証済みアクセス", () => {
       timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
     });
   });
+
+  // サインアウトすると以降のテストが認証済みの前提を失うため、このdescribeの最後に置く
+  test("ヘッダーのログアウトを押すと、サインアウトしてトップへ戻る", async () => {
+    await page.goto("/onboarding/account-type");
+    await page
+      .getByRole("banner")
+      .getByRole("button", { name: "ログアウト" })
+      .click();
+
+    await expect(page).toHaveURL(/\/$/);
+    await page.goto("/onboarding/plan");
+    await expect(page).toHaveURL(/\/sign-in/);
+  });
 });
 
 // ── 法人として登録 ─────────────────────────────────────────────
