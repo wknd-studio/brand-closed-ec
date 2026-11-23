@@ -11,9 +11,9 @@ import {
   updateAddressAction,
   type AddressFormResult,
 } from "./actions";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import type { RequiredAddressField } from "@/domain/errors/missing-required-address-fields-error";
 
 type AddressDto = {
   id: string;
@@ -109,22 +109,6 @@ async function fetchAddressByZipcode(zipcode: string): Promise<{
   }
 }
 
-function FieldError({
-  field,
-  fieldErrors,
-}: {
-  field: RequiredAddressField;
-  fieldErrors: Partial<Record<RequiredAddressField, string>> | undefined;
-}) {
-  const message = fieldErrors?.[field];
-  if (!message) return null;
-  return (
-    <p id={`address-${field}-error`} className="mt-1 text-xs text-danger">
-      {message}
-    </p>
-  );
-}
-
 export default function AddressForm(props: Props) {
   const addr = props.mode === "edit" ? props.address : null;
   const [state, action, isPending] = useActionState<
@@ -169,10 +153,6 @@ export default function AddressForm(props: Props) {
     }
   }
 
-  function describedBy(field: RequiredAddressField) {
-    return fieldErrors?.[field] ? `address-${field}-error` : undefined;
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
@@ -186,133 +166,121 @@ export default function AddressForm(props: Props) {
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">姓</label>
-              <Input
-                name="recipient_last_name"
-                defaultValue={addr?.recipientLastName ?? ""}
-                required
-                error={fieldErrors?.recipientLastName}
-                aria-describedby={describedBy("recipientLastName")}
-                className="w-full"
-              />
-              <FieldError field="recipientLastName" fieldErrors={fieldErrors} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">名</label>
-              <Input
-                name="recipient_first_name"
-                defaultValue={addr?.recipientFirstName ?? ""}
-                required
-                error={fieldErrors?.recipientFirstName}
-                aria-describedby={describedBy("recipientFirstName")}
-                className="w-full"
-              />
-              <FieldError
-                field="recipientFirstName"
-                fieldErrors={fieldErrors}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">郵便番号</label>
-            <div className="relative">
-              <Input
-                name="postal_code"
-                defaultValue={addr?.postalCode ?? ""}
-                required
-                // domain の InvalidPostalCodeError と同じ形式（tests/unit/address-form.test.tsx で一致を確かめる）
-                pattern="\d{3}-?\d{4}"
-                title="7桁の数字（例: 150-0001）"
-                placeholder="1500001"
-                onChange={(e) => handleZipcodeChange(e.target.value)}
-                error={fieldErrors?.postalCode}
-                aria-describedby={describedBy("postalCode")}
-                className="w-full"
-              />
-              {zipcodeLoading && (
-                <span className="absolute right-3 top-2 text-xs text-gray-400">
-                  検索中…
-                </span>
+            <FormField label="姓" error={fieldErrors?.recipientLastName}>
+              {(field) => (
+                <Input
+                  name="recipient_last_name"
+                  defaultValue={addr?.recipientLastName ?? ""}
+                  required
+                  className="w-full"
+                  {...field}
+                />
               )}
-            </div>
-            <FieldError field="postalCode" fieldErrors={fieldErrors} />
+            </FormField>
+            <FormField label="名" error={fieldErrors?.recipientFirstName}>
+              {(field) => (
+                <Input
+                  name="recipient_first_name"
+                  defaultValue={addr?.recipientFirstName ?? ""}
+                  required
+                  className="w-full"
+                  {...field}
+                />
+              )}
+            </FormField>
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">都道府県</label>
-            <Select
-              name="prefecture"
-              value={prefecture}
-              onChange={(e) => setPrefecture(e.target.value)}
-              required
-              error={fieldErrors?.prefecture}
-              aria-describedby={describedBy("prefecture")}
-              className="w-full"
-              options={PREFECTURE_OPTIONS}
-            />
-            <FieldError field="prefecture" fieldErrors={fieldErrors} />
-          </div>
+          <FormField label="郵便番号" error={fieldErrors?.postalCode}>
+            {(field) => (
+              <div className="relative">
+                <Input
+                  name="postal_code"
+                  defaultValue={addr?.postalCode ?? ""}
+                  required
+                  // domain の InvalidPostalCodeError と同じ形式（tests/unit/address-form.test.tsx で一致を確かめる）
+                  pattern="\d{3}-?\d{4}"
+                  title="7桁の数字（例: 150-0001）"
+                  placeholder="1500001"
+                  onChange={(e) => handleZipcodeChange(e.target.value)}
+                  className="w-full"
+                  {...field}
+                />
+                {zipcodeLoading && (
+                  <span className="absolute right-3 top-2 text-xs text-gray-400">
+                    検索中…
+                  </span>
+                )}
+              </div>
+            )}
+          </FormField>
 
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">市区町村</label>
-            <Input
-              name="city"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              required
-              error={fieldErrors?.city}
-              aria-describedby={describedBy("city")}
-              className="w-full"
-            />
-            <FieldError field="city" fieldErrors={fieldErrors} />
-          </div>
+          <FormField label="都道府県" error={fieldErrors?.prefecture}>
+            {(field) => (
+              <Select
+                name="prefecture"
+                value={prefecture}
+                onChange={(e) => setPrefecture(e.target.value)}
+                required
+                className="w-full"
+                options={PREFECTURE_OPTIONS}
+                {...field}
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">
-              番地・建物名
-            </label>
-            <Input
-              name="address_line1"
-              value={addressLine1}
-              onChange={(e) => setAddressLine1(e.target.value)}
-              required
-              error={fieldErrors?.addressLine1}
-              aria-describedby={describedBy("addressLine1")}
-              className="w-full"
-            />
-            <FieldError field="addressLine1" fieldErrors={fieldErrors} />
-          </div>
+          <FormField label="市区町村" error={fieldErrors?.city}>
+            {(field) => (
+              <Input
+                name="city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                required
+                className="w-full"
+                {...field}
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">
-              建物名・部屋番号（任意）
-            </label>
-            <Input
-              name="address_line2"
-              defaultValue={addr?.addressLine2 ?? ""}
-              className="w-full"
-            />
-          </div>
+          <FormField label="番地・建物名" error={fieldErrors?.addressLine1}>
+            {(field) => (
+              <Input
+                name="address_line1"
+                value={addressLine1}
+                onChange={(e) => setAddressLine1(e.target.value)}
+                required
+                className="w-full"
+                {...field}
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">電話番号</label>
-            <Input
-              type="tel"
-              name="phone_number"
-              defaultValue={addr?.phoneNumber ?? ""}
-              required
-              // domain の PhoneNumber と同じ形式（ハイフンをすべて除いて0始まりの10〜11桁。tests/unit/address-form.test.tsx で一致を確かめる）
-              pattern="-*0(?:-*\d){9,10}-*"
-              title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
-              placeholder="09012345678"
-              error={fieldErrors?.phoneNumber}
-              aria-describedby={describedBy("phoneNumber")}
-              className="w-full"
-            />
-            <FieldError field="phoneNumber" fieldErrors={fieldErrors} />
-          </div>
+          <FormField label="建物名・部屋番号（任意）">
+            {(field) => (
+              <Input
+                name="address_line2"
+                defaultValue={addr?.addressLine2 ?? ""}
+                className="w-full"
+                {...field}
+              />
+            )}
+          </FormField>
+
+          <FormField label="電話番号" error={fieldErrors?.phoneNumber}>
+            {(field) => (
+              <Input
+                type="tel"
+                name="phone_number"
+                defaultValue={addr?.phoneNumber ?? ""}
+                required
+                // domain の PhoneNumber と同じ形式（ハイフンをすべて除いて0始まりの10〜11桁。tests/unit/address-form.test.tsx で一致を確かめる）
+                pattern="-*0(?:-*\d){9,10}-*"
+                title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
+                placeholder="09012345678"
+                className="w-full"
+                {...field}
+              />
+            )}
+          </FormField>
 
           {formError && <p className="text-xs text-danger">{formError}</p>}
 
