@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -126,6 +132,7 @@ describe("CLI", () => {
           GITHUB_REPOSITORY: REPO,
           RUN_HEAD_SHA: SHA,
           RUN_CONCLUSION: "success",
+          RUN_HAS_BUILD_OUTPUT: "true",
         },
       }
     );
@@ -157,6 +164,7 @@ describe("decidePreviewAction", () => {
     repository: REPO,
     runHeadSha: SHA,
     runConclusion: "success",
+    hasBuildOutput: true,
     changedFiles: ["src/app/page.tsx"],
   };
 
@@ -218,6 +226,12 @@ describe("decidePreviewAction", () => {
     ).toBe("skip");
   });
 
+  it("成果物が無い実行は何もしない（閉じた直後に再オープンしたときの、閉じたときの実行など）", () => {
+    expect(
+      decidePreviewAction({ ...base, hasBuildOutput: false, pr: pr() }).action
+    ).toBe("skip");
+  });
+
   it("ビルドが失敗・取り消しなら何もしない（前のプレビューを残す）", () => {
     expect(
       decidePreviewAction({ ...base, runConclusion: "failure", pr: pr() })
@@ -246,5 +260,58 @@ describe("scripts/ci/delete-preview-worker.sh", () => {
     });
     expect(r.status).not.toBe(0);
     expect(r.stdout + r.stderr).toContain("プレビューの Worker の名前ではない");
+  });
+});
+
+describe("scripts/ci/delete-preview-worker.sh の Cloudflare の API の結果ごとの動き", () => {
+  // curl（Worker の有無の問い合わせ）と pnpm（wrangler delete）を、呼ばれた引数を書き出す偽物に差し替える
+  function runWith(httpStatus: string) {
+    const bin = mkdtempSync(path.join(tmpdir(), "preview-delete-"));
+    const log = path.join(bin, "pnpm.log");
+    writeFileSync(
+      path.join(bin, "curl"),
+      `#!/bin/sh\nprintf %s "${httpStatus}"\n`
+    );
+    writeFileSync(path.join(bin, "pnpm"), `#!/bin/sh\necho "$@" > "${log}"\n`);
+    chmodSync(path.join(bin, "curl"), 0o755);
+    chmodSync(path.join(bin, "pnpm"), 0o755);
+    const r = spawnSync(
+      "bash",
+      ["scripts/ci/delete-preview-worker.sh", "brand-closed-ec-pr-12"],
+      {
+        cwd: ROOT,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          CLOUDFLARE_API_TOKEN: "t",
+          CLOUDFLARE_ACCOUNT_ID: "a",
+        },
+      }
+    );
+    return {
+      ...r,
+      pnpmArgs: existsSync(log) ? readFileSync(log, "utf8").trim() : null,
+    };
+  }
+
+  it("Worker があれば、プレビュー用の設定と名前で wrangler delete する", () => {
+    const r = runWith("200");
+    expect(r.status).toBe(0);
+    expect(r.pnpmArgs).toBe(
+      "exec wrangler delete --config wrangler.preview.jsonc --name brand-closed-ec-pr-12 --force"
+    );
+  });
+
+  it("Worker が無ければ（出していない・削除済み）、何もせずに成功する", () => {
+    const r = runWith("404");
+    expect(r.status).toBe(0);
+    expect(r.pnpmArgs).toBeNull();
+  });
+
+  it("有無を確かめられなければ（トークンの誤り等）、消さずに失敗する", () => {
+    const r = runWith("403");
+    expect(r.status).not.toBe(0);
+    expect(r.pnpmArgs).toBeNull();
   });
 });

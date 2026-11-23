@@ -28,6 +28,7 @@ type Step = {
 };
 type Job = {
   if?: string;
+  concurrency?: { group: string; "cancel-in-progress": boolean };
   environment?: unknown;
   permissions?: Record<string, string>;
   steps: Step[];
@@ -176,6 +177,14 @@ describe("preview-deploy.yml（develop の定義でデプロイ・削除する�
     expect(Object.keys(deploy.wf.on)).toEqual(["workflow_run"]);
   });
 
+  it("同じブランチの古い実行は取り消す。fork の同じ名前のブランチの実行とは重ねない（ジョブの if で飛ばす実行をグループに入れない）", () => {
+    expect(deploy.wf.concurrency).toBeUndefined();
+    expect(reconcile.concurrency?.group).toBe(
+      "preview-deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}"
+    );
+    expect(reconcile.concurrency?.["cancel-in-progress"]).toBe(true);
+  });
+
   it("同じリポジトリのPRの実行だけを扱う", () => {
     expect(reconcile.if).toContain(
       "github.event.workflow_run.event == 'pull_request'"
@@ -206,6 +215,10 @@ describe("preview-deploy.yml（develop の定義でデプロイ・削除する�
     expect(run).toContain('gh api "repos/$GH_REPO/pulls/$PR_NUMBER"');
     expect(run).toContain("/files");
     expect(run).toContain("scripts/ci/preview.ts decide");
+    // 成果物があるかは、Preview の実行の artifact の一覧で確かめる
+    expect(run).toContain(
+      'gh api "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts"'
+    );
     expect(step(reconcile, "Decide").env?.RUN_HEAD_SHA).toBe(
       "${{ github.event.workflow_run.head_sha }}"
     );
