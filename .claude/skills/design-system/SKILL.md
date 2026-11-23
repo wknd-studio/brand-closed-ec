@@ -37,6 +37,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## デザイントークン・カタログ（`src/app/globals.css`）
 
 - `--color-primary` / `--color-primary-foreground` / `--color-primary-light`: ブランドのゴールド。`bg-primary` `text-primary` `border-primary` `from-primary-light` 等で使う
+- `--color-primary-strong`: 白地の小さい文字（「必須」の印等）に使う濃いゴールド（`text-primary-strong`）。`--color-primary` は白地とのコントラストが約3.6:1で、小さい文字の基準（4.5:1）に届かない。4.5:1以上は `tests/unit/ui/color-tokens.test.ts` で検査している
 - `--color-secondary`: 補助テキスト色
 - `--color-neutral-50〜900`: 暖色寄りのウォームグレー。ボーダー・非活性テキスト・背景に使う（純グレーではない点に注意）
 - `--font-sans`: 本文用（日本語フォールバック込み）
@@ -56,6 +57,11 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `Input` / `Select` / `Checkbox` / `Radio`: フォーム部品。すでにトークン参照で書かれているため追加対応不要
 - `Table`（`TableHeader` / `TableBody` / `TableRow` / `TableHead` / `TableCell`）: 管理画面の一覧用テーブル。角丸の枠付きで、狭い画面では横スクロールする（最初の利用は `/admin/procurement/queue`）
 - `Badge`: 状態・区分を示す小さなラベル。`tone`(neutral/primary/success/warning/danger)
+- `Steps`: 手続きの進み具合（`steps` のラベルの配列と、今の位置 `current`（0始まり））。`<nav aria-label="お手続きの進み具合">` で囲み、今のステップに `aria-current="step"` を付ける（最初の利用はオンボーディング）
+
+## Clerk のコンポーネントの見た目
+
+- `<Waitlist>`・`<SignIn>`・`<SignUp>` をカードの中に置くときは、`src/components/auth/clerk-appearance.ts` の `clerkAppearance` を `appearance` に渡す。画面ごとに `appearance` を書き直さない
 
 ## 注意事項
 
