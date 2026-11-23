@@ -15,6 +15,7 @@ import {
   clerkFrontendApiHost,
   formatResults,
   handledEventTypes,
+  parseRemoteMigrations,
   parseTarget,
   type CheckResult,
 } from "../../scripts/check-env";
@@ -497,5 +498,29 @@ describe("formatResults", () => {
 
   it("全て OK なら成功", () => {
     expect(formatResults([{ name: "A", status: "ok" }]).failed).toBe(false);
+  });
+});
+
+describe("parseRemoteMigrations", () => {
+  it("supabase migration list の表から、リモートに適用済みのものを読む", () => {
+    const table = [
+      "   Local            | Remote           | Time (UTC)            ",
+      "  ------------------|------------------|-----------------------",
+      "   `20260516160953` | `20260516160953` | `2026-05-16 16:09:53` ",
+      "   `20261110215518` |                  | `2026-11-10 21:55:18` ",
+      "                    | `20261201000000` | `2026-12-01 00:00:00` ",
+    ].join("\n");
+    expect(parseRemoteMigrations(table)).toEqual([
+      "20260516160953",
+      "20261201000000",
+    ]);
+  });
+
+  it("JSON で出たときも読む", () => {
+    expect(
+      parseRemoteMigrations(
+        'Connecting...\n{"migrations":[{"local":"1","remote":"1"},{"local":"2","remote":""}]}'
+      )
+    ).toEqual(["1"]);
   });
 });
