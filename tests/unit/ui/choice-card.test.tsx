@@ -50,7 +50,8 @@ describe("ChoiceCard", () => {
     const className = render().className;
 
     expect(className).toContain("has-checked:border-primary");
-    expect(className).toContain("has-focus-visible:outline-primary");
+    expect(className).toContain("has-focus-visible:outline-2");
+    expect(className).toContain("outline-primary");
   });
 
   it("渡した className を足す", () => {
