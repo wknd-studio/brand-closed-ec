@@ -167,3 +167,49 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
     expect(orders).toHaveLength(0);
   });
 });
+
+// 特定商取引法第12条の6（注文の最終確認画面の表示）で求められる表示（#695）。
+// 表示の文言そのものではなく、項目が確定ボタンと同じ画面に出ていることを確かめる
+test.describe("注文の最終確認画面の表示", () => {
+  test("数量・価格・支払いの時期と方法・引渡時期・キャンセルの条件・規約へのリンクが、注文を確定するボタンと同じ画面に出る", async ({
+    page,
+  }) => {
+    await addFirstProductToCart(page);
+    await page.goto("/order/checkout");
+    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+
+    // 分量（数量）と販売価格（対価）。カートのサイドバーにも同じ表示があるため、画面の本文に絞る
+    const content = page.getByRole("main").first();
+    await expect(content.getByText(/¥[\d,]+ × 1/)).toBeVisible();
+    await expect(content.getByText("合計（固定価格）")).toBeVisible();
+
+    const terms = page.getByRole("region", {
+      name: "お支払い・お届け・キャンセルについて",
+    });
+    for (const term of [
+      "お支払い方法",
+      "お支払い時期",
+      "お届け時期",
+      "キャンセル・返品",
+    ]) {
+      await expect(
+        terms.getByRole("term").filter({ hasText: term })
+      ).toHaveCount(1);
+    }
+    // カートの商品（注文時払い）に合う支払い方法・時期が出て、注文後払いのものは出ない
+    await expect(terms.getByText(/^クレジットカード/)).toBeVisible();
+    await expect(terms.getByText("注文の確定時")).toBeVisible();
+    await expect(terms.getByText(/^請求書払い/)).toHaveCount(0);
+    await expect(
+      terms.getByRole("link", { name: "特定商取引法に基づく表記" })
+    ).toHaveAttribute("href", "/legal/tokushoho");
+    await expect(terms.getByRole("link", { name: "利用規約" })).toHaveAttribute(
+      "href",
+      "/legal/terms"
+    );
+
+    await expect(
+      page.getByRole("button", { name: "注文を確定する" })
+    ).toBeVisible();
+  });
+});

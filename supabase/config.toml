@@ -361,7 +361,7 @@ enabled = false
 [auth.third_party.clerk]
 enabled = true
 # Obtain from https://clerk.com/setup/supabase
-domain = "natural-griffon-10.clerk.accounts.dev"
+domain = "legible-swan-6757.clerk.accounts.dev"
 
 # OAuth server configuration
 [auth.oauth_server]

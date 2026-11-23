@@ -68,7 +68,7 @@ export class SupabaseMemberQueryService implements MemberQueryService {
 
     return {
       confirmedAmount,
-      monthlyLimit: user.rank.getMonthlyLimit().amount,
+      monthlyLimit: user.monthlyLimit,
       favoriteProductIds: user.favoriteProductIds,
     };
   }
@@ -113,7 +113,9 @@ export class SupabaseMemberQueryService implements MemberQueryService {
   private async findUserWithFavorites(clerkUserId: string) {
     const { data, error } = await this.db
       .from("users")
-      .select("id, rank_code, billing_anchor_day, favorites(sanity_product_id)")
+      .select(
+        "id, rank_code, billing_anchor_day, favorites(sanity_product_id), member_ranks!users_rank_code_fkey(monthly_limit_amount)"
+      )
       .eq("clerk_user_id", clerkUserId)
       .is("deleted_at", null)
       .order("created_at", { referencedTable: "favorites", ascending: false })
@@ -125,6 +127,8 @@ export class SupabaseMemberQueryService implements MemberQueryService {
       id: data.id,
       rank: MemberRank.of(data.rank_code),
       billingAnchorDay: data.billing_anchor_day,
+      // 月間仕入れ上限の正は member_ranks（NULL = 無制限）。注文確定時の上限チェックと同じ値を使う
+      monthlyLimit: data.member_ranks.monthly_limit_amount,
       favoriteProductIds: data.favorites.map((f) => f.sanity_product_id),
     };
   }

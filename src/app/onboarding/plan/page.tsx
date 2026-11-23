@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
+import LegalLinksNote from "@/app/legal/legal-links-note";
 import PlanSelector from "./plan-selector";
 
 export default async function OnboardingPlanPage({
@@ -27,6 +28,7 @@ export default async function OnboardingPlanPage({
       <div className="w-full max-w-lg space-y-6">
         <h1 className="text-2xl font-semibold">プランを選択してください</h1>
         <PlanSelector isCorporate={accountType === "corporate"} />
+        <LegalLinksNote action="お申し込み" />
       </div>
     </main>
   );

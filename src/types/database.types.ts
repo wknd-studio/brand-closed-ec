@@ -474,7 +474,7 @@ export type Database = {
           billing_address_snapshot: Json;
           created_at: string;
           id: string;
-          monthly_limit_at_order: number;
+          monthly_limit_at_order: number | null;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status: string;
@@ -485,7 +485,7 @@ export type Database = {
           billing_address_snapshot: Json;
           created_at?: string;
           id?: string;
-          monthly_limit_at_order: number;
+          monthly_limit_at_order?: number | null;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status?: string;
@@ -496,7 +496,7 @@ export type Database = {
           billing_address_snapshot?: Json;
           created_at?: string;
           id?: string;
-          monthly_limit_at_order?: number;
+          monthly_limit_at_order?: number | null;
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot?: Json;
           status?: string;

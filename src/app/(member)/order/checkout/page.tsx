@@ -10,6 +10,15 @@ import {
   selectNotAccessibleProductIds,
   sumCheckoutFixedTotal,
 } from "@/domain/services/checkout-access";
+import LegalLinksNote from "@/app/legal/legal-links-note";
+import LegalNoticeText from "@/app/legal/legal-notice-text";
+import {
+  CANCELLATION_POLICY,
+  DELIVERY_TIMING,
+  PAYMENT_METHOD,
+  PAYMENT_TIMING,
+  type LegalNoticeValue,
+} from "@/app/legal/legal-notice";
 import CheckoutForm from "./checkout-form";
 
 type LineItem = {
@@ -69,6 +78,63 @@ function LineItemList({ items }: { items: LineItem[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * 注文の最終確認画面に出す、支払い・引渡し・キャンセルの条件（特定商取引法第12条の6。#695）。
+ * 数量・価格は注文内容に、確定ボタンは CheckoutForm に出す
+ */
+function OrderTerms({
+  hasAtOrder,
+  hasAfterOrder,
+}: {
+  hasAtOrder: boolean;
+  hasAfterOrder: boolean;
+}) {
+  const paymentTimings = [
+    ...(hasAtOrder ? (["atOrder"] as const) : []),
+    ...(hasAfterOrder ? (["afterOrder"] as const) : []),
+  ];
+  const rows: { label: string; values: LegalNoticeValue[] }[] = [
+    {
+      label: "お支払い方法",
+      values: paymentTimings.map((t) => PAYMENT_METHOD[t]),
+    },
+    {
+      label: "お支払い時期",
+      values: paymentTimings.map((t) => PAYMENT_TIMING[t]),
+    },
+    { label: "お届け時期", values: [DELIVERY_TIMING] },
+    { label: "キャンセル・返品", values: [CANCELLATION_POLICY] },
+  ];
+  return (
+    <section aria-labelledby="order-terms-heading" className="space-y-3">
+      <h2
+        id="order-terms-heading"
+        className="text-sm font-medium text-gray-700"
+      >
+        お支払い・お届け・キャンセルについて
+      </h2>
+      <dl className="divide-y rounded-lg border text-sm">
+        {rows.map(({ label, values }) => (
+          <div
+            key={label}
+            className="grid gap-1 px-4 py-3 sm:grid-cols-[8rem_1fr]"
+          >
+            <dt className="text-gray-500">{label}</dt>
+            <dd className="space-y-1">
+              {values.map((value) => (
+                <p key={value.text}>
+                  <LegalNoticeText value={value} />
+                </p>
+              ))}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <LegalLinksNote action="ご注文" />
+    </section>
   );
 }
 
@@ -155,6 +221,13 @@ export default async function CheckoutPage() {
             </p>
           )}
         </section>
+
+        <OrderTerms
+          hasAtOrder={lineItems.some((i) => i.paymentTiming === "at_order")}
+          hasAfterOrder={lineItems.some(
+            (i) => i.paymentTiming === "after_order"
+          )}
+        />
 
         {/* 住所選択・注文ボタン */}
         <CheckoutForm

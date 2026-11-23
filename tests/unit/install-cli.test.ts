@@ -55,6 +55,31 @@ describe("release_repo / release_tag / asset_name", () => {
     );
   });
 
+  it("gitleaks は gitleaks/gitleaks の v付きのタグから取り、amd64 は x64 と書く", () => {
+    expect(call("release_repo gitleaks").stdout.trim()).toBe(
+      "gitleaks/gitleaks"
+    );
+    expect(call("release_tag gitleaks 8.30.1").stdout.trim()).toBe("v8.30.1");
+    expect(call("asset_name gitleaks 8.30.1 linux amd64").stdout.trim()).toBe(
+      "gitleaks_8.30.1_linux_x64.tar.gz"
+    );
+    expect(call("asset_name gitleaks 8.30.1 darwin arm64").stdout.trim()).toBe(
+      "gitleaks_8.30.1_darwin_arm64.tar.gz"
+    );
+  });
+
+  it("checksums のファイル名は、gitleaks だけ版付き", () => {
+    expect(call("checksums_name supabase 2.116.0").stdout.trim()).toBe(
+      "checksums.txt"
+    );
+    expect(call("checksums_name doppler 3.77.1").stdout.trim()).toBe(
+      "checksums.txt"
+    );
+    expect(call("checksums_name gitleaks 8.30.1").stdout.trim()).toBe(
+      "gitleaks_8.30.1_checksums.txt"
+    );
+  });
+
   it("知らないCLIは失敗する", () => {
     expect(call("release_repo stripe").status).not.toBe(0);
   });
@@ -291,6 +316,15 @@ describe("extract_cli", () => {
     );
     expect(status).toBe(0);
     expect(readdirSync(dest)).toEqual(["doppler"]);
+  });
+
+  it("gitleaks は gitleaks だけを置き、LICENSE・README は展開しない", () => {
+    const { status, dest } = extract(
+      tarball({ gitleaks: 'echo "8.30.1"', LICENSE: "", "README.md": "" }),
+      "gitleaks"
+    );
+    expect(status).toBe(0);
+    expect(readdirSync(dest)).toEqual(["gitleaks"]);
   });
 
   it("tarball に CLI の実行ファイルが無ければ失敗する", () => {

@@ -334,7 +334,8 @@ export default function CartSidebar() {
             {/* フッター */}
             <div className="border-t px-6 py-5 space-y-4">
               {/* 月間仕入れ残量 */}
-              {monthlyLimit > 0 && (
+              {/* 会員の情報が無いとき（上限0）は出さない。無制限（null）は出す */}
+              {monthlyLimit !== 0 && (
                 <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
                   <div className="flex items-center justify-between text-gray-500">
                     <span>月間仕入れ残量</span>
