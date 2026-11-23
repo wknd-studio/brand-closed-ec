@@ -46,6 +46,7 @@ export function makeUser(
     phoneNumber: PhoneNumber | null;
     id: string;
     stripeCustomerId: string | null;
+    createdAt: Date;
   }>
 ) {
   return reconstituteUser({
@@ -64,6 +65,7 @@ export function makeUser(
     onboardingCompleted: overrides?.onboardingCompleted ?? true,
     deletedAt: null,
     stripeCustomerId: overrides?.stripeCustomerId ?? null,
+    createdAt: overrides?.createdAt ?? new Date(2025, 0, 1),
   });
 }
 
