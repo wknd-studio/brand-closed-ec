@@ -55,6 +55,7 @@ Sanityにダミーのブランド・カテゴリ・商品・掛け率設定・�
 - **Stripe の ID はダミー**: Checkout Session の ID は `cs_test_seed_scenario_dummy_<n>`、Invoice の ID は `in_seed_scenario_dummy_<n>` で、Stripe にはオブジェクトが無い。本物のテストモードのオブジェクトにしないのは、支払い済み・キャンセル等の状態を作るには Stripe 側で決済を完了・失効させる必要があり、シードのたびに Stripe に行が増え続けるのに、表示の確認には ID の値そのものが要らないため。このデータでは、支払い完了の Webhook・返金・請求書の再送など、Stripe を呼ぶ・Stripe から呼ばれる操作は確かめられない（新しく注文して確かめる）
 - **状態の変化の履歴**（`order_status_changes`）: どの注文にも注文確定（`customer`、`null → processing`）の行があり、最終の状態が `processing` 以外の注文には `processing → <最終の状態>`（`system`、理由 `シナリオのデータ: <シナリオ名>`）の行がある
 - 調達（`procurement_tasks`）・出荷・返品の状態は入れていない。それぞれの機能の issue で、このシードに足す
+- 統合テスト（`tests/integration/seed-scenarios.test.ts`）は目印の付いた注文をすべて消すため、`task test:integration` を流すと、そのDBに入れたシナリオのデータも消える。流したあとは入れ直す
 - シナリオの注文の返品（`returns`）を手で作ると、その注文を消せずにシードが失敗する。先にその返品を消す
 
 | アカウント                          | 入っているもの                                                                        | 確かめられること                                                                                         |
