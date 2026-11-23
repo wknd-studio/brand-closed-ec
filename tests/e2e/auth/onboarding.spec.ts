@@ -107,6 +107,31 @@ test.describe.serial("認証済みアクセス", () => {
     await expect(page.getByRole("radio", { name: /PREMIUM/ })).toBeVisible();
   });
 
+  // 月額プランの申込みの最終確認の画面（このあと Stripe Checkout へ進む）に、特定商取引法
+  // 第12条の6で求められる対価・支払い・契約期間・解約の条件を出す（#724）
+  test("申込みの最終確認として、月額・初期費用・支払い・契約期間・解約の条件が表示される", async () => {
+    await page.goto("/onboarding/plan?accountType=individual");
+
+    await expect(page.getByRole("radio", { name: /STARTER/ })).toBeVisible();
+    await expect(
+      page.getByText(/月額 ¥5,000（税込）・初期費用 ¥5,000（税込）/)
+    ).toBeVisible();
+    const terms = page.getByRole("region", { name: "お申し込みの条件" });
+    for (const term of [
+      "お支払い方法",
+      "お支払い時期",
+      "契約期間",
+      "解約（退会）",
+    ]) {
+      await expect(
+        terms.getByRole("term").filter({ hasText: term })
+      ).toHaveCount(1);
+    }
+    await expect(terms).toContainText("最低利用期間は入会日から6ヶ月");
+    await expect(terms).toContainText("自動更新");
+    await expect(terms).toContainText("残りの月数分の月額を解約金");
+  });
+
   test("個人は法人情報の入力欄が表示されない", async () => {
     await page.goto("/onboarding/plan?accountType=individual");
     await expect(page.getByLabel("会社名")).toBeHidden();

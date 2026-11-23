@@ -59,6 +59,7 @@ import {
   deleteAccount,
 } from "@/app/(member)/settings/actions";
 import { cancelOrder } from "@/app/admin/orders/[id]/actions";
+import { CONTACT, legalNoticePlainText } from "@/app/legal/legal-notice";
 
 const addressCases = [
   {
@@ -153,15 +154,15 @@ describe("deleteAccount", () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("入会から6ヶ月経っていない（MinimumMembershipPeriodError）なら、退会できる日（JST）を示し、Sentry に送らない", async () => {
+  it("入会から6ヶ月経っていない（MinimumMembershipPeriodError）なら、退会できる日（JST）と運営の問い合わせ先を示し、Sentry に送らない", async () => {
     // JST 2026-11-15 00:00
     vi.mocked(withdraw).mockRejectedValue(
       new MinimumMembershipPeriodError(new Date("2026-11-14T15:00:00Z"))
     );
 
     expect(await deleteAccount()).toEqual({
-      error:
-        "入会から6ヶ月間は退会できません。2026年11月15日から退会できます。それより前に退会をご希望の場合は、運営までお問い合わせください",
+      // 問い合わせ先は特定商取引法に基づく表記と同じ値。仮の値なら「要差し替え」の印が付く（#724）
+      error: `入会から6ヶ月間は退会できません。2026年11月15日から退会できます。それより前に退会をご希望の場合は、運営（メール: ${legalNoticePlainText(CONTACT.email)}・電話: ${legalNoticePlainText(CONTACT.phone)}）までお問い合わせください`,
     });
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });

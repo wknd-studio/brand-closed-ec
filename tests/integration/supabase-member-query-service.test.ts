@@ -5,6 +5,7 @@ import type { Database } from "@/types/database.types";
 import { SupabaseMemberQueryService } from "@/infrastructure/supabase/supabase-member-query-service";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（supabase-server-client.test.ts と同じ）
 const LOCAL_JWT_SECRET =
@@ -64,6 +65,10 @@ const ALL_USER_IDS = [
   WITHDRAWN_USER_ID,
   PENDING_USER_ID,
 ];
+
+// 入会から6ヶ月の最低利用期間（#724）。CLERK_USER は期間内、CLERK_OTHER_USER は期間を過ぎている
+const JOINED_RECENTLY = new Date(Date.now() - 24 * 60 * 60 * 1000);
+const JOINED_LONG_AGO = new Date("2025-01-01T00:00:00.000Z");
 
 const SHIPPING_DEFAULT_ID = "00000000-0000-0000-0000-000000453a11";
 const SHIPPING_OTHER_ID = "00000000-0000-0000-0000-000000453a12";
@@ -183,6 +188,7 @@ beforeAll(async () => {
       rank_code: "advanced",
       onboarding_completed: true,
       billing_anchor_day: 1,
+      created_at: JOINED_RECENTLY.toISOString(),
     },
     {
       id: OTHER_USER_ID,
@@ -194,6 +200,7 @@ beforeAll(async () => {
       rank_code: "basic",
       onboarding_completed: true,
       billing_anchor_day: 1,
+      created_at: JOINED_LONG_AGO.toISOString(),
     },
     {
       id: WITHDRAWN_USER_ID,
@@ -321,6 +328,22 @@ describe("SupabaseMemberQueryService.findSettings", () => {
     expect(settings?.addresses.map((a) => a.id).sort()).toEqual(
       [SHIPPING_DEFAULT_ID, SHIPPING_OTHER_ID, BILLING_ID].sort()
     );
+  });
+
+  it("最低利用期間内の会員には、退会できるようになる日時（入会日から計算）を返す", async () => {
+    const settings = await queryService.findSettings(CLERK_USER);
+
+    expect(settings?.withdrawableFrom).toBe(
+      MinimumMembershipPeriod.startingAt(
+        JOINED_RECENTLY
+      ).withdrawableFrom.toISOString()
+    );
+  });
+
+  it("最低利用期間を過ぎた会員は、退会できるようになる日時が null", async () => {
+    const settings = await queryService.findSettings(CLERK_OTHER_USER);
+
+    expect(settings?.withdrawableFrom).toBeNull();
   });
 
   it("他の会員の住所を含めない", async () => {
