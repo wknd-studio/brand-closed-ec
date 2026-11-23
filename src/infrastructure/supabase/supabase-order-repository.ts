@@ -21,6 +21,7 @@ import {
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
+import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
@@ -48,6 +49,7 @@ function toOrderRowForInsert(order: Order) {
     rank_at_order: order.rankAtOrder.value,
     monthly_limit_at_order: order.monthlyLimitAtOrder.amount,
     created_at: order.createdAt.toISOString(),
+    version: order.version,
   };
 }
 
@@ -101,6 +103,7 @@ type OrderRow = {
   rank_at_order: string;
   monthly_limit_at_order: number | null;
   created_at: string;
+  version: number;
   order_items: OrderItemRow[];
   order_settlements: OrderSettlementRow[];
 };
@@ -186,6 +189,7 @@ function toOrder(row: OrderRow): Order {
     items: (row.order_items ?? []).map(toOrderItem),
     settlements: (row.order_settlements ?? []).map(toOrderSettlement),
     createdAt: new Date(row.created_at),
+    version: row.version,
   });
 }
 
@@ -403,7 +407,12 @@ export class SupabaseOrderRepository implements OrderRepository {
         reason: changedBy.type === "admin" ? changedBy.reason : null,
       },
     });
-    if (error) throw new Error(`Order保存に失敗: ${error.message}`);
+    if (error) {
+      if (error.message.includes("order_version_conflict")) {
+        throw new OrderConcurrentlyModifiedError(order.id);
+      }
+      throw new Error(`Order保存に失敗: ${error.message}`);
+    }
   }
 
   async saveNewOrderWithLimitCheck(

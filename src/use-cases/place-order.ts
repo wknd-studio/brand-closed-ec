@@ -168,6 +168,9 @@ export async function placeOrder(
       await deleteOrderQuietly(error);
       throw error;
     }
+    // 確定から紐付けまでの間に注文が変わっていれば（運営者のキャンセル等）、
+    // OrderConcurrentlyModifiedError をそのまま投げ、会員を Checkout に進めない。その注文は
+    // 他の書き手の変更を持つため、補償削除もしない（#721）
     await orderRepo.save(
       order.applySettlement(
         settlement.attachCheckoutSession(session.sessionId)
