@@ -183,7 +183,8 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
         day: "numeric",
       });
       return {
-        error: `入会から6ヶ月間は退会できません。${date}から退会できます`,
+        // 期間内の退会は運営者が残りの月額を請求して手動で行う（docs/domain/membership.md）
+        error: `入会から6ヶ月間は退会できません。${date}から退会できます。それより前に退会をご希望の場合は、運営までお問い合わせください`,
       };
     }
     Sentry.captureException(err, { tags: { useCase: "withdraw" } });
