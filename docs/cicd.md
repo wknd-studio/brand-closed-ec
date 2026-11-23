@@ -8,7 +8,8 @@ PR (develop・main)
   ├─ Lint / Format チェック
   ├─ Unit Tests
   ├─ Gitleaks（PR の commit の機密情報の漏れ）
-  └─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
+  ├─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
+  └─ Preview（develop 向けのみ。マイグレーションを含むPRは出さない。下の「PRごとのプレビュー」）
 
 push (develop・main)
   └─ Deploy
@@ -19,6 +20,7 @@ push (develop・main)
 | トリガー            | 実行されるジョブ                           |
 | ------------------- | ------------------------------------------ |
 | PR → develop / main | typecheck・lint・test・E2E（コード変更時） |
+| PR → develop        | プレビューのデプロイ（閉じたら削除）       |
 | push → develop      | migrate stg → deploy stg → E2E             |
 | push → main         | migrate prod → deploy prod                 |
 
@@ -45,6 +47,55 @@ push (develop・main)
 
 ---
 
+## PRごとのプレビュー
+
+develop 向けの同じリポジトリのPRに push すると、`.github/workflows/preview.yml` が、そのPRのコードを別名の Worker（`brand-closed-ec-pr-<PR番号>`）に出し、URL（`https://brand-closed-ec-pr-<PR番号>.white-night-bb71.workers.dev`）をPRにコメントする（#727）。push のたびに同じURLへ上書きし、コメントも更新する。PRを閉じたら（マージ・クローズ）Worker を削除する。人間の確かめ方は `docs/manual-check.md`。
+
+- **stg の DB・Clerk・Stripe・Sanity を共有する**: Worker の secrets・ビルド時の `NEXT_PUBLIC_*` は Doppler の `stg` の値を使う。アプリ自身のURL（`NEXT_PUBLIC_APP_URL`）だけをプレビューのURLに、Sentry の環境（`NEXT_PUBLIC_SENTRY_ENVIRONMENT`）を `preview` にする（Stripe Checkout の戻り先・招待リンクが stg に飛ばないように）。stg のテストアカウントでログインできる
+- **マイグレーション（`supabase/migrations/`）を含むPRは出さない**: 「マイグレーションを含むためプレビューは出さない（メインのチェックアウトで確かめる）」とコメントし、前の push で出したプレビューがあれば削除する。stg の DB にマイグレーションを適用しない（ワークフローに DB の操作は無い）
+- **fork のPR・Dependabot のPRでは動かさない**: stg のシークレットをPRのコードに渡さないため。ジョブの条件に加えて、`preview` の environment をデプロイできるブランチを `feature/*` だけに絞っている
+- **stg の Worker（`brand-closed-ec-stg`）は書き換えない**: 名前を変えた別の Worker のため、デプロイ・secrets・Durable Objects（OpenNext のキャッシュ）は Worker ごとに別になる。レート制限の名前空間も、同じ `namespace_id` だと同じアカウントの Worker どうしで回数を共有するため、`wrangler.preview.jsonc` で stg と分けている。`wrangler.preview.jsonc` は名前とレート制限の名前空間のほかは `wrangler.stg.jsonc` と同じにする（`tests/unit/preview-workflow.test.ts`）
+- **Webhook は stg（develop のコード）で処理される**: Clerk・Stripe の Webhook の送り先は stg のままのため、プレビューで決済すると、決済確定の処理は develop のコードで走る。Webhook の変更を含むPRはプレビューで確かめられない
+- **プレビューでの操作は stg のデータに残る**: ローンチ前で利用者がいないため許容する。stg のテストアカウントで退会などの戻せない操作をすると、そのアカウントは stg でも使えなくなる。メールも stg と同じく実際に送られる
+- **Clerk**: stg の Clerk は Development インスタンスのため、プレビューのドメインを許可する設定は要らない（本番のインスタンスのプレビューは作らない）
+
+### 方式を選んだ理由
+
+Cloudflare の Workers の Version の preview URL（`wrangler versions upload --preview-alias`）は、Durable Objects を持つ Worker では作られない。この Worker は OpenNext のキャッシュ用に Durable Objects を持つ。残る候補のうち、PRごとに別名の Worker を `wrangler deploy --name` で出す方にした。
+
+- stg と同じ「`wrangler secret bulk` → `wrangler deploy`」で出すため、OpenNext のビルドがそのまま動くと分かっている。Worker がまだ無ければ `wrangler secret bulk` が作る
+- Cloudflare の Previews（`wrangler preview`。2026-11 時点で open beta）は、Durable Objects をプレビューごとに分けるが、設定ファイルに `previews` の節で Durable Objects のバインディングを書き直す必要があり、`--json` の出力の形・シークレットの入れ方（作成前に入れられるか）がドキュメントに無い
+- 上限: Workers の無料プランでも、アカウントの Worker の数は 100 まで。開いているPRの数だけ増え、閉じたら消える
+
+### シークレット
+
+| Secret（`preview` environment） | Doppler の config                                          | 使うステップ                                                                                             |
+| ------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `DOPPLER_TOKEN`                 | `stg_preview`（`stg` の branch。Cloudflare の2つだけ足す） | wrangler の認証（`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`）。Sync・削除                           |
+| `DOPPLER_TOKEN_WORKER`          | `stg`                                                      | Build（PRのコードを動かすため、Cloudflare のトークンを読まない）と、Sync で Worker の secrets に上げる値 |
+
+`stg_preview` には `stg_deploy` の管理用のトークン（`SUPABASE_DB_URL`・`SENTRY_AUTH_TOKEN`・Sanity の書き込みトークン等）を入れない。プレビューは stg の DB のスキーマを変えず、ソースマップも上げないため。`CLOUDFLARE_API_TOKEN` は `stg_deploy` と同じ値で、作り直したら `stg_preview` にも入れる。
+
+```bash
+doppler secrets get CLOUDFLARE_API_TOKEN -p brand-closed-ec -c stg_deploy --plain \
+  | doppler secrets set CLOUDFLARE_API_TOKEN -p brand-closed-ec -c stg_preview --silent
+# トークンを作り直すとき
+doppler configs tokens create github-actions-preview -p brand-closed-ec -c stg_preview --access read --plain | gh secret set DOPPLER_TOKEN --env preview
+doppler configs tokens create github-actions-preview-worker -p brand-closed-ec -c stg --access read --plain | gh secret set DOPPLER_TOKEN_WORKER --env preview
+```
+
+### 残ったプレビューを消す
+
+PRを閉じたときの削除が失敗した（取り消された）ら、`Preview` ワークフローの失敗した実行を再実行するか、手元で消す。`scripts/ci/delete-preview-worker.sh` は、プレビューの名前の形（`brand-closed-ec-pr-<数字>`）以外は消さない。
+
+```bash
+# 残っているプレビューの Worker の一覧
+doppler run -p brand-closed-ec -c stg_preview -- sh -c 'curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" | jq -r ".result[].id | select(startswith(\"brand-closed-ec-pr-\"))"'
+doppler run -p brand-closed-ec -c stg_preview -- bash scripts/ci/delete-preview-worker.sh brand-closed-ec-pr-<PR番号>
+```
+
+---
+
 ## GitHub Actions Secrets
 
 GitHub リポジトリの Settings → Secrets and variables → Actions に設定する。
@@ -60,6 +111,8 @@ GitHub リポジトリの Settings → Secrets and variables → Actions に設�
 | `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期・Smoke Tests (production)（本番のURLだけを読む）        |
 | `DOPPLER_TOKEN_WORKER` | `staging` environment                            | `stg`             | Deploy (staging) の Sync Wrangler Secrets & Deploy だけ（Worker の secrets に上げる値を読む） |
 | `DOPPLER_TOKEN_WORKER` | `production` environment                         | `prod`            | Deploy (production) の Sync Wrangler Secrets & Deploy だけ                                    |
+| `DOPPLER_TOKEN`        | `preview` environment                            | `stg_preview`     | Preview（wrangler の認証だけ。上の「[PRごとのプレビュー](#prごとのプレビュー)」）             |
+| `DOPPLER_TOKEN_WORKER` | `preview` environment                            | `stg`             | Preview の Build・Sync Wrangler Secrets & Deploy                                              |
 
 `DOPPLER_TOKEN_PR` は Actions secrets と Dependabot secrets に同じ値で登録している（Dependabot の PR のワークフローは Dependabot secrets しか読めないため）。作り直すときは両方を入れ替える。
 
@@ -176,8 +229,9 @@ done
 
 Cloudflare・Sanity のトークンは、stg 用でも本番に届く。そのため、トークンを読めるジョブを絞って補う。
 
-- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は `staging`・`production` の environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging` は `develop` だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
-- PR のジョブは environment を使わない（上の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）
+- `DOPPLER_TOKEN`・`DOPPLER_TOKEN_WORKER` は `staging`・`production`・`preview` の environment にだけ置き、environment には、デプロイできるブランチの制限を付ける: `production` は `main` だけ、`staging` は `develop` だけ、`preview` は `feature/*` だけ。制限が無いと、どのブランチの PR でもワークフローに `environment: production` と書けば本番の `DOPPLER_TOKEN` を読めてしまう
+- `preview` は PR のコードを stg の値で動かすため、同じリポジトリのブランチ（push の権限がある人）を信頼して受け入れている。Cloudflare のトークンは stg の Worker も書き換えられる（Workers の権限はアカウント単位）。fork・Dependabot のPRでは動かさない
+- PR のジョブは environment を使わない（上の「[PR の CI が読む Doppler の config](#pr-の-ci-が読む-doppler-の-configci)」）。例外は PRごとのプレビュー（`preview` の environment）だけ
 - 商品データの同期（`product-data-sync.yml`）の定期実行は、GitHub の仕様で既定ブランチ（develop）でしか動かない。本番の同期は、develop の実行が `gh workflow run product-data-sync.yml --ref main` で main の上に起動し直して行う（main にこのワークフローが無い間は飛ばす）
 
 ```bash
