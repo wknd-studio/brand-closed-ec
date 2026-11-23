@@ -152,6 +152,8 @@ beforeAll(async () => {
   ]);
   if (ordersError) throw ordersError;
 
+  // 一括INSERTだと、片方の行にしか無い列（status 等）がもう片方でNULLになり既定値が
+  // 効かないため、既定値を確かめる会員Bの出荷は別にINSERTする
   const { error: shipmentsError } = await supabase.from("shipments").insert([
     {
       id: SHIPMENT_A_ID,
@@ -163,13 +165,14 @@ beforeAll(async () => {
       shipped_at: new Date().toISOString(),
       origin_location_code: "office",
     },
-    {
-      id: SHIPMENT_B_ID,
-      order_id: ORDER_B_ID,
-      origin_location_code: "supplier_direct",
-    },
   ]);
   if (shipmentsError) throw shipmentsError;
+  const { error: shipmentBError } = await supabase.from("shipments").insert({
+    id: SHIPMENT_B_ID,
+    order_id: ORDER_B_ID,
+    origin_location_code: "supplier_direct",
+  });
+  if (shipmentBError) throw shipmentBError;
 
   const { error: itemsError } = await supabase.from("order_items").insert([
     {
