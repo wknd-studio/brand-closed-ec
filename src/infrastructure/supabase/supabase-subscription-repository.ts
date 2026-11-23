@@ -3,6 +3,7 @@ import type { Database } from "@/types/database.types";
 import type {
   SubscriptionRepository,
   SubscriptionSnapshot,
+  SubscriptionStatusSync,
   UpsertSubscriptionInput,
 } from "@/repositories/subscription-repository";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
@@ -86,5 +87,24 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
       user_id: input.userId,
     });
     if (error) throw error;
+  }
+
+  async syncStatusByStripeSubscriptionId(
+    stripeSubscriptionId: string,
+    sync: SubscriptionStatusSync
+  ): Promise<"updated" | "not_found"> {
+    const { data, error } = await this.db
+      .from("subscriptions")
+      .update({
+        status: sync.status,
+        current_period_start: sync.currentPeriodStart.toISOString(),
+        current_period_end: sync.currentPeriodEnd.toISOString(),
+        cancel_at_period_end: sync.cancelAtPeriodEnd,
+        canceled_at: sync.canceledAt?.toISOString() ?? null,
+      })
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .select("id");
+    if (error) throw error;
+    return data.length > 0 ? "updated" : "not_found";
   }
 }
