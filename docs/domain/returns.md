@@ -76,4 +76,4 @@
 
 - `docs/db-schema-redesign.md`: `returns`／`return_items`テーブル定義節、「RLSポリシー方針への影響」節（`returns`/`return_items`の項）
 - （旧`docs/archive/operations-order.md`「9-4. `paid`以降のキャンセル」節: Stripeダッシュボード手動返金フローを材料に執筆。運用担当（管理者のみ）・返金理由の記録という考え方自体は新設計にも引き継がれる。ドメインドキュメント全体完了に伴いarchiveは削除済み）
-- 実装: 本ドキュメント執筆時点で`returns`/`return_items`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは別途作成予定）
+- 実装: `supabase/migrations/20261123070936_create_returns_return_items.sql`（#232）。回収不能処理で運営者が直接作る申請は、`requested_by_user_id`の代わりに`created_by_admin_user_id`を持つ。`admin_note`等の運営の内部情報は、カラム単位の権限で会員から読めない

@@ -8,6 +8,7 @@ import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
@@ -188,7 +189,7 @@ function makeOrder(
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
     rankAtOrder: MemberRank.of("basic"),
-    monthlyLimitAtOrder: Money.of(1_000_000),
+    monthlyLimitAtOrder: MonthlyLimit.of(1_000_000),
     items: [
       makeItem("00000000-0000-0000-0000-000000000031", {
         settlementId: SETTLEMENT_ID,

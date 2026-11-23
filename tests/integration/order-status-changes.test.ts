@@ -8,6 +8,7 @@ import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
@@ -104,7 +105,7 @@ function makeOrder(orderId: string, userId: string, suffix: string) {
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
     rankAtOrder: MemberRank.of("basic"),
-    monthlyLimitAtOrder: Money.of(1_000_000),
+    monthlyLimitAtOrder: MonthlyLimit.of(1_000_000),
     items: [
       reconstituteOrderItem({
         id: `00000000-0000-0000-0000-0000002372${suffix}`,
@@ -303,7 +304,7 @@ describe("order_status_changes", () => {
       await repo.saveNewOrderWithLimitCheck(
         makeOrder(ORDER_PLACED_ID, USER_B_ID, "c1"),
         period,
-        Money.of(1_000_000),
+        MonthlyLimit.of(1_000_000),
         Money.of(10_000)
       );
 

@@ -23,7 +23,8 @@ export default async function MemberLayout({
   return (
     <CartProvider
       confirmedAmount={layout?.confirmedAmount ?? 0}
-      monthlyLimit={layout?.monthlyLimit ?? 0}
+      // 会員の情報が無ければ上限0（null は無制限のため ?? で置き換えない）
+      monthlyLimit={layout ? layout.monthlyLimit : 0}
       initialCart={initialCart}
     >
       <FavoritesProvider

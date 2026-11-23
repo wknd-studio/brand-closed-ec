@@ -4,6 +4,7 @@ import { Money } from "@/domain/value-objects/money";
 import { Order } from "@/domain/entities/order";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
+import type { MemberRankRepository } from "@/repositories/member-rank-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
 import type {
   ProductRepository,
@@ -31,6 +32,7 @@ export type PlaceOrderInput = {
 export type PlaceOrderDeps = {
   userRepo: UserRepository;
   orderRepo: OrderRepository;
+  memberRankRepo: MemberRankRepository;
   addressRepo: AddressRepository;
   productRepo: ProductRepository;
   paymentGateway: PaymentGateway;
@@ -45,6 +47,7 @@ export async function placeOrder(
   const {
     userRepo,
     orderRepo,
+    memberRankRepo,
     addressRepo,
     productRepo,
     paymentGateway,
@@ -65,12 +68,12 @@ export async function placeOrder(
   const cartItems = CartItem.fromProducts(input.cartItems, products, user.rank);
 
   const period = user.getMonthlyPeriod();
-  const confirmedAmount = await orderRepo.sumConfirmedAmountByUserId(
-    user.id,
-    period
-  );
+  const [monthlyLimit, confirmedAmount] = await Promise.all([
+    memberRankRepo.findMonthlyLimit(user.rank),
+    orderRepo.sumConfirmedAmountByUserId(user.id, period),
+  ]);
   // 月次上限チェックはカート全体（at_order・after_order両方）の合計に対して1回だけ判定する
-  checkMonthlyLimit(user, cartItems, Money.of(confirmedAmount));
+  checkMonthlyLimit(monthlyLimit, cartItems, Money.of(confirmedAmount));
 
   // 住所IDは画面から送られるため、注文する会員の住所に絞って取る。注文は admin
   // クライアントで組み立てる（RLS が効かない）ので、IDだけで取ると他の会員の住所が
@@ -86,6 +89,7 @@ export async function placeOrder(
   // （docs/domain/settlement.md）
   const order = Order.place({
     user,
+    monthlyLimit,
     cartItems,
     shippingAddress: shippingAddress.toSnapshot(),
     billingAddress: billingAddress.toSnapshot(),
@@ -120,7 +124,7 @@ export async function placeOrder(
   await orderRepo.saveNewOrderWithLimitCheck(
     order,
     period,
-    user.getMonthlyLimit(),
+    monthlyLimit,
     order.getFixedTotal()
   );
 

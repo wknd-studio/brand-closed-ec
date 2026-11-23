@@ -29,7 +29,8 @@ export type FavoritesDto = {
 // 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態）
 export type MemberLayoutDto = {
   confirmedAmount: number;
-  monthlyLimit: number;
+  // 月間仕入れ上限。null なら無制限
+  monthlyLimit: number | null;
   favoriteProductIds: string[];
 };
 
