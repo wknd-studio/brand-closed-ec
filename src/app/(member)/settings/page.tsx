@@ -3,7 +3,7 @@ import { memberQueryService } from "@/composition/member-query";
 import WithdrawalDialog from "./withdrawal-dialog";
 import AddressList from "./address-list";
 import LegalNoticeText from "@/app/legal/legal-notice-text";
-import { CONTACT } from "@/app/legal/legal-notice";
+import { CONTACT, MEMBERSHIP_TERMS } from "@/app/legal/legal-notice";
 import { formatJstDate } from "./format-jst-date";
 
 export default async function SettingsPage() {
@@ -42,7 +42,7 @@ export default async function SettingsPage() {
             退会するとサービスへのアクセスができなくなります。有料プランの場合、サブスクリプションは即時解約されます。
           </p>
           <p className="text-sm text-gray-500">
-            入会から6ヶ月間は最低利用期間のため、ご自身で退会できません。期間内に退会をご希望の場合は運営へご連絡ください。最低利用期間の残りの月数分の月額を解約金としてお支払いいただいたうえで退会となります。
+            <LegalNoticeText value={MEMBERSHIP_TERMS.cancellation} />
           </p>
           {withdrawableFrom && (
             <div className="space-y-1 rounded bg-red-50 p-3 text-sm text-gray-700">
