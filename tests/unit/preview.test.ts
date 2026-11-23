@@ -524,7 +524,7 @@ describe("deactivatePreviewDeployments", () => {
     const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }));
     const responses: Record<string, unknown> = {
       [DEPLOYMENTS_OF_727]: page1,
-      [DEPLOYMENTS_OF_727.replace("page=1", "page=2")]: [{ id: 101 }],
+      [DEPLOYMENTS_OF_727.replace(/page=1$/, "page=2")]: [{ id: 101 }],
     };
     for (let id = 1; id <= 101; id++) {
       responses[
