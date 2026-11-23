@@ -197,7 +197,7 @@ describe("User", () => {
           "2028-02-28T15:00:00Z",
         ],
       ])(
-        "退会できるようになる日時を例外に持つ: %s",
+        "退会できるようになる日時を例外に持ち、その日時からは退会できる: %s",
         (_, createdAt, withdrawableFrom) => {
           expect(
             withdrawableFromOf(
@@ -205,6 +205,11 @@ describe("User", () => {
               new Date(new Date(createdAt).getTime() + 1000)
             )
           ).toEqual(new Date(withdrawableFrom));
+          const at = new Date(withdrawableFrom);
+          expect(
+            makeUser({ createdAt: new Date(createdAt) }).withdraw([], at)
+              .deletedAt
+          ).toEqual(at);
         }
       );
 
