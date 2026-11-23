@@ -28,8 +28,10 @@ const signUpAppearance = {
     // 上のメールアドレス欄（自前のInput）と角丸を揃える
     formFieldInput: cn(clerkAppearance.elements.formFieldInput, "!rounded-md"),
     footer: cn(clerkAppearance.elements.footer, "!bg-none !bg-transparent"),
-    // 見出し・説明文はカードの上部に自前で出すため、Clerkのものは隠す
-    header: "!hidden",
+    // 登録フォームの見出し・説明文はカードの上部に自前で出すため、Clerkのものは隠す。
+    // 取り消し済みの招待で出る「アクセス制限」の見出しも同じheader要素に出るため、
+    // 一律には隠さず、登録フォーム（signUp.continue）の見出しのときだけ隠す
+    header: "[&:has([data-localization-key^='signUp.continue.'])]:!hidden",
     // サインアップ画面の「アカウントをお持ちの方はサインイン」リンクは、
     // 遷移先の/sign-inにticketパラメータが引き継がれ、Clerk側がサインアップへ
     // 自動的に引き戻してしまう(既知の挙動)ため非表示にする
