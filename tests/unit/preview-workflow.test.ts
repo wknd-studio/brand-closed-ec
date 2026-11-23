@@ -100,7 +100,7 @@ describe("preview.yml（PRのコードをビルドする）", () => {
     );
   });
 
-  it("ビルドは preview-build の environment（feature/* だけ）の、stg の値を読むトークンだけを使う", () => {
+  it("ビルドは preview-build の environment（PR のマージ用の ref だけ）の、stg の値を読むトークンだけを使う", () => {
     expect(buildJob.environment).toBe("preview-build");
     expect(secretsOf(buildJob)).toEqual(["DOPPLER_TOKEN_WORKER"]);
     expect(step(buildJob, "Build").env?.DOPPLER_TOKEN).toBe(
