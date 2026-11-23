@@ -235,6 +235,11 @@ describe("preview-deploy.yml（develop の定義でデプロイ・削除する�
       "steps.decide.outputs.action == 'delete' || steps.decide.outputs.action == 'delete-migrations'",
     ],
     ["Comment on the PR", "steps.decide.outputs.action != 'skip'"],
+    ["Record deployment", "steps.decide.outputs.action == 'deploy'"],
+    [
+      "Deactivate deployments",
+      "steps.decide.outputs.action == 'delete' || steps.decide.outputs.action == 'delete-migrations'",
+    ],
   ])("%s は %s のときだけ動く", (name, cond) => {
     expect(step(reconcile, name).if).toBe(cond);
   });
@@ -246,16 +251,18 @@ describe("preview-deploy.yml（develop の定義でデプロイ・削除する�
     expect(run).toContain("-type l");
   });
 
-  it("Worker の secrets は stg の Worker 用の config の値を検査し、アプリのURLだけを差し替えて上げる", () => {
+  it("Worker の secrets は stg の Worker 用の config の値を検査し、アプリのURLだけを差し替えて、デプロイと一緒に上げる", () => {
     const s = step(reconcile, "Sync Wrangler Secrets & Deploy");
     expect(s.shell).toBe("bash");
     expect(s.env?.DOPPLER_TOKEN_WORKER).toBe(
       "${{ secrets.DOPPLER_TOKEN_WORKER }}"
     );
+    // 新しいPRで、wrangler secret bulk が作る下書きの Worker に wrangler deploy すると、最初のデプロイが
+    // 失敗することがあった（#731）。Worker の作成とシークレットの登録を wrangler deploy の1回にする
     expect(s.run).toMatch(
-      /doppler secrets download --no-read-env --token "\$DOPPLER_TOKEN_WORKER" --no-file --format json \| jq -f scripts\/ci\/filter-worker-env\.jq \| jq --arg url "\$PREVIEW_URL" '\.NEXT_PUBLIC_APP_URL = \$url[^']*' \| doppler run -- pnpm exec wrangler secret bulk/
+      /doppler secrets download --no-read-env --token "\$DOPPLER_TOKEN_WORKER" --no-file --format json \| jq -f scripts\/ci\/filter-worker-env\.jq \| jq --arg url "\$PREVIEW_URL" '\.NEXT_PUBLIC_APP_URL = \$url[^']*' \| doppler run -- bash scripts\/ci\/deploy-preview-worker\.sh "\$PREVIEW_NAME"/
     );
-    expect(s.run).toContain("pnpm exec wrangler deploy");
+    expect(s.run).not.toContain("secret bulk");
   });
 
   it("削除はプレビューの名前の形だけを消すスクリプトで行う", () => {
@@ -268,12 +275,33 @@ describe("preview-deploy.yml（develop の定義でデプロイ・削除する�
     expect(reconcile.permissions).toEqual({
       actions: "read",
       contents: "read",
+      deployments: "write",
       "pull-requests": "write",
     });
     const run = step(reconcile, "Comment on the PR").run ?? "";
     expect(run).toContain("scripts/ci/preview.ts comment");
     expect(run).toContain("-X PATCH");
     expect(run).toContain("-X POST");
+  });
+  it("デプロイしたら、PRの head のコミットに GitHub の Deployment を記録する（PRに「View deployment」が出る）", () => {
+    const s = step(reconcile, "Record deployment");
+    expect(s.run).toBe(
+      'pnpm -s tsx scripts/ci/preview.ts deployment record "$PR_NUMBER" "$HEAD_SHA"'
+    );
+    expect(s.env?.HEAD_SHA).toBe("${{ github.event.workflow_run.head_sha }}");
+  });
+
+  it("プレビューを消したら、そのPRの Deployment を inactive にする", () => {
+    expect(step(reconcile, "Deactivate deployments").run).toBe(
+      'pnpm -s tsx scripts/ci/preview.ts deployment deactivate "$PR_NUMBER"'
+    );
+  });
+
+  it("Deployment の記録は、PRのコメントの後に行う（Deployments の API が失敗しても、コメントは今までどおり出す）", () => {
+    const names = reconcile.steps.map((s) => s.name);
+    const comment = names.indexOf("Comment on the PR");
+    expect(names.indexOf("Record deployment")).toBeGreaterThan(comment);
+    expect(names.indexOf("Deactivate deployments")).toBeGreaterThan(comment);
   });
 });
 
@@ -289,16 +317,32 @@ describe("stg を壊さない", () => {
     }
   );
 
-  it("wrangler は必ずプレビュー用の設定とプレビューの名前で動かす", () => {
-    const lines = deploy.text
-      .split("\n")
-      .filter((l) => /pnpm exec wrangler /.test(l));
-    expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) {
-      expect(line).toContain("--config wrangler.preview.jsonc");
-      expect(line).toContain('--name "$PREVIEW_NAME"');
+  it.each([
+    ["preview-deploy.yml", '"$PREVIEW_NAME"'],
+    ["scripts/ci/deploy-preview-worker.sh", '"$name"'],
+    ["scripts/ci/delete-preview-worker.sh", '"$name"'],
+  ])(
+    "%s の wrangler は必ずプレビュー用の設定とプレビューの名前で動かす",
+    (file, nameVar) => {
+      const text =
+        file === "preview-deploy.yml"
+          ? deploy.text
+          : readFileSync(path.join(ROOT, file), "utf8");
+      const lines = text
+        .split("\n")
+        .filter(
+          (l) =>
+            /wrangler (deploy|delete|secret)/.test(l) &&
+            !l.trim().startsWith("#")
+        );
+      for (const line of lines) {
+        expect(line).toContain("--config wrangler.preview.jsonc");
+        expect(line).toContain(`--name ${nameVar}`);
+      }
+      if (file !== "preview-deploy.yml")
+        expect(lines.length).toBeGreaterThan(0);
     }
-  });
+  );
 
   it("プレビュー用の設定は、名前とレート制限の名前空間だけが stg と違う", () => {
     const stg = readJsonc("wrangler.stg.jsonc");
