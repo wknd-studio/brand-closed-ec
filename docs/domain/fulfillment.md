@@ -48,7 +48,7 @@
 - **1明細は同時に1つの出荷にしか属さない**: `order_items.shipment_id`は単一FK（NULL可）。数量単位でさらに分割して送る（例: 10個のうち3個だけ先に送る）ケースは当面想定しない。まだ発送されていない明細は`shipment_id IS NULL`のまま「未発送」として一覧できる（[[procurement]]の`procurement_task_id IS NULL`＝対応待ちキューと同じパターン）
 - **未払いの明細を出荷しようとした場合、警告を表示する（2026-09-21確定）**: `after_order`の明細は支払いより調達が先に進む設計のため、運営者が請求作成を忘れたまま出荷してしまう事故が起こりうる。システムはこれを強制的にブロックしない（[[returns]]同様、実務は運営者の裁量に委ねる方針を踏襲）が、出荷作成時に対象明細の決済単位が`paid`でなければ「この明細はまだ支払いが完了していません」という警告を表示する。判断は運営者に委ねる
 - **出荷の進捗は都度算出、キャッシュしない**: `orders.status`は`paid`から先に進まない。ある注文が「一部発送済み」なのか「全て配達完了」なのかは、`orders`に紐づく`shipments`/`order_items`をJOINして都度計算する（[[procurement]]の集計値と同じ考え方）。画面表示が重くなった場合のみ、後から同期用のキャッシュ列を追加できる
-- **RLS・書き込み経路**: 顧客は自分（または所属組織）の注文に紐づく出荷を`shipments`テーブルからSELECTのみ可能（追跡番号・配送状況の確認用途）。書き込みは[[procurement]]と同様に管理画面API（service role経由）に一本化し、顧客向けINSERT/UPDATE/DELETEポリシーは設けない。`order_items.shipment_id`の更新も同じAPI経由に統一する。一方`locations`（発送拠点マスタ）は運営内部の情報であり、顧客向けSELECTポリシーは設けず参照・書き込みともに管理画面APIに一本化する
+- **RLS・書き込み経路**: 顧客は自分の注文に紐づく出荷を`shipments`テーブルからSELECTのみ可能（追跡番号・配送状況の確認用途。法人1アカウント方式（#200）で組織は削除済みのため本人のみ。梱包に着手した運営者のIDは運営の内部情報として顧客には見せない）。書き込みは[[procurement]]と同様に管理画面API（service role経由）に一本化し、顧客向けINSERT/UPDATE/DELETEポリシーは設けない。`order_items.shipment_id`の更新も同じAPI経由に統一する。一方`locations`（発送拠点マスタ）は運営内部の情報であり、顧客向けSELECTポリシーは設けず参照・書き込みともに管理画面APIに一本化する
 - **`locations`はカタログ表示に使わない参照テーブル**: `member_ranks`と似た「行データとして持つことで将来の拠点追加をマイグレーション無しのINSERTだけで対応できるようにする」設計だが、`member_ranks`と異なり顧客向けには公開しない
 - **`locations`と`addresses`は別物**: `addresses`は顧客が指定する配送「先」、`locations`は商品が出発する配送「元」であり、役割が逆になる。`addresses.user_id`がNOT NULLである以上、人でも組織でもない`locations`を同じテーブルに混ぜるとポリモーフィックな関連になってしまうため統合しない
 - **旧オペレーションフローとの対応**: `archive/operations-order.md`（凍結済み）では`orders.status`が単一の値で`preparing`（発送準備中）→`shipping`（配送中）→`delivered`（配送完了）と遷移し、調達担当が管理画面のボタンで遷移させる運用だった。新設計ではこれらの値は`orders.status`から廃止され、出荷単位の状態（`pending`/`preparing`/`shipped`/`delivered`）として`shipments`側に移った。**配送伝票の作成・追跡番号の取得・配送業者への引き渡しという運営スタッフの作業内容自体は変わらない**（引き続き人手で行う）
@@ -72,4 +72,4 @@
 
 - `docs/db-schema-redesign.md`: `shipments`テーブル定義節（「このテーブルが必要な理由」「運用の流れ」「あえて持たない設計」含む）、`locations`テーブル定義節、`order_items.shipment_id`/`fulfillment_location_code`列、ER図の`orders ||--o{ shipments`／`shipments |o--o{ order_items`／`locations ||--o{ order_items`／`locations ||--o{ shipments`関係、「RLSポリシー方針への影響」節（`shipments`・`locations`の項）、「移行方針」9番・12番
 - （旧`docs/archive/operations-order.md`: 単一`orders.status`遷移（`preparing`〜`delivered`）を前提にした運営者の作業手順を材料に執筆。新設計との対応は本ドキュメント「旧オペレーションフローとの対応」参照。ドメインドキュメント全体完了に伴いarchiveは削除済み）
-- 実装: 本ドキュメント執筆時点で`shipments`/`locations`は未マイグレーション（`db-schema-redesign.md`は設計段階の文書であり、マイグレーションファイルは別途作成予定）
+- 実装: `supabase/migrations/20261123072013_create_locations.sql`（`locations`・`order_items.fulfillment_location_code`、#354）、`supabase/migrations/20261123153304_create_shipments.sql`（`shipments`・`order_items.shipment_id`・RLS、#355）
