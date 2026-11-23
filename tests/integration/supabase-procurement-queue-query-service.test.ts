@@ -30,6 +30,7 @@ const PAID_SETTLEMENT_ID = "00000000-0000-0000-0000-000000348a31";
 const PENDING_SETTLEMENT_ID = "00000000-0000-0000-0000-000000348a32";
 const INVOICE_SETTLEMENT_ID = "00000000-0000-0000-0000-000000348a33";
 const MIXED_PAID_SETTLEMENT_ID = "00000000-0000-0000-0000-000000348a34";
+const CANCELLED_PAID_SETTLEMENT_ID = "00000000-0000-0000-0000-000000348a35";
 
 const PROCUREMENT_TASK_ID = "00000000-0000-0000-0000-000000348a51";
 
@@ -41,6 +42,9 @@ const CANCELLED_ITEM_ID = "00000000-0000-0000-0000-000000348a45";
 const IN_TASK_ITEM_ID = "00000000-0000-0000-0000-000000348a46";
 const MIXED_AT_ORDER_ITEM_ID = "00000000-0000-0000-0000-000000348a47";
 const MIXED_AFTER_ORDER_ITEM_ID = "00000000-0000-0000-0000-000000348a48";
+// 支払い済みの at_order の明細でも、発注タスクに入っている・注文がキャンセルされていれば出ない
+const AT_ORDER_IN_TASK_ITEM_ID = "00000000-0000-0000-0000-000000348a49";
+const AT_ORDER_CANCELLED_ITEM_ID = "00000000-0000-0000-0000-000000348a4a";
 const ALL_ITEM_IDS = [
   AT_ORDER_PAID_ITEM_ID,
   AFTER_ORDER_ITEM_ID,
@@ -50,6 +54,8 @@ const ALL_ITEM_IDS = [
   IN_TASK_ITEM_ID,
   MIXED_AT_ORDER_ITEM_ID,
   MIXED_AFTER_ORDER_ITEM_ID,
+  AT_ORDER_IN_TASK_ITEM_ID,
+  AT_ORDER_CANCELLED_ITEM_ID,
 ];
 
 // 商品とブランド（Sanity）の対応。PRODUCT_UNKNOWN は Sanity から消えた商品
@@ -197,6 +203,15 @@ beforeAll(async () => {
       amount_snapshot: 10_000,
       paid_at: "2020-01-05T00:10:00.000Z",
     },
+    {
+      id: CANCELLED_PAID_SETTLEMENT_ID,
+      order_id: CANCELLED_ORDER_ID,
+      flow: "checkout",
+      status: "paid",
+      stripe_checkout_session_id: "cs_test_procurement_queue_004",
+      amount_snapshot: 10_000,
+      paid_at: "2020-01-04T00:10:00.000Z",
+    },
   ]);
   await insert("procurement_tasks", [{ id: PROCUREMENT_TASK_ID }]);
   await insert("order_items", [
@@ -224,6 +239,13 @@ beforeAll(async () => {
     item(IN_TASK_ITEM_ID, MIXED_ORDER_ID, {
       payment_timing: "after_order",
       procurement_task_id: PROCUREMENT_TASK_ID,
+    }),
+    item(AT_ORDER_IN_TASK_ITEM_ID, MIXED_ORDER_ID, {
+      settlement_id: MIXED_PAID_SETTLEMENT_ID,
+      procurement_task_id: PROCUREMENT_TASK_ID,
+    }),
+    item(AT_ORDER_CANCELLED_ITEM_ID, CANCELLED_ORDER_ID, {
+      settlement_id: CANCELLED_PAID_SETTLEMENT_ID,
     }),
     item(MIXED_AT_ORDER_ITEM_ID, MIXED_ORDER_ID, {
       settlement_id: MIXED_PAID_SETTLEMENT_ID,
@@ -261,6 +283,8 @@ describe("SupabaseProcurementQueueQueryService.findQueueItems", () => {
 
       expect(ids).not.toContain(CANCELLED_ITEM_ID);
       expect(ids).not.toContain(IN_TASK_ITEM_ID);
+      expect(ids).not.toContain(AT_ORDER_CANCELLED_ITEM_ID);
+      expect(ids).not.toContain(AT_ORDER_IN_TASK_ITEM_ID);
     });
   });
 
