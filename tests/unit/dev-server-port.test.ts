@@ -27,12 +27,8 @@ describe("メインのチェックアウトの開発サーバーのポート", (
     expect(pkg.scripts.dev).toMatch(/\bnext dev\b.*--port 3000\b/);
   });
 
-  it("Taskfile.yml の dev:next は next dev にポート3000を明示する", () => {
-    const nextDev = commandsOf("dev:next").filter((c) =>
-      /\bnext dev\b/.test(c)
-    );
-    expect(nextDev).toHaveLength(1);
-    expect(nextDev[0]).toMatch(/--port 3000\b/);
+  it("Taskfile.yml の dev:next は scripts/dev-run.sh で起動する（メインのチェックアウトでポート3000を明示することは tests/unit/dev-entry.test.ts で確認）", () => {
+    expect(commandsOf("dev:next")).toContain("bash scripts/dev-run.sh next");
   });
 });
 
