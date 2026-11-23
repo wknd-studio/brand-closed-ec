@@ -103,7 +103,7 @@
   - `invoice.payment_failed`は処理しない（下記「支払い失敗の会員への通知」でStripeの自動メールに任せるため。状態は`customer.subscription.updated`で分かる）
   - 再配信・順序の入れ替わりで古い状態に戻らないよう、`stripe_webhook_events`で冪等にし、イベントの中身ではなくStripeから取り直した最新のSubscriptionで更新する（`src/use-cases/sync-subscription-status.ts`）。ランク（価格）は書き換えない（プラン変更の確定は#209）
   - `canceled_at`にはStripeの`ended_at`（サブスクリプションが終了した日時）を入れる。Stripeの`canceled_at`は期末解約の予約時にも入り、予約（`cancel_at_period_end`）と確定を区別できないため
-  - 対応する`subscriptions`の行が無いサブスクリプション（入会の`checkout.session.completed`より先に届いた場合など）は、何もせずイベントを処理済みにして200を返す。入会の確定がStripeから取り直した最新の状態で行を作るため取りこぼさず、例外にするとStripeが最大3日間再送を続けるため
+  - 対応する`subscriptions`の行が無いサブスクリプション（入会の`checkout.session.completed`より先に届いた場合など）は、何もせずイベントを処理済みにして200を返す。入会の確定がStripeから取り直した最新の`status`・請求期間で行を作るためそれらは取りこぼさず（期末解約の予約は次の`customer.subscription.updated`で入る。入会前に解約を予約する経路は無い）、例外にするとStripeが最大3日間再送を続けるため
   - Stripeの`paused`を受けた場合は、上記のとおりv1では起きないため例外のまま（運営者に通知し、500を返してStripeに再送させる）
   - StripeダッシュボードのWebhookエンドポイント（テストモード・本番それぞれ）の購読イベントに`customer.subscription.updated`・`customer.subscription.deleted`を加える
 - **Stripe側の設定**（テストモード・本番それぞれ、ダッシュボードで設定する）:
