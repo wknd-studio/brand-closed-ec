@@ -375,6 +375,32 @@ describe("judge_pr_review_summary の「手順と期待する結果」のテス�
     ).toBe(0);
   });
 
+  it("`1)` の番号も項目の区切りとして扱う", () => {
+    const { status, output } = judge(
+      bodyWith({
+        steps: steps(
+          "  1) `/admin` を開く → 管理画面が出る（`tests/e2e/admin.spec.ts` の「表示」）",
+          "  2) 一覧を開く → 注文が並ぶ"
+        ),
+      })
+    );
+    expect(status).toBe(1);
+    expect(output).toContain("2 番目の項目");
+  });
+
+  it("番号の無い箇条書きは、1行ずつを項目として検査する", () => {
+    const { status, output } = judge(
+      bodyWith({
+        steps: steps(
+          "  - `/admin` を開く → 管理画面が出る（`tests/e2e/admin.spec.ts` の「表示」）",
+          "  - 一覧を開く → 注文が並ぶ"
+        ),
+      })
+    );
+    expect(status).toBe(1);
+    expect(output).toContain("2 番目の項目");
+  });
+
   it("テストファイルでないパスはテストの名前として数えない", () => {
     const { status } = judge(
       bodyWith({
