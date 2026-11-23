@@ -2,32 +2,31 @@ version: "3"
 
 tasks:
   dev:
-    desc: 開発環境を一括起動（Supabase → ngrokを別ターミナルで起動 → Next.js + Stripe + Sanity Studio 並列）
+    desc: 開発環境を一括起動（Webhookの入口を確保 → Supabase → ワークツリーではシードが無ければ投入 → ngrokを別ターミナルで起動 → Next.js + Stripe + Sanity Studio 並列）。入口を使えるのは同時に1か所だけ
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
       - task: supabase:start
+      - bash scripts/dev-run.sh seed
       - task: dev:ngrok:spawn
       - task: dev:services
 
   supabase:start:
-    desc: Supabase ローカルDBを起動
+    desc: Supabase ローカルDBを起動（ワークツリーではそのスロットのSupabase）
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
-        silent: true
-      - supabase start
+      - bash scripts/dev-run.sh supabase
 
   dev:ngrok:spawn:
     desc: ngrok を別のTerminalウィンドウで起動する（同一プロセス内で他コマンドと出力を共有するとTUI表示が崩れるため）
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
       - osascript -e 'tell application "Terminal" to do script "cd \"'"$PWD"'\" && task dev:ngrok"'
 
   dev:services:
     desc: Next.js・Stripe・Sanity Studio を並列起動
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
       - task: dev:services:run
 
@@ -39,19 +38,18 @@ tasks:
       - sanity:dev
 
   dev:next:
-    desc: Next.js 開発サーバー
+    desc: Next.js 開発サーバー（メインのチェックアウトはポート3000、ワークツリーはそのスロットのDB・ポート）
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
-      # ポートを明示すると、3000が使用中でも次の空きポート（ワークツリーのスロット2以降のポート）へ移らずエラーで止まる
-      - doppler run -- pnpm next dev --turbo --port 3000
+      - bash scripts/dev-run.sh next
 
   dev:stripe:
-    desc: Stripe Webhook を localhost:3000 へ転送
+    desc: Stripe Webhook を localhost の開発サーバー（メインのチェックアウトは3000、ワークツリーはそのスロットのポート）へ転送
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
-      - doppler run -- stripe listen --forward-to localhost:3000/api/webhooks/stripe
+      - bash scripts/dev-run.sh stripe
 
   test:e2e:
     desc: E2Eテストをローカルで実行（ワークツリーではそのスロットのSupabaseを自動起動して使う）
@@ -101,22 +99,24 @@ tasks:
       - doppler run -- env CLOUDFLARE_INCLUDE_PROCESS_ENV=true pnpm exec wrangler dev --port 3000
 
   dev:ngrok:
-    desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost:3000）
+    desc: ngrok トンネルを起動（buffing-flaccid-nutty.ngrok-free.dev → localhost の開発サーバー。メインのチェックアウトは3000、ワークツリーはそのスロットのポート）
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
-      - ngrok start default --config "$HOME/Library/Application Support/ngrok/ngrok.yml" --config ngrok.yml
+      - bash scripts/dev-run.sh ngrok
 
   dev:clean:
-    desc: task dev で起動した全プロセス（Next.js・Stripe・Sanity Studio・ngrok・Supabaseコンテナ）を停止する
+    desc: task dev で起動した全プロセス（Next.js・Stripe・Sanity Studio・ngrok・メインのチェックアウトではSupabaseコンテナも）を停止し、Webhookの入口を返す
     cmds:
-      - cmd: bash scripts/require-main-checkout.sh "{{.TASK}}"
+      # 別の場所が入口を使用中なら、その場所のプロセスを止めないよう、ここで止まる
+      - cmd: bash scripts/dev-entry.sh "{{.TASK}}"
         silent: true
       - pkill -f "pnpm next dev --turbo" || true
       - pkill -f "sanity dev" || true
       - pkill -f "stripe listen" || true
       - pkill -f "ngrok start" || true
-      - supabase stop
+      - bash scripts/dev-run.sh supabase-stop
+      - bash scripts/dev-entry.sh --release
 
   dev:re:
     desc: task dev で起動した全プロセスを停止してから再起動する

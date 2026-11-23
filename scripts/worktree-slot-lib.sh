@@ -4,8 +4,9 @@
 # 複数のワークツリーで同時に確保が走っても同じスロットを二重に確保しない）。
 # owner ファイルに確保したワークツリーの絶対パスを記録する。
 
-# シェルの設定を読まない環境（GUIアプリから呼ばれた場合等）でもHomebrewのsupabase等を見つけられるようにする
-if [ -x /opt/homebrew/bin/brew ]; then
+# シェルの設定を読まない環境（GUIアプリから呼ばれた場合等）でもHomebrewのsupabase等を見つけられるようにする。
+# 見つかるときは足さない（PATHの先頭に足すと、テストで差し替えたコマンドより Homebrew のものが優先されるため）
+if ! command -v supabase >/dev/null 2>&1 && [ -x /opt/homebrew/bin/brew ]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
