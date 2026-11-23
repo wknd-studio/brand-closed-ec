@@ -76,6 +76,13 @@ const HISTORY_PAID_ORDER_ID = "00000000-0000-0000-0000-000000364a21";
 const HISTORY_CANCELLED_ORDER_ID = "00000000-0000-0000-0000-000000364a22";
 const HISTORY_LIMIT_EXCEEDED_ORDER_ID = "00000000-0000-0000-0000-000000364a23";
 const HISTORY_PROCESSING_ORDER_ID = "00000000-0000-0000-0000-000000364a24";
+// 注文詳細（findOrderDetail）用の注文。支払い済みの Checkout・請求済みの Invoice・請求前の明細を持つ
+const DETAIL_ORDER_ID = "00000000-0000-0000-0000-000000365a21";
+const DETAIL_CHECKOUT_SETTLEMENT_ID = "00000000-0000-0000-0000-000000365a31";
+const DETAIL_INVOICE_SETTLEMENT_ID = "00000000-0000-0000-0000-000000365a32";
+const DETAIL_CHECKOUT_ITEM_ID = "00000000-0000-0000-0000-000000365a41";
+const DETAIL_INVOICE_ITEM_ID = "00000000-0000-0000-0000-000000365a42";
+const DETAIL_UNASSIGNED_ITEM_ID = "00000000-0000-0000-0000-000000365a43";
 const ALL_ORDER_IDS = [
   MIXED_ORDER_ID,
   AT_ORDER_ONLY_ORDER_ID,
@@ -84,6 +91,7 @@ const ALL_ORDER_IDS = [
   HISTORY_CANCELLED_ORDER_ID,
   HISTORY_LIMIT_EXCEEDED_ORDER_ID,
   HISTORY_PROCESSING_ORDER_ID,
+  DETAIL_ORDER_ID,
 ];
 const MIXED_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450a31";
 const AT_ORDER_ONLY_SETTLEMENT_ID = "00000000-0000-0000-0000-000000450a32";
@@ -256,6 +264,16 @@ beforeAll(async () => {
       status: "processing",
       createdAt: "2026-10-01T00:00:00.000Z",
     }),
+    {
+      ...order(DETAIL_ORDER_ID),
+      billing_address_snapshot: {
+        ...addressSnapshot,
+        recipientLastName: "請求",
+        recipientFirstName: "花子",
+        city: "中央区",
+        addressLine2: "テストビル3F",
+      },
+    },
   ]);
   await insert("order_settlements", [
     {
@@ -281,6 +299,28 @@ beforeAll(async () => {
       status: "pending_payment",
       stripe_checkout_session_id: WITHDRAWN_USER_SESSION_ID,
       amount_snapshot: 100_000,
+    },
+  ]);
+  // created_at を指定するため、列のそろった別の insert にする。作成順に並ぶことを確かめるため、後に作った Invoice を先に入れる
+  await insert("order_settlements", [
+    {
+      id: DETAIL_INVOICE_SETTLEMENT_ID,
+      order_id: DETAIL_ORDER_ID,
+      flow: "invoice",
+      status: "invoice_sent",
+      stripe_invoice_id: "in_test_member_order_query_365",
+      amount_snapshot: 30_000,
+      created_at: "2026-06-20T00:00:00.000Z",
+    },
+    {
+      id: DETAIL_CHECKOUT_SETTLEMENT_ID,
+      order_id: DETAIL_ORDER_ID,
+      flow: "checkout",
+      status: "paid",
+      stripe_checkout_session_id: "cs_test_member_order_query_365",
+      amount_snapshot: 100_000,
+      paid_at: CREATED_AT,
+      created_at: CREATED_AT,
     },
   ]);
   await insert("order_items", [
@@ -340,6 +380,26 @@ beforeAll(async () => {
       quantity: 1,
       is_negotiable: true,
       negotiated_unit_price: 99_000,
+      payment_timing: "after_order",
+    }),
+    item(DETAIL_CHECKOUT_ITEM_ID, DETAIL_ORDER_ID, {
+      product_name_snapshot: "注文時に支払った商品",
+      settlement_id: DETAIL_CHECKOUT_SETTLEMENT_ID,
+    }),
+    item(DETAIL_INVOICE_ITEM_ID, DETAIL_ORDER_ID, {
+      product_name_snapshot: "請求書で支払う商品",
+      unit_price_snapshot: 30_000,
+      quantity: 1,
+      payment_timing: "after_order",
+      settlement_id: DETAIL_INVOICE_SETTLEMENT_ID,
+    }),
+    // 請求前（まだ決済単位が無い）。要相談のため交渉済みの単価があっても単価は出さない
+    item(DETAIL_UNASSIGNED_ITEM_ID, DETAIL_ORDER_ID, {
+      product_name_snapshot: "これから請求する商品",
+      unit_price_snapshot: null,
+      quantity: 4,
+      is_negotiable: true,
+      negotiated_unit_price: 7_000,
       payment_timing: "after_order",
     }),
   ]);
@@ -678,6 +738,128 @@ describe("SupabaseMemberOrderQueryService.findOrderHistory", () => {
   });
 });
 
+describe("SupabaseMemberOrderQueryService.findOrderDetail", () => {
+  // status・rankAtOrder は値オブジェクトのため、比較用に値へ直す
+  const plain = (
+    detail: Awaited<ReturnType<typeof queryService.findOrderDetail>>
+  ) =>
+    detail && {
+      ...detail,
+      status: detail.status.value,
+      rankAtOrder: detail.rankAtOrder.value,
+    };
+
+  it("明細・住所のスナップショット・注文時点のランクと、決済単位ごとの状態・金額・明細、請求前の明細を返す", async () => {
+    const detail = await queryService.findOrderDetail({
+      clerkUserId: CLERK_USER,
+      orderId: DETAIL_ORDER_ID,
+    });
+
+    expect(plain(detail)).toEqual({
+      orderId: DETAIL_ORDER_ID,
+      createdAt: CREATED_AT,
+      status: "processing",
+      rankAtOrder: "standard",
+      shippingAddress: {
+        fullName: "テスト 太郎",
+        postalCode: "100-0001",
+        prefecture: "東京都",
+        city: "千代田区",
+        addressLine1: "丸の内1-1-1",
+        addressLine2: "",
+        phoneNumber: "03-1234-5678",
+      },
+      billingAddress: {
+        fullName: "請求 花子",
+        postalCode: "100-0001",
+        prefecture: "東京都",
+        city: "中央区",
+        addressLine1: "丸の内1-1-1",
+        addressLine2: "テストビル3F",
+        phoneNumber: "03-1234-5678",
+      },
+      // 決済単位は作成順
+      settlements: [
+        {
+          id: DETAIL_CHECKOUT_SETTLEMENT_ID,
+          flowLabel: "注文時のお支払い",
+          statusLabel: "お支払い済み",
+          amount: 100_000,
+          items: [
+            {
+              id: DETAIL_CHECKOUT_ITEM_ID,
+              productNameSnapshot: "注文時に支払った商品",
+              quantity: 2,
+              unitPriceSnapshot: 50_000,
+              isNegotiable: false,
+            },
+          ],
+        },
+        {
+          id: DETAIL_INVOICE_SETTLEMENT_ID,
+          flowLabel: "請求書払い",
+          statusLabel: "請求書をお送りしました（お支払い待ち）",
+          amount: 30_000,
+          items: [
+            {
+              id: DETAIL_INVOICE_ITEM_ID,
+              productNameSnapshot: "請求書で支払う商品",
+              quantity: 1,
+              unitPriceSnapshot: 30_000,
+              isNegotiable: false,
+            },
+          ],
+        },
+      ],
+      unassignedItems: [
+        {
+          id: DETAIL_UNASSIGNED_ITEM_ID,
+          productNameSnapshot: "これから請求する商品",
+          quantity: 4,
+          unitPriceSnapshot: null,
+          isNegotiable: true,
+        },
+      ],
+    });
+  });
+
+  it("他の会員の注文は null", async () => {
+    expect(
+      await queryService.findOrderDetail({
+        clerkUserId: CLERK_OTHER_USER,
+        orderId: DETAIL_ORDER_ID,
+      })
+    ).toBeNull();
+  });
+
+  it("退会済みの会員の注文は null", async () => {
+    expect(
+      await queryService.findOrderDetail({
+        clerkUserId: CLERK_WITHDRAWN_USER,
+        orderId: WITHDRAWN_USER_ORDER_ID,
+      })
+    ).toBeNull();
+  });
+
+  it("存在しない注文は null", async () => {
+    expect(
+      await queryService.findOrderDetail({
+        clerkUserId: CLERK_USER,
+        orderId: "00000000-0000-0000-0000-000000365fff",
+      })
+    ).toBeNull();
+  });
+
+  it("UUID の形でない注文ID（URL の改ざん等）は null", async () => {
+    expect(
+      await queryService.findOrderDetail({
+        clerkUserId: CLERK_USER,
+        orderId: "not-a-uuid",
+      })
+    ).toBeNull();
+  });
+});
+
 // page が使う組み立て。ログイン中の会員のトークンで RLS を効かせたクライアントでも取得できること
 describe("memberOrderQueryService（composition。RLS 付きのクライアント）", () => {
   it("ログイン中の会員の注文確認・注文完了・後払いの注文完了を取得できる", async () => {
@@ -721,6 +903,23 @@ describe("memberOrderQueryService（composition。RLS 付きのクライアン�
     expect(history.totalCount).toBe(4);
   });
 
+  it("ログイン中の会員の注文詳細を取得できる", async () => {
+    getToken.mockResolvedValue(signTestJwt(CLERK_USER));
+    const rlsQueryService = await memberOrderQueryService();
+
+    const detail = await rlsQueryService.findOrderDetail({
+      clerkUserId: CLERK_USER,
+      orderId: DETAIL_ORDER_ID,
+    });
+    expect(detail?.settlements.map((s) => s.id)).toEqual([
+      DETAIL_CHECKOUT_SETTLEMENT_ID,
+      DETAIL_INVOICE_SETTLEMENT_ID,
+    ]);
+    expect(detail?.unassignedItems.map((i) => i.id)).toEqual([
+      DETAIL_UNASSIGNED_ITEM_ID,
+    ]);
+  });
+
   it("引数に他の会員を渡しても、RLS によりトークンの会員以外のデータは取得できない", async () => {
     getToken.mockResolvedValue(signTestJwt(CLERK_OTHER_USER));
     const rlsQueryService = await memberOrderQueryService();
@@ -745,5 +944,11 @@ describe("memberOrderQueryService（composition。RLS 付きのクライアン�
     });
     expect(history.orders).toEqual([]);
     expect(history.totalCount).toBe(0);
+    expect(
+      await rlsQueryService.findOrderDetail({
+        clerkUserId: CLERK_USER,
+        orderId: DETAIL_ORDER_ID,
+      })
+    ).toBeNull();
   });
 });
