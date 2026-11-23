@@ -22,6 +22,8 @@ push (develop・main)
 | push → develop      | migrate stg → deploy stg → E2E             |
 | push → main         | migrate prod → deploy prod                 |
 
+本番で不具合が出たときの戻し方（アプリ・DB・secret 等）と、マイグレーションを含むデプロイの前に確かめることは `docs/runbooks/production-rollback.md`。
+
 > **PR時のE2Eについて**: `docs/`・`specs/`・`*.md`のみの変更（ドキュメントのみのPR）ではE2Eジョブをスキップする（`dorny/paths-filter`で判定）。実行する場合もstgの本物のDBには触れず、CI実行環境内でSupabaseをローカル起動してテスト用データを使う（PRごとに独立、他のPRのテストと干渉しない）。
 
 > GitHub 無料プランの private リポジトリは branch protection が使えないため、PR なし直接 push のリスクは運用でカバーする。チェックは PR 時のみ実行し、push 時はデプロイのみ行う。
