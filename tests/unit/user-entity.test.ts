@@ -7,6 +7,7 @@ import { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-regist
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import { makeOrder, makeOrderItem, makeSettlement } from "./use-cases/helpers";
 
@@ -26,6 +27,7 @@ function makeUser(
     onboardingCompleted: true,
     deletedAt: null,
     stripeCustomerId: null,
+    createdAt: new Date(2026, 0, 10),
     ...overrides,
   });
 }
@@ -134,6 +136,86 @@ describe("User", () => {
           now
         )
       ).toThrow(ActiveOrdersExistError);
+    });
+
+    describe("入会から6ヶ月の最低利用期間", () => {
+      // 期間の境界は実行環境のタイムゾーンではなくJSTの日付で決める。
+      // 入会日（JST）の6ヶ月後の同じ日の0時（JST）から退会できる
+      const withdrawableFromOf = (createdAt: Date, now: Date) => {
+        try {
+          makeUser({ createdAt }).withdraw([], now);
+        } catch (err) {
+          if (err instanceof MinimumMembershipPeriodError) {
+            return err.withdrawableFrom;
+          }
+          throw err;
+        }
+        throw new Error("退会できてしまった");
+      };
+
+      it("入会から6ヶ月経っていなければ MinimumMembershipPeriodError をthrowする", () => {
+        const user = makeUser({ createdAt: new Date("2026-05-15T03:00:00Z") });
+
+        expect(() =>
+          user.withdraw([], new Date("2026-08-01T03:00:00Z"))
+        ).toThrow(MinimumMembershipPeriodError);
+      });
+
+      it("入会日（JST）の6ヶ月後の0時（JST）の直前までは退会できず、0時からは退会できる", () => {
+        // JST 2026-05-15 00:30 に入会
+        const user = makeUser({ createdAt: new Date("2026-05-14T15:30:00Z") });
+
+        // JST 2026-11-14 23:59:59.999
+        expect(() =>
+          user.withdraw([], new Date("2026-11-14T14:59:59.999Z"))
+        ).toThrow(MinimumMembershipPeriodError);
+        // JST 2026-11-15 00:00
+        const at = new Date("2026-11-14T15:00:00Z");
+        expect(user.withdraw([], at).deletedAt).toEqual(at);
+      });
+
+      it.each([
+        [
+          "入会がJSTの0時台（UTCでは前日）",
+          "2026-05-14T15:30:00Z",
+          "2026-11-14T15:00:00Z",
+        ],
+        ["入会がJSTの23時台", "2026-05-15T14:59:00Z", "2026-11-14T15:00:00Z"],
+        [
+          "年をまたぐ（JST 2026-07-31 → 2027-01-31）",
+          "2026-07-30T15:00:00Z",
+          "2027-01-30T15:00:00Z",
+        ],
+        [
+          "6ヶ月後の月に同じ日が無ければ月末（JST 2026-08-31 → 2027-02-28）",
+          "2026-08-30T15:00:00Z",
+          "2027-02-27T15:00:00Z",
+        ],
+        [
+          "うるう年の2月は29日（JST 2027-08-31 → 2028-02-29）",
+          "2027-08-30T15:00:00Z",
+          "2028-02-28T15:00:00Z",
+        ],
+      ])(
+        "退会できるようになる日時を例外に持つ: %s",
+        (_, createdAt, withdrawableFrom) => {
+          expect(
+            withdrawableFromOf(
+              new Date(createdAt),
+              new Date(new Date(createdAt).getTime() + 1000)
+            )
+          ).toEqual(new Date(withdrawableFrom));
+        }
+      );
+
+      it("最低利用期間内なら、未解決の決済単位が無くても退会日時を立てない", () => {
+        const user = makeUser({ createdAt: new Date("2026-10-01T03:00:00Z") });
+
+        expect(() => user.withdraw([resolved], now)).toThrow(
+          MinimumMembershipPeriodError
+        );
+        expect(user.deletedAt).toBeNull();
+      });
     });
 
     it("退会済みなら MemberWithdrawnError をthrowし、退会日時を上書きしない", () => {
@@ -393,6 +475,21 @@ describe("User.register()", () => {
     expect(user.email).toBe("new@example.com");
     expect(user.firstName).toBe("次郎");
     expect(user.lastName).toBe("佐藤");
+  });
+
+  it("登録した日時を createdAt に持つ", () => {
+    const now = new Date("2026-11-23T03:00:00Z");
+    const user = User.register(
+      {
+        id: "user-new",
+        clerkUserId: "clerk_new",
+        email: "new@example.com",
+        firstName: "次郎",
+        lastName: "佐藤",
+      },
+      now
+    );
+    expect(user.createdAt).toEqual(now);
   });
 
   it("入会手続き前の初期状態（starter・個人・未入会・未退会・電話番号とStripe Customerと請求基準日なし）で作る", () => {

@@ -41,6 +41,15 @@ test.describe.serial("会員の退会", () => {
     });
     clerkUserId = created.id;
     await ensureOnboardedMember(supabaseAdmin(), clerkUserId, email);
+    // 入会から6ヶ月間は退会できない（#207）ため、入会日を7ヶ月前にずらす
+    const joinedAt = new Date();
+    joinedAt.setMonth(joinedAt.getMonth() - 7);
+    const { error } = await supabaseAdmin()
+      .from("users")
+      .update({ created_at: joinedAt.toISOString() })
+      .eq("clerk_user_id", clerkUserId)
+      .is("deleted_at", null);
+    if (error) throw new Error(`入会日の更新に失敗しました: ${error.message}`);
   });
 
   test.afterAll(async () => {

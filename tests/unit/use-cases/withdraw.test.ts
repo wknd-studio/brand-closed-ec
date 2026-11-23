@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import { withdraw } from "@/use-cases/withdraw";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import {
   makeUserRepo,
   makeOrderRepo,
@@ -56,6 +57,29 @@ describe("withdraw", () => {
       )
     ).rejects.toThrow(ActiveOrdersExistError);
     expect(userRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("入会から6ヶ月経っていない会員は MinimumMembershipPeriodError をthrowし、保存・Stripe解約・Clerk ban をしない", async () => {
+    const userRepo = makeUserRepo(makeUser({ createdAt: new Date() }));
+    const subscriptionGateway = makeSubscriptionGateway();
+    const accountGateway = makeAccountGateway();
+
+    await expect(
+      withdraw(
+        { clerkUserId: "clerk-1" },
+        {
+          userRepo,
+          orderRepo: makeOrderRepo(),
+          subscriptionRepo: makeSubscriptionRepo(),
+          subscriptionGateway,
+          accountGateway,
+          errorReporter: makeErrorReporter(),
+        }
+      )
+    ).rejects.toThrow(MinimumMembershipPeriodError);
+    expect(userRepo.save).not.toHaveBeenCalled();
+    expect(subscriptionGateway.cancelSubscription).not.toHaveBeenCalled();
+    expect(accountGateway.banUser).not.toHaveBeenCalled();
   });
 
   it("会員の注文が退会を止めないもの（決済前・キャンセル済み）だけなら退会する", async () => {
