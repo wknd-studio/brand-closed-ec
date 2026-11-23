@@ -51,9 +51,9 @@ doppler run -c prod_deploy -- pnpm exec wrangler rollback <版のID> \
   --message "<issue番号> <理由>" --config wrangler.prod.jsonc
 ```
 
-**版の ID は必ず指定する。** 省略すると「最新の 1 つ前の版」に戻るが、1 デプロイで版は複数できる（`wrangler secret bulk` で 1 つ・`wrangler deploy` で 1 つ。stg は E2E の前後の `secret put`・`secret delete` でさらに 2 つ）。省略すると、コードは同じで secret だけが違う版に戻ることがある（stg で確かめた。stg の最新は E2E の後の `secret delete` の版で、1 つ前はメールの送信を止めた版だった）。
+**版の ID は必ず指定する。** 省略すると「最新の 1 つ前の版」に戻るが、1 デプロイで版が複数できることがある（Deploy の Sync は `wrangler deploy --secrets-file` で secret とコードを 1 つの版で出す〈#708〉が、stg は E2E の前後の `secret put`・`secret delete` でさらに 2 つできる。#708 より前のデプロイは `secret bulk` と `wrangler deploy` で 2 つ）。省略すると、コードは同じで secret だけが違う版に戻ることがある（stg で確かめた。stg の最新は E2E の後の `secret delete` の版で、1 つ前はメールの送信を止めた版だった）。
 
-戻す先は「壊れたデプロイの前に出ていた版」= `deployments list` で、壊れたデプロイの Deploy (production) の実行が始まった時刻より **前の最後のデプロイ** の版（その実行の Sync の `secret bulk` と `wrangler deploy` でできた版は含めない）。コードが違うことは `versions view <版のID> --json` の `resources.script.etag` で確かめられる（同じコードなら同じ値）。
+戻す先は「壊れたデプロイの前に出ていた版」= `deployments list` で、壊れたデプロイの Deploy (production) の実行が始まった時刻より **前の最後のデプロイ** の版（その実行の Sync でできた版は含めない）。コードが違うことは `versions view <版のID> --json` の `resources.script.etag` で確かめられる（同じコードなら同じ値）。
 
 **戻せないとき**（Cloudflare のドキュメント）:
 
@@ -68,16 +68,14 @@ doppler run -c prod_deploy -- pnpm exec wrangler rollback <版のID> \
 ロールバックすると「最新の版」と「出ている版」がずれる。この間は次のとおり（stg で確かめた）。
 
 - `wrangler secret put`・`secret bulk`・`secret delete` が `Secret edit failed. ... the latest version of your Worker isn't currently deployed.` で失敗する（exit 1）
-- そのため、**CI の Deploy (production) は Sync Wrangler Secrets & Deploy のステップで失敗する**（`secret bulk` が先に動くため）。Migrate DB はその前に動くので、DB だけが新しくなる
 - `wrangler secret list` は最新の版の一覧を出す。戻した版の secret の一覧は `versions view <版のID> --json` の `resources.bindings` で見る
-- `wrangler deploy` は通る。できた版の secret は、出ていた（戻した）版ではなく **最新の版** のものを引き継ぐ。出した後は「最新の版 = 出ている版」に戻り、secret の変更もできるようになる
+- `wrangler deploy`（`--secrets-file` 付きも）は通る。できた版の secret は、出ていた（戻した）版ではなく **最新の版** のものを引き継ぎ、`--secrets-file` で渡した値で足す・上書きする。出した後は「最新の版 = 出ている版」に戻り、secret の変更もできるようになる
 
-直したものを CI で出す前に、次のどちらかで「最新の版 = 出ている版」に戻す。
+CI の Deploy (production)・Deploy (staging) の Sync Wrangler Secrets & Deploy は、`wrangler deploy --secrets-file` で secret（Doppler の Worker 用の config の値）とコードを 1 つの版で出すため、ロールバック中でも通る（#708）。直したもの（hotfix）は、手でデプロイせずにそのまま `main` にマージして CI で出せばよい。
 
-- **直したコードを手でデプロイする**（推奨）: hotfix を `main` にマージした後、CI の Deploy (production) が Sync で失敗したら、メインのチェックアウトでそのコミットを `git switch --detach origin/main` で取り、`doppler run -c prod_deploy -- pnpm build:cloudflare` → `doppler run -c prod_deploy -- pnpm exec wrangler deploy --config wrangler.prod.jsonc --message "<issue番号> hotfix"` を行う。そのあと失敗したジョブを Re-run する（secret を同期して同じコードを出し直す）。手でデプロイした版は最新の（壊れた）版の secret を引き継ぐため、壊れたデプロイで secret の値も変えていたなら、Re-run の Sync が終わるまではその値で動く（先に Doppler の値を直しておく。5 章）
-- 壊れた版に戻す（`wrangler rollback <最新の版のID>`）: 壊れた版がまた出るので、本番では使わない。stg で試した後に元へ戻すときに使う
-
-CI が `wrangler deploy --secrets-file` で secret とコードを 1 つの版で出すように変えれば、この手作業は要らなくなる（#708。ロールバック中に `--secrets-file` で出せることは stg で確かめた）。
+- 出た版の secret は、Doppler にある値は Doppler の今の値になる。Doppler に無く最新の（壊れた）版にだけある secret は、そのまま引き継がれる（`--secrets-file` は省いた secret を消さない）。壊れたデプロイで secret を足していたなら、5 章のとおり Worker から消す
+- 壊れた版に戻す（`wrangler rollback <最新の版のID>`）のは、壊れた版がまた出るので本番では使わない。stg で試した後に元へ戻すときに使う
+- stg の E2E Tests (stg) の `DISABLE_EMAIL_SENDING` の `secret put`・`secret delete` は、ロールバック中は失敗する。E2E は Deploy (staging) の直後（「最新の版 = 出ている版」に戻った後）に同じ concurrency のグループで動くので普段は通るが、**stg で `wrangler rollback` を試すのは、Deploy・E2E Tests (stg) が動いていないときにする**。E2E の途中で戻して Re-enable のステップ（`secret delete`）が失敗すると、最新の版に `DISABLE_EMAIL_SENDING=true` が残り、次のデプロイがそれを引き継いで stg のメールが送られなくなる（Doppler に無い値のため `--secrets-file` では消えない）。そうなったら、「最新の版 = 出ている版」に戻してから `doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'` で消す
 
 ### 2-2. revert して再デプロイ（十数分・CI を通す）
 
@@ -91,7 +89,7 @@ CI が `wrangler deploy --secrets-file` で secret とコードを 1 つの版�
    ```
 2. revert にマイグレーションのファイルの削除が含まれていたら止まる。マイグレーションのファイルは消さず、打ち消すマイグレーションを足す（4 章）
 3. `task check` を通し、`main` に向けて PR を作る。`hotfix/*` は `Stg E2E Check` の対象外（stg を通らない）。レビュー 1 名以上・CI が全部 green でマージする（`requirements.md` の 4-3）
-4. マージすると Deploy (production) が動く。`wrangler rollback` で戻した後なら Sync で失敗するので、2-1 の「ロールバック中の制約」の手順で出す
+4. マージすると Deploy (production) が動く。`wrangler rollback` で戻した後でも、そのまま出せる（2-1 の「ロールバック中の制約」）
 5. **同じブランチを `develop` にも PR してマージする**（バックマージ。忘れると次の `develop` → `main` で不具合が戻る）
 
 `feature/*` から `main` への PR・`main` への直接 push はしない（CLAUDE.md のブランチ戦略）。
@@ -157,7 +155,7 @@ secret の値だけを誤って変えたとき（アプリのコードは正し�
    doppler configs logs -p brand-closed-ec -c prod            # 変更のログ（ログIDを探す）
    doppler configs logs rollback <ログID> -p brand-closed-ec -c prod
    ```
-2. Deploy (production) の最後の実行を Re-run する（Sync で `secret bulk` して同じコードを出し直す）。`wrangler rollback` で戻している間は Sync が失敗する（2-1）
+2. Deploy (production) の最後の実行を Re-run する（Sync で secret と同じコードを `wrangler deploy --secrets-file` で出し直す）。`wrangler rollback` で戻している間でも通る（2-1）
 3. 急ぐなら、`deployments list` で、値を変える前の版に `wrangler rollback <版のID>` で戻す（コードも同じなら secret だけが戻る）
 
 Worker の secret を Cloudflare のダッシュボードや `wrangler secret put` で直接変えない。Doppler とずれ、次のデプロイで Doppler の値に上書きされる。

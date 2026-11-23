@@ -81,7 +81,7 @@ develop 向けの同じリポジトリの `feature/*` のPRに push すると、
 
 Cloudflare の Workers の Version の preview URL（`wrangler versions upload --preview-alias`）は、Durable Objects を持つ Worker では作られない。この Worker は OpenNext のキャッシュ用に Durable Objects を持つ。残る候補のうち、PRごとに別名の Worker を `wrangler deploy --name` で出す方にした。
 
-- stg と同じ `wrangler deploy` で出すため、OpenNext のビルドがそのまま動くと分かっている。シークレットは、stg の「`wrangler secret bulk` → `wrangler deploy`」と違い、`wrangler deploy --secrets-file` でデプロイと一緒に上げる（`scripts/ci/deploy-preview-worker.sh`。Worker がまだ無ければこれが作る）。前は stg と同じ形にしていたが、新しいPRの最初のデプロイで失敗した（#731。下）
+- stg と同じ `wrangler deploy` で出すため、OpenNext のビルドがそのまま動くと分かっている。シークレットは、`wrangler deploy --secrets-file` でデプロイと一緒に上げる（`scripts/ci/deploy-preview-worker.sh`。Worker がまだ無ければこれが作る）。前は当時の stg と同じ「`wrangler secret bulk` → `wrangler deploy`」にしていたが、新しいPRの最初のデプロイで失敗した（#731。下）。stg・本番も #708 から `--secrets-file` で上げる
 
 #### 新しいPRの最初のデプロイの失敗（#731）
 
@@ -189,7 +189,7 @@ flowchart LR
     CI["ci（root・別の環境）<br/>PR の CI 用。管理用の値なし"]
   end
   subgraph JOB["読むジョブ・ステップ"]
-    SYNC["Sync: wrangler secret bulk<br/>（filter-worker-env.jq で検査）"]
+    SYNC["Sync: wrangler deploy --secrets-file<br/>（filter-worker-env.jq で検査）"]
     DJOB["Migrate DB・Build・wrangler deploy<br/>Sanity Studio・E2E (stg)・商品データの同期"]
     PRJ["PR の CI<br/>Integration・Build・E2E (PR)"]
   end
@@ -211,7 +211,7 @@ Worker に上がるのは `stg` の値だけで、`stg_deploy` にしかない�
 - **root の `stg`・`prod`** に置くもの: Worker が実行時に使う値（Clerk・Supabase の service role・Stripe・Resend・`SANITY_API_TOKEN`・`NEXT_PUBLIC_*`）
 - **branch の `stg_deploy`・`prod_deploy`** にだけ置くもの: `SUPABASE_DB_URL`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`・`SANITY_AUTH_TOKEN`・`SANITY_WRITE_TOKEN`・`SUPABASE_PROJECT_REF`・`E2E_USER_EMAIL`・`E2E_USER_PASSWORD`・`SEED_USER_PASSWORD`。branch は root の値を引き継ぐので、実行時の値を二重に置かなくてよい
 - 新しい値を足すときは、Worker が実行時に読むなら root、デプロイ・テスト・スクリプトだけが使うなら branch に置く。リポジトリ側に名前の一覧は持たない
-- Sync のステップは、root の値を `scripts/ci/filter-worker-env.jq` に通してから `wrangler secret bulk` に渡す。Doppler が付ける `DOPPLER_*` を落とし、管理用のトークン（`SUPABASE_DB_URL`・`CLOUDFLARE_API_TOKEN`・`SENTRY_AUTH_TOKEN`・`SANITY_AUTH_TOKEN`・`SANITY_WRITE_TOKEN`・`SUPABASE_ACCESS_TOKEN`）を root に置き間違えていたら、Worker に上げずにデプロイを止める（`tests/unit/deploy-workflow-worker-env.test.ts`）
+- Sync のステップは、root の値を `scripts/ci/filter-worker-env.jq` に通してから `wrangler deploy --secrets-file /dev/stdin` に渡し、secret とコードを 1 つの版で出す（#708。`wrangler secret bulk` は `wrangler rollback` で戻している間は失敗し、直したものを出せなくなるため。`docs/runbooks/production-rollback.md` の 2-1）。Doppler が付ける `DOPPLER_*` を落とし、管理用のトークン（`SUPABASE_DB_URL`・`CLOUDFLARE_API_TOKEN`・`SENTRY_AUTH_TOKEN`・`SANITY_AUTH_TOKEN`・`SANITY_WRITE_TOKEN`・`SUPABASE_ACCESS_TOKEN`）を root に置き間違えていたら、Worker に上げずにデプロイを止める（`tests/unit/deploy-workflow-worker-env.test.ts`）
 - ローカルで stg の値を使うスクリプトは、要る値に合わせて config を選ぶ。シード（`task supabase:seed-users:stg`）は `SEED_USER_PASSWORD` を使うため `-c stg_deploy`
 
 **root から branch に値を移すとき**: 先に branch に同じ値を書いても、root と同じ値は「引き継ぎ」と扱われて branch には残らない（2026-11-21 に確かめた）。値をシェルの変数に持ったまま、root から消してから branch に書く。失敗したら root の変更は `doppler configs logs rollback <ログID> -c <config>` で戻せる。
@@ -241,7 +241,7 @@ done
 | `SUPABASE_DB_URL`      | stg のプロジェクトの DB の接続文字列                      | 本番のプロジェクトの同じもの | Deploy (staging)・Deploy (production) の Migrate DB だけ。Worker の実行環境には上げない（`*_deploy` にだけ置く） | そのプロジェクトの DB だけ。Session pooler（`aws-1-ap-northeast-1.pooler.supabase.com:5432`。GitHub のランナーは IPv6 に繋がらないため直接接続は使わない） |
 | `CLOUDFLARE_API_TOKEN` | stg 用のトークン                                          | 本番用のトークン             | Deploy の Sync Wrangler Secrets & Deploy・E2E Tests (stg)                                                        | アカウントの Workers Scripts の Edit だけ。Worker 単位には絞れないため、stg 用のトークンでも本番の Worker に届く（下の「届く範囲を補う」）                 |
 | `SENTRY_AUTH_TOKEN`    | stg 用の組織トークン                                      | 本番用の組織トークン         | Deploy の Build（ソースマップのアップロード）                                                                    | `org:ci`                                                                                                                                                   |
-| `RESEND_API_KEY`       | stg 用のキー                                              | 本番用のキー                 | Worker の実行環境（メールの送信。`wrangler secret bulk`）                                                        | Sending access・送信元のドメインだけ                                                                                                                       |
+| `RESEND_API_KEY`       | stg 用のキー                                              | 本番用のキー                 | Worker の実行環境（メールの送信。`wrangler deploy --secrets-file`）                                              | Sending access・送信元のドメインだけ                                                                                                                       |
 | `SANITY_API_TOKEN`     | stg 用のトークン                                          | 本番用のトークン             | ビルド・Worker の実行環境（商品の読み取り）                                                                      | Viewer。プロジェクト単位のため、どちらも両方のデータセットに届く（プロジェクトは分けない判断。#673）                                                       |
 | `SANITY_AUTH_TOKEN`    | Studio のデプロイ用（`github-actions-stg-sanity-deploy`） | 入れない                     | Deploy (staging) の Deploy Sanity Studio                                                                         | Deploy Studio だけ                                                                                                                                         |
 
@@ -293,7 +293,7 @@ gh api repos/{owner}/{repo}/environments/production/deployment-branch-policies -
 
 Worker の secrets は、デプロイのたびに Sync Wrangler Secrets & Deploy が Worker 用の config（`stg`・`prod`）の値で追加・上書きする（上の「[Worker に上げる値と管理用の値を分ける](#worker-に上げる値と管理用の値を分けるstgstg_deploy)」）。手で `wrangler secret put` しない。
 
-`wrangler secret bulk` は追加・上書きだけで、Doppler から消した値・branch に移した値は Worker に残る。値を消したり移したりしたら、Worker に残っていないかを確かめて消す（stg は 2026-11-21 に掃除済み。本番は初めて main に出すときに issue #681 で行う）。
+`wrangler deploy --secrets-file` は追加・上書きだけで（#708 より前の `wrangler secret bulk` も同じ）、Doppler から消した値・branch に移した値は Worker に残る。値を消したり移したりしたら、Worker に残っていないかを確かめて消す（stg は 2026-11-21 に掃除済み。本番は初めて main に出すときに issue #681 で行う）。
 
 ```bash
 # Worker にあって Worker 用の config に無い名前
@@ -397,6 +397,7 @@ E2E テストはチェックアウト・Invoice発行等でメール送信コー
 
 - `e2e-pr`ジョブ: CI内で`next dev`をこのジョブ専用に起動する使い捨てサーバーのため、「Run E2E tests」ステップの`doppler run -- env ...`に`DISABLE_EMAIL_SENDING="true"`を直接渡すだけで、他環境に一切影響しない
 - `e2e`（stg）ジョブ: `deploy-stg`でデプロイ済みの実際のCloudflare Workerに対してテストするため、Doppler側の値を変えるとstg環境全体（手動QA含む）に影響してしまう。そこで「Run E2E tests」の直前に`wrangler secret put DISABLE_EMAIL_SENDING`でstg Workerのシークレットを一時的に`true`に上書きし、直後（`if: always()`でテスト失敗時も含む）に`wrangler secret delete`で削除して元の状態（未設定＝実送信）に戻す
+  - `secret put`・`secret delete`は、stgを`wrangler rollback`で戻している間（最新の版が出ていない間）は失敗する。`e2e`は`deploy-stg`の直後に同じconcurrencyのグループで動き、`deploy-stg`が`wrangler deploy --secrets-file`で「最新の版 = 出ている版」に戻すため普段は通る（#708。`tests/unit/deploy-workflow-worker-env.test.ts`）。stgで`wrangler rollback`を試すのは、Deploy・E2E Tests (stg)が動いていないときにする（E2Eの途中で戻すと`secret delete`が失敗して`DISABLE_EMAIL_SENDING`が残る。直し方は`docs/runbooks/production-rollback.md`の2-1）
 - `production`環境・Doppler設定には一切触れない（本番は常に実送信する）
 
 ---
