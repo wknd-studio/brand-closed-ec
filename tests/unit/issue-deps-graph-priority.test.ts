@@ -230,6 +230,7 @@ describe("toMermaid: 優先度", () => {
     const edges = m.split("\n").filter((l) => l.includes("-->"));
     const inverted = edges.indexOf("  I3 --> I2");
     expect(m).toContain(`linkStyle ${inverted} stroke:`);
+    expect(m.match(/linkStyle /g)).toHaveLength(2); // 逆転は 3 → 2 と 6 → 5 の2本だけ
     expect(m).toContain("class I2 inversion");
     expect(m).toContain("class I3 inversion");
     expect(m).not.toContain("class I1 inversion");
