@@ -65,7 +65,7 @@ function manualCheck(items: {
     `- **手動確認**: ${items.need ?? "要（マージ前）"}`,
     `- **準備**: ${items.prep ?? "ブランチ `feature/711-pr-manual-check`。`supabase db reset` は不要"}`,
     `- **アカウント**: ${items.account ?? "info+test_admin1@wknd-studio.com"}`,
-    `- **手順と期待する結果**:${items.steps ?? "\n  1. `/admin` を開く → 管理画面が表示される"}`,
+    `- **手順と期待する結果**:${items.steps ?? "\n  1. `/admin` を開く → 管理画面が表示される（`tests/e2e/admin.spec.ts` の「管理画面が表示される」）"}`,
   ].join("\n");
 }
 
@@ -294,6 +294,117 @@ describe("judge_pr_review_summary の「動作確認の手順」（#711）", () 
       expect(output).toContain("手動確認 が空欄");
     }
   );
+});
+
+describe("judge_pr_review_summary の「手順と期待する結果」のテストの名前（#714）", () => {
+  const steps = (...lines: string[]) => "\n" + lines.join("\n");
+
+  it.each([
+    "`tests/unit/foo.test.ts` の「金額を計算する」",
+    "tests/integration/orders.test.ts「注文を保存する」",
+    "`tests/e2e/checkout.spec.ts` の「購入できる」",
+    "`tests/unit/components/Button.test.tsx` の「押せる」",
+    "自動テスト無し（見た目だけ）",
+    "自動テストなし（Stripeのダッシュボードの設定）",
+  ])("各項目にテストの名前か自動テスト無しがあれば成功する（%s）", (name) => {
+    for (const need of ["要（マージ前）", "要（stg）"]) {
+      const body = bodyWith({
+        need,
+        steps: steps(
+          "  1. `/admin` を開く → 管理画面が出る（`tests/e2e/admin.spec.ts` の「表示」）",
+          `  2. 一覧を開く → 注文が並ぶ（${name}）`
+        ),
+      });
+      expect(judge(body).status).toBe(0);
+    }
+  });
+
+  it("テストの名前も自動テスト無しも無い項目があれば失敗し、何番目の項目かを出す", () => {
+    for (const need of ["要（マージ前）", "要（stg）"]) {
+      const { status, output } = judge(
+        bodyWith({
+          need,
+          steps: steps(
+            "  1. `/admin` を開く → 管理画面が出る（`tests/e2e/admin.spec.ts` の「表示」）",
+            "  2. 一覧を開く → 注文が並ぶ"
+          ),
+        })
+      );
+      expect(status).toBe(1);
+      expect(output).toContain("手順と期待する結果 の 2 番目の項目");
+      expect(output).not.toContain("1 番目の項目");
+    }
+  });
+
+  it("項目の続きの行に書いたテストの名前は、その項目のものとして数える", () => {
+    const body = bodyWith({
+      steps: steps(
+        "  1. `/admin` を開く → 管理画面が出る",
+        "     - テスト: `tests/e2e/admin.spec.ts` の「表示」",
+        "  2. 一覧を開く → 注文が並ぶ",
+        "     - 自動テスト無し（並び順の見た目）"
+      ),
+    });
+    expect(judge(body).status).toBe(0);
+  });
+
+  it("別の項目に書いたテストの名前は数えない", () => {
+    const { status, output } = judge(
+      bodyWith({
+        steps: steps(
+          "  1. `/admin` を開く → 管理画面が出る",
+          "  2. 一覧を開く → 注文が並ぶ（`tests/e2e/admin.spec.ts` の「表示」）"
+        ),
+      })
+    );
+    expect(status).toBe(1);
+    expect(output).toContain("1 番目の項目");
+  });
+
+  it("番号の無い1行の手順も1つの項目として検査する", () => {
+    expect(
+      judge(bodyWith({ steps: " `/admin` を開く → 管理画面が出る" })).status
+    ).toBe(1);
+    expect(
+      judge(
+        bodyWith({
+          steps:
+            " `/admin` を開く → 管理画面が出る（`tests/e2e/admin.spec.ts` の「表示」）",
+        })
+      ).status
+    ).toBe(0);
+  });
+
+  it("テストファイルでないパスはテストの名前として数えない", () => {
+    const { status } = judge(
+      bodyWith({
+        steps: steps("  1. `src/app/admin/page.tsx` を開く → 管理画面が出る"),
+      })
+    );
+    expect(status).toBe(1);
+  });
+
+  it("手動確認が不要なら、手順にテストの名前が無くても成功する", () => {
+    const body = bodyWith({
+      need: "不要（CIの設定だけ）",
+      steps: steps("  1. `/admin` を開く → 管理画面が出る"),
+    });
+    expect(judge(body).status).toBe(0);
+  });
+
+  it("CRLF改行の本文も判定できる", () => {
+    const ok = bodyWith({
+      steps: steps(
+        "  1. `/admin` を開く → 管理画面が出る",
+        "     - 自動テスト無し（見た目）"
+      ),
+    });
+    expect(judge(ok.replace(/\n/g, "\r\n")).status).toBe(0);
+    const ng = bodyWith({
+      steps: steps("  1. `/admin` を開く → 管理画面が出る"),
+    });
+    expect(judge(ng.replace(/\n/g, "\r\n")).status).toBe(1);
+  });
 });
 
 // 標準入力の本文から、needs-manual-check ラベルをどうするか（add / remove / none）を出す
