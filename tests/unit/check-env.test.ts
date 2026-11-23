@@ -486,22 +486,86 @@ describe("checkMigrations", () => {
 });
 
 describe("formatResults", () => {
-  it("項目ごとに OK / NG / SKIP と、NG・SKIP の直し方を出し、NG があれば失敗を返す", () => {
+  /** 全角を2桁として数えた表示幅 */
+  const width = (line: string) =>
+    [...line].reduce(
+      (w, c) => w + (/[\u3000-\u9fff\uff00-\uffef]/.test(c) ? 2 : 1),
+      0
+    );
+  /** 行の中で、内容の列（`marker`）が始まる表示上の桁 */
+  const columnOf = (line: string, marker: string) =>
+    width(line.slice(0, line.indexOf(marker)));
+
+  it("結果・項目・内容の表にし、内容の列の始まりを全角の項目名でもそろえる", () => {
+    const { text } = formatResults([
+      { name: "prod: 名前", status: "ng", detail: "足りない: A", fix: "直す" },
+      { name: "Stripe: Webhook", status: "ok" },
+      { name: "C", status: "skip", detail: "読めない", fix: "トークンを渡す" },
+    ]);
+    const lines = text.split("\n");
+    expect(lines[0]).toMatch(/^結果\s+項目\s+内容$/);
+    const ng = lines.find((l) => l.startsWith("NG"))!;
+    const skip = lines.find((l) => l.startsWith("SKIP"))!;
+    expect(columnOf(ng, "足りない")).toBe(columnOf(lines[0], "内容"));
+    expect(columnOf(skip, "読めない")).toBe(columnOf(lines[0], "内容"));
+    expect(lines.find((l) => l.startsWith("OK"))).toMatch(
+      /^OK\s+Stripe: Webhook$/
+    );
+  });
+
+  it("問題ごとに行を分け、直し方はその下に出す", () => {
+    const { text } = formatResults([
+      {
+        name: "prod: 名前",
+        status: "ng",
+        detail: "足りない: A / stg に無い: B",
+        fix: "直す",
+      },
+    ]);
+    const lines = text.split("\n");
+    const start = lines.findIndex((l) => l.startsWith("NG"));
+    expect(lines[start]).toMatch(/足りない: A$/);
+    expect(lines[start + 1]).toMatch(/^\s+stg に無い: B$/);
+    expect(lines[start + 2]).toMatch(/^\s+→ 直し方: 直す$/);
+  });
+
+  it("長い一覧は名前の途中で切らずに、内容の列の中で折り返す", () => {
+    const names = Array.from({ length: 12 }, (_, k) => `STRIPE_PRICE_ID_${k}`);
+    const { text } = formatResults(
+      [
+        {
+          name: "prod: 名前",
+          status: "ng",
+          detail: `足りない: ${names.join(", ")}`,
+        },
+      ],
+      80
+    );
+    const lines = text.split("\n");
+    const body = lines.filter((l) => l.includes("STRIPE_PRICE_ID_"));
+    expect(body.length).toBeGreaterThan(1);
+    for (const line of body) expect(width(line)).toBeLessThanOrEqual(80);
+    const indent = columnOf(lines[0], "内容");
+    for (const line of body.slice(1)) {
+      expect(line.length - line.trimStart().length).toBe(indent);
+    }
+    expect(body.join(" ").match(/STRIPE_PRICE_ID_\d+/g)).toEqual(names);
+  });
+
+  it("最後に件数を出し、NG があれば失敗を返す", () => {
     const { text, failed } = formatResults([
       { name: "A", status: "ok" },
       { name: "B", status: "ng", detail: "壊れている", fix: "直す" },
       { name: "C", status: "skip", detail: "読めない", fix: "トークンを渡す" },
     ]);
-    expect(text).toContain("OK   A");
-    expect(text).toContain("NG   B: 壊れている");
-    expect(text).toContain("直し方: 直す");
-    expect(text).toContain("SKIP C: 読めない");
-    expect(text).toContain("NG 1件・SKIP 1件");
+    expect(text).toContain("NG 1件・SKIP 1件（全 3 項目）");
     expect(failed).toBe(true);
   });
 
   it("全て OK なら成功", () => {
-    expect(formatResults([{ name: "A", status: "ok" }]).failed).toBe(false);
+    const { text, failed } = formatResults([{ name: "A", status: "ok" }]);
+    expect(text).toContain("全 1 項目 OK");
+    expect(failed).toBe(false);
   });
 });
 
