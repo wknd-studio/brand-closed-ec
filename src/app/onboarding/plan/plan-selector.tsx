@@ -4,6 +4,8 @@ import { useActionState, useEffect, type ReactNode } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { selectPlan, type SelectPlanResult } from "./actions";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import {
   MemberRank,
   type MemberRankValue,
@@ -88,126 +90,71 @@ export default function PlanSelector({
       <div className="space-y-4 rounded border p-4">
         <p className="text-sm font-medium">ご本人情報</p>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="lastName" className="block text-sm font-medium">
-              姓
-            </label>
-            <input
-              id="lastName"
-              name="lastName"
-              required
-              defaultValue={values?.lastName}
-              aria-invalid={!!fieldErrors?.lastName}
-              aria-describedby={
-                fieldErrors?.lastName ? "lastName-error" : undefined
-              }
-              className="mt-1 w-full rounded border p-2"
-            />
-            {fieldErrors?.lastName && (
-              <p id="lastName-error" className="mt-1 text-sm text-red-600">
-                {fieldErrors.lastName}
-              </p>
+          <FormField label="姓" error={fieldErrors?.lastName}>
+            {(field) => (
+              <Input
+                name="lastName"
+                required
+                defaultValue={values?.lastName}
+                className="w-full"
+                {...field}
+              />
             )}
-          </div>
-          <div>
-            <label htmlFor="firstName" className="block text-sm font-medium">
-              名
-            </label>
-            <input
-              id="firstName"
-              name="firstName"
-              required
-              defaultValue={values?.firstName}
-              aria-invalid={!!fieldErrors?.firstName}
-              aria-describedby={
-                fieldErrors?.firstName ? "firstName-error" : undefined
-              }
-              className="mt-1 w-full rounded border p-2"
-            />
-            {fieldErrors?.firstName && (
-              <p id="firstName-error" className="mt-1 text-sm text-red-600">
-                {fieldErrors.firstName}
-              </p>
+          </FormField>
+          <FormField label="名" error={fieldErrors?.firstName}>
+            {(field) => (
+              <Input
+                name="firstName"
+                required
+                defaultValue={values?.firstName}
+                className="w-full"
+                {...field}
+              />
             )}
-          </div>
+          </FormField>
         </div>
-        <div>
-          <label htmlFor="phoneNumber" className="block text-sm font-medium">
-            電話番号
-          </label>
-          <input
-            id="phoneNumber"
-            name="phoneNumber"
-            required
-            placeholder="09012345678"
-            defaultValue={values?.phoneNumber}
-            aria-invalid={!!fieldErrors?.phoneNumber}
-            aria-describedby={
-              fieldErrors?.phoneNumber ? "phoneNumber-error" : undefined
-            }
-            className="mt-1 w-full rounded border p-2"
-          />
-          {fieldErrors?.phoneNumber && (
-            <p id="phoneNumber-error" className="mt-1 text-sm text-red-600">
-              {fieldErrors.phoneNumber}
-            </p>
+        <FormField label="電話番号" error={fieldErrors?.phoneNumber}>
+          {(field) => (
+            <Input
+              name="phoneNumber"
+              required
+              placeholder="09012345678"
+              defaultValue={values?.phoneNumber}
+              className="w-full"
+              {...field}
+            />
           )}
-        </div>
+        </FormField>
       </div>
       {isCorporate && (
         <div className="space-y-4 rounded border p-4">
           <p className="text-sm font-medium">法人情報</p>
-          <div>
-            <label htmlFor="companyName" className="block text-sm font-medium">
-              会社名
-            </label>
-            <input
-              id="companyName"
-              name="companyName"
-              required
-              defaultValue={values?.companyName}
-              aria-invalid={!!fieldErrors?.companyName}
-              aria-describedby={
-                fieldErrors?.companyName ? "companyName-error" : undefined
-              }
-              className="mt-1 w-full rounded border p-2"
-            />
-            {fieldErrors?.companyName && (
-              <p id="companyName-error" className="mt-1 text-sm text-red-600">
-                {fieldErrors.companyName}
-              </p>
+          <FormField label="会社名" error={fieldErrors?.companyName}>
+            {(field) => (
+              <Input
+                name="companyName"
+                required
+                defaultValue={values?.companyName}
+                className="w-full"
+                {...field}
+              />
             )}
-          </div>
-          <div>
-            <label
-              htmlFor="invoiceRegistrationNumber"
-              className="block text-sm font-medium"
-            >
-              適格請求書発行事業者登録番号
-            </label>
-            <input
-              id="invoiceRegistrationNumber"
-              name="invoiceRegistrationNumber"
-              required
-              placeholder="T1234567890123"
-              defaultValue={values?.invoiceRegistrationNumber}
-              aria-invalid={!!fieldErrors?.invoiceRegistrationNumber}
-              aria-describedby={
-                fieldErrors?.invoiceRegistrationNumber
-                  ? "invoiceRegistrationNumber-error"
-                  : undefined
-              }
-              className="mt-1 w-full rounded border p-2"
-            />
-            {fieldErrors?.invoiceRegistrationNumber && (
-              <p
-                id="invoiceRegistrationNumber-error"
-                className="mt-1 text-sm text-red-600"
-              >
-                {fieldErrors.invoiceRegistrationNumber}
-              </p>
+          </FormField>
+          <FormField
+            label="適格請求書発行事業者登録番号"
+            error={fieldErrors?.invoiceRegistrationNumber}
+          >
+            {(field) => (
+              <Input
+                name="invoiceRegistrationNumber"
+                required
+                placeholder="T1234567890123"
+                defaultValue={values?.invoiceRegistrationNumber}
+                className="w-full"
+                {...field}
+              />
             )}
-          </div>
+          </FormField>
         </div>
       )}
       <div className="grid gap-3">
