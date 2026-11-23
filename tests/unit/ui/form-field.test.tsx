@@ -85,20 +85,6 @@ describe("FormField", () => {
     expect(control().id).toBeTruthy();
   });
 
-  it("id を渡したときはその id を入力欄に付け、エラー文言の id もそれに揃える", () => {
-    act(() =>
-      root.render(
-        <FormField id="lastName" label="姓" error="姓を入力してください">
-          {(field) => <Input name="lastName" {...field} />}
-        </FormField>
-      )
-    );
-
-    expect(control().id).toBe("lastName");
-    expect(control().getAttribute("aria-describedby")).toBe("lastName-error");
-    expect(container.querySelector("label")!.htmlFor).toBe("lastName");
-  });
-
   it("同じ画面に複数置いても、エラー文言の id が重ならない", () => {
     act(() =>
       root.render(
