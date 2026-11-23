@@ -37,7 +37,8 @@ export async function syncSubscriptionStatus(
         const subscription =
           await subscriptionGateway.retrieveSubscription(stripeSubscriptionId);
         // 行が無い（入会の checkout.session.completed より先に届いた等）場合は何もせず
-        // 処理済みにする。入会の確定が Stripe の最新の状態で行を作るため、取りこぼさない。
+        // 処理済みにする。入会の確定が Stripe の最新の status・請求期間で行を作るため、
+        // それらは取りこぼさない（期末解約の予約は、次の updated で入る）。
         // 例外にすると Stripe が最大3日間再送を続けてしまう
         await subscriptionRepo.syncStatusByStripeSubscriptionId(
           stripeSubscriptionId,
