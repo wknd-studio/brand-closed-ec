@@ -84,7 +84,11 @@ test.describe("運営者の対応待ちキュー", () => {
     );
     try {
       await adminPage.goto("/admin");
-      await adminPage.getByRole("link", { name: /対応待ちキュー/ }).click();
+      // ヘッダーにも同じリンクがあるため、管理メニュー（main）のリンクを押す
+      await adminPage
+        .locator("main")
+        .getByRole("link", { name: /対応待ちキュー/ })
+        .click();
       await expect(adminPage).toHaveURL(/\/admin\/procurement\/queue$/);
       await expect(
         adminPage.getByRole("heading", { name: "対応待ちキュー" })
