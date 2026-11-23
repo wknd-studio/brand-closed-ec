@@ -59,7 +59,7 @@ export const STG_EMPTY_OK_NAMES: Record<string, string> = {
 /** 本番にだけ置く名前と理由 */
 export const PROD_ONLY_NAMES: Record<string, string> = {};
 
-/** 本番で stg と同じ値であってはいけない名前（デプロイ用の config は Worker 用の値を引き継ぐので、そちらで比べる） */
+/** 本番で stg と同じ値であってはいけない名前 */
 export const MUST_DIFFER_NAMES = [
   "STRIPE_SECRET_KEY",
   "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
@@ -81,7 +81,7 @@ export const MUST_DIFFER_NAMES = [
   "NEXT_PUBLIC_APP_URL",
 ];
 
-/** 環境ごとに決まっている値（requirements.md の 13-2） */
+/** 環境ごとに決まっている値（requirements.md の 13-2）。違ったときに実際の値を出すため、秘密でない値（`NEXT_PUBLIC_*`）だけを置く */
 export const EXPECTED_VALUES: Record<Target["env"], Record<string, string>> = {
   stg: {
     NEXT_PUBLIC_SENTRY_ENVIRONMENT: "stg",
@@ -159,12 +159,13 @@ export function checkNames(input: {
 export function checkValuesDiffer(
   target: Record<string, string>,
   reference: Record<string, string>,
-  names: string[]
+  names: string[],
+  label?: string
 ): CheckResult[] {
   const same = names.filter(
     (n) => n in target && n in reference && target[n] === reference[n]
   );
-  const name = "値が stg と違う";
+  const name = label ? `${label}: 値が stg と違う` : "値が stg と違う";
   if (same.length === 0) return ok(name);
   return ng(
     name,
@@ -183,7 +184,7 @@ const LIVE_KEY_PREFIXES: Record<string, string[]> = {
 /** 値の先頭の種類（`sk_test_` 等）だけを返す。値そのものは出さない */
 function keyKind(value: string | undefined): string {
   if (!value) return "未設定";
-  return /^[a-z]+_[a-z]+_/.exec(value)?.[0] ?? "不明な形式";
+  return /^(?:sk|pk|rk)_(?:test|live)_/.exec(value)?.[0] ?? "不明な形式";
 }
 
 export function checkLiveKeys(values: Record<string, string>): CheckResult[] {
@@ -349,10 +350,14 @@ export function checkClerkInstance(input: {
   }
   // キーとドメインが食い違っていても、アプリの URL はインスタンスの主のドメインと比べる
   const primary = domain ?? input.domains[0];
-  const appHost = new URL(input.appUrl).host;
+  if (input.production && !isUrl(input.appUrl)) {
+    problems.push("NEXT_PUBLIC_APP_URL が URL でない");
+  }
+  const appHost = isUrl(input.appUrl) ? new URL(input.appUrl).host : null;
   if (
     input.production &&
     primary &&
+    appHost !== null &&
     appHost !== primary.name &&
     !appHost.endsWith(`.${primary.name}`)
   ) {
@@ -431,9 +436,9 @@ export function checkSupabaseThirdPartyAuth(
 export function parseRemoteMigrations(out: string): string[] {
   const json = out.indexOf("{");
   if (json >= 0) {
-    const { migrations } = JSON.parse(out.slice(json)) as {
+    const { migrations } = parseJsonWithoutLeak<{
       migrations: { remote: string }[];
-    };
+    }>(out.slice(json), "supabase migration list の出力");
     return migrations.map((m) => m.remote).filter(Boolean);
   }
   return out
@@ -483,6 +488,15 @@ export function formatResults(results: CheckResult[]): {
   return { text: lines.join("\n"), failed: ngCount > 0 };
 }
 
+/** JSON を読む。失敗のメッセージには入力の断片が入るため、決まったメッセージに置き換える（値・トークンを出さない） */
+export function parseJsonWithoutLeak<T>(text: string, label: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`${label} を JSON として読めない`);
+  }
+}
+
 /* 以下はサービスの API を読む部分。判定は上の関数で行い、ここはユニットテストしない */
 
 function readDoppler(config: string): Record<string, string> {
@@ -501,7 +515,10 @@ function readDoppler(config: string): Record<string, string> {
     ],
     { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }
   );
-  return JSON.parse(out) as Record<string, string>;
+  return parseJsonWithoutLeak<Record<string, string>>(
+    out,
+    `Doppler の ${config} の出力`
+  );
 }
 
 async function getJson<T>(
@@ -510,7 +527,7 @@ async function getJson<T>(
 ): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) throw new Error(`${init.label} が ${res.status} を返した`);
-  return (await res.json()) as T;
+  return parseJsonWithoutLeak<T>(await res.text(), `${init.label} の応答`);
 }
 
 async function stripeChecks(
@@ -537,7 +554,13 @@ async function stripeChecks(
       if (res.status === 404) return { name, price: null };
       if (!res.ok)
         throw new Error(`Stripe の prices が ${res.status} を返した`);
-      return { name, price: (await res.json()) as StripePrice };
+      return {
+        name,
+        price: parseJsonWithoutLeak<StripePrice>(
+          await res.text(),
+          "Stripe の prices の応答"
+        ),
+      };
     })
   );
   return [
@@ -559,9 +582,14 @@ async function clerkWebhookEndpoints(
     }
   );
   const key = new URL(svix_url).hash.replace(/^#key=/, "");
-  const { appId, oneTimeToken, region } = JSON.parse(
-    Buffer.from(key, "base64url").toString("utf8")
-  ) as { appId: string; oneTimeToken: string; region: string };
+  const { appId, oneTimeToken, region } = parseJsonWithoutLeak<{
+    appId: string;
+    oneTimeToken: string;
+    region: string;
+  }>(
+    Buffer.from(key, "base64url").toString("utf8"),
+    "Svix のダッシュボードの URL"
+  );
   const svix = `https://api.${region}.svix.com/api/v1`;
   const { token } = await getJson<{ token: string }>(
     `${svix}/auth/one-time-token`,
@@ -579,7 +607,7 @@ async function clerkWebhookEndpoints(
   return data;
 }
 
-async function clerkChecks(
+async function clerkInstanceChecks(
   values: Record<string, string>,
   target: Target
 ): Promise<CheckResult[]> {
@@ -592,23 +620,26 @@ async function clerkChecks(
     "https://api.clerk.com/v1/domains",
     { headers, label: "Clerk の domains" }
   );
+  return checkClerkInstance({
+    environmentType: instance.environment_type,
+    domains: domains.data,
+    publishableKey: values.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+    appUrl: values.NEXT_PUBLIC_APP_URL,
+    production: target.production,
+  });
+}
+
+async function clerkWebhookChecks(
+  values: Record<string, string>
+): Promise<CheckResult[]> {
   const events = handledEventTypes(
     readFileSync("src/app/api/webhooks/clerk/route.ts", "utf8")
   );
-  return [
-    ...checkClerkInstance({
-      environmentType: instance.environment_type,
-      domains: domains.data,
-      publishableKey: values.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-      appUrl: values.NEXT_PUBLIC_APP_URL,
-      production: target.production,
-    }),
-    ...checkClerkWebhook(
-      await clerkWebhookEndpoints(values.CLERK_SECRET_KEY),
-      values.NEXT_PUBLIC_APP_URL,
-      events
-    ),
-  ];
+  return checkClerkWebhook(
+    await clerkWebhookEndpoints(values.CLERK_SECRET_KEY),
+    values.NEXT_PUBLIC_APP_URL,
+    events
+  );
 }
 
 async function supabaseChecks(
@@ -696,7 +727,14 @@ async function main(): Promise<void> {
     }),
     ...(target.production
       ? [
-          ...checkValuesDiffer(deployValues, stgDeploy, MUST_DIFFER_NAMES),
+          // branch の config は root の値を引き継ぐが、上書きもできるので両方を比べる
+          ...checkValuesDiffer(values, stg, MUST_DIFFER_NAMES, target.config),
+          ...checkValuesDiffer(
+            deployValues,
+            stgDeploy,
+            MUST_DIFFER_NAMES,
+            target.deployConfig
+          ),
           ...checkLiveKeys(values),
         ]
       : []),
@@ -709,16 +747,17 @@ async function main(): Promise<void> {
       () => stripeChecks(values, target)
     )),
     ...(await guarded(
-      "Clerk",
+      "Clerk: インスタンス",
       {
         values,
-        names: [
-          "CLERK_SECRET_KEY",
-          "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
-          "NEXT_PUBLIC_APP_URL",
-        ],
+        names: ["CLERK_SECRET_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"],
       },
-      () => clerkChecks(values, target)
+      () => clerkInstanceChecks(values, target)
+    )),
+    ...(await guarded(
+      "Clerk: Webhook",
+      { values, names: ["CLERK_SECRET_KEY", "NEXT_PUBLIC_APP_URL"] },
+      () => clerkWebhookChecks(values)
     )),
     ...(await guarded(
       "Supabase",
