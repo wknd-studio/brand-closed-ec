@@ -402,6 +402,7 @@ type Workflow = {
     string,
     {
       if?: string;
+      concurrency?: unknown;
       permissions?: Record<string, string>;
       steps: { run?: string; env?: Record<string, string> }[];
     }
@@ -445,6 +446,28 @@ describe("pr-review-summary.yml のラベルのジョブ（#711）", () => {
       "github.event.pull_request.head.repo.full_name == github.repository"
     );
     expect(labelJob?.if).toContain("dependabot[bot]");
+  });
+
+  it("push・タイトルだけの編集・閉じたPRではラベルのジョブを動かさない", () => {
+    expect(labelJob?.if).toContain("github.event.pull_request.state == 'open'");
+    expect(labelJob?.if).toContain("github.event.action != 'synchronize'");
+    expect(labelJob?.if).toContain(
+      "(github.event.action != 'edited' || github.event.changes.body != null)"
+    );
+  });
+
+  // ラベルを動かすのは opened か要・不要が変わった edited だけなので、
+  // その実行が後の実行に取り消されると、ラベルが付かないまま残る
+  it("ラベルのジョブは後の実行に取り消されない（取り消しは本文の検査のジョブだけ）", () => {
+    const wf = workflow() as Workflow & { concurrency?: unknown };
+    expect(wf.concurrency).toBeUndefined();
+    expect(labelJob?.concurrency).toBeUndefined();
+    const checkJob = jobs.find((job) =>
+      job.steps.some(
+        (s) => s.run === "bash scripts/ci/check-pr-review-summary.sh"
+      )
+    );
+    expect(checkJob?.concurrency).toMatchObject({ "cancel-in-progress": true });
   });
 
   it("編集前の本文は、本文が変わった編集のときだけ渡す", () => {
