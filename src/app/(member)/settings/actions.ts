@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { withdraw } from "@/composition/member";
 import { startBillingPortalSession } from "@/composition/billing-portal";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
+import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import { DomainError } from "@/domain/errors/domain-error";
 import {
   MissingRequiredAddressFieldsError,
@@ -175,6 +176,18 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
   } catch (err) {
     if (err instanceof ActiveOrdersExistError) {
       return { error: "進行中の注文があるため退会できません" };
+    }
+    if (err instanceof MinimumMembershipPeriodError) {
+      const date = err.withdrawableFrom.toLocaleDateString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      return {
+        // 期間内の退会は運営者が残りの月額を請求して手動で行う（docs/domain/membership.md）
+        error: `入会から6ヶ月間は退会できません。${date}から退会できます。それより前に退会をご希望の場合は、運営までお問い合わせください`,
+      };
     }
     Sentry.captureException(err, { tags: { useCase: "withdraw" } });
     return { error: "退会処理に失敗しました" };

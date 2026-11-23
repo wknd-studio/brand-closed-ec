@@ -13,6 +13,9 @@ import { pathToFileURL } from "node:url";
  *   pnpm -s tsx scripts/ci/preview.ts decide <PRのJSON> <変更したファイルの一覧>
  *     # action=… と status=…（GITHUB_OUTPUT 向け）。環境変数 GITHUB_REPOSITORY・RUN_HEAD_SHA・RUN_CONCLUSION・
  *     # RUN_HAS_BUILD_OUTPUT を読む
+ *   pnpm -s tsx scripts/ci/preview.ts deployment record <PR番号> <コミット> # GitHub の Deployment を記録する（#731）
+ *   pnpm -s tsx scripts/ci/preview.ts deployment deactivate <PR番号>       # PRの Deployment を inactive にする
+ *     # 環境変数 GITHUB_REPOSITORY・GH_TOKEN（・GITHUB_API_URL）を読む
  */
 
 /** push のたびに同じコメントを更新するため、コメントをこのマーカーで見つける */
@@ -32,6 +35,14 @@ export function previewWorkerName(pr: number): string {
 
 export function previewUrl(pr: number): string {
   return `https://${previewWorkerName(pr)}.${WORKERS_SUBDOMAIN}.workers.dev`;
+}
+
+/**
+ * GitHub の Deployments の環境名。PRごとにする（共通の名前にすると、別のPRのデプロイで前のPRの表示が inactive になる）
+ */
+export function previewEnvironment(pr: number): string {
+  previewWorkerName(pr);
+  return `preview-pr-${pr}`;
 }
 
 export function renderPreviewComment({
@@ -123,6 +134,128 @@ export function decidePreviewAction({
   return { action: "deploy", reason: "マイグレーションを含まないPR" };
 }
 
+/** GitHub の REST API を呼ぶ関数。2xx 以外は例外にする */
+export type GitHubApi = (
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown
+) => Promise<unknown>;
+
+export function createGitHubApi({
+  token,
+  baseUrl = "https://api.github.com",
+  fetch: fetchImpl = fetch,
+}: {
+  token: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+}): GitHubApi {
+  return async (method, apiPath, body) => {
+    const res = await fetchImpl(`${baseUrl}${apiPath}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `${method} ${apiPath} が失敗した（HTTP ${res.status}）: ${await res.text()}`
+      );
+    }
+    return res.json();
+  };
+}
+
+/**
+ * プレビューを GitHub の Deployments に記録する（#731）。PRの会話の流れとマージボタンの上の欄に
+ * 「View deployment」が出る。Preview Deploy は workflow_run で develop の上で動くため、ジョブの environment の
+ * url では記録が develop のコミットに付き、PRには出ない。そのためPRの head のコミットに API で作る。
+ * 新しいものを success にしてから、前の push の Deployment を inactive にする（表示が途切れないように）。
+ */
+export async function recordPreviewDeployment({
+  api,
+  repository,
+  pr,
+  sha,
+}: {
+  api: GitHubApi;
+  repository: string;
+  pr: number;
+  sha: string;
+}): Promise<void> {
+  const deployment = (await api("POST", `/repos/${repository}/deployments`, {
+    ref: sha,
+    environment: previewEnvironment(pr),
+    description: `PR #${pr} のプレビュー`,
+    transient_environment: true,
+    production_environment: false,
+    auto_merge: false,
+    // 既定では、成功していないチェックがあるコミットには作れない。プレビューはチェックの結果を待たずに出す
+    required_contexts: [],
+  })) as { id?: number };
+  if (typeof deployment.id !== "number") {
+    throw new Error(`Deployment を作れなかった: ${JSON.stringify(deployment)}`);
+  }
+  await api(
+    "POST",
+    `/repos/${repository}/deployments/${deployment.id}/statuses`,
+    {
+      state: "success",
+      environment_url: previewUrl(pr),
+      description: `${sha.slice(0, 7)} を出した`,
+    }
+  );
+  await deactivatePreviewDeployments({
+    api,
+    repository,
+    pr,
+    keep: deployment.id,
+  });
+}
+
+/**
+ * PRの環境の Deployment を inactive にする。keep を渡したら、それだけは残す。
+ * もう inactive のものには状態を足さない（push のたびに、すべての古い Deployment に足していかないように）。
+ * PRごとの environment そのものは消さない（削除にはリポジトリの管理の権限が要り、GITHUB_TOKEN には付けられない）
+ */
+export async function deactivatePreviewDeployments({
+  api,
+  repository,
+  pr,
+  keep,
+}: {
+  api: GitHubApi;
+  repository: string;
+  pr: number;
+  keep?: number;
+}): Promise<void> {
+  const environment = previewEnvironment(pr);
+  const ids: number[] = [];
+  for (let page = 1; ; page++) {
+    const deployments = (await api(
+      "GET",
+      `/repos/${repository}/deployments?environment=${encodeURIComponent(environment)}&per_page=100&page=${page}`
+    )) as { id: number }[];
+    ids.push(...deployments.map((d) => d.id));
+    if (deployments.length < 100) break;
+  }
+  for (const id of ids) {
+    if (id === keep) continue;
+    const [latest] = (await api(
+      "GET",
+      `/repos/${repository}/deployments/${id}/statuses?per_page=1`
+    )) as { state: string }[];
+    if (latest?.state === "inactive") continue;
+    await api("POST", `/repos/${repository}/deployments/${id}/statuses`, {
+      state: "inactive",
+    });
+  }
+}
+
 const STATUS_OF: Record<PreviewAction, PreviewStatus | ""> = {
   deploy: "deployed",
   "delete-migrations": "skipped-migrations",
@@ -136,7 +269,7 @@ function parsePr(arg: string | undefined): number {
   return pr;
 }
 
-function main(argv: string[]): void {
+async function main(argv: string[]): Promise<void> {
   const [command, ...args] = argv;
   if (command === "names") {
     const pr = parsePr(args[0]);
@@ -169,11 +302,32 @@ function main(argv: string[]): void {
     process.stdout.write(
       `action=${action}\nstatus=${STATUS_OF[action]}\nreason=${reason}\n`
     );
+  } else if (command === "deployment") {
+    const [sub, prArg, sha] = args;
+    const pr = parsePr(prArg);
+    const repository = process.env.GITHUB_REPOSITORY ?? "";
+    const api = createGitHubApi({
+      token: process.env.GH_TOKEN ?? "",
+      baseUrl: process.env.GITHUB_API_URL,
+    });
+    if (sub === "record") {
+      if (!/^[0-9a-f]{40}$/.test(sha ?? "")) {
+        throw new Error(`コミットが不正: ${sha}`);
+      }
+      await recordPreviewDeployment({ api, repository, pr, sha });
+    } else if (sub === "deactivate") {
+      await deactivatePreviewDeployments({ api, repository, pr });
+    } else {
+      throw new Error(`不明なコマンド: deployment ${sub}`);
+    }
   } else {
     throw new Error(`不明なコマンド: ${command}`);
   }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  main(process.argv.slice(2));
+  main(process.argv.slice(2)).catch((e: unknown) => {
+    console.error(e);
+    process.exit(1);
+  });
 }
