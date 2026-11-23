@@ -19,6 +19,7 @@ import {
   parseRemoteMigrations,
   parseTarget,
   requireValues,
+  STG_EMPTY_OK_NAMES,
   type CheckResult,
 } from "../../scripts/check-env";
 
@@ -536,6 +537,13 @@ describe("checkEmptyValues", () => {
 
   it("空が無ければ OK", () => {
     expect(checkEmptyValues("prod", { A: "x" })[0].status).toBe("ok");
+  });
+
+  it("空でよいと許可した名前は除く（stg の RESEND_ADMIN_EMAIL は RESEND_TEST_TO があるので使わない）", () => {
+    expect(
+      checkEmptyValues("stg", { A: "x", B: "" }, { B: "使わない" })[0].status
+    ).toBe("ok");
+    expect(Object.keys(STG_EMPTY_OK_NAMES)).toEqual(["RESEND_ADMIN_EMAIL"]);
   });
 });
 
