@@ -317,30 +317,29 @@ describe("stg を壊さない", () => {
     }
   );
 
+  it("preview-deploy.yml は wrangler を直接動かさない（名前の形を検査するスクリプトを通す）", () => {
+    const lines = deploy.text
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("#"))
+      .filter((l) => /\bwrangler\s/.test(l));
+    expect(lines).toEqual([]);
+  });
+
   it.each([
-    ["preview-deploy.yml", '"$PREVIEW_NAME"'],
-    ["scripts/ci/deploy-preview-worker.sh", '"$name"'],
-    ["scripts/ci/delete-preview-worker.sh", '"$name"'],
+    "scripts/ci/deploy-preview-worker.sh",
+    "scripts/ci/delete-preview-worker.sh",
   ])(
     "%s の wrangler は必ずプレビュー用の設定とプレビューの名前で動かす",
-    (file, nameVar) => {
-      const text =
-        file === "preview-deploy.yml"
-          ? deploy.text
-          : readFileSync(path.join(ROOT, file), "utf8");
-      const lines = text
+    (file) => {
+      const lines = readFileSync(path.join(ROOT, file), "utf8")
         .split("\n")
-        .filter(
-          (l) =>
-            /wrangler (deploy|delete|secret)/.test(l) &&
-            !l.trim().startsWith("#")
-        );
+        .filter((l) => !l.trim().startsWith("#"))
+        .filter((l) => /\bwrangler\s/.test(l));
+      expect(lines.length).toBeGreaterThan(0);
       for (const line of lines) {
         expect(line).toContain("--config wrangler.preview.jsonc");
-        expect(line).toContain(`--name ${nameVar}`);
+        expect(line).toContain('--name "$name"');
       }
-      if (file !== "preview-deploy.yml")
-        expect(lines.length).toBeGreaterThan(0);
     }
   );
 

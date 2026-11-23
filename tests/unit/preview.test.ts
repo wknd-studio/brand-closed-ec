@@ -590,3 +590,35 @@ describe("createGitHubApi", () => {
     await expect(api("GET", "/x")).rejects.toThrow(/403/);
   });
 });
+
+describe("CLI の deployment", () => {
+  // API を呼ぶ前に止まる入力だけを確かめる（API の呼び方は recordPreviewDeployment 等のテストで確かめる）
+  function run(...args: string[]) {
+    return spawnSync("pnpm", ["-s", "tsx", "scripts/ci/preview.ts", ...args], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_REPOSITORY: REPO,
+        GH_TOKEN: "",
+        GITHUB_API_URL: "http://127.0.0.1:9",
+      },
+    });
+  }
+
+  it("コミットが40桁の16進でなければ、記録せずに失敗する", () => {
+    const r = run("deployment", "record", "727", "abc");
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("コミットが不正");
+  });
+
+  it("不明なサブコマンドは失敗する", () => {
+    const r = run("deployment", "delete", "727");
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("不明なコマンド");
+  });
+
+  it("API の呼び出しが失敗したら、終了コードを0以外にする（ステップを失敗にする）", () => {
+    expect(run("deployment", "deactivate", "727").status).not.toBe(0);
+  });
+});
