@@ -7,7 +7,8 @@ name: Preview
 # pull_request のワークフローはPR側の定義で動き、PRのコードを動かす。Cloudflare のトークンはアカウント単位で
 # 本番の Worker にも届くため、このワークフローには渡さない（stg の値を読むトークンだけ）。書き込みの権限も持たない。
 # - fork のPR・Dependabot のPR・feature/* 以外のブランチではビルドしない（stg のシークレットをPRのコードに渡さない）。
-#   preview-build の environment も feature/* だけが使えるよう絞る
+#   preview-build の environment は pull_request のジョブ（ref が refs/pull/<番号>/merge）だけが使えるよう絞る。
+#   fork・Dependabot のPRの実行には、environment の secrets はもともと渡らない
 # - マイグレーション（supabase/migrations/）を含むPRはビルドしない
 on:
   pull_request:

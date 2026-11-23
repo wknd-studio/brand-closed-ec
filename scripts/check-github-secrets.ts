@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
  * 1. リポジトリの Actions secrets・Dependabot secrets・各 environment の secrets に、develop と main の
  *    `.github/` のどこからも参照されていないものが無いこと。使われていない secret も、同じリポジトリの
  *    ブランチからの PR でワークフローを書き換えれば読み出せるため、溜めない
- * 2. environment の production は main だけ、staging・preview は develop だけ、preview-build は feature/* だけがデプロイできること
+ * 2. environment の production は main だけ、staging・preview は develop だけ、preview-build は PR のマージ用の ref だけがデプロイできること
  *
  * secrets の名前の一覧・environment の設定を読む API はリポジトリの管理者の権限が要り、CI の
  * GITHUB_TOKEN では読めない。CI には入れず、secrets を足し引きしたとき・トークンを作り直したときに
@@ -30,9 +30,10 @@ export const EXPECTED_DEPLOYMENT_BRANCHES: Record<string, string[]> = {
   production: ["main"],
   staging: ["develop"],
   // PRごとのプレビュー（#727）。Cloudflare のトークンは develop の定義で動く workflow_run（preview-deploy.yml）
-  // だけが読む。ビルド（preview.yml）の stg の値は feature/* だけ（Dependabot のブランチからは読めない）
+  // だけが読む。ビルド（preview.yml）の stg の値は pull_request のジョブだけ。pull_request のジョブの ref は
+  // refs/pull/<番号>/merge のため、head のブランチ名では絞れない
   preview: ["develop"],
-  "preview-build": ["feature/*"],
+  "preview-build": ["refs/pull/*/merge"],
 };
 
 /** 参照を探すブランチ。main の deploy.yml は develop を main に出すまで古いまま残る */
