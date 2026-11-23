@@ -2,7 +2,10 @@
  * Sanityに開発用のブランド・カテゴリ・商品等をシードする。
  * 投入するデータの一覧: docs/seed-data.md
  */
-import { createClient } from "@sanity/client";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { createClient, type SanityClient } from "@sanity/client";
 
 import {
   computeRankPrices,
@@ -126,13 +129,8 @@ const priceSettingsDefs: {
   },
 ];
 
-const client = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
-  token: process.env.SANITY_WRITE_TOKEN!,
-  apiVersion: "2026-05-17",
-  useCdn: false,
-});
+// import しただけでは Sanity に接続しないよう（scripts/seed-scenarios.ts が商品の定義を使う）、実行時に作る
+let client: SanityClient;
 
 function makeBlock(key: string, text: string): Block {
   return {
@@ -727,6 +725,30 @@ const productDefs = [
   },
 ];
 
+/** 投入する商品の定義（scripts/seed-scenarios.ts が注文の明細のスナップショットに使う） */
+export { productDefs as SEED_PRODUCTS };
+
+type SeedProduct = (typeof productDefs)[number];
+
+/** 商品のランク別価格（Sanity に登録する prices と同じ値）。掛け率は 商品 > ブランド > デフォルト の順で決まる */
+export function seedProductRankPrices(def: SeedProduct): RateMap {
+  const brandId = brandIdByName[def.brand];
+  const ownPriceSettingsRef =
+    "price_settings" in def ? def.price_settings?._ref : undefined;
+  const effectiveDefaultRates = pickEffectivePriceSettingsRates({
+    ownRates: ownPriceSettingsRef
+      ? priceSettingsRatesById[ownPriceSettingsRef]
+      : undefined,
+    brandRates: priceSettingsRatesById[brandPriceSettingsRefById[brandId]],
+    defaultRates: defaultPriceSettingsRates,
+  });
+  return computeRankPrices(
+    def.retail_price,
+    ("price_rates" in def ? def.price_rates : undefined) ?? {},
+    effectiveDefaultRates
+  );
+}
+
 async function seed() {
   console.log(`プロジェクト: ${process.env.NEXT_PUBLIC_SANITY_PROJECT_ID}`);
   console.log(`データセット: ${process.env.NEXT_PUBLIC_SANITY_DATASET}\n`);
@@ -853,21 +875,9 @@ async function seed() {
 
     const priceRates =
       "price_rates" in productProps ? productProps.price_rates : undefined;
-    const ownPriceSettingsRef = productProps.price_settings?._ref;
-    const effectiveDefaultRates = pickEffectivePriceSettingsRates({
-      ownRates: ownPriceSettingsRef
-        ? priceSettingsRatesById[ownPriceSettingsRef]
-        : undefined,
-      brandRates: priceSettingsRatesById[brandPriceSettingsRefById[brandId]],
-      defaultRates: defaultPriceSettingsRates,
-    });
     const prices = productProps.is_negotiable
       ? undefined
-      : computeRankPrices(
-          productProps.retail_price,
-          priceRates ?? {},
-          effectiveDefaultRates
-        );
+      : seedProductRankPrices(def);
 
     const doc: ProductDoc = {
       ...productProps,
@@ -925,7 +935,19 @@ async function seed() {
   console.log(`https://brand-closed-ec.sanity.studio/`);
 }
 
-seed().catch((err) => {
-  console.error("エラー:", err.message);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
+  client = createClient({
+    projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
+    dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
+    token: process.env.SANITY_WRITE_TOKEN!,
+    apiVersion: "2026-05-17",
+    useCdn: false,
+  });
+  seed().catch((err) => {
+    console.error("エラー:", err.message);
+    process.exit(1);
+  });
+}
