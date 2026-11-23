@@ -1,1 +1,2 @@
+bash scripts/gitleaks-staged.sh
 pnpm lint-staged

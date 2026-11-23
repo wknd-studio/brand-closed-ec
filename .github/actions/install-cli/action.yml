@@ -1,11 +1,11 @@
 name: Install CLI
 description: >-
-  Supabase CLI・Doppler CLI を GitHub のリリースから API 経由（リトライ・checksums 照合付き）で
+  Supabase CLI・Doppler CLI・gitleaks を GitHub のリリースから API 経由（リトライ・checksums 照合付き）で
   インストールする。github.com/.../releases/download/ の504で supabase/setup-cli・
   dopplerhq/cli-action が止まったため（#546）。中身は install-cli.sh
 inputs:
   tool:
-    description: supabase か doppler
+    description: supabase・doppler・gitleaks のどれか
     required: true
   version:
     description: インストールする版（v無し。例 2.116.0）

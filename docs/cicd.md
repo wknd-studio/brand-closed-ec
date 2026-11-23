@@ -7,6 +7,7 @@ PR (develop・main)
   ├─ TypeScript チェック
   ├─ Lint / Format チェック
   ├─ Unit Tests
+  ├─ Gitleaks（PR の commit の機密情報の漏れ）
   └─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
 
 push (develop・main)
@@ -299,6 +300,44 @@ CI の Supabase CLI・Doppler CLI は、共通の composite action `.github/acti
 - 5xx・タイムアウトだけを、間隔をあけて数回やり直す。4xx（403・404・429 等）はやり直さずに失敗する
 - 取得したファイルはリリースの `checksums.txt` の SHA-256 と照合してから展開する
 - 版はジョブごとに `version` で固定する。上げるときは `tests/unit/workflow-cli-install.test.ts` の `EXPECTED_VERSIONS` も一緒に変える
+- gitleaks も同じ手順で入れる（`with: { tool: gitleaks, version: 8.30.1 }`。#663）
+
+---
+
+## 機密情報の漏れの検査（gitleaks）
+
+API キー・秘密鍵・トークンが commit に入っていないかを、[gitleaks](https://github.com/gitleaks/gitleaks) の既定のルールで2か所で確かめる（#663）。GitHub の secret scanning・push protection（2026-11-21 に有効化）は GitHub が形を知っているサービスの鍵しか見ず、commit の前には止められないため。
+
+| 場所       | 何を調べるか                                            | 設定                                               |
+| ---------- | ------------------------------------------------------- | -------------------------------------------------- |
+| PR の CI   | PR の base から head までの commit（`Gitleaks`）        | `.github/workflows/secret-scan.yml`                |
+| pre-commit | commit する差分（`gitleaks git --pre-commit --staged`） | `.husky/pre-commit` → `scripts/gitleaks-staged.sh` |
+
+- 鍵の形をしていない漏れ（例: テスト用のアカウントのパスワード = メールアドレス。#651）は gitleaks でも見つけられない。引き続き `high-risk` の精読で見る
+- CI はマージコミットの差分を調べない（gitleaks は `git log -p` を使い、既定ではマージコミットの差分が出ないため）。develop を取り込んだときの衝突の解消で足した値は、ローカルの pre-commit でだけ止まる
+- CI は PR のチェックアウトにある `.gitleaks.toml` を読むため、PR が allowlist を広げるとその PR の検査も弱くなる。`.gitleaks.toml`・`.husky/`・`scripts/gitleaks-staged.sh` を `high-risk`（`risk:gate`）の対象にして、人間が精読する
+- gitleaks の公式の action は Organization のリポジトリでは有料のライセンスキーが要るため使わない
+
+### ローカルの準備
+
+pre-commit は、gitleaks が入っていなければ入れ方を出して commit を止める（黙って通さない）。CI と同じ版を入れる。
+
+```bash
+brew install gitleaks   # macOS。ほかの OS は https://github.com/gitleaks/gitleaks#installing
+gitleaks version        # CI の版（.github/workflows/secret-scan.yml の version）と揃っているか
+```
+
+### 検出したとき
+
+- **本物の鍵**: 鍵を無効にして作り直す（一度 push した鍵は、消しても漏れたものとして扱う）。履歴の書き換えはしない
+- **誤検出**（テスト用のダミーの値・ドキュメントのプレースホルダー等）: `.gitleaks.toml` の `[[allowlists]]` に、`description` に理由を書き、ファイル（`paths`）と値（`regexes`）の両方で絞って足す（`condition = "AND"`）。ディレクトリ全体・ルール全体は外さない。書き方は `tests/unit/gitleaks.test.ts` が検査する
+
+履歴全体を調べ直すときは、全ブランチを取ってから実行する。
+
+```bash
+git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+gitleaks git --log-opts="--all" --redact --no-banner .
+```
 
 ---
 
