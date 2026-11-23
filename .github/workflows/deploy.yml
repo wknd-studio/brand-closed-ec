@@ -440,6 +440,82 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
 
+  smoke-prod:
+    name: Smoke Tests (production)
+    runs-on: ubuntu-24.04
+    # 本番のデプロイの後に、本番の環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）が
+    # 動いているかを、ログインせず・データを書き換えずに確かめる（#696）。本番のClerkではTesting Tokenを
+    # 使えないため、ログインしないスモークテスト（tests/e2e/smoke/public.spec.ts）だけを流す。
+    # ログインした後の確認は人間が手で行う（docs/cicd.md「本番のデプロイ後の確認」）
+    needs: [deploy-prod]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - uses: ./.github/actions/install-cli
+        with: { tool: doppler, version: 3.77.1 }
+      - run: pnpm install --frozen-lockfile
+      - name: Get installed Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright Chromium (ブラウザ本体・OS依存パッケージ両方)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright OS依存パッケージのみ（ブラウザ本体はキャッシュ済み）
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+      - name: Wait for production to be ready
+        run: |
+          doppler run -- sh -c '
+            for i in $(seq 1 12); do
+              if curl -sf "$NEXT_PUBLIC_APP_URL" > /dev/null; then
+                echo "production is ready"
+                exit 0
+              fi
+              echo "Waiting... ($i/12)"
+              sleep 10
+            done
+            echo "production did not become ready in time"
+            exit 1
+          '
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: 環境の確認（スモークテスト）
+        # ここで失敗したら、本番の環境変数・秘密鍵・外部サービスの設定を疑う（E2E Tests (stg) の同名のステップと同じ）。
+        # BASE_URL 以外の値は読まない。署名の正しくない Webhook を送るが、受け口は 400 を返すだけで Sentry には送らない
+        id: smoke
+        run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e:smoke:public'
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Install age (暗号化用・スモークテストの失敗時のみ)
+        # Playwrightのレポートを暗号化するために使う（#513）
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age > /dev/null
+      - name: Encrypt Playwright report (動画・トレース含む、スモークテストの失敗時のみ)
+        # E2E Tests (stg)の同名のステップと同じ。本番に対するテストのため、trace.zipには本番のレスポンス・Cookieが入る
+        id: playwright-report
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: pnpm -s tsx scripts/ci/encrypt-artifact.ts playwright-report-encrypted/playwright-report.tar.gz.age playwright-report test-results
+      - name: Upload Playwright report (暗号化済み・スモークテストの失敗時のみ)
+        if: failure() && steps.playwright-report.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-prod-${{ github.run_attempt }}
+          path: playwright-report-encrypted/playwright-report.tar.gz.age
+          if-no-files-found: error
+          retention-days: 3
+
   e2e:
     name: E2E Tests (stg)
     runs-on: ubuntu-24.04
@@ -502,7 +578,8 @@ jobs:
       - name: 環境の確認（スモークテスト）
         # デプロイした環境（環境変数・秘密鍵・Workers上のビルド・外部サービスの設定）が動いているかを、
         # データを書き換えずに数本で確かめる（#649）。ここで失敗したら振る舞いの不具合ではなく環境の問題として、
-        # 全部のE2Eを流さずにジョブを止める。ログインに使うアカウントは tests/e2e/smoke/smoke.spec.ts の冒頭
+        # 全部のE2Eを流さずにジョブを止める。ログインしないもの・するもの（#696）の両方を流す。
+        # ログインに使うアカウントは tests/e2e/smoke/signed-in.spec.ts の冒頭
         id: smoke
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e:smoke'
         env:
