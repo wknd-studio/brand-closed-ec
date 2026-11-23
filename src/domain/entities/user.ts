@@ -1,6 +1,7 @@
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MemberType } from "@/domain/value-objects/member-type";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 import type { PhoneNumber } from "@/domain/value-objects/phone-number";
 import type { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-registration-number";
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
@@ -9,10 +10,6 @@ import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
 import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import type { Order } from "./order";
-
-// 入会日から退会できるようになるまでの最低利用期間（docs/domain/membership.md）
-const MINIMUM_MEMBERSHIP_MONTHS = 6;
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 interface UserProps {
   id: string;
@@ -194,9 +191,9 @@ export class User {
   // 持つものが1件でもあれば退会できない（docs/domain/membership.md）。orders は会員の全注文
   withdraw(orders: readonly Order[], now: Date = new Date()): User {
     if (this.isWithdrawn()) throw new MemberWithdrawnError();
-    const withdrawableFrom = this.withdrawableFrom();
-    if (now < withdrawableFrom) {
-      throw new MinimumMembershipPeriodError(withdrawableFrom);
+    const minimumPeriod = MinimumMembershipPeriod.startingAt(this.createdAt);
+    if (minimumPeriod.includes(now)) {
+      throw new MinimumMembershipPeriodError(minimumPeriod.withdrawableFrom);
     }
     if (
       orders.some(
@@ -206,18 +203,6 @@ export class User {
       throw new ActiveOrdersExistError();
     }
     return this.with({ deletedAt: now });
-  }
-
-  // 入会日の6ヶ月後の同じ日の0時から退会できる。6ヶ月後の月にその日が無ければ月末にする。
-  // 日付は実行環境のタイムゾーン（WorkersはUTC）ではなくJSTで決める。
-  // JSTは夏時間が無いため、+9時間ずらしたUTCの日付がJSTの日付になる
-  private withdrawableFrom(): Date {
-    const joined = new Date(this.createdAt.getTime() + JST_OFFSET_MS);
-    const year = joined.getUTCFullYear();
-    const month = joined.getUTCMonth() + MINIMUM_MEMBERSHIP_MONTHS;
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    const day = Math.min(joined.getUTCDate(), lastDay);
-    return new Date(Date.UTC(year, month, day) - JST_OFFSET_MS);
   }
 
   // 退会処理の途中で失敗したときの取り消し（補償処理）。退会前の状態に戻す

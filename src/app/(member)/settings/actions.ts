@@ -13,6 +13,7 @@ import {
 } from "@/domain/errors/missing-required-address-fields-error";
 import { InvalidPostalCodeError } from "@/domain/errors/invalid-postal-code-error";
 import { InvalidPhoneNumberError } from "@/domain/errors/invalid-phone-number-error";
+import { CONTACT, legalNoticePlainText } from "@/app/legal/legal-notice";
 import {
   createAddress,
   updateAddress,
@@ -20,6 +21,7 @@ import {
   setDefaultAddress,
 } from "@/composition/address";
 import type { AddressContent, AddressType } from "@/domain/entities/address";
+import { formatJstDate } from "./format-jst-date";
 
 type ActionResult = { success: true } | { error: string };
 
@@ -176,15 +178,11 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
       return { error: "進行中の注文があるため退会できません" };
     }
     if (err instanceof MinimumMembershipPeriodError) {
-      const date = err.withdrawableFrom.toLocaleDateString("ja-JP", {
-        timeZone: "Asia/Tokyo",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      const date = formatJstDate(err.withdrawableFrom);
+      const contact = `メール: ${legalNoticePlainText(CONTACT.email)}・電話: ${legalNoticePlainText(CONTACT.phone)}`;
       return {
         // 期間内の退会は運営者が残りの月額を請求して手動で行う（docs/domain/membership.md）
-        error: `入会から6ヶ月間は退会できません。${date}から退会できます。それより前に退会をご希望の場合は、運営までお問い合わせください`,
+        error: `入会から6ヶ月間は退会できません。${date}から退会できます。それより前に退会をご希望の場合は、運営（${contact}）までお問い合わせください`,
       };
     }
     Sentry.captureException(err, { tags: { useCase: "withdraw" } });

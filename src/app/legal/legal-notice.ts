@@ -1,5 +1,5 @@
 /**
- * 特定商取引法に基づく表記（第11条）と、注文の最終確認画面（第12条の6）に出す値（#695）。
+ * 特定商取引法に基づく表記（第11条）と、注文・入会の申込みの最終確認画面（第12条の6）に出す値（#695・#724）。
  * 値はクライアントから届き次第ここだけを差し替える。`placeholder: true` の値は仮の文言で、
  * 画面にも「要差し替え」と出る。差し替えたら `placeholder` を消す
  */
@@ -12,6 +12,11 @@ export type LegalNoticeItem = {
   label: string;
   value: LegalNoticeValue;
 };
+
+/** 画面の要素ではなく文字列（Server Action のエラー等）に値を入れるときに使う。仮の値の印を落とさない */
+export function legalNoticePlainText(value: LegalNoticeValue): string {
+  return value.placeholder ? `${value.text}（要差し替え）` : value.text;
+}
 
 export const LEGAL_LINKS = [
   { href: "/legal/terms", label: "利用規約" },
@@ -43,6 +48,39 @@ export const CANCELLATION_POLICY: LegalNoticeValue = {
   placeholder: true,
 };
 
+// 運営の問い合わせ先。最低利用期間内の退会の連絡先としても出す（#724）
+export const CONTACT = {
+  email: { text: "info@example.com", placeholder: true },
+  phone: {
+    text: "00-0000-0000（受付時間 平日10:00〜18:00）",
+    placeholder: true,
+  },
+} satisfies Record<string, LegalNoticeValue>;
+
+/**
+ * 入会（月額プランの申込み）の最終確認画面に出す条件（第12条の6。#724）。月額・初期費用はプランごとに
+ * プラン選択の欄に出す。契約期間・解約の条件は法律の確認が済んでいない仮の文言（正式な規約は #240）
+ */
+export const MEMBERSHIP_TERMS = {
+  price: {
+    text: "月額・初期費用は、各プランの欄に表示した金額（税込）です。再入会の場合、以前に初期費用をお支払いいただいたプラン以下を選ぶと初期費用はかかりません（上回るプランは差額をお支払いいただきます）",
+  },
+  paymentMethod: {
+    text: "クレジットカード（お申し込みの確定後、Stripeの決済画面でお支払い）",
+  },
+  paymentTiming: {
+    text: "初期費用と初月の月額は、お申し込みの確定時（決済画面でのお支払い時）。2ヶ月目以降の月額は、毎月の更新日に自動で請求します",
+  },
+  contractPeriod: {
+    text: "最低利用期間は入会日から6ヶ月です。以後は1ヶ月ごとに自動更新します",
+    placeholder: true,
+  },
+  cancellation: {
+    text: "入会から6ヶ月間（最低利用期間）は、ご自身で退会できません。期間内に退会をご希望の場合は運営へご連絡ください。最低利用期間の残りの月数分の月額を解約金としてお支払いいただいたうえで退会となります。6ヶ月を過ぎた後は、アカウント設定から退会でき（進行中の注文がある間を除く）、サブスクリプションはその場で解約されます",
+    placeholder: true,
+  },
+} satisfies Record<string, LegalNoticeValue>;
+
 export const TOKUSHOHO_ITEMS: LegalNoticeItem[] = [
   { label: "販売業者", value: { text: "株式会社○○", placeholder: true } },
   { label: "運営統括責任者", value: { text: "○○ ○○", placeholder: true } },
@@ -50,17 +88,8 @@ export const TOKUSHOHO_ITEMS: LegalNoticeItem[] = [
     label: "所在地",
     value: { text: "〒000-0000 東京都○○区○○", placeholder: true },
   },
-  {
-    label: "電話番号",
-    value: {
-      text: "00-0000-0000（受付時間 平日10:00〜18:00）",
-      placeholder: true,
-    },
-  },
-  {
-    label: "メールアドレス",
-    value: { text: "info@example.com", placeholder: true },
-  },
+  { label: "電話番号", value: CONTACT.phone },
+  { label: "メールアドレス", value: CONTACT.email },
   {
     label: "販売価格",
     value: {

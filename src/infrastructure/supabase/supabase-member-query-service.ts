@@ -8,6 +8,7 @@ import type {
 } from "@/queries/member-query-service";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 
 export class SupabaseMemberQueryService implements MemberQueryService {
@@ -17,7 +18,7 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     const { data, error } = await this.db
       .from("users")
       .select(
-        "addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number)"
+        "created_at, addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number)"
       )
       .eq("clerk_user_id", clerkUserId)
       .is("deleted_at", null)
@@ -26,7 +27,15 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     if (error) throw error;
     if (!data) return null;
 
+    // 退会の判定（User.withdraw）と同じ最低利用期間の計算を使う
+    const minimumPeriod = MinimumMembershipPeriod.startingAt(
+      new Date(data.created_at)
+    );
+
     return {
+      withdrawableFrom: minimumPeriod.includes(new Date())
+        ? minimumPeriod.withdrawableFrom.toISOString()
+        : null,
       addresses: data.addresses.map((a) => ({
         id: a.id,
         type: a.type,
