@@ -167,3 +167,44 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
     expect(orders).toHaveLength(0);
   });
 });
+
+// 特定商取引法第12条の6（注文の最終確認画面の表示）で求められる表示（#695）。
+// 表示の文言そのものではなく、項目が確定ボタンと同じ画面に出ていることを確かめる
+test.describe("注文の最終確認画面の表示", () => {
+  test("数量・価格・支払いの時期と方法・引渡時期・キャンセルの条件・規約へのリンクが、注文を確定するボタンと同じ画面に出る", async ({
+    page,
+  }) => {
+    await addFirstProductToCart(page);
+    await page.goto("/order/checkout");
+    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+
+    // 分量（数量）と販売価格（対価）
+    await expect(page.getByText(/¥[\d,]+ × 1/)).toBeVisible();
+    await expect(page.getByText("合計（固定価格）")).toBeVisible();
+
+    const terms = page.getByRole("region", {
+      name: "お支払い・お届け・キャンセルについて",
+    });
+    for (const term of [
+      "お支払い方法",
+      "お支払い時期",
+      "お届け時期",
+      "キャンセル・返品",
+    ]) {
+      await expect(
+        terms.getByRole("term").filter({ hasText: term })
+      ).toHaveCount(1);
+    }
+    await expect(
+      terms.getByRole("link", { name: "特定商取引法に基づく表記" })
+    ).toHaveAttribute("href", "/legal/tokushoho");
+    await expect(terms.getByRole("link", { name: "利用規約" })).toHaveAttribute(
+      "href",
+      "/legal/terms"
+    );
+
+    await expect(
+      page.getByRole("button", { name: "注文を確定する" })
+    ).toBeVisible();
+  });
+});
