@@ -56,6 +56,7 @@ export type CheckoutProductDto = {
   thumbnail: string | null;
   unitPrice: number | null;
   isOutOfStock: boolean;
+  // 注文で実際に支払う時期（要相談の商品は注文後払い）。商品の設定値そのものではない
   paymentTiming: ProductPaymentTiming;
   isAccessible: boolean;
 };
