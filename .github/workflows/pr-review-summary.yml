@@ -3,6 +3,8 @@ name: PR Review Summary
 # PR本文の「レビューの要点」（変わる振る舞い・一番危ない箇所・人間に判断してほしいこと）が
 # 空欄のPRを失敗させる（#471）。根拠を示す節は <details> に折りたたむため、
 # 人間が最初に読むこの節だけは必ず書かせる。ブランチ保護の必須チェックに登録して使う。
+# 「動作確認の手順」（手動確認・準備・アカウント・手順と期待する結果）も検査し、手動確認が要のPRには
+# needs-manual-check ラベルを付ける（#711。人間の確かめ方は docs/manual-check.md）。
 # Dependabot が作ったPRは本文を検査せずに成功扱いにする（#668。scripts/ci/check-pr-review-summary.sh）
 on:
   # 必須チェックに登録するため、develop宛てのすべてのPRで実行する。本文の編集で結果を更新する。
@@ -31,3 +33,56 @@ jobs:
           # 実行した人（github.actor）ではなくPRの作成者で見る。人間が再実行・pushしても作成者は変わらない
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: bash scripts/ci/check-pr-review-summary.sh
+
+  # 手動確認が `要（マージ前）`・`要（stg）` なら needs-manual-check ラベルを付け、`不要` に書き換えたら外す。
+  # 人間は確かめ終わったらラベルを外す。「マージ済みで未確認のPR」は
+  # `gh pr list --state merged --label needs-manual-check` で出す（docs/manual-check.md）
+  manual-check-label:
+    name: Manual Check Label
+    # fork のPRはトークンに書き込みの権限が無いため対象外。Dependabot のPRは本文を検査しないため付けない。
+    # synchronize（push）では本文が変わらないため動かさない。edited は本文が変わったときだけ動かす（タイトルの編集等では動かさない）。
+    # 閉じたPRの本文を後から編集しても、人間が外したラベルを付け直さない
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.state == 'open' &&
+      github.event.action != 'synchronize' &&
+      (github.event.action != 'edited' || github.event.changes.body != null)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # ラベルが無ければ作るため（リポジトリのラベルの作成は issues の権限）
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add or remove needs-manual-check label
+        env:
+          # 本文はシェルに埋め込まず環境変数で渡す（スクリプトインジェクション対策）
+          PR_BODY: ${{ github.event.pull_request.body }}
+          # 本文が変わった edited のときだけ値が入る。手動確認の要・不要が変わったときだけラベルを動かすために使う
+          PR_PREVIOUS_BODY: ${{ github.event.changes.body.from }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        # gh pr edit は GraphQL で Projects (classic) を読みに行って失敗することがあるため、REST API で付け外しする
+        run: |
+          label="needs-manual-check"
+          action="$(bash -c 'source scripts/ci/check-pr-review-summary.sh && manual_check_label_action')"
+          echo "needs-manual-check: ${action}"
+          case "$action" in
+            add)
+              if ! gh api "repos/${GH_REPO}/labels/${label}" --silent 2>/dev/null; then
+                gh api -X POST "repos/${GH_REPO}/labels" --silent -f name="$label" -f color=FBCA04 \
+                  -f description="人間の動作確認待ち。確かめ終わったら外す（docs/manual-check.md）"
+              fi
+              gh api -X POST "repos/${GH_REPO}/issues/${PR_NUMBER}/labels" --silent -f "labels[]=${label}"
+              ;;
+            remove)
+              # 付いていなければ何もしない
+              if gh api "repos/${GH_REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | grep -qx "$label"; then
+                gh api -X DELETE "repos/${GH_REPO}/issues/${PR_NUMBER}/labels/${label}" --silent
+              fi
+              ;;
+          esac
