@@ -54,7 +54,7 @@ GitHub リポジトリの Settings → Secrets and variables → Actions に設�
 | ---------------------- | ------------------------------------------------ | ----------------- | --------------------------------------------------------------------------------------------- |
 | `DOPPLER_TOKEN_PR`     | リポジトリの Actions secrets・Dependabot secrets | `ci`（環境 `CI`） | Integration Tests・Build (Cloudflare)・E2E Tests (PR)                                         |
 | `DOPPLER_TOKEN`        | `staging` environment                            | `stg_deploy`      | Deploy (staging)・E2E Tests (stg)・商品データの同期                                           |
-| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期                                                         |
+| `DOPPLER_TOKEN`        | `production` environment                         | `prod_deploy`     | Deploy (production)・商品データの同期・Smoke Tests (production)（本番のURLだけを読む）        |
 | `DOPPLER_TOKEN_WORKER` | `staging` environment                            | `stg`             | Deploy (staging) の Sync Wrangler Secrets & Deploy だけ（Worker の secrets に上げる値を読む） |
 | `DOPPLER_TOKEN_WORKER` | `production` environment                         | `prod`            | Deploy (production) の Sync Wrangler Secrets & Deploy だけ                                    |
 
@@ -226,7 +226,7 @@ doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler 
 
 本番へのデプロイ（main へのマージ）のたびに、`Smoke Tests (production)` が green になったあと、次を手で確かめる。会員・注文などのデータは作らない・変えない。
 
-1. 本番の確認用の会員アカウント（入会済みで、ランクで見られる商品があるもの）で、本番の `/sign-in` からログインする
+1. 本番の確認用の会員アカウント（入会済みで、ランクで見られる商品があるもの。本番の環境を作るときに用意する）で、本番の `/sign-in` からログインする
 2. `/shop` に「ブランドから探す」とブランドが表示される（Supabase の会員のランクと Sanity の商品の両方を読めている）
 3. ブランドを1つ開き、商品が1つ以上表示される。商品を1つ開き、商品の画像が表示される（Sanity の画像の CDN を読めている）
 4. ログアウトし、本番の運営者のアカウントでログインする
