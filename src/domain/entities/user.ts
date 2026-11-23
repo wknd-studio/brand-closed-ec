@@ -6,8 +6,13 @@ import type { InvoiceRegistrationNumber } from "@/domain/value-objects/invoice-r
 import { MissingCorporateProfileError } from "@/domain/errors/missing-corporate-profile-error";
 import { ActiveOrdersExistError } from "@/domain/errors/active-orders-exist-error";
 import { MemberWithdrawnError } from "@/domain/errors/member-withdrawn-error";
+import { MinimumMembershipPeriodError } from "@/domain/errors/minimum-membership-period-error";
 import { OnboardingAlreadyCompletedError } from "@/domain/errors/onboarding-already-completed-error";
 import type { Order } from "./order";
+
+// 入会日から退会できるようになるまでの最低利用期間（docs/domain/membership.md）
+const MINIMUM_MEMBERSHIP_MONTHS = 6;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 interface UserProps {
   id: string;
@@ -27,6 +32,8 @@ interface UserProps {
   companyName?: string | null;
   invoiceRegistrationNumber?: InvoiceRegistrationNumber | null;
   initialFeePaidRank?: MemberRank | null;
+  // users.created_at。最低利用期間の起点（入会日）
+  createdAt: Date;
 }
 
 /** プラン選択の申込内容（入会手続き中に会員が入力する項目） */
@@ -75,6 +82,7 @@ export class User {
   readonly invoiceRegistrationNumber: InvoiceRegistrationNumber | null;
   // 支払い済み最高ランク。再入会・アップグレード時の初期費用の判定に使う
   readonly initialFeePaidRank: MemberRank | null;
+  readonly createdAt: Date;
 
   private constructor(props: UserProps) {
     const memberType = props.memberType ?? MemberType.of("individual");
@@ -102,13 +110,17 @@ export class User {
     this.companyName = companyName;
     this.invoiceRegistrationNumber = invoiceRegistrationNumber;
     this.initialFeePaidRank = props.initialFeePaidRank ?? null;
+    this.createdAt = props.createdAt;
   }
 
   /**
    * 新しい会員を作る。入会手続き前の初期状態（starter・個人・未入会）で、電話番号・Stripe Customer・
    * 請求基準日は持たない。プランの申込内容は selectPlan() で入れる
    */
-  static register(registration: UserRegistration): User {
+  static register(
+    registration: UserRegistration,
+    now: Date = new Date()
+  ): User {
     // 構造的部分型でより広いオブジェクトが渡されても、初期状態の項目を上書きしないよう項目を取り出す
     return new User({
       id: registration.id,
@@ -123,6 +135,7 @@ export class User {
       onboardingCompleted: false,
       deletedAt: null,
       stripeCustomerId: null,
+      createdAt: now,
     });
   }
 
@@ -148,6 +161,7 @@ export class User {
       companyName: this.companyName,
       invoiceRegistrationNumber: this.invoiceRegistrationNumber,
       initialFeePaidRank: this.initialFeePaidRank,
+      createdAt: this.createdAt,
     };
   }
 
@@ -176,10 +190,14 @@ export class User {
     });
   }
 
-  // 退会済み、またはキャンセルされていない注文のうち未解決の決済単位を持つものが
-  // 1件でもあれば退会できない（docs/domain/membership.md）。orders は会員の全注文
+  // 退会済み、入会から6ヶ月経っていない、またはキャンセルされていない注文のうち未解決の決済単位を
+  // 持つものが1件でもあれば退会できない（docs/domain/membership.md）。orders は会員の全注文
   withdraw(orders: readonly Order[], now: Date = new Date()): User {
     if (this.isWithdrawn()) throw new MemberWithdrawnError();
+    const withdrawableFrom = this.withdrawableFrom();
+    if (now < withdrawableFrom) {
+      throw new MinimumMembershipPeriodError(withdrawableFrom);
+    }
     if (
       orders.some(
         (order) => !order.isCancelled() && order.hasUnresolvedSettlement()
@@ -188,6 +206,18 @@ export class User {
       throw new ActiveOrdersExistError();
     }
     return this.with({ deletedAt: now });
+  }
+
+  // 入会日の6ヶ月後の同じ日の0時から退会できる。6ヶ月後の月にその日が無ければ月末にする。
+  // 日付は実行環境のタイムゾーン（WorkersはUTC）ではなくJSTで決める。
+  // JSTは夏時間が無いため、+9時間ずらしたUTCの日付がJSTの日付になる
+  private withdrawableFrom(): Date {
+    const joined = new Date(this.createdAt.getTime() + JST_OFFSET_MS);
+    const year = joined.getUTCFullYear();
+    const month = joined.getUTCMonth() + MINIMUM_MEMBERSHIP_MONTHS;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const day = Math.min(joined.getUTCDate(), lastDay);
+    return new Date(Date.UTC(year, month, day) - JST_OFFSET_MS);
   }
 
   // 退会処理の途中で失敗したときの取り消し（補償処理）。退会前の状態に戻す
