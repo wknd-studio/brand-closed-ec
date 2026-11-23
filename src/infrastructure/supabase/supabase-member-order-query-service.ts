@@ -7,16 +7,24 @@ import type {
   CompletedOrderItemDto,
   InvoiceRequestedOrderDto,
   MemberOrderQueryService,
+  OrderDetailAddressDto,
+  OrderDetailDto,
   OrderHistoryDto,
 } from "@/queries/member-order-query-service";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
+import { groupItemsBySettlement } from "@/domain/services/settlement-grouping";
 import type { OrderItem } from "@/domain/entities/order-item";
+import type { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import {
   ORDER_ITEM_COLUMNS,
+  ORDER_SETTLEMENT_COLUMNS,
+  toAddressSnapshot,
   toOrderItem,
+  toOrderSettlement,
   type OrderItemRow,
+  type OrderSettlementRow,
 } from "@/infrastructure/supabase/supabase-order-repository";
 
 type AddressRow = {
@@ -51,6 +59,20 @@ function toItemDto(item: OrderItem): CompletedOrderItemDto {
     quantity: item.quantity,
     unitPriceSnapshot: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
     isNegotiable: item.isNegotiable,
+  };
+}
+
+function toOrderDetailAddressDto(
+  address: AddressSnapshot
+): OrderDetailAddressDto {
+  return {
+    fullName: address.toFullName(),
+    postalCode: address.postalCode,
+    prefecture: address.prefecture,
+    city: address.city,
+    addressLine1: address.addressLine1,
+    addressLine2: address.addressLine2,
+    phoneNumber: address.phoneNumber,
   };
 }
 
@@ -203,6 +225,59 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
       totalCount: count ?? 0,
       page,
       pageSize,
+    };
+  }
+
+  async findOrderDetail({
+    clerkUserId,
+    orderId,
+  }: {
+    clerkUserId: string;
+    orderId: string;
+  }): Promise<OrderDetailDto | null> {
+    const { data, error } = await this.db
+      .from("orders")
+      .select(
+        `status, rank_at_order, shipping_address_snapshot, billing_address_snapshot, ${ORDER_SELECT}, order_settlements(${ORDER_SETTLEMENT_COLUMNS}, created_at)`
+      )
+      .eq("id", orderId)
+      .eq("users.clerk_user_id", clerkUserId)
+      .is("users.deleted_at", null)
+      // 決済単位は作成順、明細は登録順（同じ日時の並びは ID で固定する）
+      .order("created_at", { referencedTable: "order_settlements" })
+      .order("id", { referencedTable: "order_settlements" })
+      .order("created_at", { referencedTable: "order_items" })
+      .order("id", { referencedTable: "order_items" })
+      .maybeSingle();
+    if (error) {
+      if (isInvalidUuid(error)) return null;
+      throw error;
+    }
+    if (!data) return null;
+
+    const { groups, unassigned } = groupItemsBySettlement(
+      (data.order_settlements as OrderSettlementRow[]).map(toOrderSettlement),
+      (data.order_items as OrderItemRow[]).map(toOrderItem)
+    );
+    return {
+      orderId: data.id,
+      createdAt: new Date(data.created_at).toISOString(),
+      status: OrderStatus.of(data.status),
+      rankAtOrder: MemberRank.of(data.rank_at_order),
+      shippingAddress: toOrderDetailAddressDto(
+        toAddressSnapshot(data.shipping_address_snapshot)
+      ),
+      billingAddress: toOrderDetailAddressDto(
+        toAddressSnapshot(data.billing_address_snapshot)
+      ),
+      settlements: groups.map(({ settlement, items }) => ({
+        id: settlement.id,
+        flowLabel: settlement.flowLabel(),
+        statusLabel: settlement.statusLabel(),
+        amount: settlement.amount.amount,
+        items: items.map(toItemDto),
+      })),
+      unassignedItems: unassigned.map(toItemDto),
     };
   }
 

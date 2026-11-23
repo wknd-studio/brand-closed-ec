@@ -124,6 +124,26 @@ describe("applyImport", () => {
     expect(productDoc.payment_timing).toBe("at_order");
   });
 
+  it("インポートで作成した商品は発送拠点を事務所経由(office)で初期設定する", async () => {
+    // 支払いタイミングと同じく、schemaのinitialValueはAPI経由の書き込みには効かない（#356）
+    const { client, created } = createFakeClient();
+
+    await applyImport({
+      client,
+      catalogId: "catalog-1",
+      triggeredBy: "manual_csv",
+      startedAt: new Date(),
+      outcome: "completed",
+      validRecords: [record()],
+      failureCount: 0,
+    });
+
+    const productDoc = created.find((d) => d._type === "product") as {
+      fulfillment_location: string;
+    };
+    expect(productDoc.fulfillment_location).toBe("office");
+  });
+
   it("既存商品とJANコードが一致すれば新規作成せず更新する", async () => {
     const { client, patched, created } = createFakeClient({
       existingProducts: [
@@ -154,7 +174,7 @@ describe("applyImport", () => {
     expect(created.find((d) => d._type === "product")).toBeUndefined();
   });
 
-  it("更新時は支払いタイミング・ランク別仕入れ価格・最低閲覧ランクを上書きしない", async () => {
+  it("更新時は支払いタイミング・発送拠点・ランク別仕入れ価格・最低閲覧ランクを上書きしない", async () => {
     // 運営者が商品ごとに手動調整した値（後払い設定・個別price_rates由来のprices・
     // 絞り込みランク）が、同じCSVの再インポートのたびに消えてしまう問題への対応。
     // 「新規作成時だけデフォルト値を設定し、更新時は既存値を尊重する」方針（ユーザーとの合意）
@@ -182,6 +202,7 @@ describe("applyImport", () => {
 
     expect(patched).toHaveLength(1);
     expect(patched[0].doc).not.toHaveProperty("payment_timing");
+    expect(patched[0].doc).not.toHaveProperty("fulfillment_location");
     expect(patched[0].doc).not.toHaveProperty("prices");
     expect(patched[0].doc).not.toHaveProperty("min_rank");
     // 一方、業者データ由来のフィールドは引き続き更新される

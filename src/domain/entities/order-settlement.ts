@@ -34,6 +34,22 @@ export function isAllowedSettlementTransition(
   return ALLOWED_TRANSITIONS[from].has(to);
 }
 
+// 会員向けの注文詳細（/orders/[id]）に出す表示ラベル。limit_exceeded は運営者が対応する状態のため、
+// 会員は待つだけでよいことが伝わる文言にする（docs/domain/settlement.md「limit_exceededからの回復」）
+const STATUS_LABELS: Record<SettlementStatus, string> = {
+  pending_payment: "お支払い待ち",
+  invoice_sent: "請求書をお送りしました（お支払い待ち）",
+  limit_exceeded:
+    "ご利用上限を超えたため運営で確認中です（ご連絡をお待ちください）",
+  paid: "お支払い済み",
+  cancelled: "キャンセル済み",
+};
+
+const FLOW_LABELS: Record<SettlementFlow, string> = {
+  checkout: "注文時のお支払い",
+  invoice: "請求書払い",
+};
+
 interface OrderSettlementProps {
   id: string;
   orderId: string;
@@ -93,6 +109,14 @@ export class OrderSettlement {
       cancelledAt: this.cancelledAt,
       ...overrides,
     });
+  }
+
+  statusLabel(): string {
+    return STATUS_LABELS[this.status];
+  }
+
+  flowLabel(): string {
+    return FLOW_LABELS[this.flow];
   }
 
   isPaid(): boolean {

@@ -6,6 +6,8 @@ import { SupabaseMemberOrderQueryService } from "@/infrastructure/supabase/supab
 import {
   NO_ORDER_ACCOUNT_EMAIL,
   SCENARIO_ACCOUNT_EMAILS,
+  LEGACY_SCENARIO_ID_RANGE,
+  SCENARIOS,
   SCENARIO_ID_RANGE,
   seedScenarios,
 } from "../../scripts/seed-scenarios";
@@ -16,7 +18,9 @@ import {
 
 // GitHub issue #713: テスト用アカウントに各状態の注文（シナリオのデータ）を入れるシード。
 // 実DBに入れ、2回実行しても行が増えないこと・目印の無い行を消さないこと・
-// 入れた注文がアプリから読めて画面に出ることを確認する
+// 入れた注文がアプリから読めて画面に出ることを確認する。
+// GitHub issue #736: 管理画面の注文番号（IDの先頭8文字）が注文ごとに違うこと・
+// 古い形（5eed0713-）のIDで入れた行も入れ直しで消えることを確認する
 const PREFIX = "seed_scenarios_it_";
 
 const supabase = createClient<Database>(
@@ -40,6 +44,12 @@ const userIds: Record<keyof typeof accounts, string> = {
   corporate: "",
 };
 let unmarkedOrderId = "";
+// 目印の範囲のすぐ外のID（範囲を `5eed` 全体のように広げると消えてしまう）
+const NEIGHBOR_ORDER_ID = "5eed1a00-0000-4000-8000-000000000001";
+// 古い形（issue #713 の時点）のシナリオの行のID
+const LEGACY_ORDER_ID = "5eed0713-0001-4000-8000-000000000001";
+const LEGACY_SETTLEMENT_ID = "5eed0713-0002-4000-8000-000000000001";
+const LEGACY_ITEM_ID = "5eed0713-0003-4000-8000-000000000001";
 
 const ADDRESS = {
   recipientLastName: "手作り",
@@ -53,16 +63,18 @@ const ADDRESS = {
 };
 
 async function deleteScenarioOrders() {
-  const { data } = await supabase
-    .from("orders")
-    .select("id")
-    .gte("id", SCENARIO_ID_RANGE.from)
-    .lte("id", SCENARIO_ID_RANGE.to);
-  const ids = (data ?? []).map((o) => o.id);
-  if (ids.length === 0) return;
-  await supabase.from("order_items").delete().in("order_id", ids);
-  await supabase.from("order_settlements").delete().in("order_id", ids);
-  await supabase.from("orders").delete().in("id", ids);
+  for (const range of [SCENARIO_ID_RANGE, LEGACY_SCENARIO_ID_RANGE]) {
+    const { data } = await supabase
+      .from("orders")
+      .select("id")
+      .gte("id", range.from)
+      .lte("id", range.to);
+    const ids = (data ?? []).map((o) => o.id);
+    if (ids.length === 0) continue;
+    await supabase.from("order_items").delete().in("order_id", ids);
+    await supabase.from("order_settlements").delete().in("order_id", ids);
+    await supabase.from("orders").delete().in("id", ids);
+  }
 }
 
 async function cleanup() {
@@ -132,8 +144,22 @@ beforeAll(async () => {
 
   // 手で作った注文（目印が無い）。シードを実行しても消えてはいけない
   unmarkedOrderId = crypto.randomUUID();
+  for (const id of [unmarkedOrderId, NEIGHBOR_ORDER_ID]) {
+    await insertOrderWithItem({ orderId: id });
+  }
+});
+
+async function insertOrderWithItem({
+  orderId,
+  itemId,
+  settlementId,
+}: {
+  orderId: string;
+  itemId?: string;
+  settlementId?: string;
+}) {
   const { error } = await supabase.from("orders").insert({
-    id: unmarkedOrderId,
+    id: orderId,
     user_id: userIds.standard,
     status: "processing",
     rank_at_order: "standard",
@@ -142,16 +168,31 @@ beforeAll(async () => {
     billing_address_snapshot: ADDRESS,
   });
   if (error) throw error;
+  if (settlementId) {
+    const { error: settlementError } = await supabase
+      .from("order_settlements")
+      .insert({
+        id: settlementId,
+        order_id: orderId,
+        flow: "invoice",
+        status: "invoice_sent",
+        stripe_invoice_id: "in_seed_scenario_dummy_legacy",
+        amount_snapshot: 1000,
+      });
+    if (settlementError) throw settlementError;
+  }
   const { error: itemError } = await supabase.from("order_items").insert({
-    order_id: unmarkedOrderId,
-    sanity_product_id: "seed-gucci-001",
+    ...(itemId ? { id: itemId } : {}),
+    order_id: orderId,
+    sanity_product_id: "seed-refa-001",
     product_name_snapshot: "手で作った注文の明細",
     unit_price_snapshot: 1000,
     quantity: 1,
     payment_timing: "after_order",
+    settlement_id: settlementId ?? null,
   });
   if (itemError) throw itemError;
-});
+}
 
 beforeEach(deleteScenarioOrders);
 afterAll(cleanup);
@@ -165,12 +206,52 @@ describe("seedScenarios（実DB）", () => {
     await seedScenarios({ supabase, logger, now, accounts });
     expect(await rowCounts()).toEqual(first);
 
-    const { data: unmarked } = await supabase
-      .from("orders")
-      .select("id, order_items(id)")
-      .eq("id", unmarkedOrderId)
-      .single();
-    expect(unmarked?.order_items).toHaveLength(1);
+    for (const id of [unmarkedOrderId, NEIGHBOR_ORDER_ID]) {
+      const { data: unmarked } = await supabase
+        .from("orders")
+        .select("id, order_items(id)")
+        .eq("id", id)
+        .single();
+      expect(unmarked?.order_items, id).toHaveLength(1);
+    }
+  });
+
+  it("管理画面の注文番号（IDの先頭8文字）が、シナリオの注文ごとに違う", async () => {
+    await seedScenarios({ supabase, logger, now, accounts });
+
+    const orderNumbers = (await scenarioOrders()).map((o) =>
+      o.id.slice(0, 8).toUpperCase()
+    );
+    expect(orderNumbers).toHaveLength(SCENARIOS.length);
+    expect(new Set(orderNumbers).size).toBe(SCENARIOS.length);
+  });
+
+  it("古い形（5eed0713-）のIDのシナリオの行が残っていても、入れ直すと消えて新しい形の行に置き換わる", async () => {
+    await insertOrderWithItem({
+      orderId: LEGACY_ORDER_ID,
+      itemId: LEGACY_ITEM_ID,
+      settlementId: LEGACY_SETTLEMENT_ID,
+    });
+
+    await seedScenarios({ supabase, logger, now, accounts });
+
+    const legacyRows = await Promise.all([
+      supabase.from("orders").select("id").eq("id", LEGACY_ORDER_ID),
+      supabase
+        .from("order_settlements")
+        .select("id")
+        .eq("id", LEGACY_SETTLEMENT_ID),
+      supabase.from("order_items").select("id").eq("id", LEGACY_ITEM_ID),
+      supabase
+        .from("order_status_changes")
+        .select("id")
+        .eq("order_id", LEGACY_ORDER_ID),
+    ]);
+    for (const { data, error } of legacyRows) {
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
+    }
+    expect((await rowCounts()).orders).toBe(SCENARIOS.length);
   });
 
   it("standard の会員に orders.status の各値の注文が21件以上あり、注文履歴のページ送りが確かめられる", async () => {

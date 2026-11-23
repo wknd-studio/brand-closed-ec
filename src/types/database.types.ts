@@ -306,6 +306,7 @@ export type Database = {
           received_at: string | null;
           sanity_product_id: string;
           settlement_id: string | null;
+          shipment_id: string | null;
           unit_price_snapshot: number | null;
         };
         Insert: {
@@ -322,6 +323,7 @@ export type Database = {
           received_at?: string | null;
           sanity_product_id: string;
           settlement_id?: string | null;
+          shipment_id?: string | null;
           unit_price_snapshot?: number | null;
         };
         Update: {
@@ -338,6 +340,7 @@ export type Database = {
           received_at?: string | null;
           sanity_product_id?: string;
           settlement_id?: string | null;
+          shipment_id?: string | null;
           unit_price_snapshot?: number | null;
         };
         Relationships: [
@@ -367,6 +370,13 @@ export type Database = {
             columns: ["settlement_id"];
             isOneToOne: false;
             referencedRelation: "order_settlements";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_items_shipment_id_fkey";
+            columns: ["shipment_id"];
+            isOneToOne: false;
+            referencedRelation: "shipments";
             referencedColumns: ["id"];
           },
         ];
@@ -737,6 +747,67 @@ export type Database = {
           },
         ];
       };
+      shipments: {
+        Row: {
+          assigned_admin_user_id: string | null;
+          carrier: string | null;
+          created_at: string;
+          delivered_at: string | null;
+          id: string;
+          order_id: string;
+          origin_location_code: string;
+          shipped_at: string | null;
+          status: string;
+          tracking_number: string | null;
+        };
+        Insert: {
+          assigned_admin_user_id?: string | null;
+          carrier?: string | null;
+          created_at?: string;
+          delivered_at?: string | null;
+          id?: string;
+          order_id: string;
+          origin_location_code: string;
+          shipped_at?: string | null;
+          status?: string;
+          tracking_number?: string | null;
+        };
+        Update: {
+          assigned_admin_user_id?: string | null;
+          carrier?: string | null;
+          created_at?: string;
+          delivered_at?: string | null;
+          id?: string;
+          order_id?: string;
+          origin_location_code?: string;
+          shipped_at?: string | null;
+          status?: string;
+          tracking_number?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shipments_assigned_admin_user_id_fkey";
+            columns: ["assigned_admin_user_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shipments_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shipments_origin_location_code_fkey";
+            columns: ["origin_location_code"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["code"];
+          },
+        ];
+      };
       stripe_webhook_events: {
         Row: {
           error: string | null;
@@ -948,6 +1019,27 @@ export type Database = {
           p_stripe_customer_id: string;
           p_stripe_subscription_id: string;
           p_user_id: string;
+        };
+        Returns: string;
+      };
+      confirmed_amount_in_period: {
+        Args: {
+          p_excluded_item_ids?: string[];
+          p_period_end: string;
+          p_period_start: string;
+          p_user_id: string;
+        };
+        Returns: number;
+      };
+      create_invoice_settlement_with_limit_check: {
+        Args: {
+          p_admin_user_id: string;
+          p_item_ids: string[];
+          p_monthly_limit: number;
+          p_order_id: string;
+          p_period_end: string;
+          p_period_start: string;
+          p_settlement_id: string;
         };
         Returns: string;
       };

@@ -1,5 +1,6 @@
 import type { SanityClient } from "@sanity/client";
 
+import { DEFAULT_FULFILLMENT_LOCATION } from "@/sanity/schemas/fulfillment-location-options";
 import { validatePrices } from "@/sanity/schemas/product";
 import {
   computeRankPrices,
@@ -141,6 +142,7 @@ export async function applyImport(
         // schemaのinitialValueはStudioのフォーム入力時のみ適用され、client.create()に
         // よるAPI経由の書き込みには効かないため、新規作成時のみここで既定値を設定する
         payment_timing: "at_order" as const,
+        fulfillment_location: DEFAULT_FULFILLMENT_LOCATION,
         prices: priceCheckSubject,
         min_rank: record.minRank ?? "starter",
       });

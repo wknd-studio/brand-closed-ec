@@ -385,6 +385,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 | `tests/integration/webhooks/stripe-checkout-webhook.test.ts`         | Stripe決済確定Webhook（`checkout.session.completed`）受信後、注文が`paid`になることの統合テスト                                                       |
 | `tests/integration/webhooks/stripe-checkout-expired-webhook.test.ts` | Stripe Checkoutの期限切れWebhook（`checkout.session.expired`）受信後、決済されなかった決済単位が`cancelled`になり、月次上限の枠が戻ることの統合テスト |
 | `tests/integration/webhooks/stripe-invoice-webhook.test.ts`          | Stripe請求書決済確定Webhook（`invoice.paid`）受信後、注文が`paid`になることの統合テスト                                                               |
+| `tests/integration/webhooks/stripe-subscription-webhook.test.ts`     | サブスクリプションの状態の変化（`customer.subscription.updated`・`deleted`）を`subscriptions`に同期することの統合テスト                               |
 | `tests/e2e/helpers/clerk-test-invitation.ts`                         | 招待作成・テストユーザークリーンアップ・オンボーディング完了までの共通処理（`registration.spec.ts`・`checkout.spec.ts`・`invoice.spec.ts`用）         |
 | `tests/e2e/global.setup.ts`                                          | Clerk テスト環境のセットアップ                                                                                                                        |
 

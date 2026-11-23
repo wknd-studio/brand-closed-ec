@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type {
+  InvoiceSettlementCreated,
   OrderRepository,
   OrderStatusChangedBy,
   OrderWithUser,
@@ -116,7 +117,7 @@ export type OrderItemRow = {
   settlement_id: string | null;
 };
 
-type OrderSettlementRow = {
+export type OrderSettlementRow = {
   id: string;
   order_id: string;
   flow: string;
@@ -128,7 +129,7 @@ type OrderSettlementRow = {
   cancelled_at: string | null;
 };
 
-function toAddressSnapshot(json: Json): AddressSnapshot {
+export function toAddressSnapshot(json: Json): AddressSnapshot {
   const data = json as AddressSnapshotJson;
   return AddressSnapshot.of({
     recipientLastName: data.recipientLastName,
@@ -159,7 +160,7 @@ export function toOrderItem(row: OrderItemRow): OrderItem {
   });
 }
 
-function toOrderSettlement(row: OrderSettlementRow): OrderSettlement {
+export function toOrderSettlement(row: OrderSettlementRow): OrderSettlement {
   return reconstituteOrderSettlement({
     id: row.id,
     orderId: row.order_id,
@@ -191,6 +192,10 @@ function toOrder(row: OrderRow): Order {
 // toOrderItem が読む order_items の列（Query Service の実装でも使う）
 export const ORDER_ITEM_COLUMNS =
   "id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price, payment_timing, settlement_id";
+
+// toOrderSettlement が読む order_settlements の列（Query Service の実装でも使う）
+export const ORDER_SETTLEMENT_COLUMNS =
+  "id, order_id, flow, status, stripe_checkout_session_id, stripe_invoice_id, amount_snapshot, paid_at, cancelled_at";
 
 const ORDER_SELECT = `*, order_items(${ORDER_ITEM_COLUMNS}), order_settlements(*)`;
 
@@ -443,5 +448,30 @@ export class SupabaseOrderRepository implements OrderRepository {
       }
       throw new Error(`Order保存（上限チェック込み）に失敗: ${error.message}`);
     }
+  }
+
+  async createInvoiceSettlementWithLimitCheck(input: {
+    orderId: string;
+    itemIds: string[];
+    settlementId: string;
+    period: MonthlyPeriod;
+    monthlyLimit: MonthlyLimit;
+    adminUserId: string;
+  }): Promise<InvoiceSettlementCreated> {
+    const { data, error } = await this.db.rpc(
+      "create_invoice_settlement_with_limit_check",
+      {
+        p_order_id: input.orderId,
+        p_item_ids: input.itemIds,
+        p_settlement_id: input.settlementId,
+        p_period_start: input.period.start.toISOString(),
+        p_period_end: input.period.end.toISOString(),
+        // 無制限は NULL で渡す（saveNewOrderWithLimitCheck と同じ）
+        p_monthly_limit: input.monthlyLimit.amount as number,
+        p_admin_user_id: input.adminUserId,
+      }
+    );
+    if (error) throw new Error(`請求作成に失敗: ${error.message}`);
+    return data as InvoiceSettlementCreated;
   }
 }

@@ -64,4 +64,69 @@ test.describe("注文履歴", () => {
     await expect(row).toContainText("¥24,000");
     await expect(row).toContainText("2点");
   });
+
+  test("注文履歴の注文番号から注文詳細を開くと、決済単位ごとの状態と請求前の明細が表示される", async ({
+    page,
+    member,
+  }) => {
+    const supabase = supabaseAdmin();
+    const orderId = crypto.randomUUID();
+    const settlementId = crypto.randomUUID();
+    const { error: orderError } = await supabase.from("orders").insert({
+      id: orderId,
+      user_id: member.userId,
+      status: "processing",
+      shipping_address_snapshot: addressSnapshot,
+      billing_address_snapshot: addressSnapshot,
+      rank_at_order: "starter",
+      monthly_limit_at_order: 1_000_000,
+    });
+    expect(orderError).toBeNull();
+    const { error: settlementError } = await supabase
+      .from("order_settlements")
+      .insert({
+        id: settlementId,
+        order_id: orderId,
+        flow: "checkout",
+        status: "paid",
+        amount_snapshot: 24_000,
+      });
+    expect(settlementError).toBeNull();
+    const { error: itemError } = await supabase.from("order_items").insert([
+      {
+        order_id: orderId,
+        sanity_product_id: "e2e-order-detail-product",
+        product_name_snapshot: "注文時に支払った商品",
+        unit_price_snapshot: 12_000,
+        quantity: 2,
+        is_negotiable: false,
+        payment_timing: "at_order",
+        settlement_id: settlementId,
+      },
+      {
+        order_id: orderId,
+        sanity_product_id: "e2e-order-detail-after-product",
+        product_name_snapshot: "これから請求する商品",
+        unit_price_snapshot: 5_000,
+        quantity: 1,
+        is_negotiable: false,
+        payment_timing: "after_order",
+      },
+    ]);
+    expect(itemError).toBeNull();
+
+    await page.goto("/orders");
+    await page
+      .getByRole("link", { name: orderId.slice(0, 8).toUpperCase() })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`/orders/${orderId}$`));
+    await expect(page.getByRole("heading", { name: "注文詳細" })).toBeVisible();
+
+    const settlement = page.getByRole("region", { name: "注文時のお支払い" });
+    await expect(settlement).toContainText("お支払い済み");
+    await expect(settlement).toContainText("¥24,000");
+    await expect(settlement).toContainText("注文時に支払った商品");
+    const unassigned = page.getByRole("region", { name: "請求前" });
+    await expect(unassigned).toContainText("これから請求する商品");
+  });
 });

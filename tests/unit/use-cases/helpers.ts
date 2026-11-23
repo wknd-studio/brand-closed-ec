@@ -220,6 +220,9 @@ export function makeOrderRepo(order?: Order): OrderRepository {
     sumConfirmedAmountByUserId: vi.fn().mockResolvedValue(0),
     save: vi.fn().mockResolvedValue(undefined),
     saveNewOrderWithLimitCheck: vi.fn().mockResolvedValue(undefined),
+    createInvoiceSettlementWithLimitCheck: vi
+      .fn()
+      .mockResolvedValue("invoice_sent"),
     delete: vi.fn().mockResolvedValue(undefined),
     findByUserId: vi.fn().mockResolvedValue([]),
     findActiveOrdersWithUser: vi.fn().mockResolvedValue([]),
@@ -292,6 +295,8 @@ export function makeSubscriptionGateway(): SubscriptionGateway {
       currentPeriodStart: new Date(2026, 0, 1),
       currentPeriodEnd: new Date(2026, 1, 1),
       startedAt: new Date(2026, 0, 1),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
     }),
   };
 }
@@ -321,6 +326,7 @@ export function makeSubscriptionRepo(
   return {
     findActiveByUserId: vi.fn().mockResolvedValue(snapshot),
     upsert: vi.fn().mockResolvedValue(undefined),
+    syncStatusByStripeSubscriptionId: vi.fn().mockResolvedValue("updated"),
   };
 }
 

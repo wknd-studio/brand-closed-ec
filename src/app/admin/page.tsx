@@ -7,6 +7,11 @@ const sections = [
     description: "注文一覧の確認・ステータス更新・Invoice発行",
   },
   {
+    href: "/admin/procurement/queue",
+    label: "対応待ちキュー",
+    description: "まだ発注タスクに入っていない注文明細の確認",
+  },
+  {
     href: "/admin/waitlist",
     label: "Waitlist管理",
     description: "参加希望の承認・却下",

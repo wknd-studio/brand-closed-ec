@@ -32,10 +32,26 @@ export type UpsertSubscriptionInput = { userId: string } & Omit<
   "id"
 >;
 
+/** Stripe から取り直したサブスクリプションの状態。ランク（価格）は含めない（プラン変更の確定は #209） */
+export type SubscriptionStatusSync = Pick<
+  SubscriptionSnapshot,
+  | "status"
+  | "currentPeriodStart"
+  | "currentPeriodEnd"
+  | "cancelAtPeriodEnd"
+  | "canceledAt"
+>;
+
 export interface SubscriptionRepository {
   findActiveByUserId(userId: string): Promise<SubscriptionSnapshot | null>;
   // user_idにつき解約済みでない行は1件までという部分UNIQUE制約
   // （subscriptions_user_active_idx）を前提に、既存のアクティブな行があれば
   // 更新、無ければ新規作成する
   upsert(input: UpsertSubscriptionInput): Promise<void>;
+  // 解約済みの行も対象にするため、user_idではなくStripeのサブスクリプションIDで探す。
+  // 該当する行が無ければ何もせず not_found を返す
+  syncStatusByStripeSubscriptionId(
+    stripeSubscriptionId: string,
+    sync: SubscriptionStatusSync
+  ): Promise<"updated" | "not_found">;
 }

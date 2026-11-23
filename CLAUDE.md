@@ -68,7 +68,7 @@ feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Cler
 
 **ブランチ運用**: 実装開始時は必ず `git fetch origin develop` して最新の develop から feature ブランチを切ること。毎回ユーザーに指示させない。
 
-**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/{owner}/{repo}/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/{owner}/{repo}/issues/<番号> --jq .id`。`{owner}/{repo}` は gh が今いるリポジトリに置き換えるので、そのまま書く）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。
+**issueの依存関係**: 依存はGitHub標準のissue依存関係（Blocked by）にだけ登録する。issue本文の「依存」節には書かない（AI・人間が見る依存グラフの正をここに一本化するため）。起票時に依存が分かれば `gh api -X POST repos/{owner}/{repo}/issues/<後続>/dependencies/blocked_by -F issue_id=<先行issueのid>` で登録する（`id` は `gh api repos/{owner}/{repo}/issues/<番号> --jq .id`。`{owner}/{repo}` は gh が今いるリポジトリに置き換えるので、そのまま書く）。同じファイルを触って衝突するissue同士も、着手順を決めて登録する。全体は `task deps:graph`（HTML）／`task deps:graph -- --json`（着手可能なissueの洗い出し等）で確認する。同じグラフを https://wknd-studio.github.io/brand-closed-ec/ に自動で公開している（`.github/workflows/issue-deps-graph.yml`。developへのマージ・issueの変更・15分ごとの定期実行で更新）。優先度（ラベル `priority:P0`〜`priority:P3`）で「P0 だけ」「P1 まで」「P2 まで」に絞り込める。絞り込んでも、残ったissueを止めている範囲外の先行は薄い点線・「（範囲外）」付きで出す。自分より優先度の低い（または優先度なしの）issueに止められている組（優先度の逆転）は図の赤紫の太線と「次にやること」の直後の一覧に出る（`--json` では `nodes[].priority`・`priorityInversions`）。逆転を見つけたら、止めている側の優先度を上げるか先に片付ける。
 
 **並列開発（Orca）**: 複数issueの並列実装はADEのOrcaで、issueごとにワークツリーとセッションを立ち上げて行う（背景・スロット割り当ては `docs/dev-parallel-worktrees.md`）。Orcaのワークツリー内で作業するセッションは以下に従う。
 

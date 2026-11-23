@@ -211,4 +211,27 @@ describe("OrderSettlement", () => {
       }
     );
   });
+
+  // 会員向けの注文詳細（/orders/[id]）に出す表示ラベル
+  describe("表示ラベル", () => {
+    it.each([
+      ["pending_payment", "お支払い待ち"],
+      ["invoice_sent", "請求書をお送りしました（お支払い待ち）"],
+      [
+        "limit_exceeded",
+        "ご利用上限を超えたため運営で確認中です（ご連絡をお待ちください）",
+      ],
+      ["paid", "お支払い済み"],
+      ["cancelled", "キャンセル済み"],
+    ] as const)("状態 %s は「%s」", (status, label) => {
+      expect(makeSettlement({ status }).statusLabel()).toBe(label);
+    });
+
+    it.each([
+      ["checkout", "注文時のお支払い"],
+      ["invoice", "請求書払い"],
+    ] as const)("決済方法 %s は「%s」", (flow, label) => {
+      expect(makeSettlement({ flow }).flowLabel()).toBe(label);
+    });
+  });
 });

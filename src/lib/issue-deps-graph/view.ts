@@ -4,6 +4,7 @@
 
 import type { Graph, GraphNode } from "./build-graph";
 import { reachable } from "./build-graph";
+import { priorityRank, type Priority } from "./priority";
 
 /** このラベルが付いたissueを「v1だけ」の絞り込みで残す */
 export const V1_LABEL = "v1";
@@ -13,7 +14,17 @@ export const HUB_DOWNSTREAM = 3;
 
 const MAX_TITLE_LENGTH = 30;
 
-export type GraphFilter = { v1Only: boolean; hideNonDev: boolean };
+export type GraphFilter = {
+  v1Only: boolean;
+  hideNonDev: boolean;
+  /** この優先度までを範囲内にする（指定しなければ優先度で絞り込まない） */
+  maxPriority?: Priority;
+};
+
+export type FilteredGraph = Graph & {
+  /** 優先度が範囲外だが、範囲内のissueを止めているので残した先行のissue */
+  outOfRange: Set<number>;
+};
 
 export function escapeLabel(text: string): string {
   return text
@@ -30,6 +41,7 @@ function truncate(text: string): string {
 
 export function nodeLabel(node: GraphNode): string {
   const parts = [`#${node.number} ${escapeLabel(truncate(node.title))}`];
+  if (node.priority !== null) parts.unshift(node.priority);
   if (node.downstream > 0) parts.push(`↓${node.downstream}`);
   if (node.stale) {
     parts.push(`⚠停止${Math.max(...node.prs.map((p) => p.ageDays))}日`);
@@ -50,12 +62,38 @@ export function matchesFilter(node: GraphNode, filter: GraphFilter): boolean {
   return true;
 }
 
-export function filterGraph(graph: Graph, filter: GraphFilter): Graph {
-  const nodes = graph.nodes.filter((n) => matchesFilter(n, filter));
-  const kept = new Set(nodes.map((n) => n.number));
+function withinPriority(node: GraphNode, filter: GraphFilter): boolean {
+  return (
+    filter.maxPriority === undefined ||
+    priorityRank(node.priority) <= priorityRank(filter.maxPriority)
+  );
+}
+
+/**
+ * 絞り込んだグラフ。優先度で絞り込んだときは、残ったissueを止めている先行のissueを
+ * 範囲外でも残す（v1だけ・開発外を隠すには従う）。範囲外の先行からさらに先はたどらない
+ */
+export function filterGraph(graph: Graph, filter: GraphFilter): FilteredGraph {
+  const byNumber = new Map(graph.nodes.map((n) => [n.number, n]));
+  const kept = new Set(
+    graph.nodes
+      .filter((n) => matchesFilter(n, filter) && withinPriority(n, filter))
+      .map((n) => n.number)
+  );
+  const outOfRange = new Set(
+    graph.edges
+      .filter((e) => kept.has(e.to) && !kept.has(e.from))
+      .map((e) => e.from)
+      .filter((number) => matchesFilter(byNumber.get(number)!, filter))
+  );
   return {
-    nodes,
-    edges: graph.edges.filter((e) => kept.has(e.from) && kept.has(e.to)),
+    nodes: graph.nodes.filter(
+      (n) => kept.has(n.number) || outOfRange.has(n.number)
+    ),
+    edges: graph.edges.filter(
+      (e) => kept.has(e.to) && (kept.has(e.from) || outOfRange.has(e.from))
+    ),
+    outOfRange,
   };
 }
 

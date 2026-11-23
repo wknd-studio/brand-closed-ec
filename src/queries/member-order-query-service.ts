@@ -64,6 +64,39 @@ export type OrderHistoryDto = {
   pageSize: number;
 };
 
+// 注文詳細に出す住所（注文時点のスナップショット）
+export type OrderDetailAddressDto = {
+  fullName: string;
+  postalCode: string;
+  prefecture: string;
+  city: string;
+  addressLine1: string;
+  addressLine2: string;
+  phoneNumber: string;
+};
+
+// 注文詳細の決済単位。amount は決済単位の作成時点の金額のスナップショット
+export type OrderDetailSettlementDto = {
+  id: string;
+  flowLabel: string;
+  statusLabel: string;
+  amount: number;
+  items: CompletedOrderItemDto[];
+};
+
+// 注文詳細画面（/orders/[id]）。決済単位は作成順。unassignedItems はまだ決済単位に
+// 割り当てられていない明細（注文後に請求予定の商品）
+export type OrderDetailDto = {
+  orderId: string;
+  createdAt: string;
+  status: OrderStatus;
+  rankAtOrder: MemberRank;
+  shippingAddress: OrderDetailAddressDto;
+  billingAddress: OrderDetailAddressDto;
+  settlements: OrderDetailSettlementDto[];
+  unassignedItems: CompletedOrderItemDto[];
+};
+
 // 会員の注文系画面の読み取り。他の会員のデータを返さないよう、どのメソッドも会員（clerkUserId）を必須にする
 export interface MemberOrderQueryService {
   // 退会済み・存在しない会員は null
@@ -84,4 +117,9 @@ export interface MemberOrderQueryService {
     page: number;
     pageSize: number;
   }): Promise<OrderHistoryDto>;
+  // 他の会員の注文・退会済みの会員の注文・存在しない注文は null
+  findOrderDetail(input: {
+    clerkUserId: string;
+    orderId: string;
+  }): Promise<OrderDetailDto | null>;
 }
