@@ -1,11 +1,10 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_FULFILLMENT_LOCATION,
   FULFILLMENT_LOCATION_OPTIONS,
 } from "@/sanity/schemas/fulfillment-location-options";
 import { product } from "@/sanity/schemas/product";
+import { SEED_PRODUCTS } from "../../../scripts/seed-products";
 
 // 商品の発送拠点（#356）。値は DB の locations.code と一致させる
 describe("発送拠点の選択肢", () => {
@@ -58,18 +57,20 @@ describe("商品の fulfillment_location フィールド", () => {
   });
 });
 
-// seed スクリプトは読み込むと Sanity に書き込むため、ソースで確かめる。
-// 全商品に値があることは ProductDoc の型（必須）で typecheck が担保する
 describe("開発用 seed の発送拠点", () => {
-  const source = readFileSync(
-    path.resolve(__dirname, "../../../scripts/seed-products.ts"),
-    "utf8"
-  );
+  it("全商品に発送拠点の選択肢のどれかが入っている", () => {
+    const values: string[] = FULFILLMENT_LOCATION_OPTIONS.map((o) => o.value);
+    for (const p of SEED_PRODUCTS) {
+      expect(values, p._id).toContain(p.fulfillment_location);
+    }
+  });
 
   it.each(FULFILLMENT_LOCATION_OPTIONS.map((o) => o.value))(
     "%s の商品がある",
     (value) => {
-      expect(source).toContain(`fulfillment_location: "${value}"`);
+      expect(SEED_PRODUCTS.some((p) => p.fulfillment_location === value)).toBe(
+        true
+      );
     }
   );
 });
