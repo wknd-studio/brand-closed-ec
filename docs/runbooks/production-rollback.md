@@ -73,7 +73,7 @@ doppler run -c prod_deploy -- pnpm exec wrangler rollback <版のID> \
 
 CI の Deploy (production)・Deploy (staging) の Sync Wrangler Secrets & Deploy は、`wrangler deploy --secrets-file` で secret（Doppler の Worker 用の config の値）とコードを 1 つの版で出すため、ロールバック中でも通る（#708）。直したもの（hotfix）は、手でデプロイせずにそのまま `main` にマージして CI で出せばよい。
 
-- 出た版の secret は、Doppler にある値は Doppler の今の値になる。Doppler に無く最新の（壊れた）版にだけある secret は、そのまま引き継がれる（`--secrets-file` は省いた secret を消さない）。壊れたデプロイで secret を足していたなら、5 章のとおり Worker から消す
+- 出た版の secret は、Doppler にある値は Doppler の今の値になる。Doppler に無く最新の（壊れた）版にだけある secret は、そのまま引き継がれる（`--secrets-file` は省いた secret を消さない）。壊れたデプロイで secret を足していたなら、`docs/cicd.md` の「Cloudflare Workers ランタイムシークレット」の手順で Worker から消す
 - 壊れた版に戻す（`wrangler rollback <最新の版のID>`）のは、壊れた版がまた出るので本番では使わない。stg で試した後に元へ戻すときに使う
 - stg の E2E Tests (stg) の `DISABLE_EMAIL_SENDING` の `secret put`・`secret delete` は、ロールバック中は失敗する。E2E は Deploy (staging) の直後（「最新の版 = 出ている版」に戻った後）に同じ concurrency のグループで動くので普段は通るが、**stg で `wrangler rollback` を試すのは、Deploy・E2E Tests (stg) が動いていないときにする**。E2E の途中で戻して Re-enable のステップ（`secret delete`）が失敗すると、最新の版に `DISABLE_EMAIL_SENDING=true` が残り、次のデプロイがそれを引き継いで stg のメールが送られなくなる（Doppler に無い値のため `--secrets-file` では消えない）。そうなったら、「最新の版 = 出ている版」に戻してから `doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'` で消す
 
