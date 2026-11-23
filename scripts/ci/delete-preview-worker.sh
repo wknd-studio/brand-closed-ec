@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PRごとのプレビューの Worker を削除する（#727。.github/workflows/preview.yml）。
+# PRごとのプレビューの Worker を削除する（#727。.github/workflows/preview-deploy.yml）。
 # 使い方: doppler run -- bash scripts/ci/delete-preview-worker.sh brand-closed-ec-pr-<PR番号>
 #
 # - stg・本番の Worker を消さないよう、プレビューの名前の形（scripts/ci/preview.ts の previewWorkerName）

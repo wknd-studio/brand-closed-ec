@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /**
- * PRごとのプレビュー（#727。.github/workflows/preview.yml）の名前・URL・PRのコメントを作る。
+ * PRごとのプレビュー（#727。.github/workflows/preview.yml・preview-deploy.yml）の名前・URL・PRのコメント・判定を作る。
  *
  * プレビューは stg の Worker（brand-closed-ec-stg）とは別名の Worker に出す。stg の DB・Clerk・Stripe・
  * Sanity は共有し、アプリ自身のURL（NEXT_PUBLIC_APP_URL）だけをプレビューのURLにする（docs/cicd.md）。
@@ -11,7 +11,8 @@ import { pathToFileURL } from "node:url";
  *   pnpm -s tsx scripts/ci/preview.ts names <PR番号>                  # name=… と url=…（GITHUB_OUTPUT 向け）
  *   pnpm -s tsx scripts/ci/preview.ts comment <状態> <PR番号> <コミット> # PRのコメントの本文
  *   pnpm -s tsx scripts/ci/preview.ts decide <PRのJSON> <変更したファイルの一覧>
- *     # action=… と status=…（GITHUB_OUTPUT 向け）。環境変数 GITHUB_REPOSITORY・RUN_HEAD_SHA・RUN_CONCLUSION を読む
+ *     # action=… と status=…（GITHUB_OUTPUT 向け）。環境変数 GITHUB_REPOSITORY・RUN_HEAD_SHA・RUN_CONCLUSION・
+ *     # RUN_HAS_BUILD_OUTPUT を読む
  */
 
 /** push のたびに同じコメントを更新するため、コメントをこのマーカーで見つける */
@@ -82,12 +83,15 @@ export function decidePreviewAction({
   repository,
   runHeadSha,
   runConclusion,
+  hasBuildOutput,
   pr,
   changedFiles,
 }: {
   repository: string;
   runHeadSha: string;
   runConclusion: string;
+  /** Preview の実行に、ビルドの成果物（artifact の preview-build）があるか */
+  hasBuildOutput: boolean;
   pr: PullRequest;
   changedFiles: string[];
 }): { action: PreviewAction; reason: string } {
@@ -111,6 +115,10 @@ export function decidePreviewAction({
   }
   if (runConclusion !== "success") {
     return { action: "skip", reason: `ビルドが ${runConclusion}` };
+  }
+  if (!hasBuildOutput) {
+    // 閉じた直後に再オープンすると、閉じたときの実行（ビルドしない）が開いたPRを読む。再オープンの実行が出す
+    return { action: "skip", reason: "この実行にビルドの成果物が無い" };
   }
   return { action: "deploy", reason: "マイグレーションを含まないPR" };
 }
@@ -154,6 +162,7 @@ function main(argv: string[]): void {
       repository: process.env.GITHUB_REPOSITORY ?? "",
       runHeadSha: process.env.RUN_HEAD_SHA ?? "",
       runConclusion: process.env.RUN_CONCLUSION ?? "",
+      hasBuildOutput: process.env.RUN_HAS_BUILD_OUTPUT === "true",
       pr: JSON.parse(readFileSync(prFile, "utf8")) as PullRequest,
       changedFiles: readFileSync(filesFile, "utf8").split("\n").filter(Boolean),
     });
