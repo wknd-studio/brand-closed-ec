@@ -8,7 +8,9 @@
 # task dev は同時に1か所（メインのチェックアウトか、どれか1つのワークツリー）だけにする。
 # 確保 = <git-common-dir>/dev-entry ディレクトリの作成（DBのスロットの確保と同じく、mkdir で原子的に行う）。
 # owner に確保した場所の絶対パス、branch にそのブランチ、pids に確保した task のPIDを1行ずつ記録する。
-# 持ち主の場所が削除済み、または pids のプロセスがすべて終了していれば（異常終了）、持ち主が消えた入口として回収する。
+# pids のプロセスがすべて終了していれば（異常終了・持ち主のワークツリーの削除）、持ち主が消えた入口として回収する。
+# 持ち主の場所が削除済みでも、プロセス（別ウィンドウの ngrok 等）が残っていれば回収せず、task dev:clean で止めさせる
+# （固定URLを古い ngrok が持ったままになり、Webhook が誰も待っていないポートへ流れるため）。
 
 set -euo pipefail
 
@@ -21,17 +23,23 @@ entry_owner() {
   cat "$ENTRY_DIR/owner" 2>/dev/null || true
 }
 
-# 持ち主の場所が残っていて、持ち主のプロセスが1つでも動いていれば成功する
+# 持ち主のプロセスが1つでも動いていれば成功する
 entry_alive() {
-  local owner pid
-  owner="$(entry_owner)"
-  [ -n "$owner" ] && [ -d "$owner" ] && [ -f "$ENTRY_DIR/pids" ] || return 1
+  local pid
+  [ -f "$ENTRY_DIR/pids" ] || return 1
   while read -r pid; do
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
       return 0
     fi
   done <"$ENTRY_DIR/pids"
   return 1
+}
+
+# 持ち主の場所が記録されていて、その場所が削除済みなら成功する
+owner_removed() {
+  local owner
+  owner="$(entry_owner)"
+  [ -n "$owner" ] && [ ! -d "$owner" ]
 }
 
 record_owner() {
@@ -67,8 +75,26 @@ claim() {
     return
   fi
 
-  if entry_alive; then
+  # 削除済みの場所に残ったプロセスは、どこからでも task dev:clean で止めて入口を返せるようにする
+  if owner_removed && [ "$task_name" = "dev:clean" ]; then
+    return
+  fi
+
+  # owner が空 = 別の場所が確保した直後で、まだ記録を書いていない（DBのスロットの確保と同じく使用中として扱う）
+  if [ -z "$owner" ]; then
     print_busy "\`task ${task_name}\`"
+    exit 1
+  fi
+
+  if entry_alive; then
+    if owner_removed; then
+      cat >&2 <<MSG
+Webhookの入口（ngrok・stripe listen）の持ち主の場所（${owner}）は削除済みですが、そこで起動したプロセス（別ウィンドウの ngrok 等）が残っているため、\`task ${task_name}\` を中止しました。
+ここで \`task dev:clean\` を実行して残ったプロセスを止め、入口を返してから、もう一度実行してください。
+MSG
+    else
+      print_busy "\`task ${task_name}\`"
+    fi
     exit 1
   fi
 
@@ -84,7 +110,7 @@ claim() {
 
 release() {
   [ -d "$ENTRY_DIR" ] || return 0
-  if [ "$(entry_owner)" != "$ROOT" ] && entry_alive; then
+  if [ "$(entry_owner)" != "$ROOT" ] && ! owner_removed && entry_alive; then
     print_busy "入口の返却"
     exit 1
   fi
