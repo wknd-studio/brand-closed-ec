@@ -4,6 +4,9 @@ import WithdrawalDialog from "./withdrawal-dialog";
 import AddressList from "./address-list";
 import PaymentMethodButton from "./payment-method-button";
 import { openBillingPortalAction } from "./actions";
+import LegalNoticeText from "@/app/legal/legal-notice-text";
+import { CONTACT, MEMBERSHIP_TERMS } from "@/app/legal/legal-notice";
+import { formatJstDate } from "./format-jst-date";
 
 export default async function SettingsPage() {
   const { userId } = await requireAuth();
@@ -13,6 +16,7 @@ export default async function SettingsPage() {
     queryService.findStripeCustomerId(userId!),
   ]);
   const addresses = settings?.addresses ?? [];
+  const withdrawableFrom = settings?.withdrawableFrom ?? null;
 
   return (
     <main className="mx-auto max-w-xl space-y-10 px-6 py-12">
@@ -43,12 +47,40 @@ export default async function SettingsPage() {
         </section>
       )}
 
-      <section className="space-y-4 rounded-lg border border-red-200 p-6">
-        <div className="space-y-1">
-          <h2 className="text-sm font-medium text-red-700">退会</h2>
+      <section
+        aria-labelledby="withdrawal-heading"
+        className="space-y-4 rounded-lg border border-red-200 p-6"
+      >
+        <div className="space-y-2">
+          <h2
+            id="withdrawal-heading"
+            className="text-sm font-medium text-red-700"
+          >
+            退会
+          </h2>
           <p className="text-sm text-gray-500">
             退会するとサービスへのアクセスができなくなります。有料プランの場合、サブスクリプションは即時解約されます。
           </p>
+          <p className="text-sm text-gray-500">
+            <LegalNoticeText value={MEMBERSHIP_TERMS.cancellation} />
+          </p>
+          {withdrawableFrom && (
+            <div className="space-y-1 rounded bg-red-50 p-3 text-sm text-gray-700">
+              <p>
+                現在は最低利用期間内です。
+                {formatJstDate(new Date(withdrawableFrom))}から退会できます。
+              </p>
+              <p>運営の問い合わせ先</p>
+              <ul className="list-disc pl-5">
+                <li>
+                  メール: <LegalNoticeText value={CONTACT.email} />
+                </li>
+                <li>
+                  電話: <LegalNoticeText value={CONTACT.phone} />
+                </li>
+              </ul>
+            </div>
+          )}
         </div>
         <WithdrawalDialog />
       </section>

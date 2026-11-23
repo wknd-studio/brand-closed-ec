@@ -18,6 +18,8 @@ export type SettingsAddressDto = {
 // アカウント設定画面（/settings）。住所は既定の住所が先
 export type SettingsDto = {
   addresses: SettingsAddressDto[];
+  // 入会から6ヶ月の最低利用期間内なら、退会できるようになる日時（ISO文字列）。期間を過ぎていれば null
+  withdrawableFrom: string | null;
 };
 
 // お気に入り画面（/favorites）。商品の表示制限はランクで判定する
