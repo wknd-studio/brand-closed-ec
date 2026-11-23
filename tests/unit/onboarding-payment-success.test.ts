@@ -42,7 +42,7 @@ function renderPage(searchParams: Record<string, string | string[]>) {
 
 /**
  * 決済完了画面（GitHub issue #425・#461）。決済の完了を Query Service で確かめ、
- * 完了している場合だけ「処理中」を表示する。判定そのもの（session_idの検証・
+ * 完了している場合だけ「アカウントを準備しています」を表示する。判定そのもの（session_idの検証・
  * 有効なサブスクリプションの確認）は
  * tests/unit/infrastructure/stripe-onboarding-payment-query-service.test.ts で確認する
  */
@@ -54,7 +54,7 @@ describe("PaymentSuccessPage", () => {
     findPaymentCompleted.mockResolvedValue(false);
   });
 
-  it("決済が完了していれば、ショップ・プラン選択への導線を出さずに処理中を表示する", async () => {
+  it("決済が完了していれば、ショップ・プラン選択への導線を出さずにアカウントの準備中を表示する", async () => {
     findPaymentCompleted.mockResolvedValue(true);
 
     const html = renderToStaticMarkup(
@@ -65,7 +65,12 @@ describe("PaymentSuccessPage", () => {
       clerkUserId: "clerk-1",
       sessionId: SESSION_ID,
     });
-    expect(html).toContain("処理中");
+    expect(html).toContain("お支払いが完了しました");
+    expect(html).toMatch(
+      /role="status"[^>]*>[\s\S]*アカウントを準備しています/
+    );
+    expect(html).toContain('aria-label="お手続きの進み具合"');
+    expect(html).toMatch(/aria-current="step"[^>]*>[\s\S]*?3 お支払い/);
     // 確定前にショップ・プラン選択へ進むと、再決済による二重課金を招く（#407）
     expect(html).not.toContain("<a");
   });
@@ -131,7 +136,11 @@ describe("PaymentSuccessPage", () => {
         }),
       })
     );
+    expect(html).toContain("お支払いの状況を");
+    expect(html).toContain("確認できませんでした");
     expect(html).toContain("再読み込み");
-    expect(html).not.toContain("処理中");
+    expect(html).not.toContain("アカウントを準備しています");
+    // 決済が完了しているかもしれないため、種別選択（再決済）への導線は出さない
+    expect(html).not.toContain("<a");
   });
 });
