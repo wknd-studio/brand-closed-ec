@@ -2,6 +2,7 @@ import type { Order } from "@/domain/entities/order";
 import type { Money } from "@/domain/value-objects/money";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
+import type { SettlementStatus } from "@/domain/entities/order-settlement";
 
 export type OrderWithUser = {
   id: string;
@@ -31,6 +32,12 @@ export type OrderWithUser = {
     stripeInvoiceId: string | null;
   }[];
 };
+
+/** 請求作成で作られた決済単位の状態。上限超過なら Stripe Invoice を発行しない */
+export type InvoiceSettlementCreated = Extract<
+  SettlementStatus,
+  "invoice_sent" | "limit_exceeded"
+>;
 
 /**
  * orders.status を変えた主体（order_status_changes.changed_by）。
@@ -79,6 +86,26 @@ export interface OrderRepository {
     monthlyLimit: MonthlyLimit,
     cartFixedTotal: Money
   ): Promise<void>;
+
+  /**
+   * 請求作成: 1つの注文の未請求の後払い明細から invoice の決済単位を作り、明細を紐付ける。
+   * 対象ユーザー行への行ロック込みで月次上限チェックと保存を1回のDB呼び出しで行い、
+   * 同じ顧客の注文確定・請求作成と直列化する（issue #393、docs/domain/settlement.md
+   * 「月次仕入れ上限チェック」）。判定は all-or-nothing で、period 内の他の確定額＋選んだ
+   * 明細の合計が上限を超えれば limit_exceeded（注文も limit_exceeded になり、adminUserId を
+   * 主体として履歴に残す）、超えなければ invoice_sent の決済単位を作る。Stripe Invoice は
+   * 作らない（invoice_sent のときだけ呼び出し側が発行する）。
+   * 別の注文・at_order・請求済み・キャンセル済みの注文の明細を含むときは例外を投げ、何も保存しない
+   */
+  createInvoiceSettlementWithLimitCheck(input: {
+    orderId: string;
+    itemIds: string[];
+    settlementId: string;
+    period: MonthlyPeriod;
+    // 無制限なら上限の判定をしない
+    monthlyLimit: MonthlyLimit;
+    adminUserId: string;
+  }): Promise<InvoiceSettlementCreated>;
 
   /**
    * Orderを明細・決済単位ごと物理削除する。注文確定処理の途中失敗時の
