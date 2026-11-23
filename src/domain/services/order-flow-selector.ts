@@ -5,14 +5,22 @@ export type SplitCartResult = {
   afterOrderItems: CartItem[];
 };
 
+/** 商品をいつ支払うか。要相談の商品は価格が後で決まるため、商品の設定によらず注文後払いになる */
+export function settlementTimingOf(item: {
+  paymentTiming: "at_order" | "after_order";
+  isNegotiable: boolean;
+}): "at_order" | "after_order" {
+  return item.isNegotiable ? "after_order" : item.paymentTiming;
+}
+
 export function splitCartByPaymentTiming(
   cartItems: CartItem[]
 ): SplitCartResult {
   const atOrderItems = cartItems.filter(
-    (item) => item.paymentTiming === "at_order" && !item.isNegotiable
+    (item) => settlementTimingOf(item) === "at_order"
   );
   const afterOrderItems = cartItems.filter(
-    (item) => item.paymentTiming === "after_order" || item.isNegotiable
+    (item) => settlementTimingOf(item) === "after_order"
   );
   return { atOrderItems, afterOrderItems };
 }

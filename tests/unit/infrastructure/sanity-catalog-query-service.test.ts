@@ -290,7 +290,8 @@ describe("SanityCatalogQueryService.findCheckoutProducts", () => {
         thumbnail: null,
         unitPrice: null,
         isOutOfStock: true,
-        paymentTiming: "at_order",
+        // 要相談の商品は注文後払いになる（注文の保存と同じ domain の規則。#695）
+        paymentTiming: "after_order",
         isAccessible: true,
       },
     ]);

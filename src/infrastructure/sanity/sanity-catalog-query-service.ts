@@ -1,4 +1,5 @@
 import { sanityClient } from "@/infrastructure/sanity/client";
+import { settlementTimingOf } from "@/domain/services/order-flow-selector";
 import type {
   BrandSummaryDto,
   CatalogQueryService,
@@ -202,8 +203,12 @@ export class SanityCatalogQueryService implements CatalogQueryService {
         thumbnail: product.thumbnail,
         unitPrice: isAccessible ? priceFor(product, rank) : null,
         isOutOfStock: product.availability === "out_of_stock",
-        // 後方互換: payment_timing 未設定の既存商品は at_order（従来の checkout フロー相当）として扱う
-        paymentTiming: product.payment_timing ?? "at_order",
+        // 後方互換: payment_timing 未設定の既存商品は at_order（従来の checkout フロー相当）として扱う。
+        // 画面の支払い方法の表示が注文の保存とずれないよう、要相談の扱いも domain の規則に従う（#695）
+        paymentTiming: settlementTimingOf({
+          paymentTiming: product.payment_timing ?? "at_order",
+          isNegotiable: product.is_negotiable,
+        }),
         isAccessible,
       };
     });
