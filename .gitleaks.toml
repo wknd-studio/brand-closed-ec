@@ -1,0 +1,48 @@
+# gitleaks の設定（#663）。CI（.github/workflows/secret-scan.yml）と pre-commit
+# （scripts/gitleaks-staged.sh）の両方がこのファイルを読む。
+#
+# ルールは gitleaks の既定のものをそのまま使う。誤検出は [[allowlists]] に、理由を
+# description に書き、ファイル（paths）と値（regexes）の両方で絞って足す（condition = "AND"）。
+# ディレクトリ全体・ルール全体は外さない（その配下に本物の鍵が入っても見逃すため）。
+# 書き方は tests/unit/gitleaks.test.ts が検査する。
+
+[extend]
+useDefault = true
+
+# age の暗号化・復号のテストで、秘密鍵がログに出ないことを確かめるためのダミーの鍵（Q の繰り返し）
+[[allowlists]]
+description = "age の秘密鍵の形をしたテスト用のダミーの値"
+condition = "AND"
+paths = [
+  '''^tests/unit/encrypt-artifact\.test\.ts$''',
+  '''^tests/unit/collect-supabase-logs\.test\.ts$''',
+]
+regexes = [
+  '''^AGE-SECRET-KEY-1Q+$''',
+]
+
+# Supabase のログの収集で、Stripe の鍵がログに残らないこと（伏せ字になること）を確かめる
+# ためのダミーの値。いまのファイルには無く、過去の commit にだけある
+[[allowlists]]
+description = "Stripe の鍵の形をしたテスト用のダミーの値"
+condition = "AND"
+paths = [
+  '''^tests/unit/collect-supabase-logs\.test\.ts$''',
+]
+regexes = [
+  '''^sk_test_abcdefghijkl$''',
+  '''^sk_live_supersecret$''',
+]
+
+# Clerk の公式のスキルの雛形にある、curl の例のプレースホルダー
+[[allowlists]]
+description = "Clerk のスキルの雛形の curl の例にあるプレースホルダー"
+condition = "AND"
+paths = [
+  '''^\.agents/skills/clerk-chrome-extension-patterns/SKILL\.md$''',
+  '''^\.agents/skills/clerk-chrome-extension-patterns/references/headless-extension\.md$''',
+  '''^\.agents/skills/clerk-chrome-extension-patterns/references/sync-host\.md$''',
+]
+regexes = [
+  '''^YOUR_SECRET_KEY$''',
+]

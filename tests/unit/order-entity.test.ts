@@ -5,6 +5,7 @@ import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement"
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
@@ -85,7 +86,7 @@ function makeOrder(
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
     rankAtOrder: MemberRank.of("basic"),
-    monthlyLimitAtOrder: Money.of(1_000_000),
+    monthlyLimitAtOrder: MonthlyLimit.of(1_000_000),
     items: [makeItem()],
     settlements: [],
     createdAt: new Date(2026, 5, 1),
@@ -133,6 +134,7 @@ function sequentialIds() {
 function placeOrder(cartItems: CartItem[]) {
   return Order.place({
     user: makeUser(),
+    monthlyLimit: MonthlyLimit.of(5_000_000),
     cartItems,
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of({
@@ -246,11 +248,26 @@ describe("Order", () => {
       );
     });
 
+    it("無制限の上限は、無制限のまま注文時の上限としてスナップショットする", () => {
+      const order = Order.place({
+        user: makeUser(),
+        monthlyLimit: MonthlyLimit.unlimited(),
+        cartItems: [makeCartItem()],
+        shippingAddress: AddressSnapshot.of(snapshotProps),
+        billingAddress: AddressSnapshot.of(snapshotProps),
+        placedAt: new Date(2026, 10, 11),
+        generateId: sequentialIds(),
+      });
+
+      expect(order.monthlyLimitAtOrder.isUnlimited()).toBe(true);
+    });
+
     it("明細のスナップショット・会員・住所・日時を注文に写す", () => {
       const placedAt = new Date(2026, 10, 11);
       const user = makeUser();
       const order = Order.place({
         user,
+        monthlyLimit: MonthlyLimit.of(5_000_000),
         cartItems: [makeCartItem({ quantity: 2 })],
         shippingAddress: AddressSnapshot.of(snapshotProps),
         billingAddress: AddressSnapshot.of({ ...snapshotProps, city: "港区" }),
@@ -263,9 +280,7 @@ describe("Order", () => {
         createdAt: placedAt,
       });
       expect(order.rankAtOrder.value).toBe("standard");
-      expect(order.monthlyLimitAtOrder.amount).toBe(
-        user.getMonthlyLimit().amount
-      );
+      expect(order.monthlyLimitAtOrder.amount).toBe(5_000_000);
       expect(order.shippingAddress.city).toBe("千代田区");
       expect(order.billingAddress.city).toBe("港区");
       expect(order.items[0]).toMatchObject({

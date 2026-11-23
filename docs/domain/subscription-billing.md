@@ -41,7 +41,7 @@
 
 - 7ランク制（STARTER / BASIC / STANDARD / PRO / ADVANCED / PREMIUM / ENTERPRISE）。名称・月額費用・初期費用・商品掛け率は`archive/service-spec.md`の「会員プラン」節を正とする（実装済み: `src/domain/value-objects/member-rank.ts`の`RANK_ORDER`）
 - ENTERPRISEはセルフサービスの選択肢に含まれない。管理者がStripeダッシュボードで個別にカスタムプライスのサブスクリプションを作成し会員へ送付する形で契約する（`specs/001-seven-rank-pricing/spec.md` FR-006）
-- 月間仕入れ上限は現時点で暫定値（`src/domain/value-objects/member-rank.ts`の`MONTHLY_LIMITS`にTODOコメント付きで暫定設定済み）。確定次第、コード側の唯一の定義箇所を更新する。**単一の情報源の原則**（`specs/001-seven-rank-pricing/spec.md` SC-003）により、上限値をコード内の複数箇所に書き写さない
+- 月間仕入れ上限の金額の正は`member_ranks.monthly_limit_amount`（NULL = 無制限。ENTERPRISE）。現在の値（STARTER 30万円〜PREMIUM 1億円）を正式な暫定値とし、変更は`member_ranks`の行の更新だけで済む（GitHub issue #210）。注文確定時の上限チェック・カートの残り枠表示はどちらもこの値を読む。**単一の情報源の原則**（`specs/001-seven-rank-pricing/spec.md` SC-003）により、上限値をコードに書き写さない
 - 個人・法人（`users.member_type`）とも同じ`users`行がランク・月次期間・サブスクリプションを持つ。1アカウント＝1担当者であり、複数メンバーで契約・月次上限を共有する仕組みは無い（2026-09-12方針転換、GitHub issue #200。詳細は[[membership]]「個人と法人の関係」節）
 
 **アップグレード**
@@ -150,4 +150,4 @@
 - `docs/plan-change-flow.md` — プラン変更のStripe操作・Webhookハンドラー・`changePlan`統合ユースケースの詳細設計（本ドキュメントの「業務ルール」節は主にこれを要約）
 - `specs/001-seven-rank-pricing/` — 旧5ランクから新7ランクへの移行spec。`data-model.md`に`MemberRank`のコード定義・DB移行手順あり
 - `specs/005-b2b-organization/spec.md` — 複数メンバー共有型の法人組織モデルの旧spec。2026-09-12方針転換（GitHub issue #200）により実装対象から外れたが、Ver2以降で再導入する場合の参考資料として残す（移行手順は[[membership]]「将来、複数メンバー対応（Ver2以降）を実装する際の移行手順」節参照）
-- 実装: `src/domain/value-objects/member-rank.ts`（`RANK_ORDER`・`MONTHLY_LIMITS`・`MemberRank`クラス）、`src/infrastructure/sanity/sanity-catalog-query-service.ts`（`MemberRank.accessibleRanks()`で商品を絞り込む）、`src/app/onboarding/plan/`（プラン選択画面。[[membership]]の責務）
+- 実装: `src/domain/value-objects/member-rank.ts`（`RANK_ORDER`・`MemberRank`クラス）、`src/domain/value-objects/monthly-limit.ts`（`MonthlyLimit`。無制限を含む上限の判定）、`src/infrastructure/supabase/supabase-member-rank-repository.ts`（`member_ranks`から上限を読む）、`src/infrastructure/sanity/sanity-catalog-query-service.ts`（`MemberRank.accessibleRanks()`で商品を絞り込む）、`src/app/onboarding/plan/`（プラン選択画面。[[membership]]の責務）
