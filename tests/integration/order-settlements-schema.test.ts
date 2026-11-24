@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // docs/db-schema-redesign.md「移行方針」8番（GitHub issue #219）
 // order_settlements新設・order_items.payment_timing/settlement_id追加・
@@ -37,7 +38,7 @@ const baseItem = {
 async function createOrder(): Promise<string> {
   const { data, error } = await adminClient
     .from("orders")
-    .insert(baseOrder)
+    .insert({ ...baseOrder, order_number: randomOrderNumber() })
     .select("id")
     .single();
   if (error) throw error;
@@ -81,7 +82,7 @@ describe("orders（決済フロー分離後のスキーマ）", () => {
   it("statusを省略するとデフォルト値processingが設定される", async () => {
     const { data, error } = await adminClient
       .from("orders")
-      .insert(baseOrder)
+      .insert({ ...baseOrder, order_number: randomOrderNumber() })
       .select("status")
       .single();
     expect(error).toBeNull();
@@ -93,7 +94,7 @@ describe("orders（決済フロー分離後のスキーマ）", () => {
     async (status) => {
       const { error } = await adminClient
         .from("orders")
-        .insert({ ...baseOrder, status });
+        .insert({ order_number: randomOrderNumber(), ...baseOrder, status });
       expect(error).toBeNull();
     }
   );
@@ -103,7 +104,7 @@ describe("orders（決済フロー分離後のスキーマ）", () => {
     async (status) => {
       const { error } = await adminClient
         .from("orders")
-        .insert({ ...baseOrder, status });
+        .insert({ order_number: randomOrderNumber(), ...baseOrder, status });
       expect(error).not.toBeNull();
     }
   );

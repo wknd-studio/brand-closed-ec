@@ -1,4 +1,5 @@
 import { OrderStatus } from "@/domain/value-objects/order-status";
+import type { OrderNumber } from "@/domain/value-objects/order-number";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
@@ -27,6 +28,8 @@ import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector"
 interface OrderProps {
   id: string;
   userId: string;
+  /** 会員・運営者が注文を言い表す番号（#754）。注文を作るときに割り当て、書き換えでは変えない */
+  orderNumber: OrderNumber;
   status: OrderStatus;
   shippingAddress: AddressSnapshot;
   billingAddress: AddressSnapshot;
@@ -55,6 +58,8 @@ interface PlaceOrderProps {
   placedAt: Date;
   /** 注文・決済単位・明細のIDを割り当てる */
   generateId: () => string;
+  /** 注文番号を割り当てる（重なりは保存するDBの UNIQUE が防ぐ） */
+  generateOrderNumber: () => OrderNumber;
 }
 
 /**
@@ -84,6 +89,7 @@ export class Order {
 
   readonly id: string;
   readonly userId: string;
+  readonly orderNumber: OrderNumber;
   readonly status: OrderStatus;
   readonly shippingAddress: AddressSnapshot;
   readonly billingAddress: AddressSnapshot;
@@ -97,6 +103,7 @@ export class Order {
   private constructor(props: OrderProps) {
     this.id = props.id;
     this.userId = props.userId;
+    this.orderNumber = props.orderNumber;
     this.status = props.status;
     this.shippingAddress = props.shippingAddress;
     this.billingAddress = props.billingAddress;
@@ -127,7 +134,7 @@ export class Order {
    * - after_order: 決済単位は作らない（settlementId=NULL）。運営者の「請求作成」で後から紐付く
    */
   static place(props: PlaceOrderProps): Order {
-    const { user, cartItems, generateId } = props;
+    const { user, cartItems, generateId, generateOrderNumber } = props;
     // 要相談商品は Ver1 では扱わない（docs/domain/catalog.md）。価格が後で決まる前提の
     // 月次上限の判定・請求作成が無いため、単価0円の明細を作らせない
     const negotiable = cartItems.find((c) => c.isNegotiable);
@@ -178,6 +185,7 @@ export class Order {
     const order = Order.build({
       id: orderId,
       userId: user.id,
+      orderNumber: generateOrderNumber(),
       status: OrderStatus.of("processing"),
       shippingAddress: props.shippingAddress,
       billingAddress: props.billingAddress,
@@ -230,6 +238,7 @@ export class Order {
     return {
       id: this.id,
       userId: this.userId,
+      orderNumber: this.orderNumber,
       status: this.status,
       shippingAddress: this.shippingAddress,
       billingAddress: this.billingAddress,

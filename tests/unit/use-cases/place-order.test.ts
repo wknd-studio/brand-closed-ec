@@ -63,6 +63,8 @@ describe("placeOrder", () => {
     const firstSaved = vi.mocked(deps.orderRepo.saveNewOrderWithLimitCheck).mock
       .calls[0][0];
     expect(firstSaved.status.value).toBe("processing");
+    // 注文番号は注文を作るときに割り当てる（#754。DB は重ならないこと・形を守るだけ）
+    expect(firstSaved.orderNumber.value).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
     expect(firstSaved.settlements).toHaveLength(1);
     expect(firstSaved.settlements[0]).toMatchObject({
       flow: "checkout",

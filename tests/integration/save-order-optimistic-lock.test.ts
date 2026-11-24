@@ -15,6 +15,8 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // save_order の楽観ロック（issue #721）。呼び出し側はロックを取らずに findById で読んだ注文を
 // 書き戻すため、読んでから書き戻すまでの間に別の書き手（請求作成・Webhook・運営者のキャンセル等）が
@@ -61,6 +63,7 @@ function buildOrder(timings: PaymentTiming[]): Order {
   return reconstituteOrder({
     id: orderId,
     userId: USER_ID,
+    orderNumber: OrderNumber.of(randomOrderNumber()),
     status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),

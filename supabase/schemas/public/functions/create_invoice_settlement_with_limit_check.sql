@@ -1,123 +1,88 @@
 CREATE OR REPLACE FUNCTION public.create_invoice_settlement_with_limit_check (
-  p_order_id      uuid,
-  p_item_ids      uuid[],
-  p_settlement_id uuid,
-  p_period_start  timestamp with time zone,
-  p_period_end    timestamp with time zone,
-  p_monthly_limit bigint,
-  p_admin_user_id uuid
+  p_user_id          uuid,
+  p_period_start     timestamp with time zone,
+  p_period_end       timestamp with time zone,
+  p_monthly_limit    bigint,
+  p_invoice_item_ids uuid[],
+  p_invoice_amount   bigint,
+  p_within_limit     jsonb,
+  p_limit_exceeded   jsonb,
+  p_status_change    jsonb
 )
   RETURNS text
   LANGUAGE plpgsql
   AS $function$
 DECLARE
-  v_user_id uuid;
-  v_order_status text;
-  v_selected_total bigint;
+  v_order_id uuid := (p_within_limit->'order'->>'id')::uuid;
+  v_order_user_id uuid;
   v_confirmed bigint;
   v_status text;
+  v_order jsonb;
 BEGIN
-  IF p_item_ids IS NULL OR cardinality(p_item_ids) = 0 THEN
-    RAISE EXCEPTION 'invoice_settlement_invalid: no_items' USING ERRCODE = 'P0001';
+  -- NULL のままだと下の上限の比較が NULL になり、上限内（invoice_sent）の側に進んでしまう
+  IF p_invoice_amount IS NULL THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: invoice_amount_required' USING ERRCODE = 'P0001';
   END IF;
 
-  SELECT user_id INTO v_user_id FROM public.orders WHERE id = p_order_id;
-  IF v_user_id IS NULL THEN
+  -- 2つの候補は、同じ注文の同じ版から組み立てたもの（違えば、上限の確認の結果で別の注文を保存してしまう）
+  IF v_order_id IS NULL
+     OR (p_limit_exceeded->'order'->>'id')::uuid IS DISTINCT FROM v_order_id
+     OR (p_limit_exceeded->'order'->>'version') IS DISTINCT FROM (p_within_limit->'order'->>'version') THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: candidates_mismatch' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- 同一顧客の注文確定・請求作成を直列化する行ロック（place_order_with_limit_check と同じ行）。
+  -- 行が無いとロックせずに進んでしまうため、無ければ失敗する
+  PERFORM 1 FROM public.users WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: user_not_found' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- 請求は既存の注文にだけ作る（save_order は無い注文を新しく作るため、ここで止める）。
+  SELECT user_id INTO v_order_user_id FROM public.orders WHERE id = v_order_id;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'invoice_settlement_invalid: order_not_found' USING ERRCODE = 'P0001';
   END IF;
-
-  -- 同一顧客の注文確定・請求作成を直列化する行ロック（place_order_with_limit_check と同じ行）
-  PERFORM 1 FROM public.users WHERE id = v_user_id FOR UPDATE;
-  -- 判定の前に読む注文・明細の状態を、この関数の実行中に変えさせない。
-  -- この関数より前に読まれた注文の save_order は、版の不一致で失敗する（issue #721）
-  SELECT status INTO v_order_status FROM public.orders WHERE id = p_order_id FOR UPDATE;
-  PERFORM 1 FROM public.order_items WHERE id = ANY (p_item_ids) FOR UPDATE;
-
-  IF v_order_status = 'cancelled' THEN
-    RAISE EXCEPTION 'invoice_settlement_invalid: order_cancelled' USING ERRCODE = 'P0001';
+  -- 注文の会員（DB・渡された2つの注文）が p_user_id でなければ、ロックした行と集計する会員が
+  -- 注文と食い違う。save_order は渡された user_id で注文を書き換えるため、渡す側も確かめる
+  IF v_order_user_id <> p_user_id
+     OR (p_within_limit->'order'->>'user_id')::uuid IS DISTINCT FROM p_user_id
+     OR (p_limit_exceeded->'order'->>'user_id')::uuid IS DISTINCT FROM p_user_id THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: user_mismatch' USING ERRCODE = 'P0001';
   END IF;
 
-  -- 1回の請求は1注文の明細に限る（order_settlements.order_id が1注文を指すため）
-  IF EXISTS (
-    SELECT 1 FROM unnest(p_item_ids) AS selected(id)
-    WHERE NOT EXISTS (
-      SELECT 1 FROM public.order_items oi
-      WHERE oi.id = selected.id AND oi.order_id = p_order_id
-    )
-  ) THEN
-    RAISE EXCEPTION 'invoice_settlement_invalid: item_not_in_order' USING ERRCODE = 'P0001';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM public.order_items
-    WHERE id = ANY (p_item_ids) AND payment_timing <> 'after_order'
-  ) THEN
-    RAISE EXCEPTION 'invoice_settlement_invalid: not_after_order' USING ERRCODE = 'P0001';
-  END IF;
-
-  -- 決済単位をキャンセルした明細は settlement_id が NULL に戻るため、NULL だけを未請求とみなす
-  IF EXISTS (
-    SELECT 1 FROM public.order_items
-    WHERE id = ANY (p_item_ids) AND settlement_id IS NOT NULL
-  ) THEN
-    RAISE EXCEPTION 'invoice_settlement_invalid: already_settled' USING ERRCODE = 'P0001';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM public.order_items
-    WHERE id = ANY (p_item_ids) AND unit_price_snapshot IS NULL
-  ) THEN
-    RAISE EXCEPTION 'invoice_settlement_invalid: price_not_fixed' USING ERRCODE = 'P0001';
-  END IF;
-
-  SELECT SUM(quantity * unit_price_snapshot)::bigint
-  INTO v_selected_total
-  FROM public.order_items
-  WHERE id = ANY (p_item_ids);
-
-  -- 未請求の後払い明細はすでに確定額に入っているため、選んだ明細を除いて数えてから足す
-  -- （期間外の注文の明細でも、選んだ明細の金額は必ず1回だけ数える）
   v_confirmed := public.confirmed_amount_in_period(
-    v_user_id, p_period_start, p_period_end, p_item_ids
+    p_user_id, p_period_start, p_period_end, p_invoice_item_ids
   );
 
   -- 上限が NULL（無制限）のときだけ判定しない。上限0は上限0として扱う
-  IF p_monthly_limit IS NOT NULL AND v_confirmed + v_selected_total > p_monthly_limit THEN
+  IF p_monthly_limit IS NOT NULL AND v_confirmed + p_invoice_amount > p_monthly_limit THEN
     v_status := 'limit_exceeded';
+    v_order := p_limit_exceeded;
   ELSE
     v_status := 'invoice_sent';
+    v_order := p_within_limit;
   END IF;
 
-  INSERT INTO public.order_settlements (id, order_id, flow, status, amount_snapshot)
-  VALUES (p_settlement_id, p_order_id, 'invoice', v_status, v_selected_total);
-
-  UPDATE public.order_items
-  SET settlement_id = p_settlement_id
-  WHERE id = ANY (p_item_ids);
-
-  -- 決済単位と明細の紐付けを変えたため、注文の版を進める。これより前に読まれた注文の
-  -- save_order は失敗し、明細の紐付けを古い値（NULL）に戻さない（issue #721）
-  UPDATE public.orders SET version = version + 1 WHERE id = p_order_id;
-
-  -- orders.status のロールアップ（Order.rollupStatus()。docs/domain/settlement.md
-  -- 「orders.statusのロールアップ算出」）のうち、決済単位を1件足したときに変わりうるのは
-  -- 「limit_exceeded の決済単位がある → limit_exceeded」だけ。invoice_sent は未払いの
-  -- 決済単位が増えるだけで、未請求の明細があった注文が paid になることは無い
-  IF v_status = 'limit_exceeded' AND v_order_status <> 'limit_exceeded' THEN
-    UPDATE public.orders SET status = 'limit_exceeded' WHERE id = p_order_id;
-
-    INSERT INTO public.order_status_changes (
-      order_id, from_status, to_status, changed_by, changed_by_admin_user_id
-    )
-    VALUES (p_order_id, v_order_status, 'limit_exceeded', 'admin', p_admin_user_id);
-  END IF;
+  -- 版の確認・版の更新・状態が変わったときの履歴は save_order が行う（issue #721）
+  PERFORM public.save_order(
+    v_order->'order', v_order->'settlements', v_order->'items', p_status_change
+  );
 
   RETURN v_status;
 END;
 $function$;
 
 GRANT EXECUTE
-  ON FUNCTION "public"."create_invoice_settlement_with_limit_check"(uuid, uuid[], uuid, timestamp WITH time zone, timestamp WITH time zone, bigint, uuid)
+  ON FUNCTION "public"."create_invoice_settlement_with_limit_check"(uuid, timestamp WITH time zone, timestamp WITH time zone, bigint, uuid[], bigint, jsonb, jsonb, jsonb)
   TO "postgres", "service_role";
 
-REVOKE ALL ON FUNCTION "public"."create_invoice_settlement_with_limit_check"(uuid, uuid[], uuid, timestamp WITH time zone, timestamp WITH time zone, bigint, uuid) FROM PUBLIC;
+COMMENT ON FUNCTION "public"."create_invoice_settlement_with_limit_check"(uuid, timestamp with time zone, timestamp
+  with time zone, bigint, uuid[], bigint, jsonb, jsonb, jsonb) IS '請求作成: ユーザー行の行ロックの中で月次上限を確かめ、呼び出し側が組み立てた上限内・上限超過の
+  注文のどちらかを save_order で保存し、保存した請求の状態（invoice_sent / limit_exceeded）を返す
+  （issue #393・#763）。請求できるかの判定と orders.status のロールアップは Order が行う。
+  service role（管理者クライアント）からのみ呼び出す想定のため、他ロールへのEXECUTE権限は付与しない。';
+
+REVOKE ALL
+  ON FUNCTION "public"."create_invoice_settlement_with_limit_check"(uuid, timestamp WITH time zone, timestamp WITH time zone, bigint, uuid[], bigint, jsonb, jsonb, jsonb)
+  FROM PUBLIC;

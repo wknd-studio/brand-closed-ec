@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // docs/db-schema-redesign.md「移行方針」9番（GitHub issue #226）
 // procurement_tasks新設・order_items.procurement_task_id/received_at追加を検証する統合テスト。
@@ -39,7 +40,7 @@ const baseItem = {
 async function createOrder(): Promise<string> {
   const { data, error } = await adminClient
     .from("orders")
-    .insert(baseOrder)
+    .insert({ ...baseOrder, order_number: randomOrderNumber() })
     .select("id")
     .single();
   if (error) throw error;

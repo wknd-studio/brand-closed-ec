@@ -133,7 +133,7 @@ feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Cler
 - `package.json`・`pnpm-lock.yaml`・`.github/` を変えるため `high-risk` が付く。人間が差分を精読してからマージする
 - CIが落ちたら、オーケストレーションのセッションが修正の issue を起票する（Dependabot のPRのブランチに直接コミットしない）
 
-**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
+**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、生成物の検査（`Schema Types Drift`・`Schema Files Drift`）も動く（stgの動作には影響しないため `Deploy (staging)` は待たない。#789）。どれの失敗も依存グラフのページの一番上の帯に出る。
 
 - developのCIが赤なら、新しいPRのマージより、直す・revertすることを優先する。原因のPRがすぐ直せなければ、まずそのマージコミットをrevertする（`git revert -m 1 <マージコミット>` をfeatureブランチで行い、develop向けのPRにする）
 - 赤のdevelopに別のPRを重ねてマージしない（どのマージで壊れたかが分からなくなり、stgにも出なくなる）
