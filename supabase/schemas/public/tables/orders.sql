@@ -35,10 +35,21 @@ CREATE POLICY "orders: select own" ON "public"."orders"
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."orders" TO "anon", "authenticated", "postgres", "service_role";
 
+ALTER TABLE "public"."orders"
+  ADD COLUMN "order_number" text NOT NULL DEFAULT public.generate_order_number();
+
+ALTER TABLE "public"."orders"
+  ADD CONSTRAINT "orders_order_number_format_check" CHECK ((order_number ~ '^[0-9A-HJKMNP-TV-Z]{8}$'::text));
+
+ALTER TABLE "public"."orders"
+  ADD CONSTRAINT "orders_order_number_key" UNIQUE (order_number);
+
 COMMENT ON COLUMN "public"."orders"."monthly_limit_at_order" IS '注文時点の月間仕入れ上限（円）のスナップショット。NULL = 無制限（member_ranks.monthly_limit_amount と同じ表し方）。';
 
 COMMENT ON COLUMN "public"."orders"."status" IS '表示用のロールアップ値。配下のorder_settlements・order_itemsから都度算出して
   書き戻す（正のデータではない）。直接書き込むのはcancelled（決済単位が1件も
   作られる前のキャンセル）のみ。';
 
-COMMENT ON COLUMN "public"."orders"."version" IS '注文の集約（注文・明細の settlement_id・決済単位）の版（楽観ロック。issue #721）。save_order・create_invoice_settlement_with_limit_check が書き換えるたびに1つ進める。save_order は、呼び出し側が読んだ時点の版と違えば失敗する。';
+COMMENT ON COLUMN "public"."orders"."version" IS '注文の集約（注文・明細の settlement_id・決済単位）の版（楽観ロック。issue #721）。save_order が書き換えるたびに1つ進める（請求作成も save_order で保存する。issue #763）。save_order は、呼び出し側が読んだ時点の版と違えば失敗する。';
+
+COMMENT ON COLUMN "public"."orders"."order_number" IS '注文番号（issue #754）。Crockford Base32 の8文字（ハイフン無し）。指定しなければ generate_order_number() が既存の注文と重ならない番号を入れる。';
