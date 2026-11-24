@@ -2,10 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { memberOrderQueryService } from "@/composition/member-order-query";
+import { ReturnReason } from "@/domain/value-objects/return-reason";
 import type {
   CompletedOrderItemDto,
   OrderDetailAddressDto,
 } from "@/queries/member-order-query-service";
+import { requestReturnAction } from "./actions";
+import { ReturnRequestForm } from "./return-request-form";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -154,6 +157,28 @@ export default async function OrderDetailPage({ params }: Props) {
             <Address title="請求先" address={order.billingAddress} />
           </div>
         </section>
+
+        {order.returnableItems.length > 0 && (
+          <section
+            aria-labelledby="return-request"
+            className="rounded-lg border p-5"
+          >
+            <h2
+              id="return-request"
+              className="text-sm font-medium text-gray-700"
+            >
+              返品・返金の申請
+            </h2>
+            <p className="mb-3 mt-1 text-xs text-gray-500">
+              不良品・誤配送などの場合に、返品する商品と数量を選んで申請してください。お客様のご都合によるキャンセル・返品は原則お受けできません
+            </p>
+            <ReturnRequestForm
+              items={order.returnableItems}
+              reasonOptions={ReturnReason.options()}
+              action={requestReturnAction.bind(null, order.orderId)}
+            />
+          </section>
+        )}
       </div>
     </main>
   );

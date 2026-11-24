@@ -84,6 +84,14 @@ export type OrderDetailSettlementDto = {
   items: CompletedOrderItemDto[];
 };
 
+// 注文詳細で返品・返金を申請できる明細。returnableQuantity は、注文数量から申請中・承認済み等の
+// 有効な申請の数量を引いた、まだ申請できる数量（1以上）
+export type ReturnableItemDto = {
+  id: string;
+  productNameSnapshot: string;
+  returnableQuantity: number;
+};
+
 // 注文詳細画面（/orders/[id]）。決済単位は作成順。unassignedItems はまだ決済単位に
 // 割り当てられていない明細（注文後に請求予定の商品）
 export type OrderDetailDto = {
@@ -95,6 +103,8 @@ export type OrderDetailDto = {
   billingAddress: OrderDetailAddressDto;
   settlements: OrderDetailSettlementDto[];
   unassignedItems: CompletedOrderItemDto[];
+  // 申請できる明細が無ければ空（キャンセル済みの注文・支払い完了前の at_order の明細だけ等）
+  returnableItems: ReturnableItemDto[];
 };
 
 // 会員の注文系画面の読み取り。他の会員のデータを返さないよう、どのメソッドも会員（clerkUserId）を必須にする
