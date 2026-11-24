@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import AddressSelector from "./address-selector";
+import PaymentMethodButton from "@/app/(member)/settings/payment-method-button";
 import { placeOrder } from "./actions";
 
 type AddressDto = {
@@ -22,6 +23,9 @@ type Props = {
   hasOutOfStock: boolean;
   hasNotAccessible: boolean;
   fixedTotal: number;
+  // 月額費用の支払い失敗中は、注文ボタンの代わりにお支払い方法の更新（Billing Portal、#216）へ案内する
+  paymentFailed: boolean;
+  openBillingPortal: () => Promise<{ success: true } | { error: string }>;
 };
 
 function defaultId(addresses: AddressDto[]): string {
@@ -34,6 +38,8 @@ export default function CheckoutForm({
   hasOutOfStock,
   hasNotAccessible,
   fixedTotal,
+  paymentFailed,
+  openBillingPortal,
 }: Props) {
   const [shippingId, setShippingId] = useState(defaultId(shippingAddresses));
   const [billingId, setBillingId] = useState(defaultId(billingAddresses));
@@ -93,13 +99,27 @@ export default function CheckoutForm({
       )}
 
       <div className="flex flex-col gap-3">
-        <button
-          onClick={handleOrder}
-          disabled={!canOrder || isPending}
-          className="w-full rounded-lg bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {isPending ? "処理中..." : "注文を確定する"}
-        </button>
+        {paymentFailed ? (
+          <section className="space-y-3 rounded-lg bg-yellow-50 px-4 py-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-yellow-800">
+                お支払い方法の更新が必要です
+              </p>
+              <p className="text-sm text-yellow-700">
+                月額費用のお支払いが確認できないため、ご注文いただけません。お支払い方法を更新すると、そのまま注文できます。
+              </p>
+            </div>
+            <PaymentMethodButton action={openBillingPortal} />
+          </section>
+        ) : (
+          <button
+            onClick={handleOrder}
+            disabled={!canOrder || isPending}
+            className="w-full rounded-lg bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isPending ? "処理中..." : "注文を確定する"}
+          </button>
+        )}
         <Link
           href="/shop"
           className="text-center text-sm text-gray-400 hover:text-gray-700"

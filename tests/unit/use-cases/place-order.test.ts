@@ -6,6 +6,7 @@ import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessibl
 import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
+import { SubscriptionPaymentFailedError } from "@/domain/errors/subscription-payment-failed-error";
 import { Money } from "@/domain/value-objects/money";
 import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import {
@@ -22,6 +23,8 @@ import {
   makeErrorReporter,
   makeAddress,
   makeMemberRankRepo,
+  makeSubscriptionRepo,
+  makeSubscriptionSnapshot,
 } from "./helpers";
 
 const baseInput = {
@@ -45,6 +48,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     const result = await placeOrder(baseInput, deps);
@@ -92,6 +96,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     const promise = placeOrder(
@@ -131,6 +136,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     const result = await placeOrder(
@@ -173,6 +179,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow(
@@ -196,6 +203,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo,
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     // 確定額60,000 + 今回100,000 = 160,000 > member_ranks の上限150,000
@@ -234,6 +242,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(MonthlyLimit.unlimited()),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await placeOrder(baseInput, deps);
@@ -259,6 +268,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow(
@@ -289,6 +299,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(
@@ -325,6 +336,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(
@@ -355,6 +367,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     const error = await placeOrder(baseInput, deps).catch((e: unknown) => e);
@@ -382,6 +395,7 @@ describe("placeOrder", () => {
         notificationService: makeNotificationService(),
         errorReporter: makeErrorReporter(),
         memberRankRepo: makeMemberRankRepo(),
+        subscriptionRepo: makeSubscriptionRepo(),
       };
 
       const promise = placeOrder(
@@ -428,6 +442,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     const result = await placeOrder(
@@ -490,6 +505,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await placeOrder(baseInput, deps);
@@ -512,6 +528,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("DB接続エラー");
@@ -537,6 +554,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
@@ -565,6 +583,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter,
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toThrow("Stripeエラー");
@@ -587,6 +606,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     const tamperedInput = {
@@ -617,6 +637,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     });
 
     it("会員が見つからない", async () => {
@@ -673,6 +694,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     });
 
     expect(addressRepo.findByIdAndUserId).toHaveBeenCalledWith(
@@ -696,6 +718,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await placeOrder(
@@ -726,6 +749,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await placeOrder(
@@ -768,6 +792,7 @@ describe("placeOrder", () => {
       notificationService: makeNotificationService(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
     };
 
     await expect(placeOrder(baseInput, deps)).rejects.toBeInstanceOf(
@@ -776,5 +801,86 @@ describe("placeOrder", () => {
     expect(orderRepo.save).toHaveBeenCalledTimes(1);
     expect(orderRepo.findById).not.toHaveBeenCalled();
     expect(orderRepo.delete).not.toHaveBeenCalled();
+  });
+
+  // 月額費用の支払い失敗中は新規注文を止める（#378、docs/domain/ordering.md「新規注文を止める条件」）
+  describe("月額費用の支払い失敗中", () => {
+    function depsWithSubscription(
+      status: "active" | "trialing" | "past_due" | "unpaid"
+    ) {
+      return {
+        userRepo: makeUserRepo(),
+        orderRepo: makeOrderRepo(),
+        addressRepo: makeAddressRepo(),
+        productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
+        paymentGateway: makePaymentGateway(),
+        notificationService: makeNotificationService(),
+        errorReporter: makeErrorReporter(),
+        memberRankRepo: makeMemberRankRepo(),
+        subscriptionRepo: makeSubscriptionRepo(
+          makeSubscriptionSnapshot({ status })
+        ),
+      };
+    }
+
+    it.each(["past_due", "unpaid"] as const)(
+      "%s なら SubscriptionPaymentFailedError を投げ、注文の保存・Stripe・通知を呼ばない",
+      async (status) => {
+        const deps = depsWithSubscription(status);
+
+        await expect(
+          placeOrder(
+            {
+              ...baseInput,
+              cartItems: [
+                {
+                  sanityProductId: "prod-1",
+                  quantity: 1,
+                  productName: "固定商品",
+                },
+                {
+                  sanityProductId: "prod-3",
+                  quantity: 1,
+                  productName: "後払い固定商品",
+                },
+              ],
+            },
+            deps
+          )
+        ).rejects.toThrow(SubscriptionPaymentFailedError);
+
+        expect(deps.subscriptionRepo.findActiveByUserId).toHaveBeenCalledWith(
+          makeUser().id
+        );
+        expect(
+          deps.orderRepo.saveNewOrderWithLimitCheck
+        ).not.toHaveBeenCalled();
+        expect(deps.orderRepo.save).not.toHaveBeenCalled();
+        expect(
+          deps.paymentGateway.createCheckoutSession
+        ).not.toHaveBeenCalled();
+        expect(
+          deps.notificationService.sendOrderConfirming
+        ).not.toHaveBeenCalled();
+        expect(
+          deps.notificationService.sendOrderOperatorNotification
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(["active", "trialing"] as const)(
+      "%s なら従来どおり注文できる",
+      async (status) => {
+        const deps = depsWithSubscription(status);
+
+        const result = await placeOrder(baseInput, deps);
+
+        expect(result.redirectUrl).toBe("https://stripe.com/pay/sess_1");
+        expect(deps.orderRepo.saveNewOrderWithLimitCheck).toHaveBeenCalledTimes(
+          1
+        );
+        expect(deps.paymentGateway.createCheckoutSession).toHaveBeenCalled();
+      }
+    );
   });
 });

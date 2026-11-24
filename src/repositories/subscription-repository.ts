@@ -1,11 +1,10 @@
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
-import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
+import type { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
 
-// 値の一覧の正は domain の SubscriptionStatus（subscriptions.status の CHECK 制約に対応する）。
-// Stripe側にはこの他に'paused'が存在するが、現状のアプリケーションコードが
-// 実際に扱う経路（チェックアウト完了時のオンボーディング確定）では発生しない
-// ため未対応（発生した場合はtoSubscriptionStatusで例外になる）。
-export type SubscriptionStatus = SubscriptionStatusValue;
+// 値の定義は domain に置く（新規注文を止める条件などの判定に使うため）。Stripe側には
+// この他に'paused'が存在するが、v1では起きないため未対応（発生した場合は
+// toSubscriptionStatusで例外になる）
+export type { SubscriptionStatus };
 
 export type SubscriptionSnapshot = {
   id: string;

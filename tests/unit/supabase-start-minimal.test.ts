@@ -183,7 +183,7 @@ describe("除外指定の定義が1か所にまとまっている", () => {
     expect(workflow).not.toMatch(/supabase start/);
     expect(
       workflow.match(/bash scripts\/supabase-start-minimal\.sh/g) ?? []
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 
   it("CI でローカルSupabaseを起動するジョブの CLI は、一覧を照合したバージョン（v2.116.0）に揃っている", () => {
@@ -200,6 +200,6 @@ describe("除外指定の定義が1か所にまとまっている", () => {
             /\.github\/actions\/install-cli\s+with: \{ tool: supabase, version: ([\d.]+) \}/
           )?.[1]
       );
-    expect(versions).toEqual(["2.116.0", "2.116.0", "2.116.0"]);
+    expect(versions).toEqual(["2.116.0", "2.116.0", "2.116.0", "2.116.0"]);
   });
 });

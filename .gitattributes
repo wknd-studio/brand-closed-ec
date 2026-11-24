@@ -4,6 +4,12 @@
 # supabase gen types typescript --local の出力。正しさは CI の Schema Types Drift が検査する
 src/types/database.types.ts linguist-generated=true
 
+# task db:schema（scripts/db-schema-snapshot.sh）の出力。マイグレーションを当てたDBの今の定義の写し（#783）。
+# 正しさは CI の Schema Files Drift が検査する。関数の今の中身をレビューで読みたいときは「Load diff」で開く
+supabase/schemas/** linguist-generated=true
+# 手で書いた説明（直接編集しない旨）。生成物ではない
+supabase/schemas/README.md !linguist-generated
+
 # pnpm install の出力。package.json との整合は CI の pnpm install --frozen-lockfile が検査する
 pnpm-lock.yaml linguist-generated=true
 

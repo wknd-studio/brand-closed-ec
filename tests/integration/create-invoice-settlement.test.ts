@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
@@ -16,10 +16,13 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
+import { ItemsNotInvoiceableError } from "@/domain/errors/items-not-invoiceable-error";
+import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
 
-// 請求作成の月次上限チェックと決済単位の作成（issue #393、docs/domain/settlement.md
-// 「月次仕入れ上限チェック」）。上限の判定〜決済単位の作成〜明細の紐付け〜orders.status の
-// 更新を、ユーザー行の行ロック込みで1回のDB呼び出し（create_invoice_settlement_with_limit_check）にまとめる
+// 請求作成の月次上限チェックと決済単位の作成（issue #393・#763、docs/domain/settlement.md
+// 「月次仕入れ上限チェック」）。請求できるかの判定・決済単位の作成・明細の紐付け・orders.status の
+// ロールアップは Order.draftInvoiceSettlement() が行い、DB関数（create_invoice_settlement_with_limit_check）は
+// ユーザー行の行ロック・上限の確認・版を確かめた保存だけを1回の呼び出しで行う
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
 // 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
@@ -60,6 +63,8 @@ const supabase = createClient<Database>(
 const USER_ID = "00000000-0000-0000-0000-0000003930a1";
 const CLERK_ID = "clerk_test_create_invoice_settlement";
 const ADMIN_USER_ID = "00000000-0000-0000-0000-0000003930f1";
+// 注文の会員と食い違う p_user_id を渡すための、別の会員
+const OTHER_USER_ID = "00000000-0000-0000-0000-0000003930a2";
 
 // 注文日はすべて同じ月次の期間（6/10〜7/10）に入れる
 const ORDERED_AT = new Date(2026, 5, 12);
@@ -175,21 +180,41 @@ async function historyOf(orderId: string) {
   return data;
 }
 
-function createInvoice(
+/** 注文を読んで請求を組み立てる（請求できない明細なら ItemsNotInvoiceableError） */
+async function draftInvoice(
+  orderId: string,
+  itemIds: string[],
+  settlementId: string = newId()
+) {
+  const order = await repo.findById(orderId);
+  return order!.draftInvoiceSettlement({ settlementId, itemIds });
+}
+
+function saveInvoice(
+  draft: Awaited<ReturnType<typeof draftInvoice>>,
+  monthlyLimit: MonthlyLimit,
+  orderRepo: SupabaseOrderRepository = repo
+) {
+  return orderRepo.createInvoiceSettlementWithLimitCheck({
+    draft,
+    period: PERIOD,
+    monthlyLimit,
+    adminUserId: ADMIN_USER_ID,
+  });
+}
+
+async function createInvoice(
   orderId: string,
   itemIds: string[],
   monthlyLimit: MonthlyLimit,
   settlementId: string = newId(),
   orderRepo: SupabaseOrderRepository = repo
 ) {
-  return orderRepo.createInvoiceSettlementWithLimitCheck({
-    orderId,
-    itemIds,
-    settlementId,
-    period: PERIOD,
+  return saveInvoice(
+    await draftInvoice(orderId, itemIds, settlementId),
     monthlyLimit,
-    adminUserId: ADMIN_USER_ID,
-  });
+    orderRepo
+  );
 }
 
 async function cleanup() {
@@ -210,18 +235,30 @@ const repo = new SupabaseOrderRepository(supabase);
 
 beforeAll(async () => {
   await cleanup();
-  await supabase.from("users").delete().eq("id", USER_ID);
+  await supabase.from("users").delete().in("id", [USER_ID, OTHER_USER_ID]);
   await supabase.from("admin_users").delete().eq("id", ADMIN_USER_ID);
-  const { error: userError } = await supabase.from("users").insert({
-    id: USER_ID,
-    clerk_user_id: CLERK_ID,
-    email: "create-invoice-settlement-test@example.com",
-    first_name: "テスト",
-    last_name: "太郎",
-    rank_code: "starter",
-    onboarding_completed: true,
-    billing_anchor_day: 10,
-  });
+  const { error: userError } = await supabase.from("users").insert([
+    {
+      id: USER_ID,
+      clerk_user_id: CLERK_ID,
+      email: "create-invoice-settlement-test@example.com",
+      first_name: "テスト",
+      last_name: "太郎",
+      rank_code: "starter",
+      onboarding_completed: true,
+      billing_anchor_day: 10,
+    },
+    {
+      id: OTHER_USER_ID,
+      clerk_user_id: `${CLERK_ID}_other`,
+      email: "create-invoice-settlement-other@example.com",
+      first_name: "テスト",
+      last_name: "次郎",
+      rank_code: "starter",
+      onboarding_completed: true,
+      billing_anchor_day: 10,
+    },
+  ]);
   if (userError) throw userError;
   const { error: adminError } = await supabase.from("admin_users").insert({
     id: ADMIN_USER_ID,
@@ -239,7 +276,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await cleanup();
-  await supabase.from("users").delete().eq("id", USER_ID);
+  await supabase.from("users").delete().in("id", [USER_ID, OTHER_USER_ID]);
   await supabase.from("admin_users").delete().eq("id", ADMIN_USER_ID);
 });
 
@@ -454,11 +491,9 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
     });
   });
 
+  // 請求できるかの判定は Order が行う（分岐は tests/unit/order-entity.test.ts）。ここでは、DBから
+  // 読んだ注文の明細の状態で判定され、DBには何も保存されないことを確かめる
   describe("請求できない明細を含めると失敗し、何も変えない", () => {
-    async function expectNoInvoiceSettlement(orderId: string) {
-      expect(await settlementsOf(orderId)).toEqual([]);
-    }
-
     it("すでに settlement_id がある明細", async () => {
       const { orderId, itemIds } = await seedOrder([
         { price: 10_000, timing: "after_order" },
@@ -474,74 +509,15 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
 
       await expect(
         createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/already_settled/);
+      ).rejects.toMatchObject(
+        new ItemsNotInvoiceableError(orderId, "already_settled")
+      );
 
       expect(await settlementsOf(orderId)).toHaveLength(1);
       expect(await settlementIdsOf(itemIds)).toEqual({
         [itemIds[0]!]: firstSettlementId,
         [itemIds[1]!]: null,
       });
-    });
-
-    it("at_order の明細", async () => {
-      const { orderId, itemIds } = await seedOrder([
-        { price: 10_000, timing: "at_order" },
-        { price: 10_000, timing: "after_order" },
-      ]);
-      const before = await settlementIdsOf(itemIds);
-
-      await expect(
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/not_after_order/);
-
-      await expectNoInvoiceSettlement(orderId);
-      expect(await settlementIdsOf(itemIds)).toEqual(before);
-    });
-
-    it("キャンセル済みの注文の明細", async () => {
-      const { orderId, itemIds } = await seedOrder([
-        { price: 10_000, timing: "after_order" },
-      ]);
-      const order = await repo.findById(orderId);
-      await repo.save(order!.cancel(new Date()), { type: "system" });
-
-      await expect(
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/order_cancelled/);
-
-      await expectNoInvoiceSettlement(orderId);
-      expect(await settlementIdsOf(itemIds)).toEqual({ [itemIds[0]!]: null });
-    });
-
-    it("別の注文の明細（1回の請求は1注文の明細に限る）", async () => {
-      const a = await seedOrder([{ price: 10_000, timing: "after_order" }]);
-      const b = await seedOrder([{ price: 10_000, timing: "after_order" }]);
-
-      await expect(
-        createInvoice(
-          a.orderId,
-          [...a.itemIds, ...b.itemIds],
-          MonthlyLimit.of(300_000)
-        )
-      ).rejects.toThrow(/item_not_in_order/);
-
-      await expectNoInvoiceSettlement(a.orderId);
-      expect(await settlementIdsOf([...a.itemIds, ...b.itemIds])).toEqual({
-        [a.itemIds[0]!]: null,
-        [b.itemIds[0]!]: null,
-      });
-    });
-
-    it("存在しない明細", async () => {
-      const { orderId, itemIds } = await seedOrder([
-        { price: 10_000, timing: "after_order" },
-      ]);
-
-      await expect(
-        createInvoice(orderId, [...itemIds, newId()], MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/item_not_in_order/);
-
-      await expectNoInvoiceSettlement(orderId);
     });
 
     it("価格が決まっていない明細（要相談商品。Ver1 では注文できないが、0円の請求を作らせない）", async () => {
@@ -556,21 +532,44 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
 
       await expect(
         createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/price_not_fixed/);
-
-      await expectNoInvoiceSettlement(orderId);
-    });
-
-    it("明細を1件も選んでいない", async () => {
-      const { orderId } = await seedOrder([
-        { price: 10_000, timing: "after_order" },
-      ]);
-
-      await expect(
-        createInvoice(orderId, [], MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/no_items/);
+      ).rejects.toMatchObject(
+        new ItemsNotInvoiceableError(orderId, "price_not_fixed")
+      );
 
       expect(await settlementsOf(orderId)).toEqual([]);
+    });
+  });
+
+  // 楽観ロック（#721）: 請求作成も、読んだ時点の版を確かめて保存し、版を進める
+  describe("版の確認", () => {
+    it("組み立てた後に注文が変わっていれば、請求作成は失敗し何も保存しない", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 10_000, timing: "after_order" },
+      ]);
+      const stale = await draftInvoice(orderId, itemIds);
+      await repo.save((await repo.findById(orderId))!, { type: "system" });
+
+      await expect(
+        saveInvoice(stale, MonthlyLimit.of(300_000))
+      ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
+
+      expect(await settlementsOf(orderId)).toEqual([]);
+      expect(await settlementIdsOf(itemIds)).toEqual({ [itemIds[0]!]: null });
+    });
+
+    it("上限超過でも、版が変わっていれば何も保存しない", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 60_000, timing: "after_order" },
+      ]);
+      const stale = await draftInvoice(orderId, itemIds);
+      await repo.save((await repo.findById(orderId))!, { type: "system" });
+
+      await expect(
+        saveInvoice(stale, MonthlyLimit.of(50_000))
+      ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
+
+      expect(await settlementsOf(orderId)).toEqual([]);
+      expect(await statusOf(orderId)).toBe("processing");
     });
   });
 
@@ -642,18 +641,187 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
         { price: 10_000, timing: "after_order" },
       ]);
 
-      const results = await Promise.allSettled([
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000)),
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000)),
-      ]);
+      // 2人の運営者が同じ版の注文を読んで組み立て、同時に保存する
+      const drafts = [
+        await draftInvoice(orderId, itemIds),
+        await draftInvoice(orderId, itemIds),
+      ];
+      const results = await Promise.allSettled(
+        drafts.map((d) => saveInvoice(d, MonthlyLimit.of(300_000)))
+      );
 
       expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
       const rejected = results.find((r) => r.status === "rejected");
-      expect((rejected as PromiseRejectedResult).reason.message).toMatch(
-        /already_settled/
+      expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(
+        OrderConcurrentlyModifiedError
       );
       expect(await settlementsOf(orderId)).toHaveLength(1);
     });
+  });
+
+  // DB関数は呼び出し側（repository）が同じ draft から組み立てた値を受け取る。食い違った値・欠けた値を
+  // 渡されたときに、危ない側（上限内として保存・別の会員の行をロック・別の注文を保存）に倒れず失敗する
+  describe("渡された値の確認", () => {
+    type InvoiceArgs =
+      Database["public"]["Functions"]["create_invoice_settlement_with_limit_check"]["Args"];
+    type SaveRows = { order: Record<string, unknown> };
+
+    /** repository が DB関数に渡す引数を、呼び出さずに取り出す */
+    async function argsOf(orderId: string, itemIds: string[]) {
+      let captured: InvoiceArgs | undefined;
+      const capturing = {
+        rpc: (_name: string, args: InvoiceArgs) => {
+          captured = args;
+          return Promise.resolve({ data: "invoice_sent", error: null });
+        },
+      } as unknown as SupabaseClient<Database>;
+      await saveInvoice(
+        await draftInvoice(orderId, itemIds),
+        MonthlyLimit.of(50_000),
+        new SupabaseOrderRepository(capturing)
+      );
+      return captured!;
+    }
+
+    function withOrder(rows: unknown, overrides: Record<string, unknown>) {
+      const r = rows as SaveRows;
+      return {
+        ...r,
+        order: { ...r.order, ...overrides },
+      } as InvoiceArgs["p_within_limit"];
+    }
+
+    async function expectRejected(
+      args: InvoiceArgs,
+      pattern: RegExp,
+      orderId: string
+    ) {
+      const { error } = await supabase.rpc(
+        "create_invoice_settlement_with_limit_check",
+        args
+      );
+      expect(error?.message).toMatch(pattern);
+      expect(await settlementsOf(orderId)).toEqual([]);
+      expect(await statusOf(orderId)).toBe("processing");
+    }
+
+    it("請求額が NULL なら、上限内として保存せずに失敗する", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 60_000, timing: "after_order" },
+      ]);
+      const args = await argsOf(orderId, itemIds);
+
+      await expectRejected(
+        // supabase gen types は関数の引数を NULL 可として出さないため、型だけ合わせる
+        { ...args, p_invoice_amount: null as unknown as number },
+        /invoice_settlement_invalid: invoice_amount_required/,
+        orderId
+      );
+    });
+
+    it("存在しない会員なら失敗する（ロックが黙って何もしないまま進まない）", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 10_000, timing: "after_order" },
+      ]);
+      const args = await argsOf(orderId, itemIds);
+
+      await expectRejected(
+        { ...args, p_user_id: newId() },
+        /invoice_settlement_invalid: user_not_found/,
+        orderId
+      );
+    });
+
+    it("p_user_id が注文の会員でなければ失敗する", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 10_000, timing: "after_order" },
+      ]);
+      const args = await argsOf(orderId, itemIds);
+
+      await expectRejected(
+        { ...args, p_user_id: OTHER_USER_ID },
+        /invoice_settlement_invalid: user_mismatch/,
+        orderId
+      );
+      // 渡す注文の user_id を書き換えても、DBの注文の会員と違えば失敗する
+      await expectRejected(
+        {
+          ...args,
+          p_user_id: OTHER_USER_ID,
+          p_within_limit: withOrder(args.p_within_limit, {
+            user_id: OTHER_USER_ID,
+          }),
+          p_limit_exceeded: withOrder(args.p_limit_exceeded, {
+            user_id: OTHER_USER_ID,
+          }),
+        },
+        /invoice_settlement_invalid: user_mismatch/,
+        orderId
+      );
+      // DBの注文の会員と p_user_id が合っていても、渡す注文の user_id が違えば失敗する
+      // （save_order は渡された user_id で注文を書き換えるため）
+      await expectRejected(
+        {
+          ...args,
+          p_within_limit: withOrder(args.p_within_limit, {
+            user_id: OTHER_USER_ID,
+          }),
+        },
+        /invoice_settlement_invalid: user_mismatch/,
+        orderId
+      );
+    });
+
+    it("まだ無い注文には請求を作らない（新しい注文として保存しない）", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 10_000, timing: "after_order" },
+      ]);
+      const args = await argsOf(orderId, itemIds);
+      const missingOrderId = newId();
+
+      const { error } = await supabase.rpc(
+        "create_invoice_settlement_with_limit_check",
+        {
+          ...args,
+          p_within_limit: withOrder(args.p_within_limit, {
+            id: missingOrderId,
+          }),
+          p_limit_exceeded: withOrder(args.p_limit_exceeded, {
+            id: missingOrderId,
+          }),
+        }
+      );
+      expect(error?.message).toMatch(
+        /invoice_settlement_invalid: order_not_found/
+      );
+      const { data } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("id", missingOrderId);
+      expect(data).toEqual([]);
+    });
+
+    it.each([
+      ["注文のid", { id: "00000000-0000-0000-0000-393999999999" }],
+      ["版", { version: 99 }],
+    ])(
+      "上限内と上限超過の注文の%sが違えば失敗する",
+      async (_label, overrides) => {
+        const { orderId, itemIds } = await seedOrder([
+          { price: 60_000, timing: "after_order" },
+        ]);
+        const args = await argsOf(orderId, itemIds);
+
+        await expectRejected(
+          {
+            ...args,
+            p_limit_exceeded: withOrder(args.p_limit_exceeded, overrides),
+          },
+          /invoice_settlement_invalid: candidates_mismatch/,
+          orderId
+        );
+      }
+    );
   });
 
   describe("実行権限", () => {
