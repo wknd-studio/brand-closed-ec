@@ -18,6 +18,8 @@ export type CheckoutDto = {
   rank: MemberRank;
   shippingAddresses: CheckoutAddressDto[];
   billingAddresses: CheckoutAddressDto[];
+  // 月額費用の支払い失敗中。注文ボタンの代わりにお支払い方法の更新を案内する（#378）
+  paymentFailed: boolean;
 };
 
 // 注文完了画面に出す明細。価格要相談の明細は unitPriceSnapshot が null

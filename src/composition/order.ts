@@ -3,6 +3,7 @@ import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
+import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-admin-user-repository";
 import { SanityProductRepository } from "@/infrastructure/sanity/sanity-product-repository";
 import { StripePaymentGateway } from "@/infrastructure/stripe/stripe-payment-gateway";
@@ -25,6 +26,7 @@ export function placeOrder(input: PlaceOrderInput) {
     orderRepo: new SupabaseOrderRepository(supabase),
     memberRankRepo: new SupabaseMemberRankRepository(supabase),
     addressRepo: new SupabaseAddressRepository(supabase),
+    subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
     productRepo: new SanityProductRepository(),
     paymentGateway: new StripePaymentGateway(),
     notificationService: new ResendNotificationService(),
