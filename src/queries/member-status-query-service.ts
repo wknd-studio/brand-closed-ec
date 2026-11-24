@@ -2,6 +2,8 @@
 export type MemberStatusDto = {
   onboardingCompleted: boolean;
   withdrawn: boolean;
+  // Stripe 側でサブスクリプションが解約され、利用停止になっている（#380）
+  subscriptionEnded: boolean;
 };
 
 // 会員の状態の読み取り。deleted_at は JWT に反映されないため、middleware は毎回これで確認する
