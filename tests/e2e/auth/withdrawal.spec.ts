@@ -8,7 +8,14 @@ import {
   getClerkUserIdByEmail,
   slotEmail,
 } from "../helpers/clerk-test-invitation";
-import { ensureOnboardedMember } from "../helpers/onboarded-member-row";
+import {
+  ensureOnboardedMember,
+  placeholderStripeSubscriptionId,
+} from "../helpers/onboarded-member-row";
+import {
+  createStripeTestSubscription,
+  deleteStripeTestCustomer,
+} from "../helpers/stripe-test-subscription";
 
 function supabaseAdmin() {
   return createClient<Database>(
@@ -24,6 +31,7 @@ const TEST_PASSWORD = "TestPassw0rd!12345";
 test.describe.serial("会員の退会", () => {
   let email: string;
   let clerkUserId: string;
+  let stripeCustomerId: string | undefined;
 
   test.beforeAll(async ({}, workerInfo) => {
     email = slotEmail(
@@ -40,7 +48,26 @@ test.describe.serial("会員の退会", () => {
       skipLegalChecks: true,
     });
     clerkUserId = created.id;
-    await ensureOnboardedMember(supabaseAdmin(), clerkUserId, email);
+    const userId = await ensureOnboardedMember(
+      supabaseAdmin(),
+      clerkUserId,
+      email
+    );
+    // 退会はStripeのサブスクリプションを解約するため、仮のIDをStripeに実在するものに差し替える
+    const stripeSubscription = await createStripeTestSubscription(email);
+    stripeCustomerId = stripeSubscription.customerId;
+    const { error: subscriptionError } = await supabaseAdmin()
+      .from("subscriptions")
+      .update({
+        stripe_customer_id: stripeSubscription.customerId,
+        stripe_subscription_id: stripeSubscription.subscriptionId,
+      })
+      .eq("stripe_subscription_id", placeholderStripeSubscriptionId(userId));
+    if (subscriptionError) {
+      throw new Error(
+        `サブスクリプションの更新に失敗しました: ${subscriptionError.message}`
+      );
+    }
     // 入会から6ヶ月間は退会できない（#207）ため、入会日を7ヶ月前にずらす
     const joinedAt = new Date();
     joinedAt.setMonth(joinedAt.getMonth() - 7);
@@ -54,6 +81,7 @@ test.describe.serial("会員の退会", () => {
 
   test.afterAll(async () => {
     await cleanupTestUser(email);
+    if (stripeCustomerId) await deleteStripeTestCustomer(stripeCustomerId);
   });
 
   test("退会するとその場でログアウトされ、同じメールアドレス・パスワードでサインインできない", async ({
