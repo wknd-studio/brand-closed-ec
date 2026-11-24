@@ -142,6 +142,10 @@ export async function signUpViaInvitation(
   await page.goto(invitationUrl);
 
   await expect(page).toHaveURL(/\/sign-up/);
+  // 招待メールの宛先は、Clerkの登録の状態から読んで変更できない欄に出す（#745）
+  const emailField = page.getByLabel("メールアドレス");
+  await expect(emailField).toHaveValue(emailAddress);
+  await expect(emailField).not.toBeEditable();
   // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
   // 安定した要素属性(id・data-localization-key)でフォーム要素を指定する
   const passwordField = page.locator("#password-field");
