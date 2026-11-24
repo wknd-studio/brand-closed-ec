@@ -35,6 +35,7 @@ import type {
   SubscriptionRepository,
   SubscriptionSnapshot,
 } from "@/repositories/subscription-repository";
+import { OrderNumber } from "@/domain/value-objects/order-number";
 
 export function makeUser(
   overrides?: Partial<{
@@ -150,6 +151,7 @@ export function makeOrder(overrides?: {
   return reconstituteOrder({
     id: "00000000-0000-0000-0000-000000000001",
     userId: "00000000-0000-0000-0000-000000000001",
+    orderNumber: OrderNumber.of("K7Q2M9XD"),
     status: OrderStatus.of(overrides?.status ?? "processing"),
     shippingAddress: makeAddressSnapshot(),
     billingAddress: makeAddressSnapshot(),

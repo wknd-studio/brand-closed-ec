@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // shipments（#355）: 注文（orders）と実際に発送する箱（shipments）を分け、揃った明細から
 // 先に出荷できるようにする。業務ルールの正は docs/domain/fulfillment.md。
@@ -147,8 +148,18 @@ beforeAll(async () => {
   if (adminError) throw adminError;
 
   const { error: ordersError } = await supabase.from("orders").insert([
-    { ...baseOrder, id: ORDER_A_ID, user_id: USER_A_ID },
-    { ...baseOrder, id: ORDER_B_ID, user_id: USER_B_ID },
+    {
+      order_number: randomOrderNumber(),
+      ...baseOrder,
+      id: ORDER_A_ID,
+      user_id: USER_A_ID,
+    },
+    {
+      order_number: randomOrderNumber(),
+      ...baseOrder,
+      id: ORDER_B_ID,
+      user_id: USER_B_ID,
+    },
   ]);
   if (ordersError) throw ordersError;
 

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { SupabaseProcurementQueueQueryService } from "@/infrastructure/supabase/supabase-procurement-queue-query-service";
+import { randomOrderNumber } from "../helpers/order-number";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -87,6 +88,7 @@ function order(id: string, createdAt: string, status = "processing") {
   return {
     id,
     user_id: USER_ID,
+    order_number: randomOrderNumber(),
     status,
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect } from "../helpers/test-member";
+import { randomOrderNumber } from "../../helpers/order-number";
 
 function supabaseAdmin() {
   return createClient<Database>(
@@ -32,6 +33,7 @@ test.describe("注文履歴", () => {
     const supabase = supabaseAdmin();
     const orderId = crypto.randomUUID();
     const { error: orderError } = await supabase.from("orders").insert({
+      order_number: randomOrderNumber(),
       id: orderId,
       user_id: member.userId,
       status: "paid",
@@ -73,6 +75,7 @@ test.describe("注文履歴", () => {
     const orderId = crypto.randomUUID();
     const settlementId = crypto.randomUUID();
     const { error: orderError } = await supabase.from("orders").insert({
+      order_number: randomOrderNumber(),
       id: orderId,
       user_id: member.userId,
       status: "processing",

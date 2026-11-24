@@ -40,6 +40,7 @@ vi.mock("@/lib/auth/current-user", () => ({
 }));
 
 import { memberOrderQueryService } from "@/composition/member-order-query";
+import { randomOrderNumber } from "../helpers/order-number";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,6 +149,7 @@ function order(
   return {
     id,
     user_id: userId,
+    order_number: randomOrderNumber(),
     status,
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,

@@ -1,3 +1,4 @@
+import { OrderNumber } from "@/domain/value-objects/order-number";
 import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
 import { assertCanPlaceNewOrder } from "@/domain/services/new-order-eligibility";
 import { CartItem } from "@/domain/value-objects/cart-item";
@@ -104,6 +105,10 @@ export async function placeOrder(
     billingAddress: billingAddress.toSnapshot(),
     placedAt: new Date(),
     generateId: () => crypto.randomUUID(),
+    generateOrderNumber: () =>
+      OrderNumber.generate((length) =>
+        crypto.getRandomValues(new Uint8Array(length))
+      ),
   });
   const settlement = order.checkoutSettlement();
   const afterOrderItems = order.items.filter((item) => item.isAfterOrder());
