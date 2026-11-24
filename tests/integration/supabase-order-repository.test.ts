@@ -12,6 +12,8 @@ import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
 // 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
@@ -185,6 +187,7 @@ function makeOrder(
   return reconstituteOrder({
     id: ORDER_ID,
     userId: TEST_USER_ID,
+    orderNumber: OrderNumber.of(randomOrderNumber()),
     status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
@@ -602,6 +605,7 @@ describe("SupabaseOrderRepository", () => {
         // 別の注文の明細が DELETE_FAIL_ORDER_ID の決済単位を参照しているため、
         // 明細の削除のあと、決済単位の削除が外部キーで失敗する
         const { error: orderError } = await supabase.from("orders").insert({
+          order_number: randomOrderNumber(),
           id: BLOCKER_ORDER_ID,
           user_id: TEST_USER_ID,
           status: "processing",

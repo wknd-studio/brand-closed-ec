@@ -15,6 +15,7 @@ import {
   SEED_PRODUCTS,
   seedProductRankPrices,
 } from "../../scripts/seed-products";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // GitHub issue #713: テスト用アカウントに各状態の注文（シナリオのデータ）を入れるシード。
 // 実DBに入れ、2回実行しても行が増えないこと・目印の無い行を消さないこと・
@@ -159,6 +160,7 @@ async function insertOrderWithItem({
   settlementId?: string;
 }) {
   const { error } = await supabase.from("orders").insert({
+    order_number: randomOrderNumber(),
     id: orderId,
     user_id: userIds.standard,
     status: "processing",

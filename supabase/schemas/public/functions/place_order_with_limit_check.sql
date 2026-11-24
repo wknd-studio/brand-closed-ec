@@ -27,13 +27,14 @@ BEGIN
   END IF;
 
   INSERT INTO public.orders (
-    id, user_id, status,
+    id, user_id, order_number, status,
     shipping_address_snapshot, billing_address_snapshot,
     rank_at_order, monthly_limit_at_order, created_at
   )
   SELECT
     (p_order->>'id')::uuid,
     (p_order->>'user_id')::uuid,
+    p_order->>'order_number',
     p_order->>'status',
     p_order->'shipping_address_snapshot',
     p_order->'billing_address_snapshot',

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect } from "../helpers/test-member";
 import { clickAddToCart } from "../helpers/cart";
+import { randomOrderNumber } from "../../helpers/order-number";
 
 function supabaseAdmin() {
   return createClient<Database>(
@@ -128,6 +129,7 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
 
     // STARTERランクの月次上限は300,000円。既に290,000円分を確定済みにしておく
     await supabaseAdmin().from("orders").insert({
+      order_number: randomOrderNumber(),
       id: limitOrderId,
       user_id: userId,
       status: "paid",

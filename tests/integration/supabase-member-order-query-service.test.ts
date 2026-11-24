@@ -40,6 +40,7 @@ vi.mock("@/lib/auth/current-user", () => ({
 }));
 
 import { memberOrderQueryService } from "@/composition/member-order-query";
+import { randomOrderNumber } from "../helpers/order-number";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,6 +149,7 @@ function order(
   return {
     id,
     user_id: userId,
+    order_number: randomOrderNumber(),
     status,
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,
@@ -183,7 +185,25 @@ async function cleanup() {
     .in("order_id", ALL_ORDER_IDS);
   await supabase.from("orders").delete().in("id", ALL_ORDER_IDS);
   await supabase.from("addresses").delete().in("user_id", ALL_USER_IDS);
+  await supabase.from("subscriptions").delete().in("user_id", ALL_USER_IDS);
   await supabase.from("users").delete().in("id", ALL_USER_IDS);
+}
+
+function subscription(
+  userId: string,
+  stripeSubscriptionId: string,
+  status: Database["public"]["Tables"]["subscriptions"]["Insert"]["status"]
+) {
+  return {
+    user_id: userId,
+    stripe_customer_id: `cus_${stripeSubscriptionId}`,
+    stripe_subscription_id: stripeSubscriptionId,
+    status,
+    rank_code: "standard",
+    current_period_start: "2026-06-01T00:00:00.000Z",
+    current_period_end: "2026-07-01T00:00:00.000Z",
+    canceled_at: status === "canceled" ? "2026-05-01T00:00:00.000Z" : null,
+  };
 }
 
 async function insert<T extends keyof Database["public"]["Tables"]>(
@@ -238,6 +258,13 @@ beforeAll(async () => {
       onboarding_completed: true,
       billing_anchor_day: 10,
     },
+  ]);
+  // 注文確認の会員は支払い失敗中（過去に解約した行も残っている）、他の会員は通常。
+  // 注文履歴の会員はサブスクリプションの行が無い
+  await insert("subscriptions", [
+    subscription(USER_ID, "sub_test_member_order_query_old", "canceled"),
+    subscription(USER_ID, "sub_test_member_order_query", "past_due"),
+    subscription(OTHER_USER_ID, "sub_test_member_order_query_other", "active"),
   ]);
   await insert("addresses", [
     address(SHIPPING_OTHER_ID, USER_ID, "shipping", false, "港区"),
@@ -464,6 +491,24 @@ describe("SupabaseMemberOrderQueryService.findCheckout", () => {
       OTHER_USER_ADDRESS_ID,
     ]);
     expect(checkout?.billingAddresses).toEqual([]);
+  });
+
+  it("解約済みでないサブスクリプションが支払い失敗中（past_due）なら paymentFailed が true", async () => {
+    const checkout = await queryService.findCheckout(CLERK_USER);
+
+    expect(checkout?.paymentFailed).toBe(true);
+  });
+
+  it("サブスクリプションが active なら paymentFailed が false", async () => {
+    const checkout = await queryService.findCheckout(CLERK_OTHER_USER);
+
+    expect(checkout?.paymentFailed).toBe(false);
+  });
+
+  it("サブスクリプションの行が無い会員は paymentFailed が false", async () => {
+    const checkout = await queryService.findCheckout(CLERK_HISTORY_USER);
+
+    expect(checkout?.paymentFailed).toBe(false);
   });
 
   it("存在しない会員は null", async () => {
@@ -872,6 +917,7 @@ describe("memberOrderQueryService（composition。RLS 付きのクライアン�
       SHIPPING_DEFAULT_ID,
       SHIPPING_OTHER_ID,
     ]);
+    expect(checkout?.paymentFailed).toBe(true);
     expect(
       await rlsQueryService.findCheckoutCompletedOrder({
         clerkUserId: CLERK_USER,
