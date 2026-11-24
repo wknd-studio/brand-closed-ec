@@ -23,6 +23,7 @@ import {
   reconstituteOrderSettlement,
 } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
+import { OrderNumber } from "@/domain/value-objects/order-number";
 import { Money } from "@/domain/value-objects/money";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
@@ -47,6 +48,7 @@ function toOrderRowForInsert(order: Order) {
   return {
     id: order.id,
     user_id: order.userId,
+    order_number: order.orderNumber.value,
     status: order.status.value,
     shipping_address_snapshot: addrToJson(order.shippingAddress),
     billing_address_snapshot: addrToJson(order.billingAddress),
@@ -124,6 +126,7 @@ type AddressSnapshotJson = {
 type OrderRow = {
   id: string;
   user_id: string;
+  order_number: string;
   status: string;
   shipping_address_snapshot: Json;
   billing_address_snapshot: Json;
@@ -208,6 +211,7 @@ function toOrder(row: OrderRow): Order {
   return reconstituteOrder({
     id: row.id,
     userId: row.user_id,
+    orderNumber: OrderNumber.of(row.order_number),
     status: OrderStatus.of(row.status),
     shippingAddress: toAddressSnapshot(row.shipping_address_snapshot),
     billingAddress: toAddressSnapshot(row.billing_address_snapshot),
