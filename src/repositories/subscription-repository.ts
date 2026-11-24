@@ -1,17 +1,11 @@
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 
-// docs/db-schema-redesign.md「subscriptions」節のstatus CHECK制約に対応する。
+// 値の一覧の正は domain の SubscriptionStatus（subscriptions.status の CHECK 制約に対応する）。
 // Stripe側にはこの他に'paused'が存在するが、現状のアプリケーションコードが
 // 実際に扱う経路（チェックアウト完了時のオンボーディング確定）では発生しない
 // ため未対応（発生した場合はtoSubscriptionStatusで例外になる）。
-export type SubscriptionStatus =
-  | "trialing"
-  | "active"
-  | "past_due"
-  | "unpaid"
-  | "canceled"
-  | "incomplete"
-  | "incomplete_expired";
+export type SubscriptionStatus = SubscriptionStatusValue;
 
 export type SubscriptionSnapshot = {
   id: string;
