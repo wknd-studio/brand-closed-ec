@@ -16,10 +16,13 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
+import { ItemsNotInvoiceableError } from "@/domain/errors/items-not-invoiceable-error";
+import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
 
-// 請求作成の月次上限チェックと決済単位の作成（issue #393、docs/domain/settlement.md
-// 「月次仕入れ上限チェック」）。上限の判定〜決済単位の作成〜明細の紐付け〜orders.status の
-// 更新を、ユーザー行の行ロック込みで1回のDB呼び出し（create_invoice_settlement_with_limit_check）にまとめる
+// 請求作成の月次上限チェックと決済単位の作成（issue #393・#763、docs/domain/settlement.md
+// 「月次仕入れ上限チェック」）。請求できるかの判定・決済単位の作成・明細の紐付け・orders.status の
+// ロールアップは Order.draftInvoiceSettlement() が行い、DB関数（create_invoice_settlement_with_limit_check）は
+// ユーザー行の行ロック・上限の確認・版を確かめた保存だけを1回の呼び出しで行う
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
 // 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
@@ -175,21 +178,41 @@ async function historyOf(orderId: string) {
   return data;
 }
 
-function createInvoice(
+/** 注文を読んで請求を組み立てる（請求できない明細なら ItemsNotInvoiceableError） */
+async function draftInvoice(
+  orderId: string,
+  itemIds: string[],
+  settlementId: string = newId()
+) {
+  const order = await repo.findById(orderId);
+  return order!.draftInvoiceSettlement({ settlementId, itemIds });
+}
+
+function saveInvoice(
+  draft: Awaited<ReturnType<typeof draftInvoice>>,
+  monthlyLimit: MonthlyLimit,
+  orderRepo: SupabaseOrderRepository = repo
+) {
+  return orderRepo.createInvoiceSettlementWithLimitCheck({
+    draft,
+    period: PERIOD,
+    monthlyLimit,
+    adminUserId: ADMIN_USER_ID,
+  });
+}
+
+async function createInvoice(
   orderId: string,
   itemIds: string[],
   monthlyLimit: MonthlyLimit,
   settlementId: string = newId(),
   orderRepo: SupabaseOrderRepository = repo
 ) {
-  return orderRepo.createInvoiceSettlementWithLimitCheck({
-    orderId,
-    itemIds,
-    settlementId,
-    period: PERIOD,
+  return saveInvoice(
+    await draftInvoice(orderId, itemIds, settlementId),
     monthlyLimit,
-    adminUserId: ADMIN_USER_ID,
-  });
+    orderRepo
+  );
 }
 
 async function cleanup() {
@@ -454,11 +477,9 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
     });
   });
 
+  // 請求できるかの判定は Order が行う（分岐は tests/unit/order-entity.test.ts）。ここでは、DBから
+  // 読んだ注文の明細の状態で判定され、DBには何も保存されないことを確かめる
   describe("請求できない明細を含めると失敗し、何も変えない", () => {
-    async function expectNoInvoiceSettlement(orderId: string) {
-      expect(await settlementsOf(orderId)).toEqual([]);
-    }
-
     it("すでに settlement_id がある明細", async () => {
       const { orderId, itemIds } = await seedOrder([
         { price: 10_000, timing: "after_order" },
@@ -474,74 +495,15 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
 
       await expect(
         createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/already_settled/);
+      ).rejects.toMatchObject(
+        new ItemsNotInvoiceableError(orderId, "already_settled")
+      );
 
       expect(await settlementsOf(orderId)).toHaveLength(1);
       expect(await settlementIdsOf(itemIds)).toEqual({
         [itemIds[0]!]: firstSettlementId,
         [itemIds[1]!]: null,
       });
-    });
-
-    it("at_order の明細", async () => {
-      const { orderId, itemIds } = await seedOrder([
-        { price: 10_000, timing: "at_order" },
-        { price: 10_000, timing: "after_order" },
-      ]);
-      const before = await settlementIdsOf(itemIds);
-
-      await expect(
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/not_after_order/);
-
-      await expectNoInvoiceSettlement(orderId);
-      expect(await settlementIdsOf(itemIds)).toEqual(before);
-    });
-
-    it("キャンセル済みの注文の明細", async () => {
-      const { orderId, itemIds } = await seedOrder([
-        { price: 10_000, timing: "after_order" },
-      ]);
-      const order = await repo.findById(orderId);
-      await repo.save(order!.cancel(new Date()), { type: "system" });
-
-      await expect(
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/order_cancelled/);
-
-      await expectNoInvoiceSettlement(orderId);
-      expect(await settlementIdsOf(itemIds)).toEqual({ [itemIds[0]!]: null });
-    });
-
-    it("別の注文の明細（1回の請求は1注文の明細に限る）", async () => {
-      const a = await seedOrder([{ price: 10_000, timing: "after_order" }]);
-      const b = await seedOrder([{ price: 10_000, timing: "after_order" }]);
-
-      await expect(
-        createInvoice(
-          a.orderId,
-          [...a.itemIds, ...b.itemIds],
-          MonthlyLimit.of(300_000)
-        )
-      ).rejects.toThrow(/item_not_in_order/);
-
-      await expectNoInvoiceSettlement(a.orderId);
-      expect(await settlementIdsOf([...a.itemIds, ...b.itemIds])).toEqual({
-        [a.itemIds[0]!]: null,
-        [b.itemIds[0]!]: null,
-      });
-    });
-
-    it("存在しない明細", async () => {
-      const { orderId, itemIds } = await seedOrder([
-        { price: 10_000, timing: "after_order" },
-      ]);
-
-      await expect(
-        createInvoice(orderId, [...itemIds, newId()], MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/item_not_in_order/);
-
-      await expectNoInvoiceSettlement(orderId);
     });
 
     it("価格が決まっていない明細（要相談商品。Ver1 では注文できないが、0円の請求を作らせない）", async () => {
@@ -556,21 +518,44 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
 
       await expect(
         createInvoice(orderId, itemIds, MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/price_not_fixed/);
-
-      await expectNoInvoiceSettlement(orderId);
-    });
-
-    it("明細を1件も選んでいない", async () => {
-      const { orderId } = await seedOrder([
-        { price: 10_000, timing: "after_order" },
-      ]);
-
-      await expect(
-        createInvoice(orderId, [], MonthlyLimit.of(300_000))
-      ).rejects.toThrow(/no_items/);
+      ).rejects.toMatchObject(
+        new ItemsNotInvoiceableError(orderId, "price_not_fixed")
+      );
 
       expect(await settlementsOf(orderId)).toEqual([]);
+    });
+  });
+
+  // 楽観ロック（#721）: 請求作成も、読んだ時点の版を確かめて保存し、版を進める
+  describe("版の確認", () => {
+    it("組み立てた後に注文が変わっていれば、請求作成は失敗し何も保存しない", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 10_000, timing: "after_order" },
+      ]);
+      const stale = await draftInvoice(orderId, itemIds);
+      await repo.save((await repo.findById(orderId))!, { type: "system" });
+
+      await expect(
+        saveInvoice(stale, MonthlyLimit.of(300_000))
+      ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
+
+      expect(await settlementsOf(orderId)).toEqual([]);
+      expect(await settlementIdsOf(itemIds)).toEqual({ [itemIds[0]!]: null });
+    });
+
+    it("上限超過でも、版が変わっていれば何も保存しない", async () => {
+      const { orderId, itemIds } = await seedOrder([
+        { price: 60_000, timing: "after_order" },
+      ]);
+      const stale = await draftInvoice(orderId, itemIds);
+      await repo.save((await repo.findById(orderId))!, { type: "system" });
+
+      await expect(
+        saveInvoice(stale, MonthlyLimit.of(50_000))
+      ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
+
+      expect(await settlementsOf(orderId)).toEqual([]);
+      expect(await statusOf(orderId)).toBe("processing");
     });
   });
 
@@ -642,15 +627,19 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
         { price: 10_000, timing: "after_order" },
       ]);
 
-      const results = await Promise.allSettled([
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000)),
-        createInvoice(orderId, itemIds, MonthlyLimit.of(300_000)),
-      ]);
+      // 2人の運営者が同じ版の注文を読んで組み立て、同時に保存する
+      const drafts = [
+        await draftInvoice(orderId, itemIds),
+        await draftInvoice(orderId, itemIds),
+      ];
+      const results = await Promise.allSettled(
+        drafts.map((d) => saveInvoice(d, MonthlyLimit.of(300_000)))
+      );
 
       expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
       const rejected = results.find((r) => r.status === "rejected");
-      expect((rejected as PromiseRejectedResult).reason.message).toMatch(
-        /already_settled/
+      expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(
+        OrderConcurrentlyModifiedError
       );
       expect(await settlementsOf(orderId)).toHaveLength(1);
     });

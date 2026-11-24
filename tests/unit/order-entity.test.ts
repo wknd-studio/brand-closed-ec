@@ -10,6 +10,7 @@ import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
+import { ItemsNotInvoiceableError } from "@/domain/errors/items-not-invoiceable-error";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { reconstituteUser } from "@/domain/entities/user";
 import { PhoneNumber } from "@/domain/value-objects/phone-number";
@@ -794,6 +795,259 @@ describe("Order", () => {
       const order = makeOrder();
       const updated = order.applySettlement(makeSettlement({ id: "s-new" }));
       expect(updated.settlements).toHaveLength(1);
+    });
+  });
+
+  // 請求作成（docs/domain/settlement.md「請求作成」・issue #763）。請求は1つの注文の中で完結するため、
+  // 請求できるかの判定・決済単位の作成・明細の紐付け・状態のロールアップを Order が行う。
+  // 上限を超えたかは保存するDB側でしか決められないため、上限内と上限超過の両方の注文を組み立てる
+  describe("draftInvoiceSettlement()", () => {
+    function invoiceableOrder() {
+      return makeOrder({
+        version: 4,
+        items: [
+          makeItem({ id: "at", paymentTiming: "at_order", settlementId: "s1" }),
+          makeItem({
+            id: "a1",
+            paymentTiming: "after_order",
+            unitPrice: 30_000,
+            quantity: 2,
+          }),
+          makeItem({
+            id: "a2",
+            paymentTiming: "after_order",
+            unitPrice: 5_000,
+          }),
+          makeItem({
+            id: "a3",
+            paymentTiming: "after_order",
+            unitPrice: 1_000,
+          }),
+        ],
+        settlements: [makeSettlement({ id: "s1" })],
+      });
+    }
+
+    it("選んだ明細の小計の合計を請求額にし、選んだ明細だけを新しい請求に紐付ける", () => {
+      const draft = invoiceableOrder().draftInvoiceSettlement({
+        settlementId: "inv-1",
+        itemIds: ["a1", "a2"],
+      });
+
+      expect(draft.settlementId).toBe("inv-1");
+      expect(draft.itemIds).toEqual(["a1", "a2"]);
+      expect(draft.amount.amount).toBe(65_000);
+      for (const order of [draft.withinLimit, draft.limitExceeded]) {
+        expect(
+          Object.fromEntries(order.items.map((i) => [i.id, i.settlementId]))
+        ).toEqual({ at: "s1", a1: "inv-1", a2: "inv-1", a3: null });
+        const invoice = order.settlements.find((s) => s.id === "inv-1")!;
+        expect(invoice.orderId).toBe("order-001");
+        expect(invoice.flow).toBe("invoice");
+        expect(invoice.amount.amount).toBe(65_000);
+        expect(invoice.stripeInvoiceId).toBeNull();
+        expect(invoice.stripeCheckoutSessionId).toBeNull();
+        expect(invoice.paidAt).toBeNull();
+        expect(invoice.cancelledAt).toBeNull();
+        expect(order.settlements).toHaveLength(2);
+        // 保存は読んだ時点の版で確かめる（楽観ロック。#721）
+        expect(order.version).toBe(4);
+      }
+    });
+
+    it("上限内なら invoice_sent の請求で、注文の状態は変わらない", () => {
+      const { withinLimit } = invoiceableOrder().draftInvoiceSettlement({
+        settlementId: "inv-1",
+        itemIds: ["a1"],
+      });
+      expect(
+        withinLimit.settlements.find((s) => s.id === "inv-1")!.status
+      ).toBe("invoice_sent");
+      expect(withinLimit.status.value).toBe("processing");
+    });
+
+    it("上限超過なら limit_exceeded の請求で、注文の状態は rollupStatus() により limit_exceeded になる", () => {
+      const { limitExceeded } = invoiceableOrder().draftInvoiceSettlement({
+        settlementId: "inv-1",
+        itemIds: ["a1"],
+      });
+      expect(
+        limitExceeded.settlements.find((s) => s.id === "inv-1")!.status
+      ).toBe("limit_exceeded");
+      expect(limitExceeded.status.value).toBe("limit_exceeded");
+      expect(limitExceeded.status.value).toBe(
+        limitExceeded.rollupStatus().value
+      );
+    });
+
+    it("同じ明細を重ねて選んでも1回だけ数える", () => {
+      const draft = invoiceableOrder().draftInvoiceSettlement({
+        settlementId: "inv-1",
+        itemIds: ["a2", "a2"],
+      });
+      expect(draft.itemIds).toEqual(["a2"]);
+      expect(draft.amount.amount).toBe(5_000);
+    });
+
+    it("元の注文は書き換えない", () => {
+      const order = invoiceableOrder();
+      order.draftInvoiceSettlement({ settlementId: "inv-1", itemIds: ["a1"] });
+      expect(order.settlements).toHaveLength(1);
+      expect(order.items.find((i) => i.id === "a1")!.settlementId).toBeNull();
+    });
+
+    it("上限超過で記録済みの注文（limit_exceeded）にも、残りの明細の請求を作れる", () => {
+      const order = makeOrder({
+        items: [
+          makeItem({
+            id: "a1",
+            paymentTiming: "after_order",
+            settlementId: "inv-0",
+          }),
+          makeItem({ id: "a2", paymentTiming: "after_order" }),
+        ],
+        settlements: [
+          makeSettlement({
+            id: "inv-0",
+            flow: "invoice",
+            status: "limit_exceeded",
+            stripeCheckoutSessionId: null,
+          }),
+        ],
+      });
+      const { withinLimit } = order.draftInvoiceSettlement({
+        settlementId: "inv-1",
+        itemIds: ["a2"],
+      });
+      expect(withinLimit.status.value).toBe("limit_exceeded");
+    });
+
+    it("決済単位のキャンセルで未請求に戻った明細は請求できる", () => {
+      const order = makeOrder({
+        items: [makeItem({ id: "a1", paymentTiming: "after_order" })],
+        settlements: [
+          makeSettlement({
+            id: "inv-0",
+            flow: "invoice",
+            status: "cancelled",
+            cancelledAt: new Date(),
+          }),
+        ],
+      });
+      const { withinLimit } = order.draftInvoiceSettlement({
+        settlementId: "inv-1",
+        itemIds: ["a1"],
+      });
+      expect(withinLimit.items[0]!.settlementId).toBe("inv-1");
+    });
+
+    describe("請求できない明細を含むと例外を投げる", () => {
+      function reasonOf(fn: () => unknown) {
+        try {
+          fn();
+        } catch (e) {
+          expect(e).toBeInstanceOf(ItemsNotInvoiceableError);
+          expect((e as ItemsNotInvoiceableError).orderId).toBe("order-001");
+          return (e as ItemsNotInvoiceableError).reason;
+        }
+        throw new Error("例外が投げられなかった");
+      }
+
+      it("明細を1件も選んでいない", () => {
+        expect(
+          reasonOf(() =>
+            invoiceableOrder().draftInvoiceSettlement({
+              settlementId: "inv-1",
+              itemIds: [],
+            })
+          )
+        ).toBe("no_items");
+      });
+
+      it("キャンセル済みの注文", () => {
+        const order = makeOrder({
+          status: OrderStatus.of("cancelled"),
+          items: [makeItem({ id: "a1", paymentTiming: "after_order" })],
+        });
+        expect(
+          reasonOf(() =>
+            order.draftInvoiceSettlement({
+              settlementId: "inv-1",
+              itemIds: ["a1"],
+            })
+          )
+        ).toBe("order_cancelled");
+      });
+
+      it("別の注文の明細・存在しない明細", () => {
+        expect(
+          reasonOf(() =>
+            invoiceableOrder().draftInvoiceSettlement({
+              settlementId: "inv-1",
+              itemIds: ["a1", "item-of-other-order"],
+            })
+          )
+        ).toBe("item_not_in_order");
+      });
+
+      it("後払いでない（at_order）明細", () => {
+        expect(
+          reasonOf(() =>
+            invoiceableOrder().draftInvoiceSettlement({
+              settlementId: "inv-1",
+              itemIds: ["a1", "at"],
+            })
+          )
+        ).toBe("not_after_order");
+      });
+
+      it("請求済み（決済単位に紐付いている）明細", () => {
+        const order = makeOrder({
+          items: [
+            makeItem({
+              id: "a1",
+              paymentTiming: "after_order",
+              settlementId: "inv-0",
+            }),
+          ],
+          settlements: [
+            makeSettlement({
+              id: "inv-0",
+              flow: "invoice",
+              status: "invoice_sent",
+              stripeCheckoutSessionId: null,
+            }),
+          ],
+        });
+        expect(
+          reasonOf(() =>
+            order.draftInvoiceSettlement({
+              settlementId: "inv-1",
+              itemIds: ["a1"],
+            })
+          )
+        ).toBe("already_settled");
+      });
+
+      it("価格が決まっていない明細（要相談商品。0円の請求を作らせない）", () => {
+        const order = makeOrder({
+          items: [
+            makeItem({
+              id: "a1",
+              paymentTiming: "after_order",
+              isNegotiable: true,
+            }),
+          ],
+        });
+        expect(
+          reasonOf(() =>
+            order.draftInvoiceSettlement({
+              settlementId: "inv-1",
+              itemIds: ["a1"],
+            })
+          )
+        ).toBe("price_not_fixed");
+      });
     });
   });
 
