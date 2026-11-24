@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Alert } from "@/components/ui/alert";
 
@@ -89,17 +89,19 @@ describe("Alert", () => {
     expect(new Set(icons).size).toBe(tones.length);
   });
 
-  it("ref・tabIndex 等の属性をそのまま渡せる（エラーのまとめにフォーカスを移すため）", () => {
+  it("ref・tabIndex を渡してフォーカスを移せる（エラーのまとめにフォーカスを移すため）", () => {
+    const ref = createRef<HTMLDivElement>();
     act(() =>
       root.render(
-        <Alert tone="danger" role="alert" tabIndex={-1}>
+        <Alert ref={ref} tone="danger" role="alert" tabIndex={-1}>
           入力内容をご確認ください。
         </Alert>
       )
     );
 
-    expect(
-      container.querySelector('[role="alert"]')?.getAttribute("tabindex")
-    ).toBe("-1");
+    const alert = container.querySelector<HTMLElement>('[role="alert"]');
+    expect(alert?.getAttribute("tabindex")).toBe("-1");
+    act(() => ref.current?.focus());
+    expect(document.activeElement).toBe(alert);
   });
 });
