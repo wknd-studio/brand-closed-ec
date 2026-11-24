@@ -158,27 +158,12 @@ export default async function OrderDetailPage({ params }: Props) {
           </div>
         </section>
 
-        {order.returnableItems.length > 0 && (
-          <section
-            aria-labelledby="return-request"
-            className="rounded-lg border p-5"
-          >
-            <h2
-              id="return-request"
-              className="text-sm font-medium text-gray-700"
-            >
-              返品・返金の申請
-            </h2>
-            <p className="mb-3 mt-1 text-xs text-gray-500">
-              不良品・誤配送などの場合に、返品する商品と数量を選んで申請してください。お客様のご都合によるキャンセル・返品は原則お受けできません
-            </p>
-            <ReturnRequestForm
-              items={order.returnableItems}
-              reasonOptions={ReturnReason.options()}
-              action={requestReturnAction.bind(null, order.orderId)}
-            />
-          </section>
-        )}
+        {/* 申請できる明細が無ければ何も出さない。全数量を申請した直後も受け付けの表示を残すため、常に置く */}
+        <ReturnRequestForm
+          items={order.returnableItems}
+          reasonOptions={ReturnReason.options()}
+          action={requestReturnAction.bind(null, order.orderId)}
+        />
       </div>
     </main>
   );

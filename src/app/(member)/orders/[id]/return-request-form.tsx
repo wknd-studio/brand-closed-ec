@@ -28,8 +28,51 @@ export function ReturnRequestForm({ items, reasonOptions, action }: Props) {
     });
   }
 
+  const succeeded = result !== null && "success" in result;
+  // 申請後の再描画で申請できる明細が無くなっても、受け付けたことは出し続ける
+  if (items.length === 0 && !succeeded) return null;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <section aria-labelledby="return-request" className="rounded-lg border p-5">
+      <h2 id="return-request" className="text-sm font-medium text-gray-700">
+        返品・返金の申請
+      </h2>
+      {succeeded && (
+        <p role="status" className="mt-1 text-sm text-secondary">
+          返品・返金の申請を受け付けました。運営で内容を確認のうえ、ご連絡します
+        </p>
+      )}
+      {items.length > 0 && (
+        <>
+          <p className="mb-3 mt-1 text-xs text-gray-500">
+            不良品・誤配送などの場合に、返品する商品と数量を選んで申請してください。お客様のご都合によるキャンセル・返品は原則お受けできません
+          </p>
+          <ReturnRequestFields
+            items={items}
+            reasonOptions={reasonOptions}
+            error={result && "error" in result ? result.error : null}
+            pending={pending}
+            onSubmit={handleSubmit}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+function ReturnRequestFields({
+  items,
+  reasonOptions,
+  error,
+  pending,
+  onSubmit,
+}: Omit<Props, "action"> & {
+  error: string | null;
+  pending: boolean;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
       <ul className="divide-y">
         {items.map((item) => (
           <li
@@ -85,14 +128,9 @@ export function ReturnRequestForm({ items, reasonOptions, action }: Props) {
         )}
       </FormField>
 
-      {result && "error" in result && (
+      {error && (
         <p role="alert" className="text-sm text-danger">
-          {result.error}
-        </p>
-      )}
-      {result && "success" in result && (
-        <p role="status" className="text-sm text-secondary">
-          返品・返金の申請を受け付けました。運営で内容を確認のうえ、ご連絡します
+          {error}
         </p>
       )}
 
