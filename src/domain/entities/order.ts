@@ -17,6 +17,10 @@ import type { User } from "./user";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
+import {
+  ItemsNotInvoiceableError,
+  type ItemsNotInvoiceableReason,
+} from "@/domain/errors/items-not-invoiceable-error";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
 
@@ -52,6 +56,23 @@ interface PlaceOrderProps {
   /** 注文・決済単位・明細のIDを割り当てる */
   generateId: () => string;
 }
+
+/**
+ * 請求作成で組み立てた注文（Order.draftInvoiceSettlement）。上限を超えたかは、同じ顧客の他の注文の
+ * 確定額を行ロックの中で数えないと決められないため、上限内と上限超過の両方の注文を組み立てておき、
+ * 保存する側（repository）が上限の確認の結果でどちらか一方を保存する
+ */
+export type InvoiceSettlementDraft = {
+  settlementId: string;
+  /** 請求に紐付ける明細（重複なし）。上限の確認では、確定額からこの明細を除いて請求額を足す */
+  itemIds: string[];
+  /** 請求額（選んだ明細の小計の合計） */
+  amount: Money;
+  /** 上限内のときに保存する注文（請求は invoice_sent） */
+  withinLimit: Order;
+  /** 上限を超えたときに保存する注文（請求は limit_exceeded。注文の状態は rollupStatus() が決める） */
+  limitExceeded: Order;
+};
 
 // 復元の入口（reconstituteOrder）から private な build を使うため、static ブロックで受け取る
 let restore: (props: OrderProps) => Order;
@@ -307,6 +328,79 @@ export class Order {
   /** 決済単位に紐付いた明細（Checkout・Invoiceに載せる明細） */
   itemsIn(settlement: OrderSettlement): OrderItem[] {
     return this.items.filter((item) => item.settlementId === settlement.id);
+  }
+
+  /**
+   * 請求作成（docs/domain/settlement.md「請求作成」）: 注文の未請求の後払い明細のうち、選んだものを
+   * 新しい請求（invoice の決済単位）に紐付ける。請求書は注文ごとに発行し、注文をまたがない（2026-11-24 決定）。
+   * 上限内（invoice_sent）と上限超過（limit_exceeded）の両方の注文を返す（InvoiceSettlementDraft）。
+   * 請求できない明細（別の注文・後払いでない・請求済み・価格未定）を含むか、注文がキャンセル済みなら
+   * ItemsNotInvoiceableError を投げる
+   */
+  draftInvoiceSettlement(input: {
+    settlementId: string;
+    itemIds: string[];
+  }): InvoiceSettlementDraft {
+    const itemIds = [...new Set(input.itemIds)];
+    const fail = (reason: ItemsNotInvoiceableReason) =>
+      new ItemsNotInvoiceableError(this.id, reason);
+    if (itemIds.length === 0) throw fail("no_items");
+    if (this.isCancelled()) throw fail("order_cancelled");
+
+    const itemById = new Map(this.items.map((item) => [item.id, item]));
+    const selected = itemIds.map((id) => itemById.get(id));
+    if (selected.some((item) => item === undefined)) {
+      throw fail("item_not_in_order");
+    }
+    const items = selected as OrderItem[];
+    if (items.some((item) => !item.isAfterOrder())) {
+      throw fail("not_after_order");
+    }
+    // 決済単位をキャンセルすると明細は未請求（NULL）に戻るため、NULL だけを未請求とみなす
+    if (items.some((item) => item.settlementId !== null)) {
+      throw fail("already_settled");
+    }
+    // 要相談の明細は、交渉済みの単価があっても請求額（sumFixedTotal）・確定額に入らないため請求させない
+    // （Ver1 では注文できない。0円の請求を作らせない）
+    if (items.some((item) => item.isNegotiable)) {
+      throw fail("price_not_fixed");
+    }
+
+    const amount = sumFixedTotal(items);
+    const selectedIds = new Set(itemIds);
+    const withStatus = (status: "invoice_sent" | "limit_exceeded") =>
+      this.with({
+        items: this.items.map((item) =>
+          selectedIds.has(item.id)
+            ? reconstituteOrderItem({
+                ...item,
+                settlementId: input.settlementId,
+              })
+            : item
+        ),
+        settlements: [
+          ...this.settlements,
+          reconstituteOrderSettlement({
+            id: input.settlementId,
+            orderId: this.id,
+            flow: "invoice",
+            status,
+            stripeCheckoutSessionId: null,
+            stripeInvoiceId: null,
+            amount,
+            paidAt: null,
+            cancelledAt: null,
+          }),
+        ],
+      });
+
+    return {
+      settlementId: input.settlementId,
+      itemIds,
+      amount,
+      withinLimit: withStatus("invoice_sent"),
+      limitExceeded: withStatus("limit_exceeded"),
+    };
   }
 
   /** 決済単位を差し替え（無ければ追加）した注文を返す。statusはbuildがロールアップし直す */
