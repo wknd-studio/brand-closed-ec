@@ -83,6 +83,22 @@ describe("placeOrder Server Action - Sentry例外送信", () => {
     );
   });
 
+  it("月額費用の支払い失敗中はカードの更新を促す文言を返し、Sentry.captureExceptionを呼ばない", async () => {
+    const { SubscriptionPaymentFailedError } =
+      await import("@/domain/errors/subscription-payment-failed-error");
+    vi.mocked(placeOrderUseCase).mockRejectedValue(
+      new SubscriptionPaymentFailedError()
+    );
+
+    const result = await placeOrder("addr-1", "addr-1");
+
+    expect(result).toEqual({
+      error:
+        "お支払い方法の更新が必要です。月額費用のお支払いが確認できないため、お支払い方法を更新してから注文してください",
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
   it("LimitExceededErrorの場合はSentry.captureExceptionを呼ばない", async () => {
     const { LimitExceededError } =
       await import("@/domain/errors/limit-exceeded-error");
