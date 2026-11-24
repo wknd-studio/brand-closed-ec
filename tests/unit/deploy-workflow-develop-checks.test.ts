@@ -26,9 +26,13 @@ function ifOf(id: string): string {
 }
 
 const DEVELOP_CHECKS = ["typecheck", "lint", "test"];
+// 生成物の検査。別々に通ったPRの組み合わせで生成物がずれることがあるため（#789）、
+// developへのpushでも動かす。stgの動作には影響しないので、Deploy (staging) は待たない
+const GENERATED_ARTIFACT_CHECKS = ["schema-types-drift", "schema-files-drift"];
+const PUSH_CHECKS = [...DEVELOP_CHECKS, ...GENERATED_ARTIFACT_CHECKS];
 
 describe("developへのマージごとのチェック", () => {
-  it.each(DEVELOP_CHECKS)("%s はPRとdevelopへのpushの両方で動く", (id) => {
+  it.each(PUSH_CHECKS)("%s はPRとdevelopへのpushの両方で動く", (id) => {
     const condition = ifOf(id);
     expect(condition).toContain("github.event_name == 'pull_request'");
     expect(condition).toContain(
@@ -36,7 +40,7 @@ describe("developへのマージごとのチェック", () => {
     );
   });
 
-  it.each(DEVELOP_CHECKS)(
+  it.each(PUSH_CHECKS)(
     "%s はconcurrencyを持たない（続けてマージしても各コミットで取り消されずに動く）",
     (id) => {
       expect(job(id)).not.toContain("concurrency:");
@@ -47,7 +51,7 @@ describe("developへのマージごとのチェック", () => {
     expect(workflow).not.toMatch(/^concurrency:/m);
   });
 
-  it.each(["integration", "e2e-pr", "schema-types-drift", "build"])(
+  it.each(["integration", "e2e-pr", "build"])(
     "%s は時間がかかるのでPRのときだけ動く",
     (id) => {
       expect(ifOf(id)).toContain("github.event_name == 'pull_request'");
@@ -61,4 +65,12 @@ describe("developへのマージごとのチェック", () => {
       expect.arrayContaining(DEVELOP_CHECKS)
     );
   });
+
+  it.each(GENERATED_ARTIFACT_CHECKS)(
+    "Deploy (staging) は %s を待たない（生成物のずれはstgの動作に影響しない）",
+    (id) => {
+      const needs = /\n {4}needs: \[([^\]]*)\]/.exec(job("deploy-stg"))?.[1];
+      expect(needs?.split(",").map((s) => s.trim())).not.toContain(id);
+    }
+  );
 });
