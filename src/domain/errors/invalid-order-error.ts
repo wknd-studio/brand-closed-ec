@@ -3,13 +3,15 @@ import { DomainError } from "./domain-error";
 export type InvalidOrderReason =
   | "no_items"
   | "item_settlement_not_in_order"
-  | "settlement_of_other_order";
+  | "settlement_of_other_order"
+  | "duplicate_settlement_id";
 
 const MESSAGES: Record<InvalidOrderReason, string> = {
   no_items: "注文に明細がありません",
   item_settlement_not_in_order:
     "明細が、注文に含まれない決済単位に紐付いています",
   settlement_of_other_order: "別の注文の決済単位が含まれています",
+  duplicate_settlement_id: "同じIDの決済単位が複数あります",
 };
 
 /** 注文の不変条件（明細が1件以上・明細と決済単位の紐付けが注文の中で閉じている）が破れている */

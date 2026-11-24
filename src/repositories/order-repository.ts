@@ -1,4 +1,4 @@
-import type { Order } from "@/domain/entities/order";
+import type { InvoiceSettlementDraft, Order } from "@/domain/entities/order";
 import type { Money } from "@/domain/value-objects/money";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
@@ -93,21 +93,19 @@ export interface OrderRepository {
   ): Promise<void>;
 
   /**
-   * 請求作成: 1つの注文の未請求の後払い明細から invoice の決済単位を作り、明細を紐付ける。
-   * 対象ユーザー行への行ロック込みで月次上限チェックと保存を1回のDB呼び出しで行い、
-   * 同じ顧客の注文確定・請求作成と直列化する（issue #393、docs/domain/settlement.md
-   * 「月次仕入れ上限チェック」）。判定は all-or-nothing で、period 内の他の確定額＋選んだ
-   * 明細の合計が上限を超えれば limit_exceeded（注文も limit_exceeded になり、adminUserId を
-   * 主体として履歴に残す）、超えなければ invoice_sent の決済単位を作る。Stripe Invoice は
-   * 作らない（invoice_sent のときだけ呼び出し側が発行する）。
+   * 請求作成: Order.draftInvoiceSettlement() で組み立てた請求を保存する。対象ユーザー行への行ロック込みで
+   * 月次上限チェックと保存を1回のDB呼び出しで行い、同じ顧客の注文確定・請求作成と直列化する
+   * （issue #393・#763、docs/domain/settlement.md「月次仕入れ上限チェック」）。判定は all-or-nothing で、
+   * period 内の他の確定額＋請求額が上限を超えれば draft.limitExceeded を、超えなければ draft.withinLimit を
+   * 保存し、保存した請求の状態を返す。orders.status が変われば adminUserId を主体として履歴に残す。
+   * Stripe Invoice は作らない（invoice_sent のときだけ呼び出し側が発行する）。
    * period には、対象の注文の createdAt が入る月次の期間を渡す（確定額は注文日で数えるため。
    * 請求作成の日の期間を渡すと、先月の注文の明細を今月の枠でも数えてしまう）。
-   * 別の注文・at_order・請求済み・キャンセル済みの注文の明細を含むときは例外を投げ、何も保存しない
+   * 組み立てた後に注文が変わっていれば（同じ明細の請求作成の同時実行を含む）、何も保存せずに
+   * OrderConcurrentlyModifiedError を投げる（楽観ロック。#721）
    */
   createInvoiceSettlementWithLimitCheck(input: {
-    orderId: string;
-    itemIds: string[];
-    settlementId: string;
+    draft: InvoiceSettlementDraft;
     period: MonthlyPeriod;
     // 無制限なら上限の判定をしない
     monthlyLimit: MonthlyLimit;
