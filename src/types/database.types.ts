@@ -498,7 +498,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           monthly_limit_at_order?: number | null;
-          order_number?: string;
+          order_number: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status?: string;
@@ -1052,10 +1052,6 @@ export type Database = {
         Returns: string;
       };
       delete_order: { Args: { p_order_id: string }; Returns: undefined };
-      generate_order_number: {
-        Args: { p_candidates?: string[] };
-        Returns: string;
-      };
       get_current_admin_user_id: { Args: never; Returns: string };
       get_current_user_id: { Args: never; Returns: string };
       place_order_with_limit_check: {
