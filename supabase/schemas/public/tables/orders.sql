@@ -41,4 +41,4 @@ COMMENT ON COLUMN "public"."orders"."status" IS '表示用のロールアップ�
   書き戻す（正のデータではない）。直接書き込むのはcancelled（決済単位が1件も
   作られる前のキャンセル）のみ。';
 
-COMMENT ON COLUMN "public"."orders"."version" IS '注文の集約（注文・明細の settlement_id・決済単位）の版（楽観ロック。issue #721）。save_order・create_invoice_settlement_with_limit_check が書き換えるたびに1つ進める。save_order は、呼び出し側が読んだ時点の版と違えば失敗する。';
+COMMENT ON COLUMN "public"."orders"."version" IS '注文の集約（注文・明細の settlement_id・決済単位）の版（楽観ロック。issue #721）。save_order が書き換えるたびに1つ進める（請求作成も save_order で保存する。issue #763）。save_order は、呼び出し側が読んだ時点の版と違えば失敗する。';
