@@ -6,7 +6,11 @@ import type {
   OrderStatusChangedBy,
   OrderWithUser,
 } from "@/repositories/order-repository";
-import { Order, reconstituteOrder } from "@/domain/entities/order";
+import {
+  type InvoiceSettlementDraft,
+  Order,
+  reconstituteOrder,
+} from "@/domain/entities/order";
 import {
   OrderItem,
   type PaymentTiming,
@@ -82,6 +86,29 @@ function toItemRowsForInsert(order: Order) {
   }));
 }
 import type { Json } from "@/types/database.types";
+
+/** save_order（と、それを呼ぶ請求作成の関数）に渡す注文・決済単位・明細の行 */
+function toSaveOrderRows(order: Order) {
+  const settlements = toSettlementRowsForInsert(order).map((row, i) => ({
+    ...row,
+    paid_at: order.settlements[i].paidAt?.toISOString() ?? null,
+    cancelled_at: order.settlements[i].cancelledAt?.toISOString() ?? null,
+  }));
+  return {
+    order: toOrderRowForInsert(order) as unknown as Json,
+    settlements: settlements as unknown as Json,
+    items: toItemRowsForInsert(order) as unknown as Json,
+  };
+}
+
+function toStatusChangeRow(changedBy: OrderStatusChangedBy) {
+  return {
+    changed_by: changedBy.type,
+    changed_by_admin_user_id:
+      changedBy.type === "admin" ? changedBy.adminUserId : null,
+    reason: changedBy.type === "admin" ? changedBy.reason : null,
+  };
+}
 
 type AddressSnapshotJson = {
   recipientLastName: string;
@@ -395,21 +422,12 @@ export class SupabaseOrderRepository implements OrderRepository {
   async save(order: Order, changedBy: OrderStatusChangedBy): Promise<void> {
     // 状態の更新と order_status_changes の追記を同じトランザクションで行うため、
     // 注文・決済単位・明細の保存を1回のDB呼び出しにまとめる（#237）
-    const settlements = toSettlementRowsForInsert(order).map((row, i) => ({
-      ...row,
-      paid_at: order.settlements[i].paidAt?.toISOString() ?? null,
-      cancelled_at: order.settlements[i].cancelledAt?.toISOString() ?? null,
-    }));
+    const rows = toSaveOrderRows(order);
     const { error } = await this.db.rpc("save_order", {
-      p_order: toOrderRowForInsert(order) as unknown as Json,
-      p_settlements: settlements as unknown as Json,
-      p_items: toItemRowsForInsert(order) as unknown as Json,
-      p_status_change: {
-        changed_by: changedBy.type,
-        changed_by_admin_user_id:
-          changedBy.type === "admin" ? changedBy.adminUserId : null,
-        reason: changedBy.type === "admin" ? changedBy.reason : null,
-      },
+      p_order: rows.order,
+      p_settlements: rows.settlements,
+      p_items: rows.items,
+      p_status_change: toStatusChangeRow(changedBy),
     });
     if (error) {
       if (error.message.includes("order_version_conflict")) {
@@ -460,27 +478,39 @@ export class SupabaseOrderRepository implements OrderRepository {
   }
 
   async createInvoiceSettlementWithLimitCheck(input: {
-    orderId: string;
-    itemIds: string[];
-    settlementId: string;
+    draft: InvoiceSettlementDraft;
     period: MonthlyPeriod;
     monthlyLimit: MonthlyLimit;
     adminUserId: string;
   }): Promise<InvoiceSettlementCreated> {
+    const { draft } = input;
     const { data, error } = await this.db.rpc(
       "create_invoice_settlement_with_limit_check",
       {
-        p_order_id: input.orderId,
-        p_item_ids: input.itemIds,
-        p_settlement_id: input.settlementId,
+        p_user_id: draft.withinLimit.userId,
         p_period_start: input.period.start.toISOString(),
         p_period_end: input.period.end.toISOString(),
         // 無制限は NULL で渡す（saveNewOrderWithLimitCheck と同じ）
         p_monthly_limit: input.monthlyLimit.amount as number,
-        p_admin_user_id: input.adminUserId,
+        p_invoice_item_ids: draft.itemIds,
+        p_invoice_amount: draft.amount.amount,
+        p_within_limit: toSaveOrderRows(draft.withinLimit) as unknown as Json,
+        p_limit_exceeded: toSaveOrderRows(
+          draft.limitExceeded
+        ) as unknown as Json,
+        p_status_change: toStatusChangeRow({
+          type: "admin",
+          adminUserId: input.adminUserId,
+          reason: null,
+        }),
       }
     );
-    if (error) throw new Error(`請求作成に失敗: ${error.message}`);
+    if (error) {
+      if (error.message.includes("order_version_conflict")) {
+        throw new OrderConcurrentlyModifiedError(draft.withinLimit.id);
+      }
+      throw new Error(`請求作成に失敗: ${error.message}`);
+    }
     return data as InvoiceSettlementCreated;
   }
 }
