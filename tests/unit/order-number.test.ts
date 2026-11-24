@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { OrderNumber } from "@/domain/value-objects/order-number";
 import { InvalidOrderNumberError } from "@/domain/errors/invalid-order-number-error";
 
@@ -25,36 +25,41 @@ describe("OrderNumber", () => {
     });
   });
 
-  describe("fromRandomBytes()", () => {
-    it("5バイト（40ビット）を5ビットずつ8文字にする", () => {
-      // 0x00 0x44 0x32 0x14 0xC7 = 00000 00001 00010 00011 00100 00101 00110 00111
-      expect(
-        OrderNumber.fromRandomBytes(
-          new Uint8Array([0x00, 0x44, 0x32, 0x14, 0xc7])
-        ).value
-      ).toBe("01234567");
+  describe("generate()", () => {
+    it("乱数源に5バイト（40ビット）を求め、5ビットずつ8文字にする", () => {
+      const randomBytes = vi.fn(
+        // 0x00 0x44 0x32 0x14 0xC7 = 00000 00001 00010 00011 00100 00101 00110 00111
+        () => new Uint8Array([0x00, 0x44, 0x32, 0x14, 0xc7])
+      );
+
+      expect(OrderNumber.generate(randomBytes).value).toBe("01234567");
+      expect(randomBytes).toHaveBeenCalledWith(5);
     });
 
     it("すべて1のビットは Z（31）が8文字になる", () => {
       expect(
-        OrderNumber.fromRandomBytes(
-          new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff])
+        OrderNumber.generate(
+          () => new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff])
         ).value
       ).toBe("ZZZZZZZZ");
     });
 
     it("作った番号は of() で受け付けられる形になる", () => {
-      const bytes = new Uint8Array([0x9a, 0x3c, 0x5e, 0x71, 0x0f]);
-      const number = OrderNumber.fromRandomBytes(bytes);
+      const number = OrderNumber.generate((length) =>
+        crypto.getRandomValues(new Uint8Array(length))
+      );
 
       expect(OrderNumber.of(number.value).equals(number)).toBe(true);
     });
 
-    it.each([4, 6])("5バイト以外（%iバイト）からは作れない", (length) => {
-      expect(() => OrderNumber.fromRandomBytes(new Uint8Array(length))).toThrow(
-        RangeError
-      );
-    });
+    it.each([4, 6])(
+      "乱数源が5バイト以外（%iバイト）を返したら作らない",
+      (length) => {
+        expect(() =>
+          OrderNumber.generate(() => new Uint8Array(length))
+        ).toThrow(RangeError);
+      }
+    );
   });
 
   describe("equals()", () => {

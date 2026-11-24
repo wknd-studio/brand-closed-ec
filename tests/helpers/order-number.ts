@@ -5,6 +5,7 @@ import { OrderNumber } from "@/domain/value-objects/order-number";
  * アプリが注文を作るときと同じく OrderNumber で作る
  */
 export function randomOrderNumber(): string {
-  return OrderNumber.fromRandomBytes(crypto.getRandomValues(new Uint8Array(5)))
-    .value;
+  return OrderNumber.generate((length) =>
+    crypto.getRandomValues(new Uint8Array(length))
+  ).value;
 }

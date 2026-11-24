@@ -243,6 +243,38 @@ describe("注文番号の保存と読み戻し（SupabaseOrderRepository）", ()
   });
 });
 
+describe("save_order の保存し直し", () => {
+  it("既存の注文に別の番号を渡しても、番号は更新しない", async () => {
+    // repository は読み戻した番号をそのまま渡すため、DB の側で番号を変えないことを関数を直接呼んで確かめる
+    const repo = new SupabaseOrderRepository(supabase);
+    const loaded = (await repo.findById(ORDER_SAVED_ID))!;
+    const before = loaded.orderNumber.value;
+    let other = randomOrderNumber();
+    while (other === before) other = randomOrderNumber();
+
+    const { error } = await supabase.rpc("save_order", {
+      p_order: {
+        id: ORDER_SAVED_ID,
+        user_id: USER_A_ID,
+        order_number: other,
+        status: loaded.status.value,
+        shipping_address_snapshot: snapshotProps,
+        billing_address_snapshot: snapshotProps,
+        rank_at_order: "basic",
+        monthly_limit_at_order: null,
+        created_at: loaded.createdAt.toISOString(),
+        version: loaded.version,
+      },
+      p_settlements: [],
+      p_items: [],
+      p_status_change: { changed_by: "system" },
+    });
+    if (error) throw error;
+
+    expect(await orderNumberOf(ORDER_SAVED_ID)).toBe(before);
+  });
+});
+
 describe("orders.order_number の制約", () => {
   it("指定した番号はそのまま入る", async () => {
     expect(await orderNumberOf(ORDER_A_ID)).toBe(ORDER_A_NUMBER);
