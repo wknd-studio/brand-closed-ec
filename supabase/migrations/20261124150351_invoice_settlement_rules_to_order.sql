@@ -13,6 +13,11 @@
 -- 注文を組み立てて渡し、この関数が上限の確認の結果でどちらか一方を save_order で保存する。
 -- save_order が版を確かめるため、組み立てた後に注文が変わっていれば何も保存せずに失敗する
 -- （同じ明細の請求作成を同時に実行したときも、後の方はここで失敗する）
+--
+-- 渡された値は repository が同じ draft から組み立てるが、欠けた値・食い違った値を渡されたときに
+-- 危ない側（上限内として保存する・別の会員の行をロックする・新しい注文として保存する）に倒れないよう、
+-- 値の形だけは確かめる。請求額が明細の合計と合っているかは確かめない（請求額の計算は Order の責務で、
+-- ここで計算し直すと業務ルールが2か所に分かれるため）
 -- ============================================================
 
 DROP FUNCTION public.create_invoice_settlement_with_limit_check(
@@ -38,12 +43,43 @@ RETURNS text
 LANGUAGE plpgsql
 AS $$
 DECLARE
+  v_order_id uuid := (p_within_limit->'order'->>'id')::uuid;
+  v_order_user_id uuid;
   v_confirmed bigint;
   v_status text;
   v_order jsonb;
 BEGIN
-  -- 同一顧客の注文確定・請求作成を直列化する行ロック（place_order_with_limit_check と同じ行）
+  -- NULL のままだと下の上限の比較が NULL になり、上限内（invoice_sent）の側に進んでしまう
+  IF p_invoice_amount IS NULL THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: invoice_amount_required' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- 2つの候補は、同じ注文の同じ版から組み立てたもの（違えば、上限の確認の結果で別の注文を保存してしまう）
+  IF v_order_id IS NULL
+     OR (p_limit_exceeded->'order'->>'id')::uuid IS DISTINCT FROM v_order_id
+     OR (p_limit_exceeded->'order'->>'version') IS DISTINCT FROM (p_within_limit->'order'->>'version') THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: candidates_mismatch' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- 同一顧客の注文確定・請求作成を直列化する行ロック（place_order_with_limit_check と同じ行）。
+  -- 行が無いとロックせずに進んでしまうため、無ければ失敗する
   PERFORM 1 FROM public.users WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: user_not_found' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- 請求は既存の注文にだけ作る（save_order は無い注文を新しく作るため、ここで止める）。
+  SELECT user_id INTO v_order_user_id FROM public.orders WHERE id = v_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: order_not_found' USING ERRCODE = 'P0001';
+  END IF;
+  -- 注文の会員（DB・渡された2つの注文）が p_user_id でなければ、ロックした行と集計する会員が
+  -- 注文と食い違う。save_order は渡された user_id で注文を書き換えるため、渡す側も確かめる
+  IF v_order_user_id <> p_user_id
+     OR (p_within_limit->'order'->>'user_id')::uuid IS DISTINCT FROM p_user_id
+     OR (p_limit_exceeded->'order'->>'user_id')::uuid IS DISTINCT FROM p_user_id THEN
+    RAISE EXCEPTION 'invoice_settlement_invalid: user_mismatch' USING ERRCODE = 'P0001';
+  END IF;
 
   v_confirmed := public.confirmed_amount_in_period(
     p_user_id, p_period_start, p_period_end, p_invoice_item_ids
