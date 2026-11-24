@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth/current-user";
 import { onboardingPaymentQueryService } from "@/composition/onboarding-payment-query";
 import { isOnboardingCompleted } from "./actions";
 import OnboardingStatusPoller from "./onboarding-status-poller";
+import { ProcessingStatus, TimedOutStatus } from "./payment-status";
 import ReloadButton from "./reload-button";
 import {
   PaymentResultIcon,
@@ -59,7 +60,10 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
 
   return (
     <PaymentResultLayout>
-      <OnboardingStatusPoller />
+      <OnboardingStatusPoller
+        processing={<ProcessingStatus />}
+        timedOut={<TimedOutStatus />}
+      />
     </PaymentResultLayout>
   );
 }
