@@ -19,7 +19,7 @@ export default function PaymentFailingNotice({ action }: Props) {
             月額費用のお支払いに失敗しました。お支払い方法を更新してください
           </p>
           <p className="text-neutral-700">
-            お支払い方法を更新しないと、最初の支払い失敗から2週間ほどでご利用が止まります。
+            お支払い方法を更新しないと、最初の支払い失敗から2週間ほどでご利用が止まります。更新が済むまで、新しいご注文はできません。
           </p>
         </div>
         <PaymentMethodButton action={action} label="お支払い方法を更新する" />

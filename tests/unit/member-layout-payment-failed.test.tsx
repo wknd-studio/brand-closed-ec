@@ -60,6 +60,7 @@ describe("MemberLayout - 支払い失敗中の案内", () => {
     expect(findMemberLayout).toHaveBeenCalledWith("clerk-1");
     expect(html).toContain(NOTICE);
     expect(html).toContain("2週間ほどでご利用が止まります");
+    expect(html).toContain("新しいご注文はできません");
     expect(html).toContain("お支払い方法を更新する");
     expect(html).toContain("本文");
   });
