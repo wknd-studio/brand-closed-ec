@@ -32,6 +32,7 @@ describe(".gitattributes の生成物指定", () => {
     "CLAUDE.md",
     "package.json",
     "supabase/migrations/20260922020000_create_claim_stripe_webhook_event_function.sql",
+    "supabase/schemas/README.md",
   ])("%s は生成物として扱われない", (file) => {
     expect(linguistGenerated(file)).toBe("unspecified");
   });
