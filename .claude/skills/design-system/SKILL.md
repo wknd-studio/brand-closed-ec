@@ -62,7 +62,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `ChoiceCard`: ラジオボタンを中に置いて、カード全体で選ばせる `<label>`。選ばれた（ゴールドの枠・薄いグラデーション）・キーボードのフォーカスがある見た目は、中の入力欄の状態（`:has`）から付くため、選択状態を props で渡さない。中の要素は `group-has-checked:` で選ばれたときの見た目を変えられる。余白・並びは `className` で足す（最初の利用は `/onboarding/account-type`）。オンボーディングのステップのラベルは `src/app/onboarding/onboarding-steps.ts` の `ONBOARDING_STEPS` を使う
 
 - `Popover`（`PopoverTrigger` / `PopoverContent` / `usePopoverOpen`）: ボタンで開閉する浮いた枠。`aria-expanded`・`aria-controls` の付与、外側を押す・Escape（ボタンにフォーカスを戻す）・中のリンクを押すと閉じる動きをまとめてある。`PopoverContent` の `align` は `end`（ボタンの右端にそろえた白いカード。既定）と `full`（基準の要素の幅いっぱい。スマホ幅のメニュー）。`role`・`aria-label` は使う側で付ける（最初の利用は会員のヘッダーのアカウントのメニュー・仕入れ枠の内訳）
-- `LimitMeter`: 今月の仕入れ枠。上限・使用・残りと、確定した注文（`bg-primary`）・カートの商品（`bg-primary-light`）の2色のバー。使用率90%以上（上限0を含む）で注意色（`warning`）、無制限（`monthlyLimit: null`）はバーを出さず「上限なし」。`variant` は `compact`（ヘッダー用。`cartBreakdown` で「うちカート」を添える）と `detail`（内訳とカートも枠に含める旨）。金額は `src/domain/services/cart-limit.ts` の `monthlyLimitStatus`・`sumCartFixedTotal` で求めて渡し、部品の中で残りを計算しない（最初の利用は会員のヘッダー）
+- `LimitMeter`: 今月の仕入れ枠。上限・使用・残りと、確定した注文（`bg-primary`）・カートの商品（`bg-primary-light`）の2色のバー。上限間近（`status.isNearLimit`。使用率90%以上・上限0。判定は `MonthlyLimit.isNearlyExceededBy`）で注意色（`warning`）、無制限（`monthlyLimit: null`）はバーを出さず「上限なし」。`variant` は `compact`（ヘッダー用。`cartBreakdown` で「うちカート」を添える）と `detail`（内訳とカートも枠に含める旨）。`status` には `src/domain/services/cart-limit.ts` の `monthlyLimitStatus` の戻り値を、`cartAmount` には `sumCartFixedTotal` を渡し、部品の中で使用・残り・上限間近を判定・計算しない（最初の利用は会員のヘッダー）
 
 ## Clerk のコンポーネントの見た目
 
