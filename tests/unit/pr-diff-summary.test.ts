@@ -73,6 +73,8 @@ describe("linguistGenerated", () => {
         "src/types/database.types.ts",
         "pnpm-lock.yaml",
         ".agents/skills/clerk/SKILL.md",
+        "supabase/schemas/public/functions/save_order.sql",
+        "supabase/schemas/README.md",
         "src/domain/entities/order.ts",
         "CLAUDE.md",
       ])
@@ -81,6 +83,7 @@ describe("linguistGenerated", () => {
         "src/types/database.types.ts",
         "pnpm-lock.yaml",
         ".agents/skills/clerk/SKILL.md",
+        "supabase/schemas/public/functions/save_order.sql",
       ])
     );
   });

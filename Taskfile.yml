@@ -17,6 +17,11 @@ tasks:
         silent: true
       - supabase start
 
+  db:schema:
+    desc: ローカルDBの今の定義を supabase/schemas/ に書き出す（先に supabase db reset。ワークツリーではそのスロットのDBを使う。CIの Schema Files Drift が食い違いを検査する）
+    cmds:
+      - bash scripts/with-worktree-db.sh bash scripts/db-schema-snapshot.sh
+
   dev:ngrok:spawn:
     desc: ngrok を別のTerminalウィンドウで起動する（同一プロセス内で他コマンドと出力を共有するとTUI表示が崩れるため）
     cmds:
