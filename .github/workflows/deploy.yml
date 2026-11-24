@@ -59,7 +59,10 @@ jobs:
   schema-types-drift:
     name: Schema Types Drift
     runs-on: ubuntu-24.04
-    if: github.event_name == 'pull_request'
+    # 別々に通ったPRの組み合わせで生成物がずれることがあるため（#789）、developへのpushでも動かす。
+    # 理由はtypecheckのコメント参照。生成物のずれはstgの動作に影響しないため、deploy-stgは待たない
+    # （失敗は依存グラフのページの帯に出る）
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -96,7 +99,8 @@ jobs:
   schema-files-drift:
     name: Schema Files Drift
     runs-on: ubuntu-24.04
-    if: github.event_name == 'pull_request'
+    # developへのpushでも動かす理由・deploy-stgが待たない理由はSchema Types Driftのコメント参照
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install-cli

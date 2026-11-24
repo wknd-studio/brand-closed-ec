@@ -1,5 +1,5 @@
 /**
- * developへのマージ後のCI（Deployワークフロー: TypeScript・Lint・Unit Tests、stgへのデプロイと
+ * developへのマージ後のCI（Deployワークフロー: TypeScript・Lint・Unit Tests・生成物の検査、stgへのデプロイと
  * stgのE2E）の結果を、依存グラフのページの一番上に出す。マージ後に動くジョブはPRの画面に出ないため、
  * 失敗が続いても気づけなかった（#486）。GitHubからの取得はscripts/issue-deps-graph.tsが担う。
  */
