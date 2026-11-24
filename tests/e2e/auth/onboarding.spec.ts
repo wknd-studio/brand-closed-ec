@@ -74,8 +74,19 @@ test.describe.serial("認証済みアクセス", () => {
 
   test("個人として登録を選ぶと /onboarding/plan?accountType=individual に進む", async () => {
     await page.goto("/onboarding/account-type");
-    await page.getByRole("radio", { name: /個人として登録/ }).check();
-    await page.getByRole("button", { name: /次へ/ }).click();
+    await expect(
+      page
+        .getByRole("navigation", { name: "お手続きの進み具合" })
+        .locator('[aria-current="step"]')
+    ).toHaveText("1 ご利用の種別");
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "ご利用の種別を選んでください",
+      })
+    ).toBeVisible();
+    await page.getByRole("radio", { name: "個人として登録" }).check();
+    await page.getByRole("button", { name: "個人として次へ" }).click();
     await expect(page).toHaveURL(/\/onboarding\/plan\?accountType=individual/);
   });
 
@@ -97,7 +108,7 @@ test.describe.serial("認証済みアクセス", () => {
   test("プラン選択 UI が表示される", async () => {
     await page.goto("/onboarding/plan?accountType=individual");
     await expect(
-      page.getByRole("heading", { name: /プランを選択/ })
+      page.getByRole("heading", { name: "プランとお客様情報", level: 1 })
     ).toBeVisible();
     await expect(page.getByRole("radio", { name: /STARTER/ })).toBeVisible();
     await expect(page.getByRole("radio", { name: /BASIC/ })).toBeVisible();
@@ -112,10 +123,24 @@ test.describe.serial("認証済みアクセス", () => {
   test("申込みの最終確認として、月額・初期費用・支払い・契約期間・解約の条件が表示される", async () => {
     await page.goto("/onboarding/plan?accountType=individual");
 
-    await expect(page.getByRole("radio", { name: /STARTER/ })).toBeVisible();
-    await expect(
-      page.getByText(/月額 ¥5,000（税込）・初期費用 ¥5,000（税込）/)
-    ).toBeVisible();
+    await expect(page.getByText("金額はすべて税込です")).toBeVisible();
+    const starter = page.getByRole("radio", { name: /STARTER/ });
+    await expect(starter).toBeVisible();
+    await expect(starter).toHaveAccessibleName(/¥5,000 \/ 月/);
+    await expect(starter).toHaveAccessibleName(/初期費用 ¥5,000/);
+    await expect(starter).toHaveAccessibleName(/月間仕入れ上限\s*¥300,000/);
+
+    // 選んだプランの、本日のお支払い（初期費用＋初月の月額）と2ヶ月目以降の月額をまとめに出す
+    await starter.check();
+    const summary = page.getByRole("complementary", {
+      name: "お申し込み内容",
+    });
+    await expect(summary).toContainText("STARTER（入門）");
+    await expect(summary).toContainText("本日のお支払い¥10,000");
+    await expect(summary).toContainText("2ヶ月目以降毎月 ¥5,000");
+    await expect(summary).toContainText("最低利用期間は入会日から6ヶ月");
+    await expect(summary).toContainText("Stripe の決済画面");
+
     const terms = page.getByRole("region", { name: "お申し込みの条件" });
     for (const term of [
       "お支払い方法",
@@ -132,6 +157,19 @@ test.describe.serial("認証済みアクセス", () => {
     await expect(terms).toContainText("残りの月数分の月額を解約金");
   });
 
+  test("ステップと、選んだ種別のまま種別選択へ戻るリンクが表示される", async () => {
+    await page.goto("/onboarding/plan?accountType=individual");
+
+    await expect(
+      page
+        .getByRole("navigation", { name: "お手続きの進み具合" })
+        .locator('[aria-current="step"]')
+    ).toHaveText(/プラン・お客様情報/);
+    await expect(
+      page.getByRole("link", { name: /ご利用の種別に戻る（個人を選択中）/ })
+    ).toHaveAttribute("href", "/onboarding/account-type");
+  });
+
   test("個人は法人情報の入力欄が表示されない", async () => {
     await page.goto("/onboarding/plan?accountType=individual");
     await expect(page.getByLabel("会社名")).toBeHidden();
@@ -146,11 +184,17 @@ test.describe.serial("認証済みアクセス", () => {
     await page.getByLabel("名", { exact: true }).fill("太郎");
     await page.getByLabel("電話番号").fill("12345");
     await page.getByRole("radio", { name: /STANDARD/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
 
     await expect(page.getByLabel("電話番号")).toHaveAccessibleDescription(
       "電話番号の形式が正しくありません"
     );
+    // 画面上部のエラーのまとめから、該当する項目へ移れる
+    const alert = page.getByRole("alert").filter({ hasText: "入力内容" });
+    await alert
+      .getByRole("link", { name: "電話番号の形式が正しくありません" })
+      .click();
+    await expect(page.getByLabel("電話番号")).toBeFocused();
     await expect(page.getByLabel("姓", { exact: true })).toHaveValue("山田");
     await expect(page.getByLabel("名", { exact: true })).toHaveValue("太郎");
     await expect(page.getByLabel("電話番号")).toHaveValue("12345");
@@ -164,7 +208,7 @@ test.describe.serial("認証済みアクセス", () => {
     await page.getByLabel("名", { exact: true }).fill(" ");
     await page.getByLabel("電話番号").fill("09012345678");
     await page.getByRole("radio", { name: /STARTER/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
 
     await expect(
       page.getByLabel("姓", { exact: true })
@@ -181,10 +225,23 @@ test.describe.serial("認証済みアクセス", () => {
     await page.locator('input[name="firstName"]').fill("太郎");
     await page.locator('input[name="phoneNumber"]').fill("09012345678");
     await page.getByRole("radio", { name: /STARTER/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
     await expect(page).toHaveURL(/checkout\.stripe\.com/, {
       timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,
     });
+  });
+
+  // サインアウトすると以降のテストが認証済みの前提を失うため、このdescribeの最後に置く
+  test("ヘッダーのログアウトを押すと、サインアウトしてトップへ戻る", async () => {
+    await page.goto("/onboarding/account-type");
+    await page
+      .getByRole("banner")
+      .getByRole("button", { name: "ログアウト" })
+      .click();
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/");
+    await page.goto("/onboarding/plan");
+    await expect(page).toHaveURL(/\/sign-in/);
   });
 });
 
@@ -217,11 +274,17 @@ test.describe.serial("法人として登録", () => {
 
   test("法人として登録を選ぶと法人情報の入力欄が表示される", async () => {
     await page.goto("/onboarding/account-type");
-    await page.getByRole("radio", { name: /法人として登録/ }).check();
-    await page.getByRole("button", { name: /次へ/ }).click();
+    await page.getByRole("radio", { name: "法人として登録" }).check();
+    await page.getByRole("button", { name: "法人として次へ" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/plan\?accountType=corporate/);
     await expect(page.getByLabel("会社名")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "法人とご担当者の情報" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /ご利用の種別に戻る（法人を選択中）/ })
+    ).toBeVisible();
     await expect(page.getByLabel("適格請求書発行事業者登録番号")).toBeVisible();
   });
 
@@ -233,7 +296,7 @@ test.describe.serial("法人として登録", () => {
     await page.getByLabel("会社名").fill("株式会社テスト");
     await page.getByLabel("適格請求書発行事業者登録番号").fill("T123");
     await page.getByRole("radio", { name: /STARTER/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
 
     await expect(
       page.getByLabel("適格請求書発行事業者登録番号")
@@ -256,7 +319,7 @@ test.describe.serial("法人として登録", () => {
       .getByLabel("適格請求書発行事業者登録番号")
       .fill("T1234567890123");
     await page.getByRole("radio", { name: /STARTER/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
 
     await expect(page).toHaveURL(/checkout\.stripe\.com/, {
       timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,

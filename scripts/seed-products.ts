@@ -11,6 +11,7 @@ import {
   computeRankPrices,
   pickEffectivePriceSettingsRates,
 } from "../src/sanity/schemas/product-price-calculator";
+import type { FulfillmentLocationCode } from "../src/sanity/schemas/fulfillment-location-options";
 
 type Block = {
   _type: "block";
@@ -62,6 +63,7 @@ type ProductDoc = {
   retail_price: number;
   is_negotiable: boolean;
   payment_timing?: "at_order" | "after_order";
+  fulfillment_location: FulfillmentLocationCode;
   price_rates?: RateMap;
   price_settings?: RefValue;
   prices?: RateMap;
@@ -440,6 +442,7 @@ const productDefs = [
     retail_price: 55000,
     is_negotiable: false,
     payment_timing: "after_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "starter",
     availability: "available",
   },
@@ -461,6 +464,7 @@ const productDefs = [
     retail_price: 33000,
     is_negotiable: false,
     payment_timing: "after_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "starter",
     availability: "available",
   },
@@ -482,6 +486,7 @@ const productDefs = [
     retail_price: 198000,
     is_negotiable: false,
     payment_timing: "after_order" as const,
+    fulfillment_location: "supplier_direct" as const,
     // 掛け率の商品ごと上書き例（basicのみデフォルトより優遇）
     price_rates: { basic: 48 },
     min_rank: "basic",
@@ -506,6 +511,7 @@ const productDefs = [
     retail_price: 185000,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "starter",
     availability: "available",
   },
@@ -527,6 +533,7 @@ const productDefs = [
     retail_price: 495000,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "standard",
     availability: "available",
   },
@@ -548,6 +555,7 @@ const productDefs = [
     retail_price: 115500,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "supplier_direct" as const,
     min_rank: "starter",
     availability: "available",
   },
@@ -570,6 +578,7 @@ const productDefs = [
     retail_price: 693000,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "pro",
     availability: "available",
   },
@@ -591,6 +600,7 @@ const productDefs = [
     retail_price: 231000,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "basic",
     availability: "available",
   },
@@ -612,6 +622,7 @@ const productDefs = [
     retail_price: 79200,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "starter",
     availability: "available",
   },
@@ -634,6 +645,7 @@ const productDefs = [
     retail_price: 93500,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "starter",
     availability: "available",
   },
@@ -655,6 +667,7 @@ const productDefs = [
     retail_price: 249700,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "basic",
     availability: "available",
   },
@@ -677,6 +690,7 @@ const productDefs = [
     retail_price: 1210000,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     // 掛け率の商品ごと上書き例（限定品のためproをデフォルトより高めに設定）
     price_rates: { pro: 42 },
     // 掛け率設定も商品優先の動作確認用に上書き（ブランドの「定価カタログ」より優先される）
@@ -705,6 +719,7 @@ const productDefs = [
     retail_price: 143000,
     is_negotiable: false,
     payment_timing: "at_order" as const,
+    fulfillment_location: "office" as const,
     min_rank: "basic",
     availability: "available",
   },
@@ -909,8 +924,10 @@ async function seed() {
     const fileNote = fileDef ? " +ファイル" : "";
     const paymentTimingLabel =
       def.payment_timing === "after_order" ? "[後払い]" : "[先払い]";
+    const fulfillmentLocationLabel =
+      def.fulfillment_location === "supplier_direct" ? "[直送]" : "[事務所]";
     console.log(
-      ` 完了 (${def.brand}, min_rank: ${def.min_rank}, ${label}${fileNote}, ${paymentTimingLabel})`
+      ` 完了 (${def.brand}, min_rank: ${def.min_rank}, ${label}${fileNote}, ${paymentTimingLabel}, ${fulfillmentLocationLabel})`
     );
   }
 

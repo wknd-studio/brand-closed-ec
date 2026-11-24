@@ -22,7 +22,7 @@ test.describe("実際の登録画面を経由した新規会員登録", () => {
     await signUpAsIndividual(page, TEST_EMAIL, TEST_PASSWORD);
 
     await page.getByRole("radio", { name: /STARTER/ }).check();
-    await page.getByRole("button", { name: /このプランで始める/ }).click();
+    await page.getByRole("button", { name: /お支払いへ進む/ }).click();
 
     await expect(page).toHaveURL(/checkout\.stripe\.com/, {
       timeout: STRIPE_CHECKOUT_REDIRECT_TIMEOUT,

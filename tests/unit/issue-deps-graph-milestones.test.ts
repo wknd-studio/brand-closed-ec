@@ -228,12 +228,11 @@ describe("renderHtml: マイルストーンの切り替え", () => {
     expect(Object.keys(data.variants).sort()).toEqual(
       ["", "A", "B", "C", "D", NO_MILESTONE].sort()
     );
-    expect(Object.keys(data.variants["A"]).sort()).toEqual([
-      "00",
-      "01",
-      "10",
-      "11",
-    ]);
+    expect(Object.keys(data.variants["A"]).sort()).toEqual(
+      ["00", "01", "10", "11"]
+        .flatMap((k) => ["", "P0", "P1", "P2"].map((p) => k + p))
+        .sort()
+    );
     expect(data.variants[""]["00"]).toContain("I3 --> I4");
     expect(data.variants["A"]["00"]).not.toContain("I3 --> I4");
     expect(data.overview["00"]).toContain('M1 -->|"1本"| M0');

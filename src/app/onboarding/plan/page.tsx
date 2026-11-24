@@ -1,22 +1,36 @@
+import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { redirect } from "next/navigation";
 import LegalLinksNote from "@/app/legal/legal-links-note";
 import LegalNoticeText from "@/app/legal/legal-notice-text";
 import {
+  CONTACT,
   MEMBERSHIP_TERMS,
   type LegalNoticeValue,
 } from "@/app/legal/legal-notice";
 import { PLANS } from "@/app/home-presenter";
-import PlanSelector, { type PlanFee } from "./plan-selector";
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import { Container } from "@/components/ui/container";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { Heading } from "@/components/ui/heading";
+import { Steps } from "@/components/ui/steps";
+import {
+  MemberRank,
+  type MemberRankValue,
+} from "@/domain/value-objects/member-rank";
+import PlanSelector from "./plan-selector";
+import { PlanSection } from "./plan-section";
 
-// 料金はトップページのプラン比較表と同じ値を出す
-const PLAN_FEES = Object.fromEntries(
-  PLANS.map(({ id, monthlyFee, initialFee }) => [
-    id,
-    { monthlyFee, initialFee },
-  ])
-) as Record<MemberRankValue, PlanFee>;
+const SELF_SERVICE_RANKS: readonly MemberRankValue[] =
+  MemberRank.selfServiceRanks();
+
+// 料金・上限・説明はトップページの料金表と同じ出どころ（PLANS）から出す。
+// 申込みで選べるのは、個別契約（ENTERPRISE）を除いたプラン
+const SELECTABLE_PLANS = PLANS.filter(({ id }) =>
+  SELF_SERVICE_RANKS.includes(id)
+);
+const ENTERPRISE = PLANS.find(({ id }) => !SELF_SERVICE_RANKS.includes(id));
+
+const ACCOUNT_TYPE_LABELS = { individual: "個人", corporate: "法人" };
 
 /**
  * 入会（月額プランの申込み）の最終確認画面に出す、対価・支払い・契約期間・解約の条件
@@ -31,27 +45,22 @@ function MembershipTerms() {
     { label: "解約（退会）", value: MEMBERSHIP_TERMS.cancellation },
   ];
   return (
-    <section aria-labelledby="membership-terms-heading" className="space-y-3">
-      <h2
-        id="membership-terms-heading"
-        className="text-sm font-medium text-gray-700"
-      >
-        お申し込みの条件
-      </h2>
-      <dl className="divide-y rounded-lg border text-sm">
+    <PlanSection
+      id="membership-terms-heading"
+      number={3}
+      title="お申し込みの条件"
+    >
+      <dl className="divide-y divide-neutral-200 rounded-xl border border-neutral-200 text-[0.8125rem] leading-[1.75]">
         {rows.map(({ label, value }) => (
-          <div
-            key={label}
-            className="grid gap-1 px-4 py-3 sm:grid-cols-[8rem_1fr]"
-          >
-            <dt className="text-gray-500">{label}</dt>
-            <dd>
+          <div key={label} className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
+            <dt className="flex-[0_0_8.5rem] text-secondary">{label}</dt>
+            <dd className="min-w-0 flex-[1_1_260px]">
               <LegalNoticeText value={value} />
             </dd>
           </div>
         ))}
       </dl>
-    </section>
+    </PlanSection>
   );
 }
 
@@ -76,17 +85,54 @@ export default async function OnboardingPlanPage({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <div className="w-full max-w-lg space-y-6">
-        <h1 className="text-2xl font-semibold">プランを選択してください</h1>
+    <main className="flex-1 pt-10 pb-[72px]">
+      <Container className="flex flex-col gap-7">
+        <Steps
+          steps={["ご利用の種別", "プラン・お客様情報", "お支払い"]}
+          current={1}
+          className="mx-auto w-full max-w-[680px]"
+        />
+        <div className="flex flex-col gap-2.5">
+          <Link
+            href="/onboarding/account-type"
+            className="self-start text-[0.8125rem] text-secondary hover:text-primary"
+          >
+            ← ご利用の種別に戻る（{ACCOUNT_TYPE_LABELS[accountType]}を選択中）
+          </Link>
+          <Eyebrow withLine>STEP 2 / 3</Eyebrow>
+          <Heading as="h1" level="compact">
+            プランとお客様情報
+          </Heading>
+          <p className="text-sm leading-[1.8] text-secondary">
+            金額はすべて税込です。内容を確かめて「お支払いへ進む」を押すと、決済画面に移ります。
+          </p>
+        </div>
         <PlanSelector
           isCorporate={accountType === "corporate"}
-          fees={PLAN_FEES}
+          plans={SELECTABLE_PLANS}
+          planNote={
+            ENTERPRISE && (
+              <p className="text-xs text-secondary">
+                上限が{ENTERPRISE.monthlyLimit}の {ENTERPRISE.label}（
+                {ENTERPRISE.name}）をご希望の場合は、
+                <a
+                  href={`mailto:${CONTACT.email.text}`}
+                  className="text-neutral-900 underline hover:text-primary"
+                >
+                  お問い合わせ
+                </a>
+                ください。
+              </p>
+            )
+          }
+          minimumPeriod={
+            <LegalNoticeText value={MEMBERSHIP_TERMS.contractPeriod} />
+          }
+          legalNote={<LegalLinksNote action="お申し込み" />}
         >
           <MembershipTerms />
         </PlanSelector>
-        <LegalLinksNote action="お申し込み" />
-      </div>
+      </Container>
     </main>
   );
 }

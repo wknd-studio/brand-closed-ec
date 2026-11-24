@@ -28,8 +28,8 @@ import { clientQuestionsOf } from "@/lib/issue-deps-graph/next-actions";
  *
  * 使い方:
  *   task deps:graph           HTMLを生成してブラウザで開く（ノードをクリックするとissueへ飛ぶ）
- *   task deps:graph -- --json ノード・エッジ・ステータスと、マイルストーンごとの所属issue・
- *                             マイルストーンをまたぐ依存、developのCIの結果をJSONで標準出力に出す（AI・スクリプト向け）
+ *   task deps:graph -- --json ノード・エッジ・ステータス・優先度と、マイルストーンごとの所属issue・
+ *                             マイルストーンをまたぐ依存、優先度の逆転、developのCIの結果をJSONで標準出力に出す（AI・スクリプト向け）
  *   pnpm tsx scripts/issue-deps-graph.ts --out=<path>  指定したパスにHTMLを書き出す（ブラウザは開かない。GitHub Pagesへのデプロイ用）
  *
  * 前提: gh CLIでログイン済み（CIではGH_TOKENを設定）であること

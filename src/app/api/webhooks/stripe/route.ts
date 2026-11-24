@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { SPAN_OP } from "@/lib/observability/span";
 import {
+  cancelExpiredCheckoutSettlement,
   markCheckoutOrderAsPaid,
   markInvoiceOrderAsPaid,
 } from "@/composition/order-payment";
 import { completeOnboardingCheckout } from "@/composition/onboarding";
+import { syncSubscriptionStatus } from "@/composition/subscription-status";
 import {
   constructStripeWebhookEvent,
   processStripeWebhookEventOnce,
@@ -109,6 +111,36 @@ export async function POST(req: Request) {
     }
   }
 
+  // 決済されずに期限切れになったCheckout（expires_at。#202）。入会のCheckout（mode: subscription）は対象外
+  if (
+    event.type === "checkout.session.expired" &&
+    event.data.object.mode === "payment"
+  ) {
+    const session = event.data.object;
+    const outcome = await processStripeWebhookEventOnce({
+      event: { eventId: event.id, type: event.type, payload: event },
+      process: () =>
+        Sentry.startSpan(
+          { name: "cancelExpiredCheckoutSettlement", op: SPAN_OP.webhook },
+          () =>
+            cancelExpiredCheckoutSettlement({
+              stripeCheckoutSessionId: session.id,
+            })
+        ),
+      failureReport: {
+        tags: { webhook: "stripe", eventType: event.type },
+        extra: { stripeCheckoutSessionId: session.id, eventId: event.id },
+      },
+    });
+    if (outcome.status === "skipped") return skippedResponse(outcome.claim);
+    if (outcome.status === "failed") {
+      return failedResponse(
+        "[Checkout Expired Webhook] 処理失敗:",
+        outcome.error
+      );
+    }
+  }
+
   if (event.type === "invoice.paid") {
     const invoice = event.data.object;
     const outcome = await processStripeWebhookEventOnce({
@@ -126,6 +158,28 @@ export async function POST(req: Request) {
     if (outcome.status === "skipped") return skippedResponse(outcome.claim);
     if (outcome.status === "failed") {
       return failedResponse("[Invoice Webhook] 処理失敗:", outcome.error);
+    }
+  }
+
+  if (
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted"
+  ) {
+    const subscription = event.data.object;
+    const outcome = await Sentry.startSpan(
+      { name: "syncSubscriptionStatus", op: SPAN_OP.webhook },
+      () =>
+        syncSubscriptionStatus({
+          event: { eventId: event.id, type: event.type, payload: event },
+          stripeSubscriptionId: subscription.id,
+        })
+    );
+    if (outcome.status === "skipped") return skippedResponse(outcome.claim);
+    if (outcome.status === "failed") {
+      return failedResponse(
+        "[Subscription Webhook] 状態の同期失敗:",
+        outcome.error
+      );
     }
   }
 

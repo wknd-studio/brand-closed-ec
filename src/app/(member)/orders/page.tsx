@@ -55,7 +55,9 @@ export default async function OrdersPage({ searchParams }: Props) {
                   })}
                 </td>
                 <td className="py-3 pr-6 font-mono text-xs">
-                  {order.orderId.slice(0, 8).toUpperCase()}
+                  <Link href={`/orders/${order.orderId}`} className="underline">
+                    {order.orderId.slice(0, 8).toUpperCase()}
+                  </Link>
                 </td>
                 <td className="py-3 pr-6">{order.status.label()}</td>
                 <td className="py-3 pr-6 text-right">

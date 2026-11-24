@@ -368,12 +368,11 @@ describe("renderHtml", () => {
   it("絞り込みの組み合わせごとのMermaidのソースと、前後のissueを埋め込む", () => {
     const html = renderHtml(sampleGraph(), "2026-10-17 12:00");
     const data = embeddedData(html);
-    expect(Object.keys(data.variants[""]).sort()).toEqual([
-      "00",
-      "01",
-      "10",
-      "11",
-    ]);
+    expect(Object.keys(data.variants[""]).sort()).toEqual(
+      ["00", "01", "10", "11"]
+        .flatMap((k) => ["", "P0", "P1", "P2"].map((p) => k + p))
+        .sort()
+    );
     expect(data.variants[""]["00"]).toContain("I1 --> I2");
     expect(data.relatives["1"]).toEqual({ before: [], after: [2] });
     expect(html).toContain("2026-10-17 12:00");

@@ -56,6 +56,8 @@ describe("StripeSubscriptionGateway.retrieveSubscription", () => {
       id: "sub_1",
       status: "active",
       start_date: toUnix(start),
+      cancel_at_period_end: false,
+      ended_at: null,
       items: {
         data: [
           {
@@ -73,7 +75,41 @@ describe("StripeSubscriptionGateway.retrieveSubscription", () => {
       currentPeriodStart: start,
       currentPeriodEnd: end,
       startedAt: start,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
     });
     expect(retrieveSubscriptionMock).toHaveBeenCalledWith("sub_1");
+  });
+
+  // GitHub issue #377。Stripeのcanceled_atは期末解約の予約時にも入るため、
+  // 解約が確定した日時にはended_atを使う
+  it("期末解約の予約はcancelAtPeriodEndに、解約の確定日時はended_atからcanceledAtに変換する", async () => {
+    const start = new Date(2026, 0, 1);
+    const end = new Date(2026, 1, 1);
+    const endedAt = new Date(2026, 0, 20);
+    retrieveSubscriptionMock.mockResolvedValue({
+      id: "sub_1",
+      status: "canceled",
+      start_date: toUnix(start),
+      cancel_at_period_end: true,
+      canceled_at: toUnix(new Date(2026, 0, 10)),
+      ended_at: toUnix(endedAt),
+      items: {
+        data: [
+          {
+            current_period_start: toUnix(start),
+            current_period_end: toUnix(end),
+          },
+        ],
+      },
+    });
+
+    await expect(
+      new StripeSubscriptionGateway().retrieveSubscription("sub_1")
+    ).resolves.toMatchObject({
+      status: "canceled",
+      cancelAtPeriodEnd: true,
+      canceledAt: endedAt,
+    });
   });
 });
