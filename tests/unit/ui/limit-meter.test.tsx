@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { LimitMeter } from "@/components/ui/limit-meter";
+import { monthlyLimitStatus } from "@/domain/services/cart-limit";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -31,12 +32,25 @@ describe("LimitMeter", () => {
   const segment = (name: string) =>
     container.querySelector<HTMLElement>(`[data-segment="${name}"]`);
 
-  const OK = {
-    monthlyLimit: 5_000_000,
-    confirmedAmount: 1_090_500,
-    cartAmount: 149_500,
-    remaining: 3_760_000,
-  };
+  // 金額と、ヘッダーと同じく cart-limit の monthlyLimitStatus で求めた状態
+  function meter(
+    monthlyLimit: number | null,
+    confirmedAmount: number,
+    cartAmount: number
+  ) {
+    return {
+      monthlyLimit,
+      confirmedAmount,
+      cartAmount,
+      status: monthlyLimitStatus({
+        lines: [{ productId: "p", unitPrice: cartAmount, quantity: 1 }],
+        confirmedAmount,
+        monthlyLimit,
+      }),
+    };
+  }
+
+  const OK = meter(5_000_000, 1_090_500, 149_500);
 
   describe("小さい形（compact）", () => {
     it("「今月の仕入れ枠」と上限、残り・使用（確定した注文＋カートの商品）の金額を出す", () => {
@@ -63,23 +77,17 @@ describe("LimitMeter", () => {
       expect(text()).toContain("使用 ¥1,240,000（うちカート ¥149,500）");
     });
 
-    it("使用率が90%未満なら注意色にしない", () => {
+    it("上限間近でなければ（使用率90%未満）注意色にしない", () => {
       render({
-        monthlyLimit: 1_000_000,
-        confirmedAmount: 899_999,
-        cartAmount: 0,
-        remaining: 100_001,
+        ...meter(1_000_000, 899_999, 0),
       });
 
       expect(container.innerHTML).not.toContain("warning");
     });
 
-    it("使用率が90%以上（上限間近）なら、残りの金額とバーを注意色にする", () => {
+    it("上限間近（使用率90%以上）なら、残りの金額とバーを注意色にする", () => {
       render({
-        monthlyLimit: 1_000_000,
-        confirmedAmount: 800_000,
-        cartAmount: 100_000,
-        remaining: 100_000,
+        ...meter(1_000_000, 800_000, 100_000),
       });
 
       expect(segment("confirmed")?.className).toContain("bg-warning");
@@ -93,10 +101,7 @@ describe("LimitMeter", () => {
 
     it("上限を超えていれば、超えた金額を出し、バーは100%で止める", () => {
       render({
-        monthlyLimit: 1_000_000,
-        confirmedAmount: 900_000,
-        cartAmount: 200_000,
-        remaining: -100_000,
+        ...meter(1_000_000, 900_000, 200_000),
       });
 
       expect(text()).toContain("超過 ¥100,000");
@@ -106,10 +111,7 @@ describe("LimitMeter", () => {
 
     it("上限0（会員の情報が無い）なら、上限間近として扱う", () => {
       render({
-        monthlyLimit: 0,
-        confirmedAmount: 0,
-        cartAmount: 0,
-        remaining: 0,
+        ...meter(0, 0, 0),
       });
 
       expect(text()).toContain("残り ¥0");
@@ -118,10 +120,7 @@ describe("LimitMeter", () => {
 
     it("無制限のプランはバーを出さず「上限なし」と出す", () => {
       render({
-        monthlyLimit: null,
-        confirmedAmount: 1_090_500,
-        cartAmount: 149_500,
-        remaining: null,
+        ...meter(null, 1_090_500, 149_500),
       });
 
       expect(segment("confirmed")).toBeNull();
@@ -153,10 +152,7 @@ describe("LimitMeter", () => {
 
     it("無制限のプランは、上限・残りを「無制限」「上限なし」で出し、バーを出さない", () => {
       render({
-        monthlyLimit: null,
-        confirmedAmount: 1_000,
-        cartAmount: 500,
-        remaining: null,
+        ...meter(null, 1_000, 500),
         variant: "detail",
       });
 

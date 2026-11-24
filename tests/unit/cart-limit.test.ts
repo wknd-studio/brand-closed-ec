@@ -216,7 +216,13 @@ describe("monthlyLimitStatus", () => {
         confirmedAmount: 50_000,
         monthlyLimit: 100_000,
       })
-    ).toEqual({ isUnlimited: false, remaining: 25_000, isOver: false });
+    ).toEqual({
+      isUnlimited: false,
+      used: 75_000,
+      remaining: 25_000,
+      isOver: false,
+      isNearLimit: false,
+    });
   });
 
   it("ちょうど上限と同額なら残量0で、超過ではない", () => {
@@ -226,7 +232,13 @@ describe("monthlyLimitStatus", () => {
         confirmedAmount: 75_000,
         monthlyLimit: 100_000,
       })
-    ).toEqual({ isUnlimited: false, remaining: 0, isOver: false });
+    ).toEqual({
+      isUnlimited: false,
+      used: 100_000,
+      remaining: 0,
+      isOver: false,
+      isNearLimit: true,
+    });
   });
 
   it("上限を超えていれば残量は負で、超過とする", () => {
@@ -236,16 +248,40 @@ describe("monthlyLimitStatus", () => {
         confirmedAmount: 80_000,
         monthlyLimit: 100_000,
       })
-    ).toEqual({ isUnlimited: false, remaining: -5_000, isOver: true });
+    ).toEqual({
+      isUnlimited: false,
+      used: 105_000,
+      remaining: -5_000,
+      isOver: true,
+      isNearLimit: true,
+    });
   });
 
-  it("上限が無制限（null）なら、無制限とし、残量・超過は持たない", () => {
+  it("使用（確定額 + カートの確定額）が上限の90%以上なら上限間近とする", () => {
+    // 65,000 + 25,000 = 90,000 は 100,000 の 90%
+    expect(
+      monthlyLimitStatus({
+        lines,
+        confirmedAmount: 65_000,
+        monthlyLimit: 100_000,
+      }).isNearLimit
+    ).toBe(true);
+    expect(
+      monthlyLimitStatus({
+        lines,
+        confirmedAmount: 64_999,
+        monthlyLimit: 100_000,
+      }).isNearLimit
+    ).toBe(false);
+  });
+
+  it("上限が無制限（null）なら、無制限とし、使用だけを持ち、残量・超過・上限間近は持たない", () => {
     expect(
       monthlyLimitStatus({
         lines,
         confirmedAmount: 80_000,
         monthlyLimit: null,
       })
-    ).toEqual({ isUnlimited: true });
+    ).toEqual({ isUnlimited: true, used: 105_000 });
   });
 });
