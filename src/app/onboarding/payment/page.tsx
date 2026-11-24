@@ -6,7 +6,14 @@ import {
   startOnboardingCheckout,
   type StartOnboardingCheckoutResult,
 } from "@/composition/onboarding";
-import Link from "next/link";
+import { CONTACT } from "@/app/legal/legal-notice";
+import {
+  PaymentResultIcon,
+  PaymentResultLayout,
+  PaymentResultText,
+  PaymentResultTitle,
+  RestartApplicationLink,
+} from "@/app/onboarding/payment/payment-result";
 
 export default async function OnboardingPaymentPage() {
   const { userId } = await requireAuth();
@@ -38,32 +45,40 @@ export default async function OnboardingPaymentPage() {
       extra: { clerkUserId: userId },
     });
     console.error("[Stripe] Checkout Session 作成失敗:", err);
-    return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="space-y-4 text-center">
-          <p className="text-red-600">決済ページの準備に失敗しました。</p>
-          <Link href="/onboarding/account-type" className="text-sm underline">
-            プラン選択に戻る
-          </Link>
-        </div>
-      </main>
-    );
+    return <PrepareFailed />;
   }
 
   if ("redirectTo" in checkout) redirect(checkout.redirectTo);
 
   if (!checkout.url) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="space-y-4 text-center">
-          <p className="text-red-600">決済ページの取得に失敗しました。</p>
-          <Link href="/onboarding/account-type" className="text-sm underline">
-            プラン選択に戻る
-          </Link>
-        </div>
-      </main>
-    );
+    return <PrepareFailed />;
   }
 
   redirect(checkout.url);
+}
+
+// Checkout Session を作れなかった・URLが無かったときは決済画面へ進んでいないため、料金は発生していない
+function PrepareFailed() {
+  return (
+    <PaymentResultLayout>
+      <PaymentResultIcon kind="alert" />
+      <PaymentResultTitle>決済画面を開けませんでした</PaymentResultTitle>
+      <PaymentResultText>
+        決済ページの準備に失敗しました。料金は発生していません。
+        <br />
+        時間をおいて、もう一度お試しください。
+      </PaymentResultText>
+      <RestartApplicationLink
+        note={
+          <>
+            続けて失敗する場合は、
+            <a href={`mailto:${CONTACT.email.text}`} className="underline">
+              お問い合わせ
+            </a>
+            ください
+          </>
+        }
+      />
+    </PaymentResultLayout>
+  );
 }
