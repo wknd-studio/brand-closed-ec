@@ -2,10 +2,22 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
+import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
+import { reconstituteOrder } from "@/domain/entities/order";
+import { reconstituteOrderItem } from "@/domain/entities/order-item";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+import { OrderStatus } from "@/domain/value-objects/order-status";
+import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
+import { MemberRank } from "@/domain/value-objects/member-rank";
+import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
+import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // orders.order_number（#754）: 画面に出すたびに注文ID（UUID）の先頭8文字から作っていた注文番号を、
-// 重ならない保証のある列として保存する。形は Crockford Base32 の8文字（ハイフン無し）で、
-// 注文を作るどの経路（DB関数・直接の insert）でも、指定しなければ DB が自動で入れる
+// 重ならない保証のある列として保存する。番号の形の決まりは OrderNumber（domain）にだけ置き、
+// 番号はアプリが注文を作るときに作る。DB は重ならないこと（UNIQUE）と形（CHECK）を守るだけで、
+// 番号を作らない（DEFAULT も関数も無い）
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
 // 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
@@ -57,8 +69,6 @@ function clientAs(clerkUserId: string) {
   );
 }
 
-const ORDER_NUMBER_PATTERN = /^[0-9A-HJKMNP-TV-Z]{8}$/;
-
 const USER_A_ID = "00000000-0000-0000-0000-0000007540a1";
 const USER_B_ID = "00000000-0000-0000-0000-0000007540b1";
 const CLERK_A = "clerk_test_order_number_a";
@@ -67,20 +77,22 @@ const CLERK_B = "clerk_test_order_number_b";
 // 直接の insert で作る注文
 const ORDER_A_ID = "00000000-0000-0000-0000-000000754001";
 const ORDER_B_ID = "00000000-0000-0000-0000-000000754002";
-// DB関数で作る注文
+// repository（DB関数）で作る注文
 const ORDER_PLACED_ID = "00000000-0000-0000-0000-000000754011";
 const ORDER_SAVED_ID = "00000000-0000-0000-0000-000000754012";
-// 番号を指定する・制約で拒否される注文
-const ORDER_EXPLICIT_ID = "00000000-0000-0000-0000-000000754021";
+const ITEM_PLACED_ID = "00000000-0000-0000-0000-000000754111";
+const ITEM_SAVED_ID = "00000000-0000-0000-0000-000000754112";
+// 制約で拒否される注文
 const ORDER_REJECTED_ID = "00000000-0000-0000-0000-000000754022";
 const ALL_ORDER_IDS = [
   ORDER_A_ID,
   ORDER_B_ID,
   ORDER_PLACED_ID,
   ORDER_SAVED_ID,
-  ORDER_EXPLICIT_ID,
   ORDER_REJECTED_ID,
 ];
+
+const SYSTEM = { type: "system" } as const;
 
 const baseOrder = {
   shipping_address_snapshot: {},
@@ -89,6 +101,45 @@ const baseOrder = {
   monthly_limit_at_order: 1_000_000,
   status: "paid",
 };
+
+const snapshotProps = {
+  recipientLastName: "テスト",
+  recipientFirstName: "太郎",
+  postalCode: "100-0001",
+  prefecture: "東京都",
+  city: "千代田区",
+  addressLine1: "丸の内1-1-1",
+  addressLine2: "",
+  phoneNumber: "03-1234-5678",
+};
+
+function makeOrder(id: string, itemId: string, orderNumber: OrderNumber) {
+  return reconstituteOrder({
+    id,
+    userId: USER_A_ID,
+    orderNumber,
+    status: OrderStatus.of("processing"),
+    shippingAddress: AddressSnapshot.of(snapshotProps),
+    billingAddress: AddressSnapshot.of(snapshotProps),
+    rankAtOrder: MemberRank.of("basic"),
+    monthlyLimitAtOrder: MonthlyLimit.unlimited(),
+    items: [
+      reconstituteOrderItem({
+        id: itemId,
+        sanityProductId: "prod-754",
+        productNameSnapshot: "テスト商品",
+        unitPriceSnapshot: Money.of(10_000),
+        quantity: 1,
+        isNegotiable: false,
+        negotiatedUnitPrice: null,
+        paymentTiming: "after_order",
+        settlementId: null,
+      }),
+    ],
+    settlements: [],
+    createdAt: new Date(),
+  });
+}
 
 async function cleanup() {
   await supabase
@@ -114,6 +165,9 @@ async function orderNumberOf(orderId: string) {
   return data.order_number;
 }
 
+const ORDER_A_NUMBER = randomOrderNumber();
+const ORDER_B_NUMBER = randomOrderNumber();
+
 beforeAll(async () => {
   await cleanup();
   for (const [id, clerkId] of [
@@ -134,106 +188,64 @@ beforeAll(async () => {
   }
 
   const { error } = await supabase.from("orders").insert([
-    { ...baseOrder, id: ORDER_A_ID, user_id: USER_A_ID },
-    { ...baseOrder, id: ORDER_B_ID, user_id: USER_B_ID },
+    {
+      ...baseOrder,
+      id: ORDER_A_ID,
+      user_id: USER_A_ID,
+      order_number: ORDER_A_NUMBER,
+    },
+    {
+      ...baseOrder,
+      id: ORDER_B_ID,
+      user_id: USER_B_ID,
+      order_number: ORDER_B_NUMBER,
+    },
   ]);
   if (error) throw error;
 });
 
 afterAll(cleanup);
 
-describe("orders.order_number の自動採番", () => {
-  it("直接の insert で番号を指定しなければ、Crockford Base32 の8文字が入る", async () => {
-    expect(await orderNumberOf(ORDER_A_ID)).toMatch(ORDER_NUMBER_PATTERN);
-    expect(await orderNumberOf(ORDER_B_ID)).toMatch(ORDER_NUMBER_PATTERN);
-    expect(await orderNumberOf(ORDER_A_ID)).not.toBe(
-      await orderNumberOf(ORDER_B_ID)
+describe("注文番号の保存と読み戻し（SupabaseOrderRepository）", () => {
+  const repo = new SupabaseOrderRepository(supabase);
+
+  it("place_order_with_limit_check で保存した注文の番号を読み戻せる", async () => {
+    const orderNumber = OrderNumber.of(randomOrderNumber());
+    const period = MonthlyPeriod.fromBillingAnchorDay(10);
+
+    await repo.saveNewOrderWithLimitCheck(
+      makeOrder(ORDER_PLACED_ID, ITEM_PLACED_ID, orderNumber),
+      period,
+      MonthlyLimit.unlimited(),
+      Money.of(0)
     );
+
+    expect(await orderNumberOf(ORDER_PLACED_ID)).toBe(orderNumber.value);
+    const reloaded = await repo.findById(ORDER_PLACED_ID);
+    expect(reloaded!.orderNumber.equals(orderNumber)).toBe(true);
   });
 
-  it("place_order_with_limit_check で作った注文にも番号が入る", async () => {
-    const { error } = await supabase.rpc("place_order_with_limit_check", {
-      p_user_id: USER_A_ID,
-      p_period_start: new Date(2026, 10, 10).toISOString(),
-      p_period_end: new Date(2026, 11, 10).toISOString(),
-      p_monthly_limit: null as unknown as number,
-      p_cart_fixed_total: 0,
-      p_order: {
-        ...baseOrder,
-        id: ORDER_PLACED_ID,
-        user_id: USER_A_ID,
-        created_at: new Date().toISOString(),
-      },
-      p_items: [],
-      p_settlement: null as unknown as Record<string, never>,
-    });
-    if (error) throw error;
+  it("save_order で保存した注文の番号を読み戻せ、保存し直しても番号は変わらない", async () => {
+    const orderNumber = OrderNumber.of(randomOrderNumber());
 
-    expect(await orderNumberOf(ORDER_PLACED_ID)).toMatch(ORDER_NUMBER_PATTERN);
-  });
+    await repo.save(
+      makeOrder(ORDER_SAVED_ID, ITEM_SAVED_ID, orderNumber),
+      SYSTEM
+    );
+    expect(await orderNumberOf(ORDER_SAVED_ID)).toBe(orderNumber.value);
 
-  it("save_order で作った注文にも番号が入り、保存し直しても番号は変わらない", async () => {
-    const order = {
-      ...baseOrder,
-      id: ORDER_SAVED_ID,
-      user_id: USER_A_ID,
-      created_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.rpc("save_order", {
-      p_order: { ...order, version: 0 },
-      p_settlements: [],
-      p_items: [],
-      p_status_change: { changed_by: "system" },
-    });
-    if (error) throw error;
-    const first = await orderNumberOf(ORDER_SAVED_ID);
-    expect(first).toMatch(ORDER_NUMBER_PATTERN);
+    const loaded = await repo.findById(ORDER_SAVED_ID);
+    await repo.save(loaded!.cancel(new Date()), SYSTEM);
 
-    const { error: resaveError } = await supabase.rpc("save_order", {
-      p_order: { ...order, status: "processing", version: 1 },
-      p_settlements: [],
-      p_items: [],
-      p_status_change: { changed_by: "system" },
-    });
-    if (resaveError) throw resaveError;
-    expect(await orderNumberOf(ORDER_SAVED_ID)).toBe(first);
-  });
-
-  it("自動で作った番号が既存の注文と重なれば、作り直して重ならない番号を返す", async () => {
-    // 乱数は重なりを起こせないため、試す候補を先に渡して重なりを人工的に起こす
-    const taken = await orderNumberOf(ORDER_A_ID);
-    const { data, error } = await supabase.rpc("generate_order_number", {
-      p_candidates: [taken, taken],
-    });
-    if (error) throw error;
-
-    expect(data).toMatch(ORDER_NUMBER_PATTERN);
-    expect(data).not.toBe(taken);
-  });
-
-  it("重なった候補を飛ばし、次の重ならない候補を使う", async () => {
-    const taken = await orderNumberOf(ORDER_A_ID);
-    const free = taken === "ZZZZZZZZ" ? "00000000" : "ZZZZZZZZ";
-    const { data, error } = await supabase.rpc("generate_order_number", {
-      p_candidates: [taken, free],
-    });
-    if (error) throw error;
-
-    expect(data).toBe(free);
+    const reloaded = await repo.findById(ORDER_SAVED_ID);
+    expect(reloaded!.status.value).toBe("cancelled");
+    expect(reloaded!.orderNumber.equals(orderNumber)).toBe(true);
   });
 });
 
 describe("orders.order_number の制約", () => {
   it("指定した番号はそのまま入る", async () => {
-    const { error } = await supabase.from("orders").insert({
-      ...baseOrder,
-      id: ORDER_EXPLICIT_ID,
-      user_id: USER_A_ID,
-      order_number: "K7Q2M9XD",
-    });
-    if (error) throw error;
-
-    expect(await orderNumberOf(ORDER_EXPLICIT_ID)).toBe("K7Q2M9XD");
+    expect(await orderNumberOf(ORDER_A_ID)).toBe(ORDER_A_NUMBER);
   });
 
   it("既存の注文と同じ番号は UNIQUE 制約で入れられない", async () => {
@@ -241,7 +253,7 @@ describe("orders.order_number の制約", () => {
       ...baseOrder,
       id: ORDER_REJECTED_ID,
       user_id: USER_A_ID,
-      order_number: await orderNumberOf(ORDER_A_ID),
+      order_number: ORDER_A_NUMBER,
     });
 
     expect(error?.code).toBe("23505");
@@ -264,13 +276,12 @@ describe("orders.order_number の制約", () => {
     expect(error?.code).toBe("23514");
   });
 
-  it("番号に NULL は入れられない", async () => {
+  it("番号を渡さなければ入れられない（DB は番号を作らない）", async () => {
     const { error } = await supabase.from("orders").insert({
       ...baseOrder,
       id: ORDER_REJECTED_ID,
       user_id: USER_A_ID,
-      order_number: null as unknown as string,
-    });
+    } as Database["public"]["Tables"]["orders"]["Insert"]);
 
     expect(error?.code).toBe("23502");
   });
@@ -284,16 +295,6 @@ describe("orders.order_number の RLS", () => {
       .in("id", [ORDER_A_ID, ORDER_B_ID]);
     if (error) throw error;
 
-    expect(data).toEqual([
-      { id: ORDER_A_ID, order_number: await orderNumberOf(ORDER_A_ID) },
-    ]);
-  });
-
-  it("会員のトークンからは番号を作る関数を呼べない", async () => {
-    const { error } = await clientAs(CLERK_A).rpc("generate_order_number", {});
-
-    expect(error?.message).toMatch(
-      /permission denied for function generate_order_number/
-    );
+    expect(data).toEqual([{ id: ORDER_A_ID, order_number: ORDER_A_NUMBER }]);
   });
 });

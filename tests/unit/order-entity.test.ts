@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Order, reconstituteOrder } from "@/domain/entities/order";
 import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { reconstituteOrderSettlement } from "@/domain/entities/order-settlement";
+import { OrderNumber } from "@/domain/value-objects/order-number";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
@@ -145,6 +146,7 @@ function placeOrder(cartItems: CartItem[]) {
     }),
     placedAt: new Date(2026, 10, 11),
     generateId: sequentialIds(),
+    generateOrderNumber: () => OrderNumber.of("K7Q2M9XD"),
   });
 }
 
@@ -152,6 +154,12 @@ describe("Order", () => {
   // docs/domain/settlement.md「注文と決済単位」: 注文は1回のチェックアウト＝1件。
   // at_orderの明細があるときだけCheckoutの決済単位を作り、after_orderの明細は決済単位なしで残す
   describe("Order.place()", () => {
+    it("注文番号を割り当てる（#754）", () => {
+      const order = placeOrder([makeCartItem()]);
+
+      expect(order.orderNumber.value).toBe("K7Q2M9XD");
+    });
+
     it("at_orderの明細のみ: Checkoutの決済単位を1件作り、全明細を紐付け、金額は小計の合計", () => {
       const order = placeOrder([
         makeCartItem({ quantity: 2 }),
@@ -259,6 +267,7 @@ describe("Order", () => {
         billingAddress: AddressSnapshot.of(snapshotProps),
         placedAt: new Date(2026, 10, 11),
         generateId: sequentialIds(),
+        generateOrderNumber: () => OrderNumber.of("K7Q2M9XD"),
       });
 
       expect(order.monthlyLimitAtOrder.isUnlimited()).toBe(true);
@@ -275,6 +284,7 @@ describe("Order", () => {
         billingAddress: AddressSnapshot.of({ ...snapshotProps, city: "港区" }),
         placedAt,
         generateId: sequentialIds(),
+        generateOrderNumber: () => OrderNumber.of("K7Q2M9XD"),
       });
 
       expect(order).toMatchObject({
@@ -517,6 +527,14 @@ describe("Order", () => {
   });
 
   describe("cancel()", () => {
+    it("書き換えても注文番号は変わらない（#754）", () => {
+      const order = makeOrder({ orderNumber: OrderNumber.of("K7Q2M9XD") });
+
+      expect(order.cancel(new Date(2026, 8, 21)).orderNumber.value).toBe(
+        "K7Q2M9XD"
+      );
+    });
+
     it("注文をcancelledにし、未払いの決済単位をcancelledにする", () => {
       const at = new Date(2026, 8, 21);
       const order = makeOrder({
