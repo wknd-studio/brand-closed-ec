@@ -74,6 +74,7 @@
   - 月額費用の支払い失敗中: `subscriptions.status`が`past_due`（Stripeが再請求している間）、または万一の`unpaid`（#378）
   - 利用停止中: 入会済みで、解約済みでない`subscriptions`行が1つも無い（Stripe側で解約された。[[membership]]「Stripe側の解約による利用停止」）。画面ごと利用停止の案内に送られる（#380）が、注文確定でも二重に止める
   - 管理者による停止中（#206、post-v1。[[membership]]「アカウント停止・強制退会」）
+- 判定は`src/domain/services/new-order-eligibility.ts`（`assertCanPlaceNewOrder`）に1か所で定義し、`placeOrder`の先頭とチェックアウト画面の表示（`findCheckout`の`paymentFailed`）の両方がこれを使う。v1で実装済みなのは支払い失敗中だけで、利用停止中の注文確定での判定は#380で足す（解約済みでない行が無い会員を、入会済みかどうかと合わせて判定する必要があるため）
 - 止めるのは新規注文の確定だけで、進行中の注文の続き（請求書払いの支払い、運営者による請求作成、発注・配送）は止めない
 - 支払い失敗中もカートへの追加は止めない。チェックアウト画面では注文ボタンの代わりに「お支払い方法の更新が必要です」とカードの更新（Billing Portal、#216）への導線を出し、カードを更新して`active`に戻ればそのまま注文できる
 - `subscriptions.status`の値ごとの扱いの正は[[subscription-billing]]「支払い失敗・Stripe側の解約」の表
