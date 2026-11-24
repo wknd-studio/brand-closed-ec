@@ -379,11 +379,14 @@ jobs:
         # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、stg を引き継いだデプロイ用の config（stg_deploy。
         # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md）。
         # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
-        # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
+        # secret とコードは wrangler deploy --secrets-file で1つの版で出す（#708）。wrangler secret bulk は、wrangler rollback で
+        # 戻している間（最新の版が出ていない間）は失敗し、直したものを出せなくなるため。--secrets-file は省いた secret を消さない
+        # （secret bulk と同じく足す・上書きするだけ）。値はランナーにファイルとして置かず、パイプで渡す（docs/cicd.md）。
+        # Doppler・jq の検査で失敗したら、jq は何も出さず、wrangler は空の --secrets-file を「not valid」としてアップロードの前に
+        # 止める（wrangler 4.166.0 の parseBulkInputToObject）。shell: bash は pipefail 付きで動くため、ステップも失敗になる
         shell: bash
         run: |
-          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | doppler run -- pnpm exec wrangler secret bulk --config wrangler.stg.jsonc
-          doppler run -- pnpm exec wrangler deploy --config wrangler.stg.jsonc
+          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | doppler run -- pnpm exec wrangler deploy --config wrangler.stg.jsonc --secrets-file /dev/stdin
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
@@ -431,11 +434,14 @@ jobs:
         # CLOUDFLARE_API_TOKEN・SENTRY_AUTH_TOKEN 等）は、prod を引き継いだデプロイ用の config（prod_deploy。
         # DOPPLER_TOKEN）にだけ置き、このジョブだけが読む（#672。docs/cicd.md。smoke-prod は本番のURLだけを読む）。
         # ステップの環境変数の DOPPLER_TOKEN（デプロイ用）を読まないよう、--no-read-env と --token で Worker 用の config だけを読む。
-        # shell: bash は pipefail 付きで動くため、途中で失敗したら secrets を更新しないまま deploy に進まない
+        # secret とコードは wrangler deploy --secrets-file で1つの版で出す（#708）。wrangler secret bulk は、wrangler rollback で
+        # 戻している間（最新の版が出ていない間）は失敗し、直したものを出せなくなるため。--secrets-file は省いた secret を消さない
+        # （secret bulk と同じく足す・上書きするだけ）。値はランナーにファイルとして置かず、パイプで渡す（docs/cicd.md）。
+        # Doppler・jq の検査で失敗したら、jq は何も出さず、wrangler は空の --secrets-file を「not valid」としてアップロードの前に
+        # 止める（wrangler 4.166.0 の parseBulkInputToObject）。shell: bash は pipefail 付きで動くため、ステップも失敗になる
         shell: bash
         run: |
-          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | doppler run -- pnpm exec wrangler secret bulk --config wrangler.prod.jsonc
-          doppler run -- pnpm exec wrangler deploy --config wrangler.prod.jsonc
+          doppler secrets download --no-read-env --token "$DOPPLER_TOKEN_WORKER" --no-file --format json | jq -f scripts/ci/filter-worker-env.jq | doppler run -- pnpm exec wrangler deploy --config wrangler.prod.jsonc --secrets-file /dev/stdin
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           DOPPLER_TOKEN_WORKER: ${{ secrets.DOPPLER_TOKEN_WORKER }}
