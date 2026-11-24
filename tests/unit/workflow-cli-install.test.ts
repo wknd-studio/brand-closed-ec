@@ -43,6 +43,7 @@ const USES_CLI: Record<string, RegExp> = {
 const EXPECTED_VERSIONS: Record<string, Record<string, string>> = {
   supabase: {
     "deploy.yml/schema-types-drift": "2.116.0",
+    "deploy.yml/schema-files-drift": "2.116.0",
     "deploy.yml/integration": "2.116.0",
     "deploy.yml/e2e-pr": "2.116.0",
     "deploy.yml/deploy-stg": "2.102.0",
