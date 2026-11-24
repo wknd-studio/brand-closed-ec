@@ -125,6 +125,35 @@ export type Database = {
           },
         ];
       };
+      admin_role_assignments: {
+        Row: {
+          admin_user_id: string;
+          created_at: string;
+          role: string;
+          updated_at: string;
+        };
+        Insert: {
+          admin_user_id: string;
+          created_at?: string;
+          role: string;
+          updated_at?: string;
+        };
+        Update: {
+          admin_user_id?: string;
+          created_at?: string;
+          role?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_role_assignments_admin_user_id_fkey";
+            columns: ["admin_user_id"];
+            isOneToOne: true;
+            referencedRelation: "admin_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       admin_users: {
         Row: {
           clerk_user_id: string;
