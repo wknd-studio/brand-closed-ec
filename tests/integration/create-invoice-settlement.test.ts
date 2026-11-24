@@ -758,6 +758,18 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
         /invoice_settlement_invalid: user_mismatch/,
         orderId
       );
+      // DBの注文の会員と p_user_id が合っていても、渡す注文の user_id が違えば失敗する
+      // （save_order は渡された user_id で注文を書き換えるため）
+      await expectRejected(
+        {
+          ...args,
+          p_within_limit: withOrder(args.p_within_limit, {
+            user_id: OTHER_USER_ID,
+          }),
+        },
+        /invoice_settlement_invalid: user_mismatch/,
+        orderId
+      );
     });
 
     it("まだ無い注文には請求を作らない（新しい注文として保存しない）", async () => {
