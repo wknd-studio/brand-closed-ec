@@ -93,6 +93,25 @@ jobs:
             exit 1
           fi
 
+  schema-files-drift:
+    name: Schema Files Drift
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install-cli
+        with: { tool: supabase, version: 2.116.0 }
+      - name: Start local Supabase
+        # DBの定義を読むだけなので、Schema Types Drift と同じく未使用のコンテナは起動しない
+        run: bash scripts/supabase-start-minimal.sh
+      - name: Apply local migrations
+        run: supabase db reset
+      - name: Generate supabase/schemas from local DB and diff against committed files
+        # supabase/schemas/ はマイグレーションを当てたDBから書き出した写し（#783）。
+        # マイグレーションを足した後に `task db:schema` の再実行とコミットを忘れると、
+        # 関数・テーブルの今の定義として古いものを読んでしまう。ここでその書き出し忘れを検出する
+        run: bash scripts/db-schema-snapshot.sh --check
+
   test:
     name: Unit Tests
     runs-on: ubuntu-24.04

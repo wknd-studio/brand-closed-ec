@@ -100,7 +100,7 @@ const supabase = createClient<Database>(
 const CLERK_ID_PREFIX = "clerk_test_onboarding_flow";
 const EVENT_ID_PREFIX = "evt_test_onboarding_flow";
 const APP_URL = "http://localhost:3000";
-const PROCESSING_TEXT = "アカウントの設定を処理中です";
+const PROCESSING_TEXT = "アカウントを準備しています";
 
 type FakeCheckoutSession = {
   id: string;

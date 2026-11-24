@@ -39,7 +39,7 @@ flowchart TD
     O --> P
     P --> Q{"決済完了"}
     Q -- 成功 --> R["Webhook: checkout.session.completed"]
-    Q -- キャンセル --> S["/onboarding/payment/cancel\nプラン選択に戻る"]
+    Q -- キャンセル --> S["/onboarding/payment/cancel\nお申し込みをやり直す（種別の選択へ）"]
 
     R --> T{"metadataにorganization_idがあるか"}
     T -- なし（個人） --> U["completeSubscriptionOnboarding\nusers.onboarding_completed=true"]
