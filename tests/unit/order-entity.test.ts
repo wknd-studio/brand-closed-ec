@@ -365,6 +365,34 @@ describe("Order", () => {
       ).toBe("settlement_of_other_order");
     });
 
+    it("同じidの決済単位が2つあればInvalidOrderError（duplicate_settlement_id）", () => {
+      expect(
+        reasonOf(() =>
+          makeOrder({
+            settlements: [
+              makeSettlement({ id: "s1" }),
+              makeSettlement({ id: "s1" }),
+            ],
+          })
+        )
+      ).toBe("duplicate_settlement_id");
+    });
+
+    it("draftInvoiceSettlementで既存の決済単位と同じidを渡すとInvalidOrderError", () => {
+      const order = makeOrder({
+        items: [
+          makeItem({ id: "at", settlementId: "s1" }),
+          makeItem({ id: "a1", paymentTiming: "after_order" }),
+        ],
+        settlements: [makeSettlement({ id: "s1" })],
+      });
+      expect(
+        reasonOf(() =>
+          order.draftInvoiceSettlement({ settlementId: "s1", itemIds: ["a1"] })
+        )
+      ).toBe("duplicate_settlement_id");
+    });
+
     it("settlementIdがNULLの明細・注文の決済単位を指す明細は受け付ける", () => {
       expect(
         reasonOf(() =>
