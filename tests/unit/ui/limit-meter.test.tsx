@@ -84,9 +84,10 @@ describe("LimitMeter", () => {
 
       expect(segment("confirmed")?.className).toContain("bg-warning");
       expect(
-        [...container.querySelectorAll("span")].find((el) =>
-          el.textContent?.startsWith("残り")
-        )?.className
+        // 「残り」で始まる要素のうち、一番内側（金額そのもの）
+        [...container.querySelectorAll("span")]
+          .filter((el) => el.textContent?.startsWith("残り"))
+          .at(-1)?.className
       ).toContain("text-warning");
     });
 

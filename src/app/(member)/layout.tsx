@@ -33,7 +33,7 @@ export default async function MemberLayout({
         removeFavorite={removeFavoriteAction}
       >
         <div className="flex min-h-full flex-col">
-          <Header />
+          <Header account={layout?.account ?? null} />
           <main className="flex-1">{children}</main>
           <CartSidebar />
         </div>

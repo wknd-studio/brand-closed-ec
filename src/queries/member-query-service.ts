@@ -28,12 +28,22 @@ export type FavoritesDto = {
   favoriteProductIds: string[];
 };
 
-// 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態）
+// ヘッダーのアカウントのメニューに出す会員の情報
+export type MemberAccountDto = {
+  // 姓 名
+  name: string;
+  email: string;
+  // プランの表示名（member_ranks.display_name_ja）
+  planName: string;
+};
+
+// 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態、ヘッダーのアカウント）
 export type MemberLayoutDto = {
   confirmedAmount: number;
   // 月間仕入れ上限。null なら無制限
   monthlyLimit: number | null;
   favoriteProductIds: string[];
+  account: MemberAccountDto;
 };
 
 // 会員の画面の読み取り。他の会員のデータを返さないよう、どのメソッドも会員（clerkUserId）を必須にする
