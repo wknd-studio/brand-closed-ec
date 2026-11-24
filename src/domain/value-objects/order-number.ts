@@ -17,10 +17,12 @@ export class OrderNumber {
   }
 
   /**
-   * 乱数の5バイト（40ビット）を5ビットずつ8文字にして番号を作る。乱数は呼び出し側が渡す
-   * （注文のIDと同じく、domain は乱数の作り方を持たない）。重なりは DB の UNIQUE が防ぐ
+   * 乱数の5バイト（40ビット）を5ビットずつ8文字にして番号を作る。何バイト要るかは番号の形の決まりなので
+   * ここで決め、乱数源（長さを受け取って乱数を返す）だけを呼び出し側が渡す（注文のIDと同じく、domain は
+   * 乱数の作り方を持たない）。重なりは DB の UNIQUE が防ぐ
    */
-  static fromRandomBytes(bytes: Uint8Array): OrderNumber {
+  static generate(randomBytes: (length: number) => Uint8Array): OrderNumber {
+    const bytes = randomBytes(RANDOM_BYTES_LENGTH);
     if (bytes.length !== RANDOM_BYTES_LENGTH) {
       throw new RangeError(
         `注文番号には${RANDOM_BYTES_LENGTH}バイトの乱数が要ります: ${bytes.length}バイト`

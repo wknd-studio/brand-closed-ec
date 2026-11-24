@@ -106,7 +106,9 @@ export async function placeOrder(
     placedAt: new Date(),
     generateId: () => crypto.randomUUID(),
     generateOrderNumber: () =>
-      OrderNumber.fromRandomBytes(crypto.getRandomValues(new Uint8Array(5))),
+      OrderNumber.generate((length) =>
+        crypto.getRandomValues(new Uint8Array(length))
+      ),
   });
   const settlement = order.checkoutSettlement();
   const afterOrderItems = order.items.filter((item) => item.isAfterOrder());

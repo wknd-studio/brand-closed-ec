@@ -68,7 +68,9 @@ const scenarioId = (kind: keyof typeof ID_KIND, n: number) => {
 
 // 注文番号はアプリが注文を作るときと同じく OrderNumber で作る（DB は番号を作らない。#754）
 const randomOrderNumber = () =>
-  OrderNumber.fromRandomBytes(crypto.getRandomValues(new Uint8Array(5))).value;
+  OrderNumber.generate((length) =>
+    crypto.getRandomValues(new Uint8Array(length))
+  ).value;
 
 const DAY = 24 * 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
