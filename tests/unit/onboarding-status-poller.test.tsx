@@ -17,7 +17,6 @@ vi.mock("@/app/onboarding/payment/success/poll-onboarding-status", () => ({
   pollOnboardingStatus,
 }));
 
-import { CONTACT } from "@/app/legal/legal-notice";
 import OnboardingStatusPoller from "@/app/onboarding/payment/success/onboarding-status-poller";
 
 (
@@ -25,8 +24,9 @@ import OnboardingStatusPoller from "@/app/onboarding/payment/success/onboarding-
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * 決済の確定待ち（GitHub issue #748）。ポーリングそのもの（間隔・時間切れ）は
- * tests/unit/poll-onboarding-status.test.ts で確認する
+ * 決済の確定待ち（GitHub issue #748）。ポーラーはポーリングと表示の切り替えだけを持ち、
+ * 2つの表示はサーバーで組み立てて渡す。表示の中身は tests/unit/onboarding-payment-status.test.ts、
+ * ポーリングそのもの（間隔・時間切れ）は tests/unit/poll-onboarding-status.test.ts で確認する
  */
 describe("OnboardingStatusPoller", () => {
   let container: HTMLDivElement;
@@ -42,7 +42,14 @@ describe("OnboardingStatusPoller", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => root.render(<OnboardingStatusPoller />));
+    act(() =>
+      root.render(
+        <OnboardingStatusPoller
+          processing={<p>確定待ちの表示</p>}
+          timedOut={<p>時間切れの表示</p>}
+        />
+      )
+    );
   });
 
   afterEach(() => {
@@ -50,22 +57,8 @@ describe("OnboardingStatusPoller", () => {
     container.remove();
   });
 
-  it("確定を待つ間は、見出しと role=status の「アカウントを準備しています」を出し、導線を出さない", () => {
-    expect(container.querySelector("h1")?.textContent).toBe(
-      "お支払いが完了しました"
-    );
-    expect(container.querySelector('[role="status"]')?.textContent).toContain(
-      "アカウントを準備しています"
-    );
-    expect(container.querySelector("a")).toBeNull();
-  });
-
-  it("スピナーは prefers-reduced-motion では止める", () => {
-    const spinner = container.querySelector('[role="status"] svg');
-    expect(spinner?.getAttribute("class")).toContain("animate-spin");
-    expect(spinner?.getAttribute("class")).toContain(
-      "motion-reduce:animate-none"
-    );
+  it("確定を待つ間は、確定待ちの表示を出す", () => {
+    expect(container.textContent).toBe("確定待ちの表示");
   });
 
   it("入会が確定したら /shop へ進む", () => {
@@ -74,17 +67,9 @@ describe("OnboardingStatusPoller", () => {
     expect(replace).toHaveBeenCalledWith("/shop");
   });
 
-  it("時間切れになったら、お支払いが完了している旨を出し、プランの選択・決済へ戻る導線は出さない", () => {
+  it("時間切れになったら、時間切れの表示に切り替える", () => {
     act(() => options.onTimeout());
 
-    expect(container.textContent).toContain(
-      "お支払いは完了しています。もう一度お支払いいただく必要はありません。"
-    );
-    expect(container.querySelector('[role="status"]')).toBeNull();
-    // 再決済するとサブスクリプションが2本でき二重課金になる（#407）
-    const hrefs = [...container.querySelectorAll("a")].map((a) =>
-      a.getAttribute("href")
-    );
-    expect(hrefs).toEqual([`mailto:${CONTACT.email.text}`]);
+    expect(container.textContent).toBe("時間切れの表示");
   });
 });

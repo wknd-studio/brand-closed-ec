@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ReactElement } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
@@ -33,6 +33,29 @@ import * as Sentry from "@sentry/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { isOnboardingCompleted } from "@/app/onboarding/payment/success/actions";
 import PaymentSuccessPage from "@/app/onboarding/payment/success/page";
+import OnboardingStatusPoller from "@/app/onboarding/payment/success/onboarding-status-poller";
+import {
+  ProcessingStatus,
+  TimedOutStatus,
+} from "@/app/onboarding/payment/success/payment-status";
+
+// 画面の要素の木から、ポーラーに渡した props を取り出す
+function findPollerProps(
+  node: ReactNode
+): { processing: ReactNode; timedOut: ReactNode } | undefined {
+  if (!isValidElement(node)) return undefined;
+  const props = node.props as { children?: ReactNode };
+  if (node.type === OnboardingStatusPoller)
+    return props as { processing: ReactNode; timedOut: ReactNode };
+  const children = Array.isArray(props.children)
+    ? props.children
+    : [props.children];
+  for (const child of children) {
+    const found = findPollerProps(child);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 const SESSION_ID = "cs_test_a1B2c3";
 
@@ -73,6 +96,16 @@ describe("PaymentSuccessPage", () => {
     expect(html).toMatch(/aria-current="step"[^>]*>[\s\S]*?3 お支払い/);
     // 確定前にショップ・プラン選択へ進むと、再決済による二重課金を招く（#407）
     expect(html).not.toContain("<a");
+  });
+
+  it("確定待ちと時間切れの表示をサーバーで組み立ててポーラーに渡す", async () => {
+    findPaymentCompleted.mockResolvedValue(true);
+
+    const props = findPollerProps(await renderPage({ session_id: SESSION_ID }));
+
+    expect(isValidElement(props?.processing)).toBe(true);
+    expect((props?.processing as ReactElement).type).toBe(ProcessingStatus);
+    expect((props?.timedOut as ReactElement).type).toBe(TimedOutStatus);
   });
 
   it("入会済みならsession_idに関わらず/shopへ進む", async () => {
