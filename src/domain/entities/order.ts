@@ -32,6 +32,11 @@ interface OrderProps {
   /** 決済単位。at_orderのCheckout・後から作られるInvoiceを含め、1注文に複数ありうる */
   settlements: OrderSettlement[];
   createdAt: Date;
+  /**
+   * 読んだ時点の版（楽観ロック。issue #721）。保存は、DBの版がこの値から変わっていれば失敗する。
+   * 版を進めるのは保存するDB側で、書き換え（cancel・applySettlement 等）はこの値を引き継ぐ
+   */
+  version: number;
 }
 
 interface PlaceOrderProps {
@@ -66,6 +71,7 @@ export class Order {
   readonly items: OrderItem[];
   readonly settlements: OrderSettlement[];
   readonly createdAt: Date;
+  readonly version: number;
 
   private constructor(props: OrderProps) {
     this.id = props.id;
@@ -78,6 +84,7 @@ export class Order {
     this.items = props.items;
     this.settlements = props.settlements;
     this.createdAt = props.createdAt;
+    this.version = props.version;
   }
 
   /**
@@ -161,6 +168,7 @@ export class Order {
       ],
       settlements: settlement ? [settlement] : [],
       createdAt: props.placedAt,
+      version: 0,
     });
     return order;
   }
@@ -205,6 +213,7 @@ export class Order {
       items: this.items,
       settlements: this.settlements,
       createdAt: this.createdAt,
+      version: this.version,
     };
   }
 
@@ -312,8 +321,11 @@ export class Order {
 
 /**
  * DBの行からの復元とテストの組み立てにだけ使う（src/infrastructure・src/domain の外からの import は lint で禁止。#635）。
- * 新規作成は Order.place()、書き換えは cancel()・applySettlement() を使う
+ * 新規作成は Order.place()、書き換えは cancel()・applySettlement() を使う。
+ * DBの行から復元するときは version を必ず渡す（省略はテストで組み立てる未保存の注文だけ。版0として扱う）
  */
-export function reconstituteOrder(props: OrderProps): Order {
-  return restore(props);
+export function reconstituteOrder(
+  props: Omit<OrderProps, "version"> & { version?: number }
+): Order {
+  return restore({ ...props, version: props.version ?? 0 });
 }

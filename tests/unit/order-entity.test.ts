@@ -861,4 +861,30 @@ describe("Order", () => {
       );
     });
   });
+
+  // 楽観ロック（issue #721）: 保存は、読んだ時点の版からDBの版が変わっていれば失敗する。
+  // 書き換え（cancel・applySettlement）は版を変えない（版を進めるのは保存するDB側）
+  describe("version", () => {
+    it("新しい注文の版は0", () => {
+      expect(placeOrder([makeCartItem()]).version).toBe(0);
+    });
+
+    it("復元した注文は、渡された版を持つ（省略すれば0）", () => {
+      expect(makeOrder({ version: 3 }).version).toBe(3);
+      expect(makeOrder().version).toBe(0);
+    });
+
+    it("cancel()・applySettlement() は読んだ時点の版を引き継ぐ", () => {
+      const settlement = makeSettlement({ id: "settlement-001" });
+      const order = makeOrder({
+        version: 5,
+        items: [makeItem({ settlementId: "settlement-001" })],
+        settlements: [settlement],
+      });
+      expect(order.cancel(new Date()).version).toBe(5);
+      expect(
+        order.applySettlement(settlement.markPaid(new Date())).version
+      ).toBe(5);
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
+import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
 import {
   makeOrderRepo,
   makeUserRepo,
@@ -228,5 +229,113 @@ describe("markInvoiceOrderAsPaid", () => {
         tags: expect.objectContaining({ useCase: "markInvoiceOrderAsPaid" }),
       })
     );
+  });
+
+  // 楽観ロック（issue #721）: 入金は実際にされているため、読んでから保存するまでの間に
+  // 別の書き手（請求作成・運営者のキャンセル・同じイベントの同時配信）がコミットしていたら、
+  // 注文を読み直してやり直す。読み直した注文で、支払い済み・キャンセル済みの扱いをし直す
+  describe("保存の競合（楽観ロック）", () => {
+    const ORDER = () =>
+      makeOrder({
+        items: [afterOrderItem()],
+        settlements: [invoiceSettlement()],
+      });
+    const PAID_ORDER = () =>
+      makeOrder({
+        items: [afterOrderItem()],
+        settlements: [
+          invoiceSettlement({ status: "paid", paidAt: new Date() }),
+        ],
+      });
+    const CANCELLED_ORDER = () =>
+      makeOrder({
+        status: "cancelled",
+        items: [afterOrderItem()],
+        settlements: [
+          invoiceSettlement({ status: "cancelled", cancelledAt: new Date() }),
+        ],
+      });
+    const conflict = () =>
+      new OrderConcurrentlyModifiedError(
+        "00000000-0000-0000-0000-000000000001"
+      );
+
+    function depsWith(orderRepo: ReturnType<typeof makeOrderRepo>) {
+      return {
+        orderRepo,
+        userRepo: makeUserRepo(),
+        notificationService: makeNotificationService(),
+        errorReporter: makeErrorReporter(),
+      };
+    }
+
+    it("保存が競合したら、注文を読み直して保存し直し、通知は1回だけ送る", async () => {
+      const orderRepo = makeOrderRepo(ORDER());
+      vi.mocked(orderRepo.save).mockRejectedValueOnce(conflict());
+      const deps = depsWith(orderRepo);
+
+      await markInvoiceOrderAsPaid({ stripeInvoiceId: "inv_1" }, deps);
+
+      expect(orderRepo.findByStripeInvoiceId).toHaveBeenCalledTimes(2);
+      expect(orderRepo.save).toHaveBeenCalledTimes(2);
+      expect(
+        vi.mocked(orderRepo.save).mock.calls[1]?.[0].settlements[0]?.status
+      ).toBe("paid");
+      expect(deps.notificationService.sendInvoicePaid).toHaveBeenCalledTimes(1);
+    });
+
+    it("読み直した注文で決済単位が支払い済みなら（同じイベントの同時配信）、保存も通知もせずに終える", async () => {
+      const orderRepo = makeOrderRepo(ORDER());
+      vi.mocked(orderRepo.findByStripeInvoiceId)
+        .mockResolvedValueOnce(ORDER())
+        .mockResolvedValueOnce(PAID_ORDER());
+      vi.mocked(orderRepo.save).mockRejectedValueOnce(conflict());
+      const deps = depsWith(orderRepo);
+
+      await markInvoiceOrderAsPaid({ stripeInvoiceId: "inv_1" }, deps);
+
+      expect(orderRepo.save).toHaveBeenCalledTimes(1);
+      expect(deps.notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    });
+
+    it("読み直した注文で決済単位がキャンセル済みなら、要対応として通知し、保存せずに終える", async () => {
+      const orderRepo = makeOrderRepo(ORDER());
+      vi.mocked(orderRepo.findByStripeInvoiceId)
+        .mockResolvedValueOnce(ORDER())
+        .mockResolvedValueOnce(CANCELLED_ORDER());
+      vi.mocked(orderRepo.save).mockRejectedValueOnce(conflict());
+      const deps = depsWith(orderRepo);
+
+      await markInvoiceOrderAsPaid({ stripeInvoiceId: "inv_1" }, deps);
+
+      expect(orderRepo.save).toHaveBeenCalledTimes(1);
+      expect(deps.errorReporter.captureException).toHaveBeenCalledTimes(1);
+      expect(deps.notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    });
+
+    it("3回続けて競合したら OrderConcurrentlyModifiedError を投げる（Webhookは失敗を返し、Stripeが再送する）", async () => {
+      const orderRepo = makeOrderRepo(ORDER());
+      vi.mocked(orderRepo.save).mockRejectedValue(conflict());
+      const deps = depsWith(orderRepo);
+
+      await expect(
+        markInvoiceOrderAsPaid({ stripeInvoiceId: "inv_1" }, deps)
+      ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
+      expect(orderRepo.save).toHaveBeenCalledTimes(3);
+      expect(deps.notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    });
+
+    it("競合以外の保存の失敗は、やり直さずに投げる", async () => {
+      const orderRepo = makeOrderRepo(ORDER());
+      vi.mocked(orderRepo.save).mockRejectedValue(new Error("Order保存に失敗"));
+
+      await expect(
+        markInvoiceOrderAsPaid(
+          { stripeInvoiceId: "inv_1" },
+          depsWith(orderRepo)
+        )
+      ).rejects.toThrow("Order保存に失敗");
+      expect(orderRepo.save).toHaveBeenCalledTimes(1);
+    });
   });
 });

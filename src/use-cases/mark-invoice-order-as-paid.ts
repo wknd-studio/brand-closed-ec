@@ -2,6 +2,7 @@ import type { OrderRepository } from "@/repositories/order-repository";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { NotificationService } from "@/repositories/notification-service";
 import type { ErrorReporter } from "@/repositories/error-reporter";
+import { retryOnOrderConflict } from "@/use-cases/retry-on-order-conflict";
 
 export type MarkInvoiceOrderAsPaidInput = { stripeInvoiceId: string };
 export type MarkInvoiceOrderAsPaidDeps = {
@@ -11,8 +12,19 @@ export type MarkInvoiceOrderAsPaidDeps = {
   errorReporter: ErrorReporter;
 };
 
-/** Stripe Invoiceの入金を、対応する決済単位のpaidとして記録する */
+/**
+ * Stripe Invoiceの入金を、対応する決済単位のpaidとして記録する。
+ * 保存が別の書き手（請求作成・運営者のキャンセル・同じイベントの同時配信）と競合したら、入金は実際に
+ * されているため、注文を読み直してやり直す（issue #721）
+ */
 export async function markInvoiceOrderAsPaid(
+  input: MarkInvoiceOrderAsPaidInput,
+  deps: MarkInvoiceOrderAsPaidDeps
+): Promise<void> {
+  await retryOnOrderConflict(() => markPaidOnce(input, deps));
+}
+
+async function markPaidOnce(
   input: MarkInvoiceOrderAsPaidInput,
   deps: MarkInvoiceOrderAsPaidDeps
 ): Promise<void> {

@@ -490,6 +490,7 @@ export type Database = {
           status: string;
           updated_at: string;
           user_id: string;
+          version: number;
         };
         Insert: {
           billing_address_snapshot: Json;
@@ -501,6 +502,7 @@ export type Database = {
           status?: string;
           updated_at?: string;
           user_id: string;
+          version?: number;
         };
         Update: {
           billing_address_snapshot?: Json;
@@ -512,6 +514,7 @@ export type Database = {
           status?: string;
           updated_at?: string;
           user_id?: string;
+          version?: number;
         };
         Relationships: [
           {

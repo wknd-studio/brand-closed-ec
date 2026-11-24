@@ -5,6 +5,7 @@ import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
+import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
 import { Money } from "@/domain/value-objects/money";
 import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import {
@@ -748,5 +749,32 @@ describe("placeOrder", () => {
     // 固定商品100,000×2 + 後払い固定商品50,000
     expect(fixedTotal.amount).toBe(250_000);
     expect(saved.getFixedTotal().amount).toBe(250_000);
+  });
+
+  // 楽観ロック（issue #721）: 確定直後の注文を Checkout Session の紐付けまでの間に誰か
+  // （運営者のキャンセル等）が変えていたら、会員を Checkout に進めない。その注文は他の書き手の
+  // 変更（履歴を含む）を持つため、補償削除もしない
+  it("Checkout Session の紐付けの保存が競合したら、補償削除も読み直しもせずに OrderConcurrentlyModifiedError を投げる", async () => {
+    const orderRepo = makeOrderRepo();
+    vi.mocked(orderRepo.save).mockRejectedValue(
+      new OrderConcurrentlyModifiedError("order-1")
+    );
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([fixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
+    };
+
+    await expect(placeOrder(baseInput, deps)).rejects.toBeInstanceOf(
+      OrderConcurrentlyModifiedError
+    );
+    expect(orderRepo.save).toHaveBeenCalledTimes(1);
+    expect(orderRepo.findById).not.toHaveBeenCalled();
+    expect(orderRepo.delete).not.toHaveBeenCalled();
   });
 });

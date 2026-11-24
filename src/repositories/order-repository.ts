@@ -69,7 +69,11 @@ export interface OrderRepository {
   /**
    * 注文・明細・決済単位を1つのトランザクションで保存する（既存があれば更新）。
    * orders.status が変わったときだけ、changedBy を主体として order_status_changes に
-   * 1行記録する（状態の更新と履歴は両方とも反映されるか、両方とも反映されない。#237）
+   * 1行記録する（状態の更新と履歴は両方とも反映されるか、両方とも反映されない。#237）。
+   * order.version（読んだ時点の版）から、DBの注文が別の書き手に変えられていれば、何も保存せずに
+   * OrderConcurrentlyModifiedError を投げる（楽観ロック。#721）。読み直してやり直すかは呼び出し側が決める。
+   * 新しい注文の作成には使わない（saveNewOrderWithLimitCheck を使う）。まだ行の無い注文はロックする行が
+   * 無いため、同じ注文を同時に作ると版の確認をすり抜けて後の保存が先の保存を上書きする
    */
   save(order: Order, changedBy: OrderStatusChangedBy): Promise<void>;
 
