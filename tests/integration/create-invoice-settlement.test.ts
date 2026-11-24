@@ -18,6 +18,8 @@ import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { ItemsNotInvoiceableError } from "@/domain/errors/items-not-invoiceable-error";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // 請求作成の月次上限チェックと決済単位の作成（issue #393・#763、docs/domain/settlement.md
 // 「月次仕入れ上限チェック」）。請求できるかの判定・決済単位の作成・明細の紐付け・orders.status の
@@ -113,6 +115,7 @@ async function seedOrder(items: ItemSpec[]) {
   const order = reconstituteOrder({
     id: orderId,
     userId: USER_ID,
+    orderNumber: OrderNumber.of(randomOrderNumber()),
     status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
@@ -458,6 +461,7 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
       const placed = reconstituteOrder({
         id: newId(),
         userId: USER_ID,
+        orderNumber: OrderNumber.of(randomOrderNumber()),
         status: OrderStatus.of("processing"),
         shippingAddress: AddressSnapshot.of(snapshotProps),
         billingAddress: AddressSnapshot.of(snapshotProps),
@@ -584,6 +588,7 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
       const placed = reconstituteOrder({
         id: newId(),
         userId: USER_ID,
+        orderNumber: OrderNumber.of(randomOrderNumber()),
         status: OrderStatus.of("processing"),
         shippingAddress: AddressSnapshot.of(snapshotProps),
         billingAddress: AddressSnapshot.of(snapshotProps),

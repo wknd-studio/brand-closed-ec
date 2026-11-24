@@ -3,6 +3,7 @@ import type { Database } from "@/types/database.types";
 import { test, expect, withWorkerSuffix } from "../helpers/test-member";
 import { signInAsAdmin } from "../helpers/admin-user";
 import { cleanupTestUser, slotEmail } from "../helpers/clerk-test-invitation";
+import { randomOrderNumber } from "../../helpers/order-number";
 
 // 注文の確定までの画面は orders.spec.ts 等が確かめているため、ここでは注文を DB に直接作り、
 // 対応待ちキューの画面だけを確かめる。ブランドは Sanity から引くため、Sanity に無い商品IDなら「—」になる
@@ -51,6 +52,7 @@ test.describe("運営者の対応待ちキュー", () => {
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
+        order_number: randomOrderNumber(),
         user_id: member.userId,
         status: "processing",
         shipping_address_snapshot: addressSnapshot,

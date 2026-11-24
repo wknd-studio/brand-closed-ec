@@ -84,6 +84,7 @@ function makeOrder(
   return reconstituteOrder({
     id: "order-001",
     userId: "user-001",
+    orderNumber: OrderNumber.of("K7Q2M9XD"),
     status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
