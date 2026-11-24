@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { SPAN_OP } from "@/lib/observability/span";
 import {
+  cancelExpiredCheckoutSettlement,
   markCheckoutOrderAsPaid,
   markInvoiceOrderAsPaid,
 } from "@/composition/order-payment";
@@ -107,6 +108,36 @@ export async function POST(req: Request) {
           outcome.error
         );
       }
+    }
+  }
+
+  // 決済されずに期限切れになったCheckout（expires_at。#202）。入会のCheckout（mode: subscription）は対象外
+  if (
+    event.type === "checkout.session.expired" &&
+    event.data.object.mode === "payment"
+  ) {
+    const session = event.data.object;
+    const outcome = await processStripeWebhookEventOnce({
+      event: { eventId: event.id, type: event.type, payload: event },
+      process: () =>
+        Sentry.startSpan(
+          { name: "cancelExpiredCheckoutSettlement", op: SPAN_OP.webhook },
+          () =>
+            cancelExpiredCheckoutSettlement({
+              stripeCheckoutSessionId: session.id,
+            })
+        ),
+      failureReport: {
+        tags: { webhook: "stripe", eventType: event.type },
+        extra: { stripeCheckoutSessionId: session.id, eventId: event.id },
+      },
+    });
+    if (outcome.status === "skipped") return skippedResponse(outcome.claim);
+    if (outcome.status === "failed") {
+      return failedResponse(
+        "[Checkout Expired Webhook] 処理失敗:",
+        outcome.error
+      );
     }
   }
 

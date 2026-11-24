@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { SignUp } from "@clerk/nextjs";
-import LegalLinksNote from "@/app/legal/legal-links-note";
+import { SignUpPresenter } from "./sign-up-presenter";
 
 // ticketの署名検証は行わない(kidが無くverifyTokenが使えず、専用の検証APIも
 // 存在しない)。ここでの判定は「明らかに無効なticketを弾いてwaitlistへ誘導する」
@@ -33,15 +32,5 @@ export default async function SignUpPage({
     redirect("/waitlist");
   }
 
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4">
-      {/* サインアップ画面の「アカウントをお持ちの方はサインイン」リンクは、
-          遷移先の/sign-inにticketパラメータが引き継がれ、Clerk側がサインアップへ
-          自動的に引き戻してしまう(既知の挙動)ため非表示にする */}
-      <SignUp appearance={{ elements: { footerAction: "!hidden" } }} />
-      <div className="max-w-sm px-4 text-center">
-        <LegalLinksNote action="ご登録" />
-      </div>
-    </main>
-  );
+  return <SignUpPresenter />;
 }

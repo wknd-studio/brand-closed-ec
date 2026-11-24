@@ -12,7 +12,7 @@ function supabaseAdmin() {
 }
 
 /**
- * 「このプランで始める」等を押してからStripe Checkoutの画面が開くまでを待つ時間。
+ * 「お支払いへ進む」等を押してからStripe Checkoutの画面が開くまでを待つ時間。
  * selectPlanのServer Action → /onboarding/paymentでのCheckout Session作成（Stripe API）
  * → Stripeへの遷移が続くため、stgでは4.4〜4.7秒かかり、toHaveURLの既定の5秒では
  * 遷移が起きているのに断続的に失敗していた（#518）。`checkout.spec.ts`の注文確定後の
@@ -142,6 +142,10 @@ export async function signUpViaInvitation(
   await page.goto(invitationUrl);
 
   await expect(page).toHaveURL(/\/sign-up/);
+  // 招待メールの宛先は、Clerkの登録の状態から読んで変更できない欄に出す（#745）
+  const emailField = page.getByLabel("メールアドレス");
+  await expect(emailField).toHaveValue(emailAddress);
+  await expect(emailField).not.toBeEditable();
   // 日本語ローカライズ後もラベル文言に依存しないよう、Clerkが付与する
   // 安定した要素属性(id・data-localization-key)でフォーム要素を指定する
   const passwordField = page.locator("#password-field");
@@ -202,7 +206,7 @@ export async function signUpAndCompleteOnboarding(
   await signUpAsIndividual(page, emailAddress, password);
 
   await page.getByRole("radio", { name: /STARTER/ }).check();
-  await page.getByRole("button", { name: /このプランで始める/ }).click();
+  await page.getByRole("button", { name: /お支払いへ進む/ }).click();
 
   // selectPlanサーバーアクションの完了（usersテーブルの行作成）を待つ。
   // /onboarding/payment はStripeセッション作成後すぐ外部ドメインへ

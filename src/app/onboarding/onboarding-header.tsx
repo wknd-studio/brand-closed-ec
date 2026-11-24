@@ -10,9 +10,14 @@ import { cn } from "@/lib/cn";
 // 決済の確定待ちでは決済は完了しているため、ログアウトさせずに確定を待ってもらう
 const PATHS_WITHOUT_SIGN_OUT = ["/onboarding/payment/success"];
 
-export function OnboardingHeader() {
+// 会員登録（/sign-up）はまだログインしていないため、withSignOut={false} でロゴだけにする
+export function OnboardingHeader({
+  withSignOut = true,
+}: {
+  withSignOut?: boolean;
+}) {
   const pathname = usePathname();
-  const showSignOut = !PATHS_WITHOUT_SIGN_OUT.includes(pathname);
+  const showSignOut = withSignOut && !PATHS_WITHOUT_SIGN_OUT.includes(pathname);
 
   return (
     <header className="border-b border-neutral-200 bg-white">

@@ -662,6 +662,42 @@ describe("Order", () => {
     it("決済単位が1件も無い注文はprocessing", () => {
       expect(makeOrder().rollupStatus().value).toBe("processing");
     });
+
+    // 決済されずに放置されたCheckoutの自動キャンセル（#202）で、注文に残る明細が無くなった場合
+    it("全明細がcancelledの決済単位に属していればcancelled", () => {
+      const order = makeOrder({
+        items: [makeItem({ id: "i1", settlementId: "s1" })],
+        settlements: [
+          makeSettlement({
+            id: "s1",
+            status: "cancelled",
+            cancelledAt: new Date(),
+          }),
+        ],
+      });
+      expect(order.rollupStatus().value).toBe("cancelled");
+    });
+
+    it("cancelledの決済単位の明細のほかに、settlement_idがNULLの明細が残っていればprocessing", () => {
+      const order = makeOrder({
+        items: [
+          makeItem({ id: "i1", settlementId: "s1" }),
+          makeItem({
+            id: "i2",
+            paymentTiming: "after_order",
+            settlementId: null,
+          }),
+        ],
+        settlements: [
+          makeSettlement({
+            id: "s1",
+            status: "cancelled",
+            cancelledAt: new Date(),
+          }),
+        ],
+      });
+      expect(order.rollupStatus().value).toBe("processing");
+    });
   });
 
   // at_orderの明細の決済単位（注文確定時に1件だけ作られるCheckout）と、そこに載せる明細

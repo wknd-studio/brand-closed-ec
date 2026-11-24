@@ -63,6 +63,15 @@ describe("OnboardingHeader", () => {
     expect(logoutButton()).toBeUndefined();
   });
 
+  // 会員登録（/sign-up）はまだログインしていないため、ロゴだけを出す
+  it("ログアウトを出さない指定（withSignOut={false}）ではロゴだけを出す", () => {
+    pathname = "/sign-up/continue";
+    act(() => root.render(<OnboardingHeader withSignOut={false} />));
+
+    expect(container.querySelector("header img")).not.toBeNull();
+    expect(logoutButton()).toBeUndefined();
+  });
+
   it("ログアウトを押すと、サインアウトしてトップへ戻る", () => {
     pathname = "/onboarding/plan";
     act(() => root.render(<OnboardingHeader />));

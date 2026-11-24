@@ -241,8 +241,9 @@ export class Order {
    * （docs/domain/settlement.md「orders.statusのロールアップ算出」）。
    * 1. 注文自体がキャンセル済み → cancelled
    * 2. いずれかの決済単位がlimit_exceeded → limit_exceeded
-   * 3. キャンセル済み決済単位に属する明細を除き、全明細がpaidの決済単位に属する → paid
-   * 4. それ以外 → processing
+   * 3. 全明細がキャンセル済み決済単位に属する（放置されたCheckoutの自動キャンセル等で、残る明細が無い） → cancelled（#202）
+   * 4. キャンセル済み決済単位に属する明細を除き、全明細がpaidの決済単位に属する → paid
+   * 5. それ以外 → processing
    */
   rollupStatus(): OrderStatus {
     if (this.status.value === "cancelled") return this.status;
@@ -257,14 +258,14 @@ export class Order {
         : undefined;
       return !settlement?.isCancelled();
     });
-    const allPaid =
-      relevantItems.length > 0 &&
-      relevantItems.every((item) => {
-        const settlement = item.settlementId
-          ? settlementById.get(item.settlementId)
-          : undefined;
-        return settlement?.isPaid() === true;
-      });
+    // 明細は不変条件で1件以上あるため、残る明細が無いのは全明細の決済単位がキャンセルされたとき
+    if (relevantItems.length === 0) return OrderStatus.of("cancelled");
+    const allPaid = relevantItems.every((item) => {
+      const settlement = item.settlementId
+        ? settlementById.get(item.settlementId)
+        : undefined;
+      return settlement?.isPaid() === true;
+    });
 
     return OrderStatus.of(allPaid ? "paid" : "processing");
   }
