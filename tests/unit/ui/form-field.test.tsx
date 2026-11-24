@@ -85,6 +85,91 @@ describe("FormField", () => {
     expect(control().id).toBeTruthy();
   });
 
+  // エラーのまとめ（画面上部）から、該当する項目へリンクするため（#747）
+  it("id を渡したときはその id を入力欄に付け、ラベルとエラー文言もそれに揃える", () => {
+    act(() =>
+      root.render(
+        <FormField id="lastName" label="姓" error="姓を入力してください">
+          {(field) => <Input name="lastName" {...field} />}
+        </FormField>
+      )
+    );
+
+    expect(control().id).toBe("lastName");
+    expect(container.querySelector("label")!.htmlFor).toBe("lastName");
+    expect(
+      document.getElementById(control().getAttribute("aria-describedby")!)
+        ?.textContent
+    ).toBe("姓を入力してください");
+  });
+
+  it("ヒントはエラーが無いときに出し、入力欄と aria-describedby で結び付ける", () => {
+    act(() =>
+      root.render(
+        <FormField
+          label="電話番号"
+          hint="ハイフンはあってもなくてもかまいません"
+        >
+          {(field) => <Input name="phoneNumber" {...field} />}
+        </FormField>
+      )
+    );
+
+    const id = control().getAttribute("aria-describedby");
+    expect(document.getElementById(id!)?.textContent).toBe(
+      "ハイフンはあってもなくてもかまいません"
+    );
+    expect(control().hasAttribute("aria-invalid")).toBe(false);
+  });
+
+  it("エラーがあるときはヒントの代わりにエラー文言を出す", () => {
+    act(() =>
+      root.render(
+        <FormField
+          label="電話番号"
+          hint="ハイフンはあってもなくてもかまいません"
+          error="電話番号の形式が正しくありません"
+        >
+          {(field) => <Input name="phoneNumber" {...field} />}
+        </FormField>
+      )
+    );
+
+    const id = control().getAttribute("aria-describedby");
+    expect(document.getElementById(id!)?.textContent).toBe(
+      "電話番号の形式が正しくありません"
+    );
+    expect(container.textContent).not.toContain("ハイフン");
+  });
+
+  // 「必須」はラベルの見た目の印。読み上げは入力欄の required に任せ、
+  // ラベルの文字列（getByLabel("姓", { exact: true }) 等）を変えない
+  it("required のときはラベルの横に「必須」の印を付け、ラベルの文字列・読み上げには含めない", () => {
+    act(() =>
+      root.render(
+        <FormField label="姓" required>
+          {(field) => <Input name="lastName" required {...field} />}
+        </FormField>
+      )
+    );
+
+    const mark = container.querySelector("[aria-hidden='true']");
+    expect(mark?.textContent).toBe("必須");
+    expect(container.querySelector("label")!.textContent).toBe("姓");
+  });
+
+  it("required でないときは「必須」の印を付けない", () => {
+    act(() =>
+      root.render(
+        <FormField label="姓">
+          {(field) => <Input name="lastName" {...field} />}
+        </FormField>
+      )
+    );
+
+    expect(container.querySelector("label")!.textContent).toBe("姓");
+  });
+
   it("同じ画面に複数置いても、エラー文言の id が重ならない", () => {
     act(() =>
       root.render(

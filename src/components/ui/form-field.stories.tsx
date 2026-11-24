@@ -29,6 +29,10 @@ export const ErrorState: Story = {
   args: { error: "0から始まる10〜11桁の数字で入力してください" },
 };
 
+export const RequiredWithHint: Story = {
+  args: { required: true, hint: "ハイフンはあってもなくてもかまいません" },
+};
+
 export const WithSelect: Story = {
   args: {
     label: "都道府県",
