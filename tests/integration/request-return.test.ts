@@ -98,9 +98,21 @@ function clientAs(clerkUserId: string) {
   );
 }
 
+// 申請はリポジトリで注文を集約として読むため、住所のスナップショットにも値を入れる
+const addressSnapshot = {
+  recipientLastName: "テスト",
+  recipientFirstName: "太郎",
+  postalCode: "100-0001",
+  prefecture: "東京都",
+  city: "千代田区",
+  addressLine1: "丸の内1-1-1",
+  addressLine2: "",
+  phoneNumber: "03-1234-5678",
+};
+
 const baseOrder = {
-  shipping_address_snapshot: {},
-  billing_address_snapshot: {},
+  shipping_address_snapshot: addressSnapshot,
+  billing_address_snapshot: addressSnapshot,
   rank_at_order: "basic" as const,
   monthly_limit_at_order: 1_000_000,
   status: "processing",
