@@ -35,6 +35,15 @@ export class MonthlyLimit {
     return this.limit !== null && total.isOver(this.limit);
   }
 
+  /**
+   * 上限間近か（使った金額が上限の90%以上。超えている場合も含む）。画面で注意を促すのに使う。
+   * 上限0は何も買えないため上限間近とする。無制限なら常に false
+   */
+  isNearlyExceededBy(used: Money): boolean {
+    // 小数の誤差を避けるため、used / limit >= 0.9 を整数の比較にする
+    return this.limit !== null && used.amount * 10 >= this.limit.amount * 9;
+  }
+
   /** 上限を超えていれば LimitExceededError を投げる */
   assertNotExceededBy(total: Money): void {
     if (this.limit !== null && total.isOver(this.limit)) {

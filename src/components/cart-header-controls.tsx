@@ -16,16 +16,15 @@ import { cn } from "@/lib/cn";
 // 仕入れ枠の金額は、カートの上限チェックと同じ cart-limit の計算から取る
 function useLimitAmounts() {
   const { cart, confirmedAmount, monthlyLimit } = useCart();
-  const status = monthlyLimitStatus({
-    lines: cart.items,
-    confirmedAmount,
-    monthlyLimit,
-  });
   return {
     monthlyLimit,
     confirmedAmount,
     cartAmount: sumCartFixedTotal(cart.items),
-    remaining: status.isUnlimited ? null : status.remaining,
+    status: monthlyLimitStatus({
+      lines: cart.items,
+      confirmedAmount,
+      monthlyLimit,
+    }),
   };
 }
 

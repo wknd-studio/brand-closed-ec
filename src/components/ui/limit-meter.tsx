@@ -1,7 +1,5 @@
+import type { MonthlyLimitStatus } from "@/domain/services/cart-limit";
 import { cn } from "@/lib/cn";
-
-// 使用率がこれ以上なら上限間近として注意色にする（作り直す前のヘッダーの基準と同じ）
-const NEAR_LIMIT_RATE = 0.9;
 
 type LimitMeterProps = {
   // 月間仕入れ上限。null なら無制限
@@ -10,8 +8,8 @@ type LimitMeterProps = {
   confirmedAmount: number;
   // カートの商品の金額（要相談の商品を除く）
   cartAmount: number;
-  // 残り（monthlyLimitStatus の remaining）。超えていれば負。無制限なら null
-  remaining: number | null;
+  // 使用・残り・上限間近か（cart-limit の monthlyLimitStatus の戻り値）。部品の中で判定・計算しない
+  status: MonthlyLimitStatus;
   // compact: ヘッダー用の小さい形。detail: 内訳まで出す形
   variant?: "compact" | "detail";
   // compact で、使用の金額にカートの商品の分を添える（スマホ幅の帯）
@@ -34,18 +32,16 @@ export function LimitMeter({
   monthlyLimit,
   confirmedAmount,
   cartAmount,
-  remaining,
+  status,
   variant = "compact",
   cartBreakdown = false,
   planName,
   className,
 }: LimitMeterProps) {
-  const used = confirmedAmount + cartAmount;
+  const { used } = status;
   const isUnlimited = monthlyLimit === null;
-  // 上限0（会員の情報が無い）は、何も買えないため上限間近として扱う
-  const isNear =
-    !isUnlimited &&
-    (monthlyLimit === 0 || used / monthlyLimit >= NEAR_LIMIT_RATE);
+  const remaining = status.isUnlimited ? null : status.remaining;
+  const isNear = !status.isUnlimited && status.isNearLimit;
   const remainingAmount =
     remaining === null
       ? "上限なし"

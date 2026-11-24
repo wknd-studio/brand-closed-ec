@@ -264,15 +264,15 @@ describe("monthlyLimitStatus", () => {
         lines,
         confirmedAmount: 65_000,
         monthlyLimit: 100_000,
-      }).isNearLimit
-    ).toBe(true);
+      })
+    ).toMatchObject({ isNearLimit: true });
     expect(
       monthlyLimitStatus({
         lines,
         confirmedAmount: 64_999,
         monthlyLimit: 100_000,
-      }).isNearLimit
-    ).toBe(false);
+      })
+    ).toMatchObject({ isNearLimit: false });
   });
 
   it("上限が無制限（null）なら、無制限とし、使用だけを持ち、残量・超過・上限間近は持たない", () => {
