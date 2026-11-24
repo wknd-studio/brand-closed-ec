@@ -7,7 +7,6 @@ import { useAuth, useClerk } from "@clerk/nextjs";
 import type { MemberAccountDto } from "@/queries/member-query-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Container } from "@/components/ui/container";
 import {
   Popover,
   PopoverContent,
@@ -47,8 +46,10 @@ export default function Header({
 
   return (
     <header className="relative z-20 border-b border-neutral-200 bg-white">
-      <div data-header="desktop" className="hidden lg:block">
-        <Container className="flex h-[72px] items-center gap-5">
+      {/* モックアップどおり、ヘッダーはページの本文（Container の1080px）より広い1200pxまで使う。
+          ナビ・検索欄・仕入れ枠・カート・アカウントが1行に収まる1200px以上で、この並びにする */}
+      <div data-header="desktop" className="hidden min-[1200px]:block">
+        <div className="mx-auto flex h-[72px] max-w-[1200px] items-center gap-6 px-6">
           <Logo className="h-8" />
           {account && (
             <>
@@ -78,10 +79,10 @@ export default function Header({
               <AccountMenu account={account} />
             </>
           )}
-        </Container>
+        </div>
       </div>
 
-      <Popover data-header="mobile" className="lg:hidden">
+      <Popover data-header="mobile" className="min-[1200px]:hidden">
         <div className="flex h-[60px] items-center gap-1 pr-2 pl-4">
           <Logo className="h-[26px]" />
           <div className="flex-1" />
@@ -186,7 +187,7 @@ function SearchForm() {
       role="search"
       action="/shop/search"
       method="get"
-      className="relative ml-auto flex min-w-36 flex-1 items-center lg:max-w-[220px]"
+      className="relative ml-auto flex max-w-[220px] min-w-36 flex-1 items-center"
     >
       <span className="pointer-events-none absolute left-3.5 text-secondary">
         <SearchIcon size={16} />
