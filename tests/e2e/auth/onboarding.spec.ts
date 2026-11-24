@@ -74,8 +74,19 @@ test.describe.serial("認証済みアクセス", () => {
 
   test("個人として登録を選ぶと /onboarding/plan?accountType=individual に進む", async () => {
     await page.goto("/onboarding/account-type");
-    await page.getByRole("radio", { name: /個人として登録/ }).check();
-    await page.getByRole("button", { name: /次へ/ }).click();
+    await expect(
+      page
+        .getByRole("navigation", { name: "お手続きの進み具合" })
+        .locator('[aria-current="step"]')
+    ).toHaveText("1 ご利用の種別");
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "ご利用の種別を選んでください",
+      })
+    ).toBeVisible();
+    await page.getByRole("radio", { name: "個人として登録" }).check();
+    await page.getByRole("button", { name: "個人として次へ" }).click();
     await expect(page).toHaveURL(/\/onboarding\/plan\?accountType=individual/);
   });
 
@@ -230,8 +241,8 @@ test.describe.serial("法人として登録", () => {
 
   test("法人として登録を選ぶと法人情報の入力欄が表示される", async () => {
     await page.goto("/onboarding/account-type");
-    await page.getByRole("radio", { name: /法人として登録/ }).check();
-    await page.getByRole("button", { name: /次へ/ }).click();
+    await page.getByRole("radio", { name: "法人として登録" }).check();
+    await page.getByRole("button", { name: "法人として次へ" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/plan\?accountType=corporate/);
     await expect(page.getByLabel("会社名")).toBeVisible();

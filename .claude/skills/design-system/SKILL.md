@@ -59,6 +59,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `Table`（`TableHeader` / `TableBody` / `TableRow` / `TableHead` / `TableCell`）: 管理画面の一覧用テーブル。角丸の枠付きで、狭い画面では横スクロールする（最初の利用は `/admin/procurement/queue`）
 - `Badge`: 状態・区分を示す小さなラベル。`tone`(neutral/primary/success/warning/danger)
 - `Steps`: 手続きの進み具合（`steps` のラベルの配列と、今の位置 `current`（0始まり））。`<nav aria-label="お手続きの進み具合">` で囲み、今のステップに `aria-current="step"` を付ける（最初の利用はオンボーディング）
+- `ChoiceCard`: ラジオボタンを中に置いて、カード全体で選ばせる `<label>`。選ばれた（ゴールドの枠・薄いグラデーション）・キーボードのフォーカスがある見た目は、中の入力欄の状態（`:has`）から付くため、選択状態を props で渡さない。中の要素は `group-has-checked:` で選ばれたときの見た目を変えられる。余白・並びは `className` で足す（最初の利用は `/onboarding/account-type`）。オンボーディングのステップのラベルは `src/app/onboarding/onboarding-steps.ts` の `ONBOARDING_STEPS` を使う
 
 ## Clerk のコンポーネントの見た目
 
