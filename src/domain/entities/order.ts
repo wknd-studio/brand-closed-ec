@@ -199,6 +199,7 @@ export class Order {
    * - 明細が1件以上ある
    * - 明細のsettlementIdは、その注文の決済単位のどれかかNULL
    * - 決済単位のorderIdが、その注文のid
+   * - 決済単位のidが重ならない（請求作成で既存の決済単位のidを渡されたとき、上書きして保存しないため）
    */
   private static assertInvariants(props: OrderProps): void {
     if (props.items.length === 0) {
@@ -208,6 +209,9 @@ export class Order {
       throw new InvalidOrderError(props.id, "settlement_of_other_order");
     }
     const settlementIds = new Set(props.settlements.map((s) => s.id));
+    if (settlementIds.size !== props.settlements.length) {
+      throw new InvalidOrderError(props.id, "duplicate_settlement_id");
+    }
     if (
       props.items.some(
         (item) =>
