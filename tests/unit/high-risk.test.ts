@@ -97,8 +97,12 @@ describe("judgeHighRisk（変更したファイル → high-risk か）", () => 
     ".gitleaks.toml",
     ".husky/pre-commit",
     "scripts/gitleaks-staged.sh",
+    // issue の範囲外の high-risk の変更を止める判定（#795）
+    "scripts/ci/issue-scope.ts",
+    ".github/workflows/issue-scope.yml",
+    ".claude/hooks/issue-scope-guard.ts",
   ])(
-    "Test Guard・high-risk の判定・gitleaks の本体 %s は、どう変えても high-risk（弱めたかを機械的に見分けられないため）",
+    "Test Guard・high-risk の判定・gitleaks・Issue Scope の本体 %s は、どう変えても high-risk（弱めたかを機械的に見分けられないため）",
     (path) => {
       expect(judge([change(path)]).highRisk).toBe(true);
     }
@@ -478,6 +482,28 @@ describe("detectClaudeSettingsWeakening（.claude/settings.json の権限）", (
         })
       )
     ).toEqual([]);
+  });
+
+  it("hooks から hook を外す・matcher を変えると検出する（#795 の Issue Scope の hook を外せないように）", () => {
+    const hooked = (matcher: string, command: string) =>
+      json({
+        permissions: {
+          allow: ["Bash(pnpm *)"],
+          ask: ["Bash(git push *)"],
+          deny: ["Bash(rm -rf *)"],
+        },
+        hooks: {
+          PreToolUse: [{ matcher, hooks: [{ type: "command", command }] }],
+        },
+      });
+    const before = hooked("Edit|Write", "tsx guard.ts");
+    expect(detect(hooked("Edit|Write", "tsx guard.ts"), before)).toEqual([]);
+    expect(
+      detect(json({ permissions: JSON.parse(before).permissions }), before)
+    ).toEqual(["hooks からの削除（PreToolUse・Edit|Write: tsx guard.ts）"]);
+    expect(detect(hooked("Edit", "tsx guard.ts"), before)).toEqual([
+      "hooks からの削除（PreToolUse・Edit|Write: tsx guard.ts）",
+    ]);
   });
 
   it("ファイルを消すと、deny・ask からの削除として検出する", () => {
