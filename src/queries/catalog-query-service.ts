@@ -3,11 +3,13 @@ import type { MemberRank } from "@/domain/value-objects/member-rank";
 export type ProductAvailability = "available" | "out_of_stock" | "discontinued";
 export type ProductPaymentTiming = "at_order" | "after_order";
 
-// ブランド一覧（/shop）の1ブランド。閲覧できる商品の件数と、最初の商品のサムネイル
+// ブランド一覧（/shop）の1ブランド。閲覧できる商品の件数と、最初の商品のサムネイル。
+// category は閲覧できる商品に最も多く付いたカテゴリ（ブランド自体はカテゴリを持たないため）。無ければ null
 export type BrandSummaryDto = {
   brand: string;
   count: number;
   thumbnail: string | null;
+  category: string | null;
 };
 
 // 商品一覧・検索・お気に入りの商品カード。unitPrice は会員ランクの価格（要相談・未設定は null）
@@ -20,6 +22,8 @@ export type ProductCardDto = {
   unitPrice: number | null;
   availability: ProductAvailability;
   thumbnail: string | null;
+  // 注文で実際に支払う時期（要相談の商品は注文後払い）。after_order の商品は請求書払い
+  paymentTiming: ProductPaymentTiming;
 };
 
 export type ProductListDto = {

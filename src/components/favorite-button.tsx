@@ -1,6 +1,7 @@
 "use client";
 
 import { useFavorites } from "@/components/favorites/favorites-provider";
+import { cn } from "@/lib/cn";
 
 export default function FavoriteButton({
   sanityProductId,
@@ -22,14 +23,25 @@ export default function FavoriteButton({
       }}
       aria-pressed={favorited}
       aria-label={favorited ? "お気に入りから削除" : "お気に入りに追加"}
-      className={`flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg shadow transition hover:scale-105 ${className}`}
+      className={cn(
+        "inline-flex size-10 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        favorited ? "text-primary" : "text-neutral-700",
+        className
+      )}
     >
-      <span
-        className={favorited ? "text-primary" : "text-gray-400"}
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill={favorited ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         aria-hidden="true"
       >
-        {favorited ? "★" : "☆"}
-      </span>
+        <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+      </svg>
     </button>
   );
 }

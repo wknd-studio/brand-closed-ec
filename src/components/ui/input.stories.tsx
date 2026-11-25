@@ -26,3 +26,12 @@ export const Disabled: Story = {
 export const ErrorState: Story = {
   args: { error: "必須項目です" },
 };
+
+// 検索欄（/shop・/shop/search）
+export const Pill: Story = {
+  args: {
+    type: "search",
+    shape: "pill",
+    placeholder: "商品名・ブランドで検索",
+  },
+};

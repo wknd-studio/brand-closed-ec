@@ -74,28 +74,63 @@ function toCardDto(
     unitPrice,
     availability: product.availability,
     thumbnail: product.thumbnail,
+    paymentTiming: settlementTimingOf({
+      paymentTiming: product.payment_timing ?? "at_order",
+      isNegotiable: product.is_negotiable,
+    }),
   };
+}
+
+// 最も多いもの。同数なら先に出たもの（Map は入れた順を保つ）
+function mostFrequent(values: string[]): string | null {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  let result: string | null = null;
+  let max = 0;
+  for (const [value, count] of counts) {
+    if (count > max) {
+      result = value;
+      max = count;
+    }
+  }
+  return result;
 }
 
 export class SanityCatalogQueryService implements CatalogQueryService {
   async findBrands(rank: MemberRank): Promise<BrandSummaryDto[]> {
     const rows = await sanityClient.fetch<
-      { brand: string; thumbnail: string | null }[]
+      {
+        brand: string;
+        thumbnail: string | null;
+        categories: (string | null)[] | null;
+      }[]
     >(
-      `*[${LISTABLE_FILTER}]|order(brand->name asc){"brand":brand->name,"thumbnail":images[0].asset->url}`,
+      `*[${LISTABLE_FILTER}]|order(brand->name asc){"brand":brand->name,"thumbnail":images[0].asset->url,"categories":categories[]->name}`,
       { allowedRanks: rank.accessibleRanks() }
     );
     const brandMap = new Map<
       string,
-      { count: number; thumbnail: string | null }
+      { count: number; thumbnail: string | null; categories: string[] }
     >();
     for (const row of rows) {
       if (!brandMap.has(row.brand))
-        brandMap.set(row.brand, { count: 0, thumbnail: row.thumbnail });
-      brandMap.get(row.brand)!.count++;
+        brandMap.set(row.brand, {
+          count: 0,
+          thumbnail: row.thumbnail,
+          categories: [],
+        });
+      const summary = brandMap.get(row.brand)!;
+      summary.count++;
+      for (const category of row.categories ?? [])
+        if (category) summary.categories.push(category);
     }
     return Array.from(brandMap.entries())
-      .map(([brand, { count, thumbnail }]) => ({ brand, count, thumbnail }))
+      .map(([brand, { count, thumbnail, categories }]) => ({
+        brand,
+        count,
+        thumbnail,
+        category: mostFrequent(categories),
+      }))
       .sort((a, b) => a.brand.localeCompare(b.brand, "ja"));
   }
 
