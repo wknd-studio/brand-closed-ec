@@ -2,6 +2,8 @@
  * Clerk + Supabaseに開発用ユーザーをシードする。
  * 各ランク1人ずつの個人会員 + standardの法人会員1人 + 管理者1人を、存在しなければClerk側も新規作成する。会員はオンボーディングを
  * 終えた状態のusersの行を、有効な行があれば更新し、無ければ作る（べき等・何度実行しても同じ結果）。
+ * 解約済みでないsubscriptions行が無い入会済みの会員は利用停止になる（#380）ため、有効なサブスクリプションの
+ * 行も入れる。Stripeには実在しない仮のIDのため、シードの会員はStripeを使う操作（退会・プラン変更）ができない。
  * 管理者はClerkの publicMetadata.role = "admin" だけで、usersの行は持たない。
  * 1件でも失敗すれば、残りを続けたうえで終了コード1で終わる。
  * Clerk・Supabaseともlocal/stgでインスタンス・プロジェクトが分かれている（#686）ため、
@@ -168,10 +170,10 @@ async function ensureOnboardedMemberRow(
   supabase: SeedSupabase,
   clerkUserId: string,
   def: SeedUserDef & { role: "member" }
-): Promise<void> {
+): Promise<string> {
   const profile = onboardedMemberProfile(def);
 
-  const updateActiveRow = async (): Promise<boolean> => {
+  const updateActiveRow = async (): Promise<string | undefined> => {
     const { data, error } = await supabase
       .from("users")
       .update(profile)
@@ -179,28 +181,53 @@ async function ensureOnboardedMemberRow(
       .is("deleted_at", null)
       .select("id");
     if (error) throw new Error(`usersの更新に失敗: ${error.message}`);
-    return data.length > 0;
+    return data[0]?.id;
   };
 
-  if (await updateActiveRow()) return;
+  const existingId = await updateActiveRow();
+  if (existingId) return existingId;
 
-  const { error } = await supabase
+  const { data: created, error } = await supabase
     .from("users")
     .insert({ ...profile, email: def.email, clerk_user_id: clerkUserId })
     .select("id")
     .single();
-  if (!error) return;
+  if (!error) return created.id;
 
   // Clerkでアカウントを作ると、user.created Webhookが更新してから作成するまでの間に
   // 有効な行を作ることがある。その行を更新する
   if (
     error.code === "23505" &&
-    error.message.includes("users_clerk_user_id_active_idx") &&
-    (await updateActiveRow())
+    error.message.includes("users_clerk_user_id_active_idx")
   ) {
-    return;
+    const conflictedId = await updateActiveRow();
+    if (conflictedId) return conflictedId;
   }
   throw new Error(`usersの作成に失敗: ${error.message}`);
+}
+
+// 会員ごとに1つの仮のIDで upsert し、何度実行しても行を増やさない
+async function ensureActiveSubscriptionRow(
+  supabase: SeedSupabase,
+  userId: string,
+  def: SeedUserDef & { role: "member" }
+): Promise<void> {
+  const now = new Date();
+  const periodEnd = new Date(now);
+  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  const { error } = await supabase.from("subscriptions").upsert(
+    {
+      user_id: userId,
+      stripe_customer_id: `cus_seed_${userId}`,
+      stripe_subscription_id: `sub_seed_${userId}`,
+      status: "active",
+      rank_code: def.rank,
+      current_period_start: now.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+    },
+    { onConflict: "stripe_subscription_id" }
+  );
+  if (error) throw new Error(`subscriptionsの作成に失敗: ${error.message}`);
 }
 
 export async function seedUsers({
@@ -221,7 +248,8 @@ export async function seedUsers({
     try {
       const { userId, created } = await upsertClerkUser(clerk, def, password);
       if (def.role === "member") {
-        await ensureOnboardedMemberRow(supabase, userId, def);
+        const memberId = await ensureOnboardedMemberRow(supabase, userId, def);
+        await ensureActiveSubscriptionRow(supabase, memberId, def);
       }
       const clerkNote = created ? "Clerk新規作成" : "Clerk既存・更新";
       logger.log(

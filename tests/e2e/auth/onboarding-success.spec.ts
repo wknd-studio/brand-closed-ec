@@ -59,6 +59,17 @@ test.describe.serial("決済完了画面", () => {
   });
 
   test.afterAll(async () => {
+    const { data: users } = await supabaseAdmin()
+      .from("users")
+      .select("id")
+      .eq("clerk_user_id", clerkUserId);
+    await supabaseAdmin()
+      .from("subscriptions")
+      .delete()
+      .in(
+        "user_id",
+        (users ?? []).map((user) => user.id)
+      );
     await supabaseAdmin()
       .from("users")
       .delete()
@@ -101,11 +112,11 @@ test.describe.serial("決済完了画面", () => {
   });
 
   test("入会済みなら /shop へ進む", async ({ page }) => {
-    const { error } = await supabaseAdmin()
-      .from("users")
-      .update({ onboarding_completed: true })
-      .eq("clerk_user_id", clerkUserId);
-    expect(error).toBeNull();
+    // 入会の確定（confirm_subscription_onboarding）と同じく、入会済みにしてサブスクリプションの行も作る。
+    // 行が無いと利用停止と判定される（#380）
+    await ensureMemberRow(supabaseAdmin(), clerkUserId, TEST_EMAIL, {
+      onboardingCompleted: true,
+    });
 
     await page.goto("/");
     await clerk.signIn({ page, emailAddress: TEST_EMAIL });

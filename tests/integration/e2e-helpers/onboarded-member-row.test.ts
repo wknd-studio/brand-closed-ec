@@ -45,7 +45,22 @@ async function activeRows() {
   return data;
 }
 
+async function subscriptionStatuses() {
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("status, users!inner(clerk_user_id)")
+    .eq("users.clerk_user_id", CLERK_USER_ID);
+  if (error) throw error;
+  return data.map((row) => row.status);
+}
+
 async function cleanup() {
+  const { data } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_user_id", CLERK_USER_ID);
+  const ids = (data ?? []).map((row) => row.id);
+  await supabase.from("subscriptions").delete().in("user_id", ids);
   await supabase.from("users").delete().eq("clerk_user_id", CLERK_USER_ID);
 }
 
@@ -152,3 +167,30 @@ describe.each([
     });
   }
 );
+
+// GitHub issue #380: middleware は解約済みでない subscriptions 行が無い入会済みの会員を
+// 利用停止の画面に送るため、入会済みの会員には有効なサブスクリプションの行も用意する
+describe("ensureMemberRow のサブスクリプションの行", () => {
+  it("入会済みにすると、有効なサブスクリプションの行が1つだけできる（2回目も増えない）", async () => {
+    await ensureMemberRow(supabase, CLERK_USER_ID, EMAIL, {
+      onboardingCompleted: true,
+    });
+    await ensureMemberRow(supabase, CLERK_USER_ID, EMAIL, {
+      onboardingCompleted: true,
+    });
+
+    expect(await subscriptionStatuses()).toEqual(["active"]);
+  });
+
+  it("入会済みの行が残っていても、未入会に戻すとサブスクリプションの行を消す", async () => {
+    await ensureMemberRow(supabase, CLERK_USER_ID, EMAIL, {
+      onboardingCompleted: true,
+    });
+
+    await ensureMemberRow(supabase, CLERK_USER_ID, EMAIL, {
+      onboardingCompleted: false,
+    });
+
+    expect(await subscriptionStatuses()).toEqual([]);
+  });
+});

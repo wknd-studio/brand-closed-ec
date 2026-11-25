@@ -59,7 +59,24 @@ function makeSupabase({
       ? { message: "write failed" }
       : null;
 
+  // subscriptions は stripe_subscription_id の一意制約での upsert だけを再現する
+  const subscriptions: Record<string, unknown>[] = [];
   const from = vi.fn((table: string) => {
+    if (table === "subscriptions") {
+      return {
+        upsert: async (
+          row: Record<string, unknown>,
+          { onConflict }: { onConflict: string }
+        ) => {
+          const existing = subscriptions.find(
+            (s) => s[onConflict] === row[onConflict]
+          );
+          if (existing) Object.assign(existing, row);
+          else subscriptions.push({ ...row });
+          return { error: null };
+        },
+      };
+    }
     expect(table).toBe("users");
     return {
       update: (fields: Record<string, unknown>) => ({
@@ -111,7 +128,11 @@ function makeSupabase({
       }),
     };
   });
-  return { supabase: { from } as unknown as SeedSupabase, rows };
+  return {
+    supabase: { from } as unknown as SeedSupabase,
+    rows,
+    subscriptions,
+  };
 }
 
 const MEMBER_SEED_USERS = SEED_USERS.filter((u) => u.role === "member");
@@ -248,6 +269,31 @@ describe("seedUsers", () => {
           invoice_registration_number: null,
         })
       );
+    }
+  });
+
+  // GitHub issue #380: 解約済みでない subscriptions 行が無い入会済みの会員は利用停止になる
+  it("会員ごとに、users の行に紐づく有効なサブスクリプションの行を1つだけ入れる（何度実行しても増やさない）", async () => {
+    const clerk = makeClerk(SEED_USERS.map((u) => u.email));
+    const { supabase, rows, subscriptions } = makeSupabase();
+
+    for (let i = 0; i < 2; i++) {
+      await seedUsers({
+        clerk,
+        supabase,
+        password: PASSWORD,
+        logger: makeLogger(),
+      });
+    }
+
+    expect(subscriptions).toHaveLength(MEMBER_SEED_USERS.length);
+    for (const row of rows) {
+      expect(subscriptions.filter((s) => s.user_id === row.id)).toEqual([
+        expect.objectContaining({
+          status: "active",
+          rank_code: row.rank_code,
+        }),
+      ]);
     }
   });
 
