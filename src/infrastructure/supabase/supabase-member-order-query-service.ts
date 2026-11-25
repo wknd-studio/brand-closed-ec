@@ -15,7 +15,7 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { isSubscriptionPaymentFailed } from "@/domain/services/new-order-eligibility";
-import type { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
+import { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
 import { groupItemsBySettlement } from "@/domain/services/settlement-grouping";
 import type { OrderItem } from "@/domain/entities/order-item";
 import type { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
@@ -106,7 +106,11 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
       .is("deleted_at", null)
       .order("is_default", { referencedTable: "addresses", ascending: false })
       // 解約済みでない行は会員につき1件まで（subscriptions_user_active_idx）
-      .neq("subscriptions.status", "canceled")
+      .not(
+        "subscriptions.status",
+        "in",
+        `(${SubscriptionStatus.endedValues().join(",")})`
+      )
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
@@ -121,8 +125,9 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
         .filter((a) => a.type === "billing")
         .map(toAddressDto),
       paymentFailed: isSubscriptionPaymentFailed(
-        (data.subscriptions[0]?.status as SubscriptionStatus | undefined) ??
-          null
+        data.subscriptions[0]
+          ? SubscriptionStatus.of(data.subscriptions[0].status).value
+          : null
       ),
     };
   }

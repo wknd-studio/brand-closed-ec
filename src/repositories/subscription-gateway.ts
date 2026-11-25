@@ -1,8 +1,8 @@
-import type { SubscriptionStatus } from "@/repositories/subscription-repository";
+import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 
 /** Stripe から取得したサブスクリプションのステータス・期間・開始日時・解約 */
 export type RetrievedSubscription = {
-  status: SubscriptionStatus;
+  status: SubscriptionStatusValue;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   startedAt: Date;

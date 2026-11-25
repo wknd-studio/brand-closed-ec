@@ -2,7 +2,7 @@ import type { MemberRankValue } from "@/domain/value-objects/member-rank";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
-import type { SubscriptionStatus } from "@/repositories/subscription-repository";
+import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 import type {
   ConfirmSubscriptionOnboardingResult,
   SubscriptionOnboardingRepository,
@@ -13,7 +13,7 @@ export type CompleteSubscriptionOnboardingInput = {
   plan: MemberRankValue;
   stripeCustomerId: string;
   stripeSubscriptionId: string;
-  status: SubscriptionStatus;
+  status: SubscriptionStatusValue;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   // サブスクリプションの開始日時（Stripeのstart_date）。課金基準日の計算に使う

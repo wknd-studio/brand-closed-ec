@@ -1,17 +1,14 @@
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
-import type { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
-
-// 値の定義は domain に置く（新規注文を止める条件などの判定に使うため）。Stripe側には
-// この他に'paused'が存在するが、v1では起きないため未対応（発生した場合は
+// Stripe側にはこの他に'paused'が存在するが、v1では起きないため未対応（発生した場合は
 // toSubscriptionStatusで例外になる）
-export type { SubscriptionStatus };
+import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 
 export type SubscriptionSnapshot = {
   id: string;
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   stripeSubscriptionScheduleId: string | null;
-  status: SubscriptionStatus;
+  status: SubscriptionStatusValue;
   rank: MemberRankValue;
   pendingRank: MemberRankValue | null;
   currentPeriodStart: Date;
@@ -36,6 +33,7 @@ export type SubscriptionStatusSync = Pick<
 >;
 
 export interface SubscriptionRepository {
+  // 解約済み（SubscriptionStatus.isEnded()）でない行を返す
   findActiveByUserId(userId: string): Promise<SubscriptionSnapshot | null>;
   // user_idにつき解約済みでない行は1件までという部分UNIQUE制約
   // （subscriptions_user_active_idx）を前提に、既存のアクティブな行があれば

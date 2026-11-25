@@ -7,6 +7,7 @@ import type {
   UpsertSubscriptionInput,
 } from "@/repositories/subscription-repository";
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
 
 type SubscriptionRow = {
   id: string;
@@ -28,7 +29,7 @@ function toSnapshot(row: SubscriptionRow): SubscriptionSnapshot {
     stripeCustomerId: row.stripe_customer_id,
     stripeSubscriptionId: row.stripe_subscription_id,
     stripeSubscriptionScheduleId: row.stripe_subscription_schedule_id,
-    status: row.status as SubscriptionSnapshot["status"],
+    status: SubscriptionStatus.of(row.status).value,
     rank: row.rank_code as MemberRankValue,
     pendingRank: row.pending_rank_code as MemberRankValue | null,
     currentPeriodStart: new Date(row.current_period_start),
@@ -37,6 +38,9 @@ function toSnapshot(row: SubscriptionRow): SubscriptionSnapshot {
     canceledAt: row.canceled_at ? new Date(row.canceled_at) : null,
   };
 }
+
+// PostgREST の in 演算子の値の一覧
+const ENDED_STATUSES_FILTER = `(${SubscriptionStatus.endedValues().join(",")})`;
 
 const SELECT_FIELDS =
   "id, stripe_customer_id, stripe_subscription_id, stripe_subscription_schedule_id, status, rank_code, pending_rank_code, current_period_start, current_period_end, cancel_at_period_end, canceled_at";
@@ -51,7 +55,8 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
       .from("subscriptions")
       .select(SELECT_FIELDS)
       .eq("user_id", userId)
-      .neq("status", "canceled")
+      // 解約済みでない行は会員につき1件まで（subscriptions_user_active_idx）
+      .not("status", "in", ENDED_STATUSES_FILTER)
       .maybeSingle();
     if (error) throw error;
     return data ? toSnapshot(data as SubscriptionRow) : null;
