@@ -1,7 +1,7 @@
 name: Issue Scope
 
-# 差分の high-risk のファイル（.github/labeler.yml の high-risk）のうち、PR本文の `Closes #n` の issue の
-# 「触るファイル」に無いものがあれば失敗させる（#795）。issue の範囲外で high-risk のファイルを変える変更を、
+# 差分の high-risk のファイル（PR に high-risk を付ける判定 scripts/ci/high-risk.ts が理由を出したファイル。#578）のうち、
+# PR本文の `Closes #n` の issue の「触るファイル」に無いものがあれば失敗させる（#795）。issue の範囲外で high-risk の変更を、
 # モデルの判断に頼らず止める。ブランチ保護の必須チェックに登録して使う。
 # 意図的な変更なら、人間がPRに `scope-approved` ラベルを付けると成功扱いになる（Test Guard の test-change-approved と同じ形）。
 # 判定は scripts/ci/issue-scope.ts（Orca のワークツリーの PreToolUse hook と同じ関数）。
