@@ -52,7 +52,12 @@ judge_sync_check() {
     return 0
   fi
   echo "::error::スキーマのファイル（supabase/schemas/）と、マイグレーションを当てた結果に差があります。sync は次のマイグレーションを作りました:"
-  cat "$created"
+  local file
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    echo "--- ${file}"
+    cat "$file"
+  done <<<"$created"
   cat <<'MSG'
 
 - スキーマのファイルを直したなら、`task db:sync -- <名前>` でマイグレーションを作ってコミットしてください。
@@ -65,14 +70,27 @@ MSG
   return 1
 }
 
-# sync を実行し、作ったマイグレーションのパスを出す（作らなければ何も出さない）
+# sync を実行し、作ったマイグレーションのパスを1行ずつ出す（作らなければ何も出さない）。sync が失敗したら失敗する。
+# コマンド置換の中では set -e が効かないため、各コマンドの失敗を明示的に返す
 # 引数: $1 = マイグレーションの名前
 run_sync() {
   local name="$1" before after
-  before="$(ls "$MIGRATIONS_DIR")"
-  supabase db schema declarative sync --experimental --no-cache --no-apply --name "$name" >&2
-  after="$(ls "$MIGRATIONS_DIR")"
+  before="$(ls "$MIGRATIONS_DIR")" || return 1
+  supabase db schema declarative sync --experimental --no-cache --no-apply --name "$name" >&2 || {
+    echo "::error::supabase db schema declarative sync が失敗しました" >&2
+    return 1
+  }
+  after="$(ls "$MIGRATIONS_DIR")" || return 1
   comm -13 <(echo "$before") <(echo "$after") | sed "s|^|$MIGRATIONS_DIR/|"
+}
+
+# 引数: $1 = 消すマイグレーションのパス（改行区切り）
+remove_created() {
+  local file
+  while IFS= read -r file; do
+    [[ -n "$file" ]] && rm -f "$file"
+  done <<<"$1"
+  return 0
 }
 
 main() {
@@ -84,22 +102,24 @@ main() {
 
   if [[ "$arg" == "--check" ]]; then
     local created
-    created="$(run_sync "$CHECK_NAME")"
+    created="$(run_sync "$CHECK_NAME")" || return 1
     if ! judge_sync_check "$created"; then
-      rm -f "$created"
+      remove_created "$created"
       return 1
     fi
     return 0
   fi
 
   local created
-  created="$(run_sync "$arg")"
+  created="$(run_sync "$arg")" || return 1
   if [[ -z "$created" ]]; then
     echo "スキーマのファイルとマイグレーションの結果に差が無いため、マイグレーションは作りませんでした"
     return 0
   fi
   cat <<MSG
-${created} を作りました。コミットする前に:
+次のマイグレーションを作りました:
+${created}
+コミットする前に:
   1. 中身を読み、DROP（名前の変更が消して作り直すになっていないか）と、書いていない GRANT・REVOKE が無いか確かめる
   2. supabase db reset（ワークツリーでは bash scripts/with-worktree-db.sh supabase db reset）で当てる
   3. task db:schema を実行し、supabase/schemas/ に差分が残らないことを確かめる
