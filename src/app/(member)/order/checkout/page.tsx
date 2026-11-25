@@ -1,10 +1,10 @@
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
 import { memberOrderQueryService } from "@/composition/member-order-query";
 import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
-import { groupCartItemsByPaymentTiming } from "@/lib/cart/types";
 import { catalogQueryService } from "@/composition/catalog-query";
 import {
   selectNotAccessibleProductIds,
@@ -20,6 +20,12 @@ import {
   type LegalNoticeValue,
 } from "@/app/legal/legal-notice";
 import { openBillingPortalAction } from "@/app/(member)/settings/actions";
+import { Badge } from "@/components/ui/badge";
+import { Container } from "@/components/ui/container";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { Heading } from "@/components/ui/heading";
+import { NumberedSection } from "@/components/ui/numbered-section";
+import BackToCartButton from "./back-to-cart-button";
 import CheckoutForm from "./checkout-form";
 
 type LineItem = {
@@ -32,53 +38,82 @@ type LineItem = {
   isNotAccessible: boolean;
 };
 
+function yen(amount: number): string {
+  return `¥${amount.toLocaleString("ja-JP")}`;
+}
+
 function LineItemList({ items }: { items: LineItem[] }) {
   return (
-    <ul className="divide-y rounded-lg border">
+    <ul>
       {items.map((item) => (
-        <li key={item.productId} className="flex gap-4 px-4 py-3">
-          <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-            {item.thumbnail ? (
+        <li
+          key={item.productId}
+          className="flex items-center gap-3 border-b border-neutral-100 py-3"
+        >
+          <div className="relative h-[60px] w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100">
+            {item.thumbnail && (
               <Image
                 src={item.thumbnail}
                 alt={item.productName}
                 fill
                 className="object-cover"
-                sizes="56px"
+                sizes="48px"
               />
-            ) : (
-              <div className="h-full w-full bg-gray-100" />
             )}
           </div>
-          <div className="flex flex-1 items-start justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">{item.productName}</p>
-              <p className="text-xs text-gray-500">
-                {item.isNotAccessible
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-[3px]">
+            <p className="text-sm font-medium">{item.productName}</p>
+            <p className="text-xs tabular-nums text-secondary">
+              {`${
+                item.isNotAccessible
                   ? "—"
                   : item.unitPrice !== null
-                    ? `¥${item.unitPrice.toLocaleString()}`
-                    : "価格要相談"}{" "}
-                × {item.quantity}
-              </p>
-              {item.isOutOfStock && (
-                <p className="text-xs font-medium text-red-500">在庫切れ</p>
-              )}
-              {item.isNotAccessible && (
-                <p className="text-xs font-medium text-red-500">
-                  現在のランクでは購入できません
-                </p>
-              )}
-            </div>
-            <p className="text-sm font-medium tabular-nums">
-              {item.unitPrice !== null
-                ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
-                : "—"}
+                    ? yen(item.unitPrice)
+                    : "価格要相談"
+              } × ${item.quantity}`}
             </p>
+            {item.isOutOfStock && <Badge tone="danger">在庫切れ</Badge>}
+            {item.isNotAccessible && (
+              <Badge tone="danger">現在のランクでは購入できません</Badge>
+            )}
           </div>
+          <p className="text-sm font-semibold whitespace-nowrap tabular-nums">
+            {item.isNotAccessible
+              ? "—"
+              : item.unitPrice !== null
+                ? yen(item.unitPrice * item.quantity)
+                : "要相談"}
+          </p>
         </li>
       ))}
     </ul>
+  );
+}
+
+function LineItemGroup({
+  title,
+  badge,
+  subtotal,
+  items,
+}: {
+  title: string;
+  badge: ReactNode;
+  subtotal: number;
+  items: LineItem[];
+}) {
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-200 pt-3 pb-2">
+        <h3 className="inline-flex items-center gap-2 text-[0.8125rem] font-semibold">
+          {badge}
+          {title}
+        </h3>
+        <span className="text-xs tabular-nums text-secondary">
+          小計 {yen(subtotal)}
+        </span>
+      </div>
+      <LineItemList items={items} />
+    </div>
   );
 }
 
@@ -110,21 +145,16 @@ function OrderTerms({
     { label: "キャンセル・返品", values: [CANCELLATION_POLICY] },
   ];
   return (
-    <section aria-labelledby="order-terms-heading" className="space-y-3">
-      <h2
-        id="order-terms-heading"
-        className="text-sm font-medium text-gray-700"
-      >
-        お支払い・お届け・キャンセルについて
-      </h2>
-      <dl className="divide-y rounded-lg border text-sm">
+    <NumberedSection
+      id="order-terms-heading"
+      number={3}
+      title="お支払い・お届け・キャンセルについて"
+    >
+      <dl className="divide-y divide-neutral-200 rounded-xl border border-neutral-200 text-[0.8125rem] leading-[1.75]">
         {rows.map(({ label, values }) => (
-          <div
-            key={label}
-            className="grid gap-1 px-4 py-3 sm:grid-cols-[8rem_1fr]"
-          >
-            <dt className="text-gray-500">{label}</dt>
-            <dd className="space-y-1">
+          <div key={label} className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
+            <dt className="flex-[0_0_8.5rem] text-secondary">{label}</dt>
+            <dd className="min-w-0 flex-[1_1_260px]">
               {values.map((value) => (
                 <p key={value.text}>
                   <LegalNoticeText value={value} />
@@ -135,7 +165,7 @@ function OrderTerms({
         ))}
       </dl>
       <LegalLinksNote action="ご注文" />
-    </section>
+    </NumberedSection>
   );
 }
 
@@ -178,69 +208,82 @@ export default async function CheckoutPage() {
 
   const hasOutOfStock = lineItems.some((i) => i.isOutOfStock);
   const hasNotAccessible = notAccessibleIds.length > 0;
-  const fixedTotal = sumCheckoutFixedTotal(lineItems);
-  const hasNegotiable = lineItems.some((i) => i.unitPrice === null);
-  const paymentTimingGroups = groupCartItemsByPaymentTiming(lineItems);
+  const atOrderItems = lineItems.filter((i) => i.paymentTiming === "at_order");
+  const afterOrderItems = lineItems.filter(
+    (i) => i.paymentTiming === "after_order"
+  );
+  const atOrderTotal = sumCheckoutFixedTotal(atOrderItems);
+  const afterOrderTotal = sumCheckoutFixedTotal(afterOrderItems);
+  const accessibleItems = lineItems.filter((i) => !i.isNotAccessible);
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <h1 className="mb-8 text-xl font-semibold">注文確認</h1>
+    <div className="pt-8 pb-20">
+      <Container className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2.5">
+          <BackToCartButton />
+          <Eyebrow withLine>CHECKOUT</Eyebrow>
+          <Heading as="h1" level="compact">
+            ご注文内容の確認
+          </Heading>
+          <p className="text-sm leading-[1.8] text-secondary">
+            お届け先と注文内容を確かめて、「注文を確定する」を押してください。
+          </p>
+        </div>
 
-      <div className="space-y-8">
-        {/* 商品一覧 */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-gray-700">注文内容</h2>
-          {paymentTimingGroups ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-gray-500">
-                  注文時に支払う商品
-                </h3>
-                <LineItemList items={paymentTimingGroups.atOrder} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-gray-500">
-                  注文後に請求される商品
-                </h3>
-                <LineItemList items={paymentTimingGroups.afterOrder} />
-              </div>
-            </div>
-          ) : (
-            <LineItemList items={lineItems} />
-          )}
-
-          {/* 合計 */}
-          <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
-            <span className="text-sm text-gray-600">合計（固定価格）</span>
-            <span className="text-lg font-bold tabular-nums">
-              ¥{fixedTotal.toLocaleString()}
-            </span>
-          </div>
-          {hasNegotiable && (
-            <p className="text-xs text-gray-400">
-              ※ 価格要相談の商品は合計に含まれません
-            </p>
-          )}
-        </section>
-
-        <OrderTerms
-          hasAtOrder={lineItems.some((i) => i.paymentTiming === "at_order")}
-          hasAfterOrder={lineItems.some(
-            (i) => i.paymentTiming === "after_order"
-          )}
-        />
-
-        {/* 住所選択・注文ボタン */}
         <CheckoutForm
           shippingAddresses={shippingAddresses}
           billingAddresses={billingAddresses}
           hasOutOfStock={hasOutOfStock}
           hasNotAccessible={hasNotAccessible}
-          fixedTotal={fixedTotal}
+          summary={{
+            hasAtOrder: atOrderItems.length > 0,
+            hasAfterOrder: afterOrderItems.length > 0,
+            atOrderTotal,
+            afterOrderTotal,
+            negotiableCount: accessibleItems.filter((i) => i.unitPrice === null)
+              .length,
+            fixedTotal: sumCheckoutFixedTotal(lineItems),
+          }}
+          limitLines={accessibleItems.map(
+            ({ productId, unitPrice, quantity }) => ({
+              productId,
+              unitPrice,
+              quantity,
+            })
+          )}
           paymentFailed={paymentFailed}
           openBillingPortal={openBillingPortalAction}
-        />
-      </div>
-    </main>
+        >
+          <NumberedSection
+            id="checkout-items-heading"
+            number={2}
+            title="ご注文の商品"
+          >
+            <div className="-mt-3 flex flex-col">
+              {atOrderItems.length > 0 && (
+                <LineItemGroup
+                  title="注文時に支払う商品"
+                  badge={<Badge tone="primary">カード</Badge>}
+                  subtotal={atOrderTotal}
+                  items={atOrderItems}
+                />
+              )}
+              {afterOrderItems.length > 0 && (
+                <LineItemGroup
+                  title="注文後に請求される商品"
+                  badge={<Badge tone="info">請求書</Badge>}
+                  subtotal={afterOrderTotal}
+                  items={afterOrderItems}
+                />
+              )}
+            </div>
+          </NumberedSection>
+          <OrderTerms
+            hasAtOrder={atOrderItems.length > 0}
+            hasAfterOrder={afterOrderItems.length > 0}
+          />
+        </CheckoutForm>
+      </Container>
+    </div>
   );
 }
