@@ -59,6 +59,10 @@ const ALWAYS_HIGH_RISK_GLOBS = [
   ".gitleaks.toml",
   ".husky/**",
   "scripts/gitleaks-staged.sh",
+  // issue の範囲外の high-risk の変更を止める判定（#795。docs/cicd.md「Issue Scope」）
+  "scripts/ci/issue-scope.ts",
+  ".github/workflows/issue-scope.yml",
+  ".claude/hooks/**",
 ];
 
 export type FileChange = {
@@ -355,7 +359,7 @@ export function detectEslintSuppressionsWeakening(
 }
 
 // ---------------------------------------------------------------------------
-// Claude Code の権限: 許可の追加・確認と禁止の削除
+// Claude Code の権限: 許可の追加・確認と禁止の削除・hook の削除
 // ---------------------------------------------------------------------------
 
 type ClaudeSettings = {
@@ -365,6 +369,10 @@ type ClaudeSettings = {
     deny?: string[];
     defaultMode?: string;
   };
+  hooks?: Record<
+    string,
+    { matcher?: string; hooks?: { command?: string }[] }[]
+  >;
 };
 
 export function detectClaudeSettingsWeakening(
@@ -394,7 +402,25 @@ export function detectClaudeSettingsWeakening(
       reason: `permissions.defaultMode の変更（${before.defaultMode ?? "なし"} → ${after.defaultMode ?? "なし"}）`,
     });
   }
+  // hook を外す・matcher を変えると、Issue Scope の hook（#795）等を無効にできる
+  const afterHooks = new Set(hookEntries(parsed));
+  for (const entry of hookEntries(readJson<ClaudeSettings>(base))) {
+    if (!afterHooks.has(entry)) {
+      reasons.push({ reason: `hooks からの削除（${entry}）` });
+    }
+  }
   return reasons;
+}
+
+/** `<イベント>・<matcher>: <コマンド>` の一覧 */
+function hookEntries(settings: ClaudeSettings | null | undefined): string[] {
+  return Object.entries(settings?.hooks ?? {}).flatMap(([event, groups]) =>
+    (Array.isArray(groups) ? groups : []).flatMap((group) =>
+      (group.hooks ?? []).map(
+        (hook) => `${event}・${group.matcher ?? ""}: ${hook.command ?? ""}`
+      )
+    )
+  );
 }
 
 // ---------------------------------------------------------------------------
