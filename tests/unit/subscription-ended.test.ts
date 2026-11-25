@@ -37,6 +37,15 @@ describe("isSubscriptionEnded", () => {
     }
   );
 
+  it("subscriptions.status に無い値は例外にする（黙って有効・解約済みのどちらかに倒さない）", () => {
+    expect(() =>
+      isSubscriptionEnded({
+        onboardingCompleted: true,
+        subscriptionStatuses: ["unknown"],
+      })
+    ).toThrow();
+  });
+
   it("入会前（オンボーディング中）は、サブスクリプションの行が無くても利用停止ではない", () => {
     expect(
       isSubscriptionEnded({
