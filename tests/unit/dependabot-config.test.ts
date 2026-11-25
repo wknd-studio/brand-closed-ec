@@ -1,13 +1,10 @@
 import { readFileSync } from "node:fs";
 
-import { minimatch } from "minimatch";
 import { describe, it, expect } from "vitest";
 import { parse } from "yaml";
 
-import {
-  HIGH_RISK_LABEL,
-  parseLabelGlobs,
-} from "../../scripts/ci/review-checklists";
+import { judgeHighRisk } from "../../scripts/ci/high-risk";
+import { parseRiskRules } from "../../scripts/ci/review-checklists";
 
 type Update = {
   "package-ecosystem": string;
@@ -66,17 +63,34 @@ describe(".github/dependabot.yml", () => {
   );
 });
 
-describe("Dependabot のPRに high-risk が付く（.github/labeler.yml）", () => {
-  const globs = parseLabelGlobs(readFileSync(".github/labeler.yml", "utf8"));
+describe("Dependabot のPRの high-risk（scripts/ci/high-risk.ts）", () => {
+  const rules = parseRiskRules(readFileSync(".github/labeler.yml", "utf8"));
+  const pkg = (version: string) =>
+    JSON.stringify({ dependencies: { next: version } });
 
-  it.each(["package.json", "pnpm-lock.yaml", ".github/workflows/deploy.yml"])(
-    "%s の変更に high-risk が付く",
-    (file) => {
-      expect(
-        globs[HIGH_RISK_LABEL].some((glob) =>
-          minimatch(file, glob, { dot: true })
-        )
-      ).toBe(true);
-    }
-  );
+  it("パッチ・マイナーのセキュリティ更新（lockfile・バージョンの指定・Actions の版）には high-risk が付かない", () => {
+    expect(
+      judgeHighRisk(
+        [
+          { path: "package.json", base: pkg("16.0.1"), head: pkg("16.0.7") },
+          { path: "pnpm-lock.yaml", base: "a", head: "b" },
+          {
+            path: ".github/workflows/deploy.yml",
+            base: "jobs:\n  a:\n    steps:\n      - uses: x/y@v1\n",
+            head: "jobs:\n  a:\n    steps:\n      - uses: x/y@v2\n",
+          },
+        ],
+        rules
+      ).highRisk
+    ).toBe(false);
+  });
+
+  it("メジャーバージョンの更新には high-risk が付く", () => {
+    expect(
+      judgeHighRisk(
+        [{ path: "package.json", base: pkg("16.0.1"), head: pkg("17.0.0") }],
+        rules
+      ).highRisk
+    ).toBe(true);
+  });
 });

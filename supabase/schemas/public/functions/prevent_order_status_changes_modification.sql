@@ -12,4 +12,6 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."prevent_order_status_changes_modification"() TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."prevent_order_status_changes_modification"() TO "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."prevent_order_status_changes_modification"() FROM PUBLIC;

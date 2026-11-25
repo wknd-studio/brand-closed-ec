@@ -46,7 +46,7 @@ CREATE POLICY "users: select own" ON "public"."users"
   TO PUBLIC
   USING ((id = public.get_current_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."users" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."users" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON COLUMN "public"."users"."initial_fee_paid_rank_code" IS 'これまでに初期費用を支払った中で最も高いランク。アップグレード時の初期費用二重課金判定に使うキャッシュ。';
 
