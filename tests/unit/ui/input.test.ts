@@ -20,10 +20,10 @@ describe("inputVariants", () => {
     expect(inputVariants()).toContain("rounded-md");
   });
 
-  it("pill は検索欄用のピル型（高さ48px）", () => {
+  it("pill は検索欄用のピル型（高さは Button の md と同じ52px）", () => {
     const classes = inputVariants({ shape: "pill" });
     expect(classes).toContain("rounded-full");
-    expect(classes).toContain("h-12");
+    expect(classes).toContain("h-13");
     expect(classes).not.toContain("rounded-md");
   });
 });
