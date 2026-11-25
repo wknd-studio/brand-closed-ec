@@ -24,18 +24,22 @@ export const LEGAL_LINKS = [
   { href: "/legal/tokushoho", label: "特定商取引法に基づく表記" },
 ] as const;
 
+// 支払い手段はどちらもクレジットカードだけで、違うのは払う手順と時期（#808）
+const PAYMENT_PROCEDURE = {
+  atOrder: "注文の確定時に、Stripeの決済画面でお支払い",
+  afterOrder: "注文の確定後にメールで届くStripeの請求書から、お支払い",
+} as const;
+
 export const PAYMENT_METHOD = {
-  atOrder: {
-    text: "クレジットカード（注文の確定後、Stripeの決済画面でお支払い）",
-  },
-  afterOrder: {
-    text: "請求書払い（運営者が発行するStripeの請求書でお支払い）",
-  },
+  atOrder: { text: `クレジットカード（${PAYMENT_PROCEDURE.atOrder}）` },
+  afterOrder: { text: `クレジットカード（${PAYMENT_PROCEDURE.afterOrder}）` },
 } satisfies Record<string, LegalNoticeValue>;
 
 export const PAYMENT_TIMING = {
   atOrder: { text: "注文の確定時" },
-  afterOrder: { text: "請求書の発行日から7日以内" },
+  afterOrder: {
+    text: "請求書の発行日から7日以内（注文の確定時にはお支払いいただきません）",
+  },
 } satisfies Record<string, LegalNoticeValue>;
 
 export const DELIVERY_TIMING: LegalNoticeValue = {
@@ -106,13 +110,13 @@ export const TOKUSHOHO_ITEMS: LegalNoticeItem[] = [
   {
     label: "支払方法",
     value: {
-      text: `${PAYMENT_METHOD.atOrder.text}、または${PAYMENT_METHOD.afterOrder.text}。商品ごとに決まっており、注文確認の画面に表示します。月会費はクレジットカードでお支払いいただきます`,
+      text: `クレジットカードのみです。商品ごとに、${PAYMENT_PROCEDURE.atOrder}いただくもの（注文時払い）と、${PAYMENT_PROCEDURE.afterOrder}いただくもの（請求書払い）があり、注文確認の画面に表示します。月会費もクレジットカードでお支払いいただきます`,
     },
   },
   {
     label: "支払時期",
     value: {
-      text: `クレジットカード: ${PAYMENT_TIMING.atOrder.text}。請求書払い: ${PAYMENT_TIMING.afterOrder.text}。月会費: 会員登録時と、以後毎月の更新日`,
+      text: `注文時払いの商品: ${PAYMENT_TIMING.atOrder.text}。請求書払いの商品: ${PAYMENT_TIMING.afterOrder.text}。月会費: 会員登録時と、以後毎月の更新日`,
     },
   },
   { label: "引渡時期", value: DELIVERY_TIMING },
