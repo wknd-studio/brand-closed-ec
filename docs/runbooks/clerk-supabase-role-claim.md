@@ -35,7 +35,7 @@ Clerk の CLI（`clerk`）で、インスタンスの設定 `session.claims` に
    clerk config pull --app <application ID> --instance <dev|prod> --keys session
    ```
 
-3. `session.claims` に `role` を足したものを、`--dry-run` で確かめる。`before` / `after` で、`claims.role` が増えるだけであることを見る
+3. `session.claims` に `role` を足したものを、`--dry-run` で確かめる。`before` / `after` で、`claims.role` が増えるだけであることを見る。下の例の `metadata` は開発用のインスタンスの値。手順 2 で読んだ `claims` が違えば、その中身をそのまま残して `role` だけを足す（書かなかったクレームが消えないかを、`--dry-run` の `after` で確かめる）
 
    ```bash
    echo '{"session":{"claims":{"metadata":"{{user.public_metadata}}","role":"authenticated"}}}' > /tmp/claims.json
