@@ -81,56 +81,25 @@ function toCardDto(
   };
 }
 
-// 最も多いもの。同数なら先に出たもの（Map は入れた順を保つ）
-function mostFrequent(values: string[]): string | null {
-  const counts = new Map<string, number>();
-  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-  let result: string | null = null;
-  let max = 0;
-  for (const [value, count] of counts) {
-    if (count > max) {
-      result = value;
-      max = count;
-    }
-  }
-  return result;
-}
-
 export class SanityCatalogQueryService implements CatalogQueryService {
   async findBrands(rank: MemberRank): Promise<BrandSummaryDto[]> {
     const rows = await sanityClient.fetch<
-      {
-        brand: string;
-        thumbnail: string | null;
-        categories: (string | null)[] | null;
-      }[]
+      { brand: string; thumbnail: string | null }[]
     >(
-      `*[${LISTABLE_FILTER}]|order(brand->name asc){"brand":brand->name,"thumbnail":images[0].asset->url,"categories":categories[]->name}`,
+      `*[${LISTABLE_FILTER}]|order(brand->name asc){"brand":brand->name,"thumbnail":images[0].asset->url}`,
       { allowedRanks: rank.accessibleRanks() }
     );
     const brandMap = new Map<
       string,
-      { count: number; thumbnail: string | null; categories: string[] }
+      { count: number; thumbnail: string | null }
     >();
     for (const row of rows) {
       if (!brandMap.has(row.brand))
-        brandMap.set(row.brand, {
-          count: 0,
-          thumbnail: row.thumbnail,
-          categories: [],
-        });
-      const summary = brandMap.get(row.brand)!;
-      summary.count++;
-      for (const category of row.categories ?? [])
-        if (category) summary.categories.push(category);
+        brandMap.set(row.brand, { count: 0, thumbnail: row.thumbnail });
+      brandMap.get(row.brand)!.count++;
     }
     return Array.from(brandMap.entries())
-      .map(([brand, { count, thumbnail, categories }]) => ({
-        brand,
-        count,
-        thumbnail,
-        category: mostFrequent(categories),
-      }))
+      .map(([brand, { count, thumbnail }]) => ({ brand, count, thumbnail }))
       .sort((a, b) => a.brand.localeCompare(b.brand, "ja"));
   }
 

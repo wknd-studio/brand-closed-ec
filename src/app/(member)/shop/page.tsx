@@ -39,7 +39,7 @@ export default async function ShopPage() {
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 md:gap-x-6 md:gap-y-10 lg:grid-cols-4">
-            {brands.map(({ brand, count, thumbnail, category }) => (
+            {brands.map(({ brand, count, thumbnail }) => (
               <Link
                 key={brand}
                 href={`/shop/${encodeURIComponent(brand)}`}
@@ -64,15 +64,7 @@ export default async function ShopPage() {
                   <span className="text-[0.9375rem] font-semibold group-hover:underline">
                     {brand}
                   </span>
-                  <span className="text-xs text-neutral-700">
-                    {category && (
-                      <>
-                        {category}
-                        <span className="text-neutral-500"> ・ </span>
-                      </>
-                    )}
-                    {count}点
-                  </span>
+                  <span className="text-xs text-neutral-700">{count}点</span>
                 </span>
               </Link>
             ))}
