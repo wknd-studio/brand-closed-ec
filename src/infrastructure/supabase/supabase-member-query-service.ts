@@ -84,6 +84,7 @@ export class SupabaseMemberQueryService implements MemberQueryService {
       paymentFailing: user.subscriptionStatuses.some((status) =>
         isSubscriptionPaymentFailed(status)
       ),
+      account: user.account,
     };
   }
 
@@ -129,7 +130,7 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     const { data, error } = await this.db
       .from("users")
       .select(
-        "id, rank_code, billing_anchor_day, favorites(sanity_product_id), member_ranks!users_rank_code_fkey(monthly_limit_amount), subscriptions(status)"
+        "id, rank_code, billing_anchor_day, last_name, first_name, email, favorites(sanity_product_id), member_ranks!users_rank_code_fkey(monthly_limit_amount, display_name_ja), subscriptions(status)"
       )
       .eq("clerk_user_id", clerkUserId)
       .is("deleted_at", null)
@@ -150,6 +151,11 @@ export class SupabaseMemberQueryService implements MemberQueryService {
       subscriptionStatuses: data.subscriptions.map(
         (s) => s.status as SubscriptionStatus
       ),
+      account: {
+        name: `${data.last_name} ${data.first_name}`,
+        email: data.email,
+        planName: data.member_ranks.display_name_ja,
+      },
     };
   }
 }

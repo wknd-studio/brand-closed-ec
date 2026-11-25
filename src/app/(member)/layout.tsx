@@ -35,7 +35,7 @@ export default async function MemberLayout({
         removeFavorite={removeFavoriteAction}
       >
         <div className="flex min-h-full flex-col">
-          <Header />
+          <Header account={layout?.account ?? null} />
           {layout?.paymentFailing && (
             <PaymentFailingNotice action={openBillingPortalAction} />
           )}
