@@ -92,6 +92,11 @@ flowchart TD
 - `after_order`の明細に対する決済単位は、運営者が管理画面で「対応待ちの`after_order`明細から任意の組み合わせを選んで請求を作成する」操作を行った時点で初めて作られる（`flow='invoice'`）。このタイミングは運営者の裁量であり、システムは「入荷後でなければならない」「価格交渉後でなければならない」といった制約を課さない
 - 1つの注文に対して、`after_order`の請求作成操作は**複数回・任意の回数**行いうる（1つの注文の`after_order`明細を、まとめて1回で請求してもよいし、複数回に分けて請求してもよい）。決済単位の数を2件までに制限する前提は置かない
 
+**支払い手段（2026-11-26 決定、issue #809）**
+
+- 商品代金の支払い手段は、`checkout`・`invoice`のどちらもクレジットカード（Link で保存したカードを含む）だけ。Apple Pay・Google Pay はカードの一種として出る
+- Stripe のダッシュボードの支払い手段の設定によらないよう、コードで指定している（`src/infrastructure/stripe/stripe-payment-gateway.ts`。Checkout Session は`payment_method_types: ["card", "link"]`、Invoice は`payment_settings.payment_method_types: ["card", "link"]`）。ダッシュボードでコンビニ払い・銀行振込などを有効にしても、商品代金の支払いには出ない
+
 **決済単位ごとの状態遷移**
 
 - `checkout`決済単位: `pending_payment` →（Stripeの`checkout.session.completed` Webhook）→ `paid`。`paid_at`を設定する
