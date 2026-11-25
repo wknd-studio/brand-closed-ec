@@ -35,9 +35,9 @@ beforeEach(() => {
 describe("SanityCatalogQueryService.findBrands", () => {
   it("会員ランクで閲覧できるランクと販売終了の除外で絞り、ブランドごとに件数と最初のサムネイルを返す", async () => {
     fetchMock.mockResolvedValue([
-      { brand: "Bブランド", thumbnail: "b1.jpg" },
-      { brand: "Aブランド", thumbnail: null },
-      { brand: "Bブランド", thumbnail: "b2.jpg" },
+      { brand: "Bブランド", thumbnail: "b1.jpg", categories: null },
+      { brand: "Aブランド", thumbnail: null, categories: null },
+      { brand: "Bブランド", thumbnail: "b2.jpg", categories: null },
     ]);
 
     const brands = await service.findBrands(MemberRank.of("basic"));
@@ -47,8 +47,32 @@ describe("SanityCatalogQueryService.findBrands", () => {
     expect(query).toContain('availability!="discontinued"');
     expect(params).toEqual({ allowedRanks: ["starter", "basic"] });
     expect(brands).toEqual([
-      { brand: "Aブランド", count: 1, thumbnail: null },
-      { brand: "Bブランド", count: 2, thumbnail: "b1.jpg" },
+      { brand: "Aブランド", count: 1, thumbnail: null, category: null },
+      { brand: "Bブランド", count: 2, thumbnail: "b1.jpg", category: null },
+    ]);
+  });
+
+  it("ブランドのカテゴリは、閲覧できる商品のカテゴリのうち最も多いもの（同数なら先に出たもの）にする", async () => {
+    fetchMock.mockResolvedValue([
+      { brand: "Aブランド", thumbnail: null, categories: ["バッグ"] },
+      {
+        brand: "Aブランド",
+        thumbnail: null,
+        categories: ["アパレル", "バッグ"],
+      },
+      { brand: "Aブランド", thumbnail: null, categories: ["アパレル"] },
+      { brand: "Aブランド", thumbnail: null, categories: ["アパレル"] },
+      { brand: "Bブランド", thumbnail: null, categories: ["雑貨"] },
+      { brand: "Bブランド", thumbnail: null, categories: ["コスメ"] },
+    ]);
+
+    const brands = await service.findBrands(MemberRank.of("basic"));
+
+    const [query] = fetchMock.mock.calls[0];
+    expect(query).toContain('"categories":categories[]->name');
+    expect(brands.map(({ brand, category }) => ({ brand, category }))).toEqual([
+      { brand: "Aブランド", category: "アパレル" },
+      { brand: "Bブランド", category: "雑貨" },
     ]);
   });
 });
@@ -85,12 +109,35 @@ describe("SanityCatalogQueryService.findProducts", () => {
         unitPrice: 6000,
         availability: "available",
         thumbnail: "https://cdn.example/a.jpg",
+        paymentTiming: "at_order",
       },
       expect.objectContaining({
         id: "prod-2",
         isNegotiable: true,
         unitPrice: null,
       }),
+    ]);
+  });
+
+  it("商品カードの支払いの時期は注文で実際に支払う時期にする（要相談の商品・注文後払いの商品は注文後払い、未設定の既存商品は注文時払い）", async () => {
+    fetchMock
+      .mockResolvedValueOnce([
+        sanityProduct({ _id: "after", payment_timing: "after_order" }),
+        sanityProduct({ _id: "negotiable", is_negotiable: true, prices: null }),
+        sanityProduct({ _id: "legacy", payment_timing: null }),
+      ])
+      .mockResolvedValueOnce(3);
+
+    const { products } = await service.findProducts({
+      rank: MemberRank.of("standard"),
+    });
+
+    expect(
+      products.map(({ id, paymentTiming }) => ({ id, paymentTiming }))
+    ).toEqual([
+      { id: "after", paymentTiming: "after_order" },
+      { id: "negotiable", paymentTiming: "after_order" },
+      { id: "legacy", paymentTiming: "at_order" },
     ]);
   });
 
