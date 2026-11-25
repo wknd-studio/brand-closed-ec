@@ -50,7 +50,11 @@ describe("商品詳細の在庫・お支払いの表", () => {
   it("取り扱い中の商品は、在庫に「取り扱い中」を出す", () => {
     act(() =>
       root.render(
-        <ProductTerms availability="available" paymentTiming="at_order" />
+        <ProductTerms
+          availability="available"
+          paymentTiming="at_order"
+          isNegotiable={false}
+        />
       )
     );
     expect(rowValue("在庫")?.textContent).toBe("取り扱い中");
@@ -59,7 +63,11 @@ describe("商品詳細の在庫・お支払いの表", () => {
   it("在庫切れの商品は、在庫に「在庫切れ」を出す", () => {
     act(() =>
       root.render(
-        <ProductTerms availability="out_of_stock" paymentTiming="at_order" />
+        <ProductTerms
+          availability="out_of_stock"
+          paymentTiming="at_order"
+          isNegotiable={false}
+        />
       )
     );
     expect(rowValue("在庫")?.textContent).toBe("在庫切れ");
@@ -68,7 +76,11 @@ describe("商品詳細の在庫・お支払いの表", () => {
   it("注文時払いの商品は、特商法の表記と同じクレジットカードの方法・時期を出す", () => {
     act(() =>
       root.render(
-        <ProductTerms availability="available" paymentTiming="at_order" />
+        <ProductTerms
+          availability="available"
+          paymentTiming="at_order"
+          isNegotiable={false}
+        />
       )
     );
     expect(rowValue("お支払い方法")?.textContent).toBe(
@@ -82,7 +94,11 @@ describe("商品詳細の在庫・お支払いの表", () => {
   it("請求書払いの商品は、特商法の表記と同じ請求書払いの方法・時期を出す", () => {
     act(() =>
       root.render(
-        <ProductTerms availability="available" paymentTiming="after_order" />
+        <ProductTerms
+          availability="available"
+          paymentTiming="after_order"
+          isNegotiable={false}
+        />
       )
     );
     expect(rowValue("お支払い方法")?.textContent).toBe(
@@ -90,6 +106,23 @@ describe("商品詳細の在庫・お支払いの表", () => {
     );
     expect(rowValue("お支払い時期")?.textContent).toBe(
       legalNoticePlainText(PAYMENT_TIMING.afterOrder)
+    );
+  });
+});
+
+describe("商品詳細の在庫・お支払いの表（要相談の商品）", () => {
+  it("要相談の商品は、商品の設定が注文時払いでも、注文の保存と同じく請求書払いを出す", () => {
+    act(() =>
+      root.render(
+        <ProductTerms
+          availability="available"
+          paymentTiming="at_order"
+          isNegotiable
+        />
+      )
+    );
+    expect(rowValue("お支払い方法")?.textContent).toBe(
+      legalNoticePlainText(PAYMENT_METHOD.afterOrder)
     );
   });
 });
