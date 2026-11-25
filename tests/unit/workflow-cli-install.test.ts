@@ -39,15 +39,15 @@ const USES_CLI: Record<string, RegExp> = {
   gitleaks: /(^|[\s'"(|&;])gitleaks (git|dir)\b/m,
 };
 
-// 今の版のまま固定する（#546 の時点の版）
+// 今の版のまま固定する（#546 の時点の版。Supabase CLI は #784 で全ジョブを db schema declarative と同じ版にそろえた）
 const EXPECTED_VERSIONS: Record<string, Record<string, string>> = {
   supabase: {
     "deploy.yml/schema-types-drift": "2.116.0",
     "deploy.yml/schema-files-drift": "2.116.0",
     "deploy.yml/integration": "2.116.0",
     "deploy.yml/e2e-pr": "2.116.0",
-    "deploy.yml/deploy-stg": "2.102.0",
-    "deploy.yml/deploy-prod": "2.102.0",
+    "deploy.yml/deploy-stg": "2.116.0",
+    "deploy.yml/deploy-prod": "2.116.0",
   },
   doppler: {
     "deploy.yml/integration": "3.77.1",
