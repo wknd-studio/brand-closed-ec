@@ -11,6 +11,7 @@ import {
   isInTouchFiles,
   loadHighRiskGlobs,
   outOfScopeFiles,
+  parseLinkedIssue,
   parseTouchFiles,
 } from "../../scripts/ci/issue-scope";
 
@@ -171,6 +172,22 @@ describe("closingIssueNumbers（PR 本文の Closes #n）", () => {
     ["", []],
   ])("%j → %j", (body, expected) => {
     expect(closingIssueNumbers(body)).toEqual(expected);
+  });
+
+  it("「## 関連issue」の節があれば、その節の Closes #n だけを読む（説明文の fix #n で範囲が広がらないように）", () => {
+    expect(
+      closingIssueNumbers(
+        [
+          "## 関連issue",
+          "",
+          "Closes #795",
+          "",
+          "## レビューの要点",
+          "",
+          "<details>PR #788 は fix #768 の続き</details>",
+        ].join("\n")
+      )
+    ).toEqual([795]);
   });
 });
 
@@ -388,5 +405,26 @@ describe("checkEditScope（PreToolUse hook）", () => {
     expect(result.block).toBe(true);
     if (!result.block) return;
     expect(result.reason).toContain("gh: not logged in");
+  });
+});
+
+describe("parseLinkedIssue（orca worktree current --json の出力）", () => {
+  it("result.worktree.linkedIssue を読む", () => {
+    expect(
+      parseLinkedIssue(
+        JSON.stringify({
+          ok: true,
+          result: { worktree: { linkedIssue: 795, linkedPR: null } },
+        })
+      )
+    ).toBe(795);
+  });
+
+  it.each([
+    JSON.stringify({ ok: true, result: { worktree: { linkedIssue: null } } }),
+    JSON.stringify({ ok: false, error: "not a worktree" }),
+    "not json",
+  ])("linkedIssue が無い・読めないときは null: %s", (output) => {
+    expect(parseLinkedIssue(output)).toBeNull();
   });
 });
