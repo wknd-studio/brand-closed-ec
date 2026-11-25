@@ -198,10 +198,11 @@ test.describe("注文の最終確認画面の表示", () => {
         terms.getByRole("term").filter({ hasText: term })
       ).toHaveCount(1);
     }
-    // カートの商品（注文時払い）に合う支払い方法・時期が出て、注文後払いのものは出ない
-    await expect(terms.getByText(/^クレジットカード/)).toBeVisible();
+    // カートの商品（注文時払い）に合う支払い方法・時期が出て、注文後払いのものは出ない。
+    // 支払い手段はどちらもクレジットカードで、違いは払う手順（決済画面／請求書）と時期（#808）
+    await expect(terms.getByText(/^クレジットカード.*決済画面/)).toBeVisible();
     await expect(terms.getByText("注文の確定時")).toBeVisible();
-    await expect(terms.getByText(/^請求書払い/)).toHaveCount(0);
+    await expect(terms.getByText(/^クレジットカード.*請求書/)).toHaveCount(0);
     await expect(
       terms.getByRole("link", { name: "特定商取引法に基づく表記" })
     ).toHaveAttribute("href", "/legal/tokushoho");
