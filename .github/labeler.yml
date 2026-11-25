@@ -1,13 +1,14 @@
-# 人間が差分を精読してからマージすべきPRに high-risk ラベルを付ける（#312）。
+# 高リスクなパスに触れるPRに、区分（risk:*）のラベルを付ける（#312・#476）。
 # 運用ルールは CLAUDE.md の「PRのレビュー」を参照。
 # バグがすり抜けたら、該当パスをここへ追加するか、lint・テストに変換する。
 #
-# 区分（risk:*）ごとに見るべき観点が違うため、区分のラベルも付ける（#476）。
 # 区分ごとの確認観点は docs/review-checklists/<区分>.md（risk:db → db.md）にあり、
 # PR Diff Summary のコメントに該当するファイルとチェックリストが出る（scripts/ci/review-checklists.ts）。
 #
-# パスを足すときは、区分と high-risk の両方に足す（high-risk = 区分の和集合であることを
-# tests/unit/review-checklists.test.ts が検査する）。書き方は changed-files の any-glob-to-any-file だけにする
+# high-risk（人間が差分を精読する）はここには書かない（#578）。Labeler ワークフローの high-risk ジョブが
+# scripts/ci/high-risk.ts で付け外しする。risk:db・risk:webhook・risk:auth・risk:payment の対象パスは
+# そのまま high-risk になり、risk:gate・risk:deps はゲートを弱める変更・依存の追加とメジャー更新のときだけ
+# high-risk になる。書き方は changed-files の any-glob-to-any-file だけにする
 # （scripts/ci/review-checklists.ts はこの形だけを読む）。
 
 # スキーマ・RLS
@@ -74,52 +75,5 @@ risk:gate:
 risk:deps:
   - changed-files:
       - any-glob-to-any-file:
-          - "package.json"
-          - "pnpm-lock.yaml"
-
-high-risk:
-  - changed-files:
-      - any-glob-to-any-file:
-          # risk:db
-          - "supabase/migrations/**"
-          # risk:webhook
-          - "src/app/api/webhooks/**"
-          - "src/lib/webhook/**"
-          # risk:auth
-          - "src/middleware.ts"
-          - "src/lib/auth/**"
-          - "src/infrastructure/supabase/server-admin.ts"
-          # risk:payment
-          - "src/infrastructure/stripe/client.ts"
-          - "src/infrastructure/stripe/**"
-          - "src/use-cases/place-order.ts"
-          - "src/use-cases/cancel-order.ts"
-          - "src/use-cases/mark-checkout-order-as-paid.ts"
-          - "src/use-cases/mark-invoice-order-as-paid.ts"
-          - "src/use-cases/select-plan.ts"
-          - "src/use-cases/complete-subscription-onboarding.ts"
-          - "src/domain/entities/order*.ts"
-          - "src/domain/value-objects/money.ts"
-          - "src/domain/value-objects/order-status.ts"
-          - "src/domain/services/**"
-          - "src/app/(member)/order/checkout/actions.ts"
-          - "src/app/admin/orders/**/actions.ts"
-          - "src/app/onboarding/plan/actions.ts"
-          - "src/app/onboarding/payment/**"
-          # risk:gate
-          - ".github/**"
-          - ".claude/settings.json"
-          - "eslint.config.mjs"
-          # 既存の lint 違反の抑制（#440）。抑制を足すとゲートを弱められる
-          - "eslint-suppressions.json"
-          - "Taskfile.yml"
-          - "scripts/ci/**"
-          # テストの対象・層ごとのカバレッジ検査の配線（閾値・例外は scripts/ci/layer-coverage.config.ts）
-          - "vitest*.config.ts"
-          # 機密情報の漏れの検査（#663）。allowlist を広げる・hook を外すとゲートを弱められる
-          - ".gitleaks.toml"
-          - ".husky/**"
-          - "scripts/gitleaks-staged.sh"
-          # risk:deps
           - "package.json"
           - "pnpm-lock.yaml"

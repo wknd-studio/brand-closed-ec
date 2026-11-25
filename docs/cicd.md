@@ -433,7 +433,7 @@ API キー・秘密鍵・トークンが commit に入っていないかを、[g
 
 - 鍵の形をしていない漏れ（例: テスト用のアカウントのパスワード = メールアドレス。#651）は gitleaks でも見つけられない。引き続き `high-risk` の精読で見る
 - CI はマージコミットの差分を調べない（gitleaks は `git log -p` を使い、既定ではマージコミットの差分が出ないため）。develop を取り込んだときの衝突の解消で足した値は、ローカルの pre-commit でだけ止まる
-- CI は PR のチェックアウトにある `.gitleaks.toml` を読むため、PR が allowlist を広げるとその PR の検査も弱くなる。`.gitleaks.toml`・`.husky/`・`scripts/gitleaks-staged.sh` を `high-risk`（`risk:gate`）の対象にして、人間が精読する
+- CI は PR のチェックアウトにある `.gitleaks.toml` を読むため、PR が allowlist を広げるとその PR の検査も弱くなる。`.gitleaks.toml`・`.husky/`・`scripts/gitleaks-staged.sh` は、どう変えても `high-risk` が付くゲートの本体にして（`scripts/ci/high-risk.ts`。#578）、人間が精読する
 - gitleaks の公式の action は Organization のリポジトリでは有料のライセンスキーが要るため使わない
 
 ### ローカルの準備
