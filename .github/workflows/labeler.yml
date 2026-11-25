@@ -55,11 +55,13 @@ jobs:
       - name: Judge
         id: judge
         run: pnpm -s tsx scripts/ci/high-risk.ts "$BASE_SHA" "$HEAD_SHA"
+      # 判定までのどこかで失敗したら（結果が false でなければ）付ける側に倒す。精読せずにマージされないようにするため
       - name: Add or remove the high-risk label
+        if: always()
         env:
           HIGH_RISK: ${{ steps.judge.outputs.high-risk }}
         run: |
-          if [[ "$HIGH_RISK" == "true" ]]; then
+          if [[ "$HIGH_RISK" != "false" ]]; then
             gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" -f "labels[]=high-risk" > /dev/null
           elif gh api "repos/$GH_REPO/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -qx high-risk; then
             # 付いていないラベルを外すと 404 になるため、付いているときだけ外す
