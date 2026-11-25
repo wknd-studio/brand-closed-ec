@@ -103,6 +103,14 @@ COMMENT ON COLUMN public.x.type IS 'drop table のときに使う';
     expect(findDestructiveStatements(sql)).toEqual([]);
   });
 
+  it("GRANT・REVOKE の権限の TRUNCATE は見つけない（sync が作る GRANT によく含まれるため）", () => {
+    expect(
+      findDestructiveStatements(
+        'GRANT DELETE, INSERT, TRUNCATE, UPDATE ON TABLE "public"."x" TO "service_role";\nREVOKE TRUNCATE ON public.x FROM anon;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT TRUNCATE ON TABLES TO service_role;'
+      )
+    ).toEqual([]);
+  });
+
   it("コメントの中の語は見つけない", () => {
     const sql = `
 -- 以前は DROP TABLE で消していた
