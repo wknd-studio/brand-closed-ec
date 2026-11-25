@@ -36,7 +36,7 @@ CREATE POLICY "orders: select own" ON "public"."orders"
   TO PUBLIC
   USING ((user_id = public.get_current_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."orders" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."orders" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON COLUMN "public"."orders"."monthly_limit_at_order" IS '注文時点の月間仕入れ上限（円）のスナップショット。NULL = 無制限（member_ranks.monthly_limit_amount と同じ表し方）。';
 

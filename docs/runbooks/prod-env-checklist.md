@@ -37,7 +37,7 @@ API で確かめられない、またはダッシュボードでしか見えな�
 
 - [ ] **DNS**: 本番のドメインの DNS が Cloudflare に向いている。Clerk の Production インスタンスが求める CNAME（`clerk.`・`accounts.`・メール用の `clkmail.` 等）と、Resend の送信元ドメインの SPF・DKIM・（あれば）DMARC のレコードがある。Clerk のダッシュボードの Domains で全て Verified
 - [ ] **Clerk の Pro プラン**: Production インスタンスのアプリが Pro プラン（商用の前提。ローンチ直前に切り替える）
-- [ ] **Clerk の設定**: Production インスタンスで、Self Service Delete が無効（#531）・Organizations が有効・管理者の Organization（`CLERK_ADMIN_ORGANIZATION_ID`）がある・stg と同じサインイン方法になっている
+- [ ] **Clerk の設定**: Production インスタンスで、Self Service Delete が無効（#531）・Organizations が有効・管理者の Organization（`CLERK_ADMIN_ORGANIZATION_ID`）がある・stg と同じサインイン方法になっている・セッショントークンに `role: "authenticated"` が入る（`clerk config pull --instance prod --keys session`。手順は `docs/runbooks/clerk-supabase-role-claim.md`。無いと会員の操作が全て `42501` になる）
 - [ ] **Stripe のカスタマーポータル**: 本番モードのキーで `scripts/setup-stripe-billing-portal.ts` を実行して作った設定（カードの変更・請求履歴だけが有効で、解約・プラン変更・宛名の変更が無効）の `bpc_...` が、prod の `STRIPE_BILLING_PORTAL_CONFIGURATION_ID` に入っている（#216。手順は docs/domain/subscription-billing.md の「お支払い方法（カード）の変更」）
 - [ ] **Stripe のサブスクリプションの設定**: 本番モードで「顧客のサブスクリプションを1つに制限」等、テストモードで入れている設定がそろっている（#435）
 - [ ] **Stripe の税**: 本番モードの税の設定（Stripe Tax の有無・Price の `tax_behavior`）がテストモードと同じ
