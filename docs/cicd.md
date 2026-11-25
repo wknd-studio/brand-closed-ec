@@ -319,7 +319,8 @@ issue の範囲外で high-risk のファイル（`.github/labeler.yml` の `hig
   - Bash（`sed` 等）での書き換えは対象外。CI が止める
 - **PR の CI**（`.github/workflows/issue-scope.yml` の `Issue Scope`。develop 宛ての PR）: 差分の high-risk のファイルのうち、PR 本文の `Closes #n` の issue の「触るファイル」に無いものがあれば失敗し、範囲外のファイルを並べる
   - 人間が PR に `scope-approved` ラベルを付けると成功扱いになる（Test Guard の `test-change-approved` と同じ形）
-  - `Closes #n` が無い PR は、high-risk のファイルをすべて範囲外として扱う。high-risk のファイルを変えないなら成功する
+  - 判定は PR の head の `scripts/ci/issue-scope.ts` で動く。判定自体を書き換える PR は `scripts/ci/**` で high-risk が付き、人間が精読する
+  - `Closes #n` は PR 本文の「## 関連issue」の節から読む（節が無ければ本文全体）。`Closes #n` が無い PR は、high-risk のファイルをすべて範囲外として扱う。high-risk のファイルを変えないなら成功する
   - Dependabot の PR は issue 無しで扱うため、検査せずに成功扱いにする（high-risk が付き、人間が精読する）
   - PR 本文の編集・ラベルの付け外しでは動き直すが、issue の本文を書き足したときは動かないため、PR の Checks で `Issue Scope` を再実行する
 
