@@ -15,6 +15,6 @@ ALTER TABLE "public"."stripe_webhook_events"
 
 CREATE INDEX stripe_webhook_events_status_idx ON public.stripe_webhook_events USING btree (status);
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."stripe_webhook_events" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."stripe_webhook_events" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON TABLE "public"."stripe_webhook_events" IS 'Stripe Webhookイベントの冪等性テーブル。処理パターン: INSERT ... ON CONFLICT (event_id) DO NOTHING RETURNING event_id。行が返らなければ処理済み/処理中と判定してスキップする。';

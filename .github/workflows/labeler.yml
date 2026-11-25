@@ -1,12 +1,17 @@
 name: Labeler
 
-# 高リスクなパスに触れるPRに high-risk ラベルと、区分のラベル（risk:db 等。#476）を付ける
-# （#312。対象は .github/labeler.yml）。
+# 高リスクなパスに触れるPRに区分のラベル（risk:db 等。#476）を付け（#312。対象は .github/labeler.yml）、
+# 人間が差分を精読すべきPRに high-risk を付ける（#578。判定は scripts/ci/high-risk.ts）。
 # pull_request_target はベースブランチのワークフロー・設定で動くため、PR自身が
-# labeler.yml を書き換えてラベルを外すことはできない（PRのコードはcheckoutしない）
+# labeler.yml・判定のスクリプトを書き換えてラベルを外すことはできない（PRのコードはcheckoutも実行もしない）
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
+
+# 古い push の結果で、新しい push の結果を上書きしないようにする
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   label:
@@ -18,5 +23,47 @@ jobs:
     steps:
       - uses: actions/labeler@v5
         with:
-          # push で対象パスの変更が無くなったら high-risk・risk:* を外す
+          # push で対象パスの変更が無くなったら risk:* を外す
           sync-labels: true
+
+  # labeler はPRのラベルを丸ごと置き換える（setLabels）ため、同時に動くと high-risk を消し合う。
+  # label のあとに順に動かす
+  high-risk:
+    name: Judge high-risk
+    needs: label
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # ベースブランチ（判定のスクリプト・labeler.yml）をcheckoutする。PRの変更は git のオブジェクトとして読むだけ
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch the PR head as data
+        run: git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Judge
+        id: judge
+        run: pnpm -s tsx scripts/ci/high-risk.ts "$BASE_SHA" "$HEAD_SHA"
+      # 判定までのどこかで失敗したら（結果が false でなければ）付ける側に倒す。精読せずにマージされないようにするため
+      - name: Add or remove the high-risk label
+        if: always()
+        env:
+          HIGH_RISK: ${{ steps.judge.outputs.high-risk }}
+        run: |
+          if [[ "$HIGH_RISK" != "false" ]]; then
+            gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" -f "labels[]=high-risk" > /dev/null
+          elif gh api "repos/$GH_REPO/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -qx high-risk; then
+            # 付いていないラベルを外すと 404 になるため、付いているときだけ外す
+            gh api -X DELETE "repos/$GH_REPO/issues/$PR_NUMBER/labels/high-risk" > /dev/null
+          fi

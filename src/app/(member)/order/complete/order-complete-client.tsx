@@ -1,24 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import { useCart } from "@/components/cart/cart-provider";
-
-type OrderItem = {
-  id: string;
-  productNameSnapshot: string;
-  quantity: number;
-  unitPriceSnapshot: number | null;
-  isNegotiable: boolean;
-};
+import type { CompletedOrderItemDto } from "@/queries/member-order-query-service";
+import { presentOrderComplete } from "@/app/(member)/order/order-complete-presenter";
+import OrderCompleteView from "@/app/(member)/order/order-complete-view";
 
 type Props = {
   orderId: string;
   createdAt: string;
   /** 今回のお支払い（Checkout）の対象商品 */
-  items: OrderItem[];
+  items: CompletedOrderItemDto[];
   /** 同じ注文内の後払い商品。運営者が確認後に請求書を送付する */
-  afterOrderItems: OrderItem[];
+  afterOrderItems: CompletedOrderItemDto[];
 };
 
 export default function OrderCompleteClient({
@@ -33,95 +27,14 @@ export default function OrderCompleteClient({
     emptyCart();
   }, [emptyCart]);
 
-  const orderNumber = orderId.slice(0, 8).toUpperCase();
-  const fixedTotal = items.reduce((sum, i) => {
-    if (i.unitPriceSnapshot === null) return sum;
-    return sum + i.unitPriceSnapshot * i.quantity;
-  }, 0);
-  const hasNegotiable = items.some((i) => i.isNegotiable);
-
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
-      <div className="space-y-8">
-        <div className="space-y-2 text-center">
-          <p className="text-sm font-medium text-green-600">決済完了</p>
-          <h1 className="text-2xl font-bold">ご注文ありがとうございます</h1>
-          <p className="text-sm text-gray-500">
-            注文番号：{orderNumber}
-            <span className="ml-2 text-xs text-gray-400">
-              {new Date(createdAt).toLocaleDateString("ja-JP")}
-            </span>
-          </p>
-        </div>
-
-        {afterOrderItems.length > 0 && (
-          <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-800">
-              後払いの商品が{afterOrderItems.length}
-              点含まれています。内容を運営者が確認後、請求書をお送りします。
-            </p>
-            <ul className="mt-2 space-y-0.5 text-xs text-blue-700">
-              {afterOrderItems.map((item) => (
-                <li key={item.id}>
-                  {item.productNameSnapshot} × {item.quantity}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-gray-700">注文内容</h2>
-          <ul className="divide-y rounded-lg border">
-            {items.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between px-4 py-3"
-              >
-                <div className="space-y-0.5">
-                  <p className="text-sm font-medium">
-                    {item.productNameSnapshot}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {item.isNegotiable
-                      ? "価格要相談"
-                      : item.unitPriceSnapshot !== null
-                        ? `¥${item.unitPriceSnapshot.toLocaleString()}`
-                        : "—"}{" "}
-                    × {item.quantity}
-                  </p>
-                </div>
-                <p className="text-sm font-medium tabular-nums">
-                  {item.isNegotiable
-                    ? "—"
-                    : item.unitPriceSnapshot !== null
-                      ? `¥${(item.unitPriceSnapshot * item.quantity).toLocaleString()}`
-                      : "—"}
-                </p>
-              </li>
-            ))}
-          </ul>
-
-          <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
-            <span className="text-sm text-gray-600">合計（固定価格）</span>
-            <span className="text-lg font-bold tabular-nums">
-              ¥{fixedTotal.toLocaleString()}
-            </span>
-          </div>
-          {hasNegotiable && (
-            <p className="text-xs text-gray-400">
-              ※ 価格要相談の商品は合計に含まれません
-            </p>
-          )}
-        </section>
-
-        <Link
-          href="/shop"
-          className="block rounded-lg border px-6 py-3 text-center text-sm hover:bg-gray-50"
-        >
-          ショッピングを続ける
-        </Link>
-      </div>
-    </main>
+    <OrderCompleteView
+      view={presentOrderComplete({
+        orderId,
+        createdAt,
+        atOrderItems: items,
+        afterOrderItems,
+      })}
+    />
   );
 }

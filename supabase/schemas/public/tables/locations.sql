@@ -21,7 +21,7 @@ CREATE TRIGGER locations_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."locations" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."locations" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON COLUMN "public"."locations"."postal_code" IS '住所・電話番号は office 行のみ想定。リポジトリに実際の住所を書かないため、マイグレーションではNULLのまま入れ、環境ごとにSQLで設定する。';
 

@@ -124,7 +124,9 @@ test.describe("運営者の注文の確認とキャンセル", () => {
       ]);
 
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
     await page
       .getByRole("radio", { name: /テスト 四郎/ })
       .first()

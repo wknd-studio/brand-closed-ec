@@ -25,7 +25,7 @@ CREATE POLICY "member_ranks_select_all" ON "public"."member_ranks"
   TO PUBLIC
   USING (true);
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."member_ranks" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."member_ranks" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON COLUMN "public"."member_ranks"."monthly_limit_amount" IS '月間仕入れ上限（円）。NULL = 無制限（enterprise想定）。';
 

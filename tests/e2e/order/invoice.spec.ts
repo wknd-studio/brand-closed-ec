@@ -114,7 +114,9 @@ test.describe("要相談商品は注文できない", () => {
       ]);
 
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
 
     await page
       .getByRole("radio", { name: /テスト 次郎/ })
