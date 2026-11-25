@@ -371,9 +371,13 @@ type ClaudeSettings = {
   };
   hooks?: Record<
     string,
-    { matcher?: string; hooks?: { command?: string }[] }[]
+    { matcher?: string; hooks?: { command?: string; timeout?: number }[] }[]
   >;
+  disableAllHooks?: boolean;
 };
+
+// Claude Code の hook の timeout の既定（秒）
+const DEFAULT_HOOK_TIMEOUT = 60;
 
 export function detectClaudeSettingsWeakening(
   base: string | null,
@@ -402,23 +406,38 @@ export function detectClaudeSettingsWeakening(
       reason: `permissions.defaultMode の変更（${before.defaultMode ?? "なし"} → ${after.defaultMode ?? "なし"}）`,
     });
   }
-  // hook を外す・matcher を変えると、Issue Scope の hook（#795）等を無効にできる
-  const afterHooks = new Set(hookEntries(parsed));
-  for (const entry of hookEntries(readJson<ClaudeSettings>(base))) {
-    if (!afterHooks.has(entry)) {
+  // hook を外す・matcher を変える・すべて止める・timeout を下げる（時間切れは止めずに通る）と、
+  // Issue Scope の hook（#795）等を無効にできる
+  if (
+    parsed?.disableAllHooks &&
+    !readJson<ClaudeSettings>(base)?.disableAllHooks
+  ) {
+    reasons.push({ reason: "disableAllHooks の追加" });
+  }
+  const afterHooks = new Map(hookEntries(parsed));
+  for (const [entry, timeout] of hookEntries(readJson<ClaudeSettings>(base))) {
+    const afterTimeout = afterHooks.get(entry);
+    if (afterTimeout === undefined) {
       reasons.push({ reason: `hooks からの削除（${entry}）` });
+    } else if (afterTimeout < timeout) {
+      reasons.push({
+        reason: `hook の timeout の引き下げ（${entry}: ${timeout} → ${afterTimeout}）`,
+      });
     }
   }
   return reasons;
 }
 
-/** `<イベント>・<matcher>: <コマンド>` の一覧 */
-function hookEntries(settings: ClaudeSettings | null | undefined): string[] {
+/** `<イベント>・<matcher>: <コマンド>` と timeout（秒）の組 */
+function hookEntries(
+  settings: ClaudeSettings | null | undefined
+): [string, number][] {
   return Object.entries(settings?.hooks ?? {}).flatMap(([event, groups]) =>
     (Array.isArray(groups) ? groups : []).flatMap((group) =>
-      (group.hooks ?? []).map(
-        (hook) => `${event}・${group.matcher ?? ""}: ${hook.command ?? ""}`
-      )
+      (group.hooks ?? []).map((hook): [string, number] => [
+        `${event}・${group.matcher ?? ""}: ${hook.command ?? ""}`,
+        hook.timeout ?? DEFAULT_HOOK_TIMEOUT,
+      ])
     )
   );
 }
