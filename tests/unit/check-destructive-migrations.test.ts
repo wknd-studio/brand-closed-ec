@@ -28,7 +28,7 @@ truncate table public.cart_items;
     ]);
   });
 
-  it("if exists 付き・set data type・列名の省略（drop x）も見つける", () => {
+  it("if exists 付き・set data type も見つける", () => {
     expect(findDestructiveStatements("DROP TABLE IF EXISTS public.x;")).toEqual(
       ["drop table"]
     );
@@ -40,6 +40,43 @@ truncate table public.cart_items;
     expect(
       findDestructiveStatements("ALTER TABLE x DROP COLUMN IF EXISTS y;")
     ).toEqual(["drop column"]);
+  });
+
+  it("COLUMN を省いた列の削除・型の変更も見つける（制約・既定値の削除は見つけない）", () => {
+    expect(
+      findDestructiveStatements('ALTER TABLE public.x DROP "note";')
+    ).toEqual(["drop column"]);
+    expect(
+      findDestructiveStatements(
+        "ALTER TABLE ONLY public.x ADD COLUMN a text, DROP b;"
+      )
+    ).toEqual(["drop column"]);
+    expect(
+      findDestructiveStatements("ALTER TABLE public.x ALTER y TYPE bigint;")
+    ).toEqual(["alter column ... type"]);
+    expect(
+      findDestructiveStatements(
+        "ALTER TABLE public.x DROP CONSTRAINT c, ALTER y DROP DEFAULT, ALTER y DROP NOT NULL;"
+      )
+    ).toEqual([]);
+  });
+
+  it("二重引用符の識別子・E'...' の文字列の中の -- や引用符を取り違えず、続く文を見つける", () => {
+    expect(
+      findDestructiveStatements(
+        "COMMENT ON COLUMN public.x.\"a--b\" IS 'x';\nDROP TABLE public.y;"
+      )
+    ).toEqual(["drop table"]);
+    expect(
+      findDestructiveStatements(
+        'CREATE TABLE public."it\'s" (id int);\nTRUNCATE public.y;'
+      )
+    ).toEqual(["truncate"]);
+    expect(
+      findDestructiveStatements(
+        "INSERT INTO public.logs VALUES (E'a\\'b');\nDROP TABLE public.y;"
+      )
+    ).toEqual(["drop table"]);
   });
 
   it("文が複数行にまたがっても見つける", () => {

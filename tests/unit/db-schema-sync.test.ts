@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -101,6 +103,17 @@ describe("judge_sync_check", () => {
     expect(call("judge_sync_check", "").status).toBe(0);
   });
 
+  it("複数作ったら、すべての中身を出す", () => {
+    const a = path.join(dir, "a.sql");
+    const b = path.join(dir, "b.sql");
+    writeFileSync(a, "-- first\n");
+    writeFileSync(b, "-- second\n");
+    const { status, output } = call("judge_sync_check", `${a}\n${b}`);
+    expect(status).toBe(1);
+    expect(output).toContain("-- first");
+    expect(output).toContain("-- second");
+  });
+
   it("作ったら失敗し、中身と直し方を出す", () => {
     const file = path.join(dir, "20261201000000_schema_sync_check.sql");
     writeFileSync(
@@ -112,6 +125,38 @@ describe("judge_sync_check", () => {
     expect(output).toContain('TO "anon"');
     expect(output).toContain("task db:sync");
     expect(output).toContain("task db:schema");
+  });
+});
+
+describe("run_sync", () => {
+  it("sync が失敗したら失敗する（呼ぶ側のコマンド置換の中でも。--check が素通りしないように）", () => {
+    const bin = path.join(dir, "bin");
+    mkdirSync(bin);
+    writeFileSync(path.join(bin, "supabase"), "#!/bin/sh\nexit 1\n", {
+      mode: 0o755,
+    });
+    const result = spawnSync(
+      "bash",
+      ["-c", 'source "$0" && created="$(run_sync x)"', SCRIPT],
+      {
+        encoding: "utf8",
+        cwd: ROOT,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      }
+    );
+    expect(result.status).not.toBe(0);
+  });
+});
+
+describe("remove_created", () => {
+  it("sync が作ったマイグレーションを、複数でもすべて消す", () => {
+    const a = path.join(dir, "a.sql");
+    const b = path.join(dir, "b.sql");
+    writeFileSync(a, "x\n");
+    writeFileSync(b, "y\n");
+    expect(call("remove_created", `${a}\n${b}`).status).toBe(0);
+    expect(existsSync(a)).toBe(false);
+    expect(existsSync(b)).toBe(false);
   });
 });
 
