@@ -39,7 +39,7 @@ const otherAddress = {
 
 type Props = ComponentProps<typeof CheckoutForm>;
 
-const BASE_PROPS: Omit<Props, "openBillingPortal"> = {
+const BASE_PROPS: Omit<Props, "openBillingPortal" | "children"> = {
   shippingAddresses: [address],
   billingAddresses: [address],
   hasOutOfStock: false,
