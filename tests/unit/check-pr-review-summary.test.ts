@@ -556,7 +556,7 @@ describe("pull_request_template.md", () => {
   it.each([
     "受け入れ条件ごとの確認結果",
     "実行したチェック",
-    "レビューサブエージェントの指摘と対応",
+    "spec-reviewer の受け入れ条件の表",
   ])("根拠を示す節「%s」は <details> で折りたたまれている", (title) => {
     expect(body).toMatch(
       new RegExp(`<details>\\s*<summary>${title}[^<]*</summary>`)

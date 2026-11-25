@@ -47,6 +47,6 @@ CREATE POLICY "order_items: select own" ON "public"."order_items"
    FROM public.orders
   WHERE (orders.user_id = public.get_current_user_id()))));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_items" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_items" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON COLUMN "public"."order_items"."fulfillment_location_code" IS 'この明細が事務所経由（office）か仕入れ先直送（supplier_direct）かの、注文時点のスナップショット。DEFAULT ''office'' は #357 で外す暫定。';

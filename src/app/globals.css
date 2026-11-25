@@ -46,6 +46,8 @@
   --color-success: #15803d;
   --color-warning: #b45309;
   --color-danger: #b91c1c;
+  /* 請求書払いを表す紺。バッジ・お知らせの文字にも使うため、白地で4.5:1以上にする */
+  --color-info: #1d4f91;
 
   /* 角丸スケール。lg/xlはTailwindの既定値(8px/12px)のままでよいため未上書き。
      カード・パネル用に2xl/3xlのみ実測値で上書きする */

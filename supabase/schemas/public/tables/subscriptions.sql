@@ -40,6 +40,6 @@ CREATE POLICY "subscriptions: select own" ON "public"."subscriptions"
   TO PUBLIC
   USING ((user_id = public.get_current_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."subscriptions" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."subscriptions" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON TABLE "public"."subscriptions" IS 'Stripe Subscriptionオブジェクトの現在値ミラー。user_id/organization_idは排他（どちらか一方のみ非NULL）。来歴はrank_changesが別途持つ。';

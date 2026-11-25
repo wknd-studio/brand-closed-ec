@@ -28,4 +28,4 @@ CREATE POLICY "favorites: select own" ON "public"."favorites"
   TO PUBLIC
   USING ((user_id = public.get_current_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."favorites" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."favorites" TO "authenticated", "postgres", "service_role";

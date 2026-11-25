@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { selectPlan, type SelectPlanResult } from "./actions";
 import { PlanSection } from "./plan-section";
 import { todayPayment } from "./today-payment";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -115,33 +116,25 @@ export default function PlanSelector({
   return (
     <>
       {(errorFields.length > 0 || failed?.error) && (
-        <div
-          ref={errorSummaryRef}
-          role="alert"
-          tabIndex={-1}
-          className="flex items-start gap-3 rounded-xl border border-danger/25 bg-danger/5 px-4 py-3.5 text-sm text-danger outline-none"
-        >
-          <AlertIcon className="mt-px size-5 shrink-0" />
-          <div className="flex flex-col gap-1">
-            {errorFields.length > 0 && <p>入力内容をご確認ください。</p>}
-            {errorFields.length > 0 && (
-              <ul className="flex flex-col gap-1">
-                {errorFields.map(({ field, message }) => (
-                  <li key={field}>
-                    <a
-                      href={`#${field}`}
-                      onClick={(event) => focusField(event, field)}
-                      className="underline"
-                    >
-                      {message}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {failed?.error && <p>{failed.error}</p>}
-          </div>
-        </div>
+        <Alert ref={errorSummaryRef} tone="danger" role="alert" tabIndex={-1}>
+          {errorFields.length > 0 && <p>入力内容をご確認ください。</p>}
+          {errorFields.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {errorFields.map(({ field, message }) => (
+                <li key={field}>
+                  <a
+                    href={`#${field}`}
+                    onClick={(event) => focusField(event, field)}
+                    className="underline"
+                  >
+                    {message}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          {failed?.error && <p>{failed.error}</p>}
+        </Alert>
       )}
       <form
         ref={formRef}
@@ -420,22 +413,5 @@ function PaymentSummary({
         {minimumPeriod}
       </p>
     </>
-  );
-}
-
-function AlertIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-      className={className}
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v6M12 16.5v.5" />
-    </svg>
   );
 }

@@ -75,9 +75,9 @@ Closes #
 <!-- 画面の変更が無ければ「なし」 -->
 
 <details>
-<summary>レビューサブエージェントの指摘と対応</summary>
+<summary>spec-reviewer の受け入れ条件の表</summary>
 
-<!-- spec-reviewer（.claude/agents/spec-reviewer.md）の指摘と、それぞれへの対応（修正した／対応しない理由） -->
+<!-- spec-reviewer（.claude/agents/spec-reviewer.md）が出した受け入れ条件ごとの充足と確認するテストの表を、そのまま貼る。呼ばなかったら「なし」 -->
 
 </details>
 

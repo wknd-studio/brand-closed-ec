@@ -87,7 +87,7 @@ NEVER（このプロジェクトでは `authMiddleware`・`withAuth`・`@clerk/n
 
 ## Self Service Delete（このプロジェクト固有）
 
-会員が `<UserProfile />`（`<UserButton />` →「アカウントの管理」）から自分で Clerk アカウントを削除すると、退会処理（`src/use-cases/withdraw.ts`）を通らない。サブスクが解約されず、`users.deleted_at` も入らず、退会ブロック・退会時の ban（#416）も効かない。そのため二重に無効にしている（#530）。
+会員が `<UserProfile />`（会員のヘッダーでは #768 で `<UserButton />` をやめたが、Clerk の Account Portal 等からは開ける）から自分で Clerk アカウントを削除すると、退会処理（`src/use-cases/withdraw.ts`）を通らない。サブスクが解約されず、`users.deleted_at` も入らず、退会ブロック・退会時の ban（#416）も効かない。そのため二重に無効にしている（#530）。
 
 - Clerk ダッシュボードの Self Service Delete は無効にする（本番インスタンスを作るときも同じ。手順は #244）
 - `user.created` の Webhook（`src/use-cases/create-user.ts`）で、各ユーザーを `deleteSelfEnabled: false` に更新している（`AccountGateway.disableSelfDelete`）。ダッシュボードの設定が有効に戻っていても効く。更新に失敗したら Webhook は 500 を返し、Clerk の再送でやり直す（ユーザーが既に削除されていた 404 は成功扱い）
