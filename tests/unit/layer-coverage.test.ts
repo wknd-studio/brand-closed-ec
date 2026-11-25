@@ -15,8 +15,9 @@ import {
   type FileCoverage,
   type LayerCoverageConfig,
 } from "../../scripts/ci/layer-coverage";
-import { parseLabelGlobs } from "../../scripts/ci/review-checklists";
 import { minimatch } from "minimatch";
+import { judgeHighRisk } from "../../scripts/ci/high-risk";
+import { parseRiskRules } from "../../scripts/ci/review-checklists";
 
 const config: LayerCoverageConfig = {
   layers: [
@@ -553,20 +554,17 @@ describe("検査の配線", () => {
     expect(check).toContain("- task: test:integration");
   });
 
-  it.each([
-    LAYER_COVERAGE_CONFIG_PATH,
-    "scripts/ci/layer-coverage.ts",
-    "vitest.config.ts",
-    "vitest.integration.config.ts",
-  ])(
-    "%s の変更は high-risk（閾値を下げる・例外を足す変更を人間が見る）",
-    (file) => {
-      const globs = parseLabelGlobs(
-        readFileSync(".github/labeler.yml", "utf8")
-      )["high-risk"];
-      expect(globs.some((glob) => minimatch(file, glob, { dot: true }))).toBe(
-        true
-      );
-    }
-  );
+  it("閾値を下げる・例外を足す変更は high-risk（人間が見る）", () => {
+    const current = readFileSync(LAYER_COVERAGE_CONFIG_PATH, "utf8");
+    const rules = parseRiskRules(readFileSync(".github/labeler.yml", "utf8"));
+    const judge = (head: string) =>
+      judgeHighRisk(
+        [{ path: LAYER_COVERAGE_CONFIG_PATH, base: current, head }],
+        rules
+      ).highRisk;
+    expect(judge(current.replace("functions: 100", "functions: 90"))).toBe(
+      true
+    );
+    expect(judge(current)).toBe(false);
+  });
 });

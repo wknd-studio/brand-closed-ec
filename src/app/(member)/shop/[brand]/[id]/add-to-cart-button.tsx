@@ -2,79 +2,92 @@
 
 import { useState } from "react";
 import { useCart } from "@/components/cart/cart-provider";
+import { monthlyLimitStatus } from "@/domain/services/cart-limit";
 import type { CartItem } from "@/lib/cart/types";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
 
 type Props = {
   item: Omit<CartItem, "quantity">;
   isOutOfStock: boolean;
 };
 
+type Result =
+  | { kind: "added" }
+  | { kind: "overLimit"; error: string; remaining: number | null };
+
 export default function AddToCartButton({ item, isOutOfStock }: Props) {
-  const { addToCart } = useCart();
+  const { cart, confirmedAmount, monthlyLimit, addToCart, openCart } =
+    useCart();
   const [quantity, setQuantity] = useState(1);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [added, setAdded] = useState(false);
-
-  function handleDecrement() {
-    setQuantity((q) => Math.max(1, q - 1));
-  }
-
-  function handleIncrement() {
-    setQuantity((q) => q + 1);
-  }
+  const [result, setResult] = useState<Result | null>(null);
 
   function handleAdd() {
-    setErrorMessage(null);
-    setAdded(false);
-    const result = addToCart(item, quantity);
-    if (result.error) {
-      setErrorMessage(result.error);
+    const { error } = addToCart(item, quantity);
+    if (error) {
+      // 追加できなかったため、カートは押す前のまま。残りは押す前のカートで出す
+      const status = monthlyLimitStatus({
+        lines: cart.items,
+        confirmedAmount,
+        monthlyLimit,
+      });
+      setResult({
+        kind: "overLimit",
+        error,
+        remaining: status.isUnlimited ? null : Math.max(0, status.remaining),
+      });
     } else {
-      setAdded(true);
-      setTimeout(() => setAdded(false), 2000);
+      setResult({ kind: "added" });
     }
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-600">数量</span>
-        <div className="flex items-center rounded-lg border">
-          <button
-            onClick={handleDecrement}
-            disabled={quantity <= 1}
-            className="flex h-9 w-9 items-center justify-center text-gray-600 disabled:opacity-30 hover:bg-gray-50"
-            aria-label="数量を減らす"
-          >
-            −
-          </button>
-          <span className="w-10 text-center text-sm tabular-nums">
-            {quantity}
-          </span>
-          <button
-            onClick={handleIncrement}
-            disabled={isOutOfStock}
-            className="flex h-9 w-9 items-center justify-center text-gray-600 disabled:opacity-30 hover:bg-gray-50"
-            aria-label="数量を増やす"
-          >
-            ＋
-          </button>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <QuantityStepper
+          label={`${item.productName}の数量`}
+          value={quantity}
+          onChange={setQuantity}
+          disabled={isOutOfStock}
+        />
+        <Button
+          onClick={handleAdd}
+          disabled={isOutOfStock}
+          className="flex-[1_1_220px] disabled:bg-none disabled:bg-neutral-200 disabled:text-neutral-700 disabled:opacity-100 disabled:shadow-none"
+        >
+          {isOutOfStock ? "在庫切れのため注文できません" : "カートに追加"}
+        </Button>
       </div>
 
-      <button
-        onClick={handleAdd}
-        disabled={isOutOfStock}
-        className="w-full rounded-lg bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {isOutOfStock
-          ? "在庫切れ"
-          : added
-            ? "カートに追加しました ✓"
-            : "カートに追加"}
-      </button>
-
-      {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {result?.kind === "added" && (
+        <Alert
+          tone="success"
+          role="status"
+          action={
+            <button
+              type="button"
+              onClick={openCart}
+              className="underline-offset-2 hover:underline"
+            >
+              カートを見る
+            </button>
+          }
+        >
+          <p className="font-semibold">カートに追加しました</p>
+        </Alert>
+      )}
+      {result?.kind === "overLimit" && (
+        <Alert tone="danger" role="alert">
+          <p className="leading-relaxed">{result.error}</p>
+          {result.remaining !== null && (
+            <p className="text-[0.8125rem] leading-relaxed">
+              今月の残りは ¥{result.remaining.toLocaleString()}{" "}
+              です。数量を減らすか、来月にご注文ください。
+            </p>
+          )}
+        </Alert>
+      )}
     </div>
   );
 }

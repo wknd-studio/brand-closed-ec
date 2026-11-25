@@ -79,6 +79,16 @@ describe("QuantityStepper", () => {
     expect(button("数量を減らす").disabled).toBe(true);
   });
 
+  it("最大値（max）では「増やす」だけ押せない", () => {
+    act(() =>
+      root.render(
+        <QuantityStepper label="数量" value={3} max={3} onChange={() => {}} />
+      )
+    );
+    expect(button("数量を増やす").disabled).toBe(true);
+    expect(button("数量を減らす").disabled).toBe(false);
+  });
+
   it("disabled のときは「増やす」も「減らす」も押せない", () => {
     act(() =>
       root.render(

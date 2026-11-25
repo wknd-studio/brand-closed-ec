@@ -48,7 +48,7 @@ CREATE POLICY "addresses: update own" ON "public"."addresses"
   TO PUBLIC
   USING ((user_id = public.get_current_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."addresses" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."addresses" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON COLUMN "public"."addresses"."type" IS '配送先・請求先・本店所在地の区別。旧address_type ENUM列を置き換え
   （TEXT+CHECK）。headquarters追加によりorganizationsの住所カラムを

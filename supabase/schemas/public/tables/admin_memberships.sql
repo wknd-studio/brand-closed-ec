@@ -22,4 +22,4 @@ CREATE POLICY "admin_memberships: select own" ON "public"."admin_memberships"
   TO PUBLIC
   USING ((admin_user_id = public.get_current_admin_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."admin_memberships" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."admin_memberships" TO "authenticated", "postgres", "service_role";
