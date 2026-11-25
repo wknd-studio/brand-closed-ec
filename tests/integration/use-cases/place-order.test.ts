@@ -5,6 +5,7 @@ import { placeOrder } from "@/use-cases/place-order";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
+import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import type {
   ProductRepository,
@@ -138,6 +139,7 @@ describe("placeOrder（実DB・7ランクのスナップショット）", () => 
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
       }
     );
 
@@ -280,6 +282,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
       }
     );
 
@@ -365,6 +368,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
       }
     );
 
@@ -412,6 +416,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
       }
     );
 
@@ -524,6 +529,7 @@ describe("placeOrder（実DB・住所の持ち主。#619）", () => {
         notificationService,
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
       }
     );
   }

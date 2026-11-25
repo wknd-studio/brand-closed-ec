@@ -12,6 +12,8 @@ import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // order_status_changes（#237）: orders.status の変更履歴。追記専用で、状態の更新と同じトランザクションで書く
 
@@ -101,6 +103,7 @@ function makeOrder(orderId: string, userId: string, suffix: string) {
   return reconstituteOrder({
     id: orderId,
     userId,
+    orderNumber: OrderNumber.of(randomOrderNumber()),
     status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
@@ -263,12 +266,13 @@ describe("order_status_changes", () => {
 
     it("状態の更新が失敗したら、履歴も記録されない", async () => {
       // OrderStatus は不正な値を作れないため、関数を直接呼んで orders の CHECK 制約で失敗させる。
-      // 版の確認（#721）を通すため、今の版を渡す
-      const { version } = (await repo.findById(ORDER_B_ID))!;
+      // 版の確認（#721）を通すため、今の版を渡す。注文番号（#754）も今の値を渡す
+      const { version, orderNumber } = (await repo.findById(ORDER_B_ID))!;
       const { error } = await supabase.rpc("save_order", {
         p_order: {
           id: ORDER_B_ID,
           user_id: USER_B_ID,
+          order_number: orderNumber.value,
           status: "no_such_status",
           shipping_address_snapshot: snapshotProps,
           billing_address_snapshot: snapshotProps,

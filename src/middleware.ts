@@ -20,6 +20,7 @@ const isOnboarding = createRouteMatcher(["/onboarding(.*)"]);
 // 自分で /shop へ進めるため、入会済みでもリダイレクトしない
 const isPaymentSuccess = createRouteMatcher(["/onboarding/payment/success"]);
 const isAdmin = createRouteMatcher(["/admin(.*)"]);
+const isSubscriptionEnded = createRouteMatcher(["/subscription-ended"]);
 
 // Stripe/Clerk webhook はレート制限対象外
 const isWebhook = createRouteMatcher(["/api/webhooks/(.*)"]);
@@ -97,6 +98,19 @@ export default clerkMiddleware(async (auth, req) => {
 
   if (!status?.onboardingCompleted) {
     return NextResponse.redirect(new URL("/onboarding/account-type", req.url));
+  }
+
+  // Stripe 側でサブスクリプションが解約された会員は、ログインは許し、利用停止の案内画面だけを
+  // 表示する（docs/domain/membership.md「Stripe側の解約による利用停止」）。
+  // deleted_at と同じく JWT に反映されないため DB で確認する
+  if (status.subscriptionEnded) {
+    if (!isSubscriptionEnded(req)) {
+      return NextResponse.redirect(new URL("/subscription-ended", req.url));
+    }
+    return;
+  }
+  if (isSubscriptionEnded(req)) {
+    return NextResponse.redirect(new URL("/shop", req.url));
   }
 });
 

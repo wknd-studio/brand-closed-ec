@@ -485,6 +485,7 @@ export type Database = {
           created_at: string;
           id: string;
           monthly_limit_at_order: number | null;
+          order_number: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status: string;
@@ -497,6 +498,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           monthly_limit_at_order?: number | null;
+          order_number: string;
           rank_at_order: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot: Json;
           status?: string;
@@ -509,6 +511,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           monthly_limit_at_order?: number | null;
+          order_number?: string;
           rank_at_order?: Database["public"]["Enums"]["member_rank"];
           shipping_address_snapshot?: Json;
           status?: string;
@@ -1036,13 +1039,15 @@ export type Database = {
       };
       create_invoice_settlement_with_limit_check: {
         Args: {
-          p_admin_user_id: string;
-          p_item_ids: string[];
+          p_invoice_amount: number;
+          p_invoice_item_ids: string[];
+          p_limit_exceeded: Json;
           p_monthly_limit: number;
-          p_order_id: string;
           p_period_end: string;
           p_period_start: string;
-          p_settlement_id: string;
+          p_status_change: Json;
+          p_user_id: string;
+          p_within_limit: Json;
         };
         Returns: string;
       };

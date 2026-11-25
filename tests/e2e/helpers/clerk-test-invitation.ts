@@ -283,6 +283,7 @@ async function deleteMemberRows(
     await supabase.from("addresses").delete().eq("user_id", user.id);
     await supabase.from("cart_items").delete().eq("user_id", user.id);
     await supabase.from("favorites").delete().eq("user_id", user.id);
+    await supabase.from("subscriptions").delete().eq("user_id", user.id);
   }
 
   const { error } = await supabase.from("users").delete().eq(column, value);

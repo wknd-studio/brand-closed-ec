@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactElement } from "react";
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
@@ -51,6 +53,15 @@ const user = makeUser({
   stripeCustomerId: "cus_1",
 });
 
+// 決済の準備に失敗したときの表示（GitHub issue #748）
+function expectPrepareFailed(html: string) {
+  expect(html).toMatch(/<h1[^>]*>決済画面を開けませんでした<\/h1>/);
+  expect(html).toContain("料金は発生していません");
+  expect(html).toMatch(
+    /<a[^>]*href="\/onboarding\/account-type"[^>]*>お申し込みをやり直す<\/a>/
+  );
+}
+
 describe("OnboardingPaymentPage - Sentry例外送信", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -69,8 +80,11 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
     const error = new Error("Stripe API エラー");
     createCheckoutSessionMock.mockRejectedValue(error);
 
-    await OnboardingPaymentPage();
+    const html = renderToStaticMarkup(
+      (await OnboardingPaymentPage()) as ReactElement
+    );
 
+    expectPrepareFailed(html);
     expect(Sentry.captureException).toHaveBeenCalledWith(
       error,
       expect.objectContaining({
@@ -129,6 +143,16 @@ describe("OnboardingPaymentPage - Sentry例外送信", () => {
       }),
       { idempotencyKey: "onboarding-checkout-session-user-1-starter" }
     );
+  });
+
+  it("Checkout SessionのURLが無ければ、決済画面を開けなかった旨を出す", async () => {
+    createCheckoutSessionMock.mockResolvedValue({ url: null });
+
+    const html = renderToStaticMarkup(
+      (await OnboardingPaymentPage()) as ReactElement
+    );
+
+    expectPrepareFailed(html);
   });
 
   it("有効なサブスクリプションが既にある場合、Checkout Sessionを作らずに決済完了画面へリダイレクトする", async () => {

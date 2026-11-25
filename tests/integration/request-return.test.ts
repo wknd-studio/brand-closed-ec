@@ -12,6 +12,7 @@ import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseReturnRepository } from "@/infrastructure/supabase/supabase-return-repository";
 import { reconstituteReturnRequest } from "@/domain/entities/return-request";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // 返品・返金の申請（#381）。申請の保存（リポジトリ実装）と、注文詳細画面のサーバーアクション経由で
 // 他の会員の注文に申請できないことを、RLS 付きの会員のクライアントで確かめる
@@ -192,9 +193,25 @@ beforeAll(async () => {
     if (error) throw error;
   }
   const { error: ordersError } = await adminClient.from("orders").insert([
-    { ...baseOrder, id: ORDER_A_ID, user_id: USER_A_ID },
-    { ...baseOrder, id: ORDER_A_UNPAID_ID, user_id: USER_A_ID },
-    { ...baseOrder, id: ORDER_B_ID, user_id: USER_B_ID, status: "paid" },
+    {
+      ...baseOrder,
+      id: ORDER_A_ID,
+      user_id: USER_A_ID,
+      order_number: randomOrderNumber(),
+    },
+    {
+      ...baseOrder,
+      id: ORDER_A_UNPAID_ID,
+      user_id: USER_A_ID,
+      order_number: randomOrderNumber(),
+    },
+    {
+      ...baseOrder,
+      id: ORDER_B_ID,
+      user_id: USER_B_ID,
+      status: "paid",
+      order_number: randomOrderNumber(),
+    },
   ]);
   if (ordersError) throw ordersError;
   const { error: settlementsError } = await adminClient

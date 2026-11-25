@@ -43,6 +43,7 @@ import { PhoneNumber } from "@/domain/value-objects/phone-number";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { reconstituteUser } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
+import { OrderNumber } from "@/domain/value-objects/order-number";
 
 const addressSnapshot = AddressSnapshot.of({
   recipientLastName: "テスト",
@@ -99,6 +100,7 @@ function makeOrder() {
   return reconstituteOrder({
     id: "order-1",
     userId: "user-1",
+    orderNumber: OrderNumber.of("K7Q2M9XD"),
     status: OrderStatus.of("processing"),
     shippingAddress: addressSnapshot,
     billingAddress: addressSnapshot,

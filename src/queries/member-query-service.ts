@@ -28,12 +28,14 @@ export type FavoritesDto = {
   favoriteProductIds: string[];
 };
 
-// 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態）
+// 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態、支払い失敗中の案内）
 export type MemberLayoutDto = {
   confirmedAmount: number;
   // 月間仕入れ上限。null なら無制限
   monthlyLimit: number | null;
   favoriteProductIds: string[];
+  // 月額費用の支払い失敗中なら true（カードの更新を案内する。#379）
+  paymentFailing: boolean;
 };
 
 // 会員の画面の読み取り。他の会員のデータを返さないよう、どのメソッドも会員（clerkUserId）を必須にする

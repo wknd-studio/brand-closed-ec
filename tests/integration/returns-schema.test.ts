@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
+import { randomOrderNumber } from "../helpers/order-number";
 
 type ReturnsInsert = Database["public"]["Tables"]["returns"]["Insert"];
 
@@ -157,9 +158,24 @@ beforeAll(async () => {
   if (adminError) throw adminError;
 
   const { error: ordersError } = await supabase.from("orders").insert([
-    { ...baseOrder, id: ORDER_A_ID, user_id: USER_A_ID },
-    { ...baseOrder, id: ORDER_A2_ID, user_id: USER_A_ID },
-    { ...baseOrder, id: ORDER_B_ID, user_id: USER_B_ID },
+    {
+      order_number: randomOrderNumber(),
+      ...baseOrder,
+      id: ORDER_A_ID,
+      user_id: USER_A_ID,
+    },
+    {
+      order_number: randomOrderNumber(),
+      ...baseOrder,
+      id: ORDER_A2_ID,
+      user_id: USER_A_ID,
+    },
+    {
+      order_number: randomOrderNumber(),
+      ...baseOrder,
+      id: ORDER_B_ID,
+      user_id: USER_B_ID,
+    },
   ]);
   if (ordersError) throw ordersError;
   const { error: itemsError } = await supabase.from("order_items").insert([

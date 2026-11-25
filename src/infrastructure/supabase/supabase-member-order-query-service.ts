@@ -14,6 +14,8 @@ import type {
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
+import { isSubscriptionPaymentFailed } from "@/domain/services/new-order-eligibility";
+import type { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
 import { groupItemsBySettlement } from "@/domain/services/settlement-grouping";
 import { returnableQuantities } from "@/domain/services/returnable-quantity";
 import type { OrderItem } from "@/domain/entities/order-item";
@@ -104,11 +106,13 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     const { data, error } = await this.db
       .from("users")
       .select(
-        "rank_code, addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1)"
+        "rank_code, addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1), subscriptions(status)"
       )
       .eq("clerk_user_id", clerkUserId)
       .is("deleted_at", null)
       .order("is_default", { referencedTable: "addresses", ascending: false })
+      // 解約済みでない行は会員につき1件まで（subscriptions_user_active_idx）
+      .neq("subscriptions.status", "canceled")
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
@@ -122,6 +126,10 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
       billingAddresses: addresses
         .filter((a) => a.type === "billing")
         .map(toAddressDto),
+      paymentFailed: isSubscriptionPaymentFailed(
+        (data.subscriptions[0]?.status as SubscriptionStatus | undefined) ??
+          null
+      ),
     };
   }
 

@@ -1,4 +1,6 @@
+import { OrderNumber } from "@/domain/value-objects/order-number";
 import { checkMonthlyLimit } from "@/domain/services/monthly-limit-service";
+import { assertCanPlaceNewOrder } from "@/domain/services/new-order-eligibility";
 import { CartItem } from "@/domain/value-objects/cart-item";
 import { Money } from "@/domain/value-objects/money";
 import { Order } from "@/domain/entities/order";
@@ -6,6 +8,7 @@ import type { UserRepository } from "@/repositories/user-repository";
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { MemberRankRepository } from "@/repositories/member-rank-repository";
 import type { AddressRepository } from "@/repositories/address-repository";
+import type { SubscriptionRepository } from "@/repositories/subscription-repository";
 import type {
   ProductRepository,
   ProductSnapshot,
@@ -34,6 +37,7 @@ export type PlaceOrderDeps = {
   orderRepo: OrderRepository;
   memberRankRepo: MemberRankRepository;
   addressRepo: AddressRepository;
+  subscriptionRepo: SubscriptionRepository;
   productRepo: ProductRepository;
   paymentGateway: PaymentGateway;
   notificationService: NotificationService;
@@ -49,6 +53,7 @@ export async function placeOrder(
     orderRepo,
     memberRankRepo,
     addressRepo,
+    subscriptionRepo,
     productRepo,
     paymentGateway,
     notificationService,
@@ -57,6 +62,11 @@ export async function placeOrder(
 
   const user = await userRepo.findByClerkUserId(input.clerkUserId);
   if (!user) throw new Error("ユーザーが見つかりません");
+
+  // 月額費用の支払い失敗中は、注文・決済単位・Checkout Session のどれも作らずに止める。
+  // 画面の表示だけに頼らず、ここで判定する（#378、docs/domain/ordering.md「新規注文を止める条件」）
+  const subscription = await subscriptionRepo.findActiveByUserId(user.id);
+  assertCanPlaceNewOrder(subscription?.status ?? null);
 
   if (input.cartItems.length === 0) throw new Error("カートに商品がありません");
 
@@ -95,6 +105,10 @@ export async function placeOrder(
     billingAddress: billingAddress.toSnapshot(),
     placedAt: new Date(),
     generateId: () => crypto.randomUUID(),
+    generateOrderNumber: () =>
+      OrderNumber.generate((length) =>
+        crypto.getRandomValues(new Uint8Array(length))
+      ),
   });
   const settlement = order.checkoutSettlement();
   const afterOrderItems = order.items.filter((item) => item.isAfterOrder());

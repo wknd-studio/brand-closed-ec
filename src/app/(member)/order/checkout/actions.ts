@@ -11,6 +11,7 @@ import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
+import { SubscriptionPaymentFailedError } from "@/domain/errors/subscription-payment-failed-error";
 
 type PlaceOrderResult = { error: string };
 
@@ -46,6 +47,13 @@ export async function placeOrder(
     );
     redirectUrl = result.redirectUrl;
   } catch (err) {
+    if (err instanceof SubscriptionPaymentFailedError) {
+      // 画面を開いた後に支払い失敗中になった会員。想定内のためSentryには送らない
+      return {
+        error:
+          "お支払い方法の更新が必要です。月額費用のお支払いが確認できないため、お支払い方法を更新してから注文してください",
+      };
+    }
     if (err instanceof LimitExceededError) {
       return {
         error: `月次仕入れ上限（¥${err.limit.toLocaleString()}）を超えるため注文できません`,

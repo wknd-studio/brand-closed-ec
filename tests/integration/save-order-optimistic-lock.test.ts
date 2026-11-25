@@ -15,6 +15,8 @@ import { MemberRank } from "@/domain/value-objects/member-rank";
 import { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // save_order の楽観ロック（issue #721）。呼び出し側はロックを取らずに findById で読んだ注文を
 // 書き戻すため、読んでから書き戻すまでの間に別の書き手（請求作成・Webhook・運営者のキャンセル等）が
@@ -61,6 +63,7 @@ function buildOrder(timings: PaymentTiming[]): Order {
   return reconstituteOrder({
     id: orderId,
     userId: USER_ID,
+    orderNumber: OrderNumber.of(randomOrderNumber()),
     status: OrderStatus.of("processing"),
     shippingAddress: AddressSnapshot.of(snapshotProps),
     billingAddress: AddressSnapshot.of(snapshotProps),
@@ -177,9 +180,10 @@ describe("save_order の楽観ロック", () => {
     // 2. 請求作成がコミットする
     const invoiceId = newId();
     await repo.createInvoiceSettlementWithLimitCheck({
-      orderId: seeded.id,
-      itemIds,
-      settlementId: invoiceId,
+      draft: (await read(seeded.id)).draftInvoiceSettlement({
+        settlementId: invoiceId,
+        itemIds,
+      }),
       period: PERIOD,
       monthlyLimit: MonthlyLimit.of(300_000),
       adminUserId: ADMIN_USER_ID,
@@ -278,13 +282,37 @@ describe("save_order の楽観ロック", () => {
     const seeded = await seedOrder(["after_order"]);
     const before = await read(seeded.id);
     await repo.createInvoiceSettlementWithLimitCheck({
-      orderId: seeded.id,
-      itemIds: [seeded.items[0]!.id],
-      settlementId: newId(),
+      draft: before.draftInvoiceSettlement({
+        settlementId: newId(),
+        itemIds: [seeded.items[0]!.id],
+      }),
       period: PERIOD,
       monthlyLimit: MonthlyLimit.of(300_000),
       adminUserId: ADMIN_USER_ID,
     });
     expect((await read(seeded.id)).version).toBe(before.version + 1);
+  });
+
+  it("請求作成の後に読んだ注文は保存できる", async () => {
+    const seeded = await seedOrder(["after_order"]);
+    const invoiceId = newId();
+    await repo.createInvoiceSettlementWithLimitCheck({
+      draft: (await read(seeded.id)).draftInvoiceSettlement({
+        settlementId: invoiceId,
+        itemIds: [seeded.items[0]!.id],
+      }),
+      period: PERIOD,
+      monthlyLimit: MonthlyLimit.of(300_000),
+      adminUserId: ADMIN_USER_ID,
+    });
+
+    const after = await read(seeded.id);
+    await repo.save(after.cancel(new Date()), adminCancel);
+
+    const cancelled = await read(seeded.id);
+    expect(cancelled.status.value).toBe("cancelled");
+    expect(cancelled.settlements.find((s) => s.id === invoiceId)?.status).toBe(
+      "cancelled"
+    );
   });
 });

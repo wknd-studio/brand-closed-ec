@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 type Props = {
   // 成功すると Billing Portal へリダイレクトするため、戻り値は失敗のときだけ届く
   action: () => Promise<{ success: true } | { error: string }>;
+  label?: string;
 };
 
-export default function PaymentMethodButton({ action }: Props) {
+export default function PaymentMethodButton({
+  action,
+  label = "お支払い方法を変更する",
+}: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +32,7 @@ export default function PaymentMethodButton({ action }: Props) {
         onClick={handleClick}
         disabled={isPending}
       >
-        {isPending ? "処理中..." : "お支払い方法を変更する"}
+        {isPending ? "処理中..." : label}
       </Button>
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>

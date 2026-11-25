@@ -21,14 +21,19 @@ describe(".gitattributes の生成物指定", () => {
     "skills-lock.json",
     ".agents/skills/clerk/SKILL.md",
     ".agents/skills/clerk-astro-patterns/references/middleware.md",
+    "supabase/schemas/public/functions/save_order.sql",
+    "supabase/schemas/.pgdelta-export.json",
   ])("%s は生成物として扱われる", (file) => {
     expect(linguistGenerated(file)).toBe("true");
   });
 
-  it.each(["src/lib/cart/types.ts", "CLAUDE.md", "package.json"])(
-    "%s は生成物として扱われない",
-    (file) => {
-      expect(linguistGenerated(file)).toBe("unspecified");
-    }
-  );
+  it.each([
+    "src/lib/cart/types.ts",
+    "CLAUDE.md",
+    "package.json",
+    "supabase/migrations/20260922020000_create_claim_stripe_webhook_event_function.sql",
+    "supabase/schemas/README.md",
+  ])("%s は生成物として扱われない", (file) => {
+    expect(linguistGenerated(file)).toBe("unspecified");
+  });
 });

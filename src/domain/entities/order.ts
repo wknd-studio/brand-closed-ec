@@ -1,4 +1,5 @@
 import { OrderStatus } from "@/domain/value-objects/order-status";
+import type { OrderNumber } from "@/domain/value-objects/order-number";
 import { Money } from "@/domain/value-objects/money";
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
@@ -17,12 +18,18 @@ import type { User } from "./user";
 import { OrderNotCancellableError } from "@/domain/errors/order-not-cancellable-error";
 import { InvalidOrderError } from "@/domain/errors/invalid-order-error";
 import { NegotiableProductNotOrderableError } from "@/domain/errors/negotiable-product-not-orderable-error";
+import {
+  ItemsNotInvoiceableError,
+  type ItemsNotInvoiceableReason,
+} from "@/domain/errors/items-not-invoiceable-error";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { splitCartByPaymentTiming } from "@/domain/services/order-flow-selector";
 
 interface OrderProps {
   id: string;
   userId: string;
+  /** 会員・運営者が注文を言い表す番号（#754）。注文を作るときに割り当て、書き換えでは変えない */
+  orderNumber: OrderNumber;
   status: OrderStatus;
   shippingAddress: AddressSnapshot;
   billingAddress: AddressSnapshot;
@@ -51,7 +58,26 @@ interface PlaceOrderProps {
   placedAt: Date;
   /** 注文・決済単位・明細のIDを割り当てる */
   generateId: () => string;
+  /** 注文番号を割り当てる（重なりは保存するDBの UNIQUE が防ぐ） */
+  generateOrderNumber: () => OrderNumber;
 }
+
+/**
+ * 請求作成で組み立てた注文（Order.draftInvoiceSettlement）。上限を超えたかは、同じ顧客の他の注文の
+ * 確定額を行ロックの中で数えないと決められないため、上限内と上限超過の両方の注文を組み立てておき、
+ * 保存する側（repository）が上限の確認の結果でどちらか一方を保存する
+ */
+export type InvoiceSettlementDraft = {
+  settlementId: string;
+  /** 請求に紐付ける明細（重複なし）。上限の確認では、確定額からこの明細を除いて請求額を足す */
+  itemIds: string[];
+  /** 請求額（選んだ明細の小計の合計） */
+  amount: Money;
+  /** 上限内のときに保存する注文（請求は invoice_sent） */
+  withinLimit: Order;
+  /** 上限を超えたときに保存する注文（請求は limit_exceeded。注文の状態は rollupStatus() が決める） */
+  limitExceeded: Order;
+};
 
 // 復元の入口（reconstituteOrder）から private な build を使うため、static ブロックで受け取る
 let restore: (props: OrderProps) => Order;
@@ -63,6 +89,7 @@ export class Order {
 
   readonly id: string;
   readonly userId: string;
+  readonly orderNumber: OrderNumber;
   readonly status: OrderStatus;
   readonly shippingAddress: AddressSnapshot;
   readonly billingAddress: AddressSnapshot;
@@ -76,6 +103,7 @@ export class Order {
   private constructor(props: OrderProps) {
     this.id = props.id;
     this.userId = props.userId;
+    this.orderNumber = props.orderNumber;
     this.status = props.status;
     this.shippingAddress = props.shippingAddress;
     this.billingAddress = props.billingAddress;
@@ -106,7 +134,7 @@ export class Order {
    * - after_order: 決済単位は作らない（settlementId=NULL）。運営者の「請求作成」で後から紐付く
    */
   static place(props: PlaceOrderProps): Order {
-    const { user, cartItems, generateId } = props;
+    const { user, cartItems, generateId, generateOrderNumber } = props;
     // 要相談商品は Ver1 では扱わない（docs/domain/catalog.md）。価格が後で決まる前提の
     // 月次上限の判定・請求作成が無いため、単価0円の明細を作らせない
     const negotiable = cartItems.find((c) => c.isNegotiable);
@@ -157,6 +185,7 @@ export class Order {
     const order = Order.build({
       id: orderId,
       userId: user.id,
+      orderNumber: generateOrderNumber(),
       status: OrderStatus.of("processing"),
       shippingAddress: props.shippingAddress,
       billingAddress: props.billingAddress,
@@ -178,6 +207,7 @@ export class Order {
    * - 明細が1件以上ある
    * - 明細のsettlementIdは、その注文の決済単位のどれかかNULL
    * - 決済単位のorderIdが、その注文のid
+   * - 決済単位のidが重ならない（請求作成で既存の決済単位のidを渡されたとき、上書きして保存しないため）
    */
   private static assertInvariants(props: OrderProps): void {
     if (props.items.length === 0) {
@@ -187,6 +217,9 @@ export class Order {
       throw new InvalidOrderError(props.id, "settlement_of_other_order");
     }
     const settlementIds = new Set(props.settlements.map((s) => s.id));
+    if (settlementIds.size !== props.settlements.length) {
+      throw new InvalidOrderError(props.id, "duplicate_settlement_id");
+    }
     if (
       props.items.some(
         (item) =>
@@ -205,6 +238,7 @@ export class Order {
     return {
       id: this.id,
       userId: this.userId,
+      orderNumber: this.orderNumber,
       status: this.status,
       shippingAddress: this.shippingAddress,
       billingAddress: this.billingAddress,
@@ -307,6 +341,79 @@ export class Order {
   /** 決済単位に紐付いた明細（Checkout・Invoiceに載せる明細） */
   itemsIn(settlement: OrderSettlement): OrderItem[] {
     return this.items.filter((item) => item.settlementId === settlement.id);
+  }
+
+  /**
+   * 請求作成（docs/domain/settlement.md「請求作成」）: 注文の未請求の後払い明細のうち、選んだものを
+   * 新しい請求（invoice の決済単位）に紐付ける。請求書は注文ごとに発行し、注文をまたがない（2026-11-24 決定）。
+   * 上限内（invoice_sent）と上限超過（limit_exceeded）の両方の注文を返す（InvoiceSettlementDraft）。
+   * 請求できない明細（別の注文・後払いでない・請求済み・価格未定）を含むか、注文がキャンセル済みなら
+   * ItemsNotInvoiceableError を投げる
+   */
+  draftInvoiceSettlement(input: {
+    settlementId: string;
+    itemIds: string[];
+  }): InvoiceSettlementDraft {
+    const itemIds = [...new Set(input.itemIds)];
+    const fail = (reason: ItemsNotInvoiceableReason) =>
+      new ItemsNotInvoiceableError(this.id, reason);
+    if (itemIds.length === 0) throw fail("no_items");
+    if (this.isCancelled()) throw fail("order_cancelled");
+
+    const itemById = new Map(this.items.map((item) => [item.id, item]));
+    const selected = itemIds.map((id) => itemById.get(id));
+    if (selected.some((item) => item === undefined)) {
+      throw fail("item_not_in_order");
+    }
+    const items = selected as OrderItem[];
+    if (items.some((item) => !item.isAfterOrder())) {
+      throw fail("not_after_order");
+    }
+    // 決済単位をキャンセルすると明細は未請求（NULL）に戻るため、NULL だけを未請求とみなす
+    if (items.some((item) => item.settlementId !== null)) {
+      throw fail("already_settled");
+    }
+    // 要相談の明細は、交渉済みの単価があっても請求額（sumFixedTotal）・確定額に入らないため請求させない
+    // （Ver1 では注文できない。0円の請求を作らせない）
+    if (items.some((item) => item.isNegotiable)) {
+      throw fail("price_not_fixed");
+    }
+
+    const amount = sumFixedTotal(items);
+    const selectedIds = new Set(itemIds);
+    const withStatus = (status: "invoice_sent" | "limit_exceeded") =>
+      this.with({
+        items: this.items.map((item) =>
+          selectedIds.has(item.id)
+            ? reconstituteOrderItem({
+                ...item,
+                settlementId: input.settlementId,
+              })
+            : item
+        ),
+        settlements: [
+          ...this.settlements,
+          reconstituteOrderSettlement({
+            id: input.settlementId,
+            orderId: this.id,
+            flow: "invoice",
+            status,
+            stripeCheckoutSessionId: null,
+            stripeInvoiceId: null,
+            amount,
+            paidAt: null,
+            cancelledAt: null,
+          }),
+        ],
+      });
+
+    return {
+      settlementId: input.settlementId,
+      itemIds,
+      amount,
+      withinLimit: withStatus("invoice_sent"),
+      limitExceeded: withStatus("limit_exceeded"),
+    };
   }
 
   /** 決済単位を差し替え（無ければ追加）した注文を返す。statusはbuildがロールアップし直す */
