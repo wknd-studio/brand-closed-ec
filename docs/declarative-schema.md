@@ -51,7 +51,7 @@ DBのスキーマを変えるときは、`supabase/schemas/` のファイル（1
 
 ## 危ないマイグレーションの検査
 
-CI の `Destructive Migration Check`（`.github/workflows/migration-order.yml`。中身は `scripts/ci/check-destructive-migrations.ts`）が、PRで追加・変更したマイグレーションに次の文があれば失敗する。コメント・文字列の中の語は見ない。DO ブロックの中は見る。
+CI の `Destructive Migration Check`（`.github/workflows/migration-order.yml`。中身は `scripts/ci/check-destructive-migrations.ts`）が、PRで追加・変更したマイグレーションに次の文があれば失敗する。コメント・文字列・二重引用符の識別子の中の語と、`GRANT`・`REVOKE` の権限の名前（`TRUNCATE`）は見ない。DO ブロックの中は見る。`ALTER TABLE x DROP y`・`ALTER TABLE x ALTER y TYPE ...` のように `COLUMN` を省いた書き方も見る。
 
 - `drop table`
 - `drop column`
