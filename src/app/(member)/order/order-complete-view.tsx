@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Heading } from "@/components/ui/heading";
@@ -12,7 +13,7 @@ export default function OrderCompleteView({ view }: { view: View }) {
   return (
     <div className="pt-[clamp(20px,5vw,48px)] pb-20">
       <Container className="max-w-[720px]">
-        <div className="flex flex-col gap-6 rounded-3xl border border-neutral-200 bg-white p-[clamp(24px,5vw,44px)]">
+        <Card className="flex flex-col gap-6 rounded-3xl p-[clamp(24px,5vw,44px)]">
           <div className="flex flex-col items-center gap-3 text-center">
             <span className="inline-flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-primary-light to-primary text-white">
               <svg
@@ -154,7 +155,7 @@ export default function OrderCompleteView({ view }: { view: View }) {
               ショッピングを続ける
             </Link>
           </div>
-        </div>
+        </Card>
       </Container>
     </div>
   );
