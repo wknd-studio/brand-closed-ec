@@ -52,16 +52,20 @@ type OpenApi = {
   definitions: Record<string, { properties: Record<string, unknown> }>;
 };
 
+async function fetchOpenApi(headers: Record<string, string>): Promise<OpenApi> {
+  const res = await fetch(`${supabaseUrl}/rest/v1/`, { headers });
+  return (await res.json()) as OpenApi;
+}
+
 let tables: { name: string; firstColumn: string }[] = [];
 // 引数名が合わないと PostgREST が関数を見つけられず（PGRST202）権限の検査まで届かないため、
 // 引数名も OpenAPI から取って null で呼ぶ
 let functions: { name: string; args: Record<string, null> }[] = [];
 
 beforeAll(async () => {
-  const res = await fetch(`${supabaseUrl}/rest/v1/`, {
-    headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY! },
+  const spec = await fetchOpenApi({
+    apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   });
-  const spec = (await res.json()) as OpenApi;
   const paths = Object.keys(spec.paths).filter((p) => p !== "/");
   tables = paths
     .filter((p) => !p.startsWith("/rpc/"))
@@ -85,45 +89,42 @@ beforeAll(async () => {
 const callers = [
   {
     label: "トークン無し",
-    client: () =>
-      createClient(supabaseUrl, anonKey, { auth: { persistSession: false } }),
+    headers: (): Record<string, string> => ({}),
   },
   {
     label: "role クレームの無いトークン",
-    client: () =>
-      createClient(supabaseUrl, anonKey, {
-        global: {
-          headers: { Authorization: `Bearer ${signTokenWithoutRole()}` },
-        },
-        auth: { persistSession: false },
-      }),
+    headers: (): Record<string, string> => ({
+      Authorization: `Bearer ${signTokenWithoutRole()}`,
+    }),
   },
 ];
 
-describe.each(callers)("anon ロール（$label）", ({ client }) => {
+describe.each(callers)("anon ロール（$label）", ({ headers }) => {
+  const client = () =>
+    createClient(supabaseUrl, anonKey, {
+      global: { headers: headers() },
+      auth: { persistSession: false },
+    });
+
   it("public のテーブル・関数を列挙できている", () => {
     expect(tables.map((t) => t.name)).toContain("users");
     expect(tables.map((t) => t.name)).toContain("returns");
     expect(functions.map((f) => f.name)).toContain("get_current_user_id");
   });
 
-  it("public のどのテーブルも参照できない", async () => {
-    const supabase = client();
-    const results = await Promise.all(
-      tables.map(async ({ name }) => {
-        const { error } = await supabase.from(name).select("*").limit(1);
-        return { name, code: error?.code ?? null };
-      })
-    );
-    expect(results).toEqual(
-      tables.map(({ name }) => ({ name, code: "42501" }))
-    );
+  // PostgREST の OpenAPI は、そのロールが権限（列の単位の権限も含む）を持つテーブル・関数だけを出す。
+  // 下の実際の問い合わせは、RLS の関数（get_current_user_id）の実行権限で先に弾かれることがあり、
+  // 列の単位で付けた権限（GRANT SELECT (列) TO anon 等）を見逃すため、こちらで確かめる
+  it("anon が権限を持つテーブル・列・関数が1つも無い", async () => {
+    const spec = await fetchOpenApi({ apikey: anonKey, ...headers() });
+    expect(Object.keys(spec.paths)).toEqual(["/"]);
   });
 
-  it("public のどのテーブルにも追加・更新・削除できない", async () => {
+  it("public のどのテーブルも参照・追加・更新・削除できない", async () => {
     const supabase = client();
     const results = await Promise.all(
       tables.map(async ({ name, firstColumn }) => {
+        const select = await supabase.from(name).select("*").limit(1);
         const insert = await supabase.from(name).insert({});
         const update = await supabase
           .from(name)
@@ -135,6 +136,7 @@ describe.each(callers)("anon ロール（$label）", ({ client }) => {
           .not(firstColumn, "is", null);
         return {
           name,
+          select: select.error?.code ?? null,
           insert: insert.error?.code ?? null,
           update: update.error?.code ?? null,
           delete: del.error?.code ?? null,
@@ -144,6 +146,7 @@ describe.each(callers)("anon ロール（$label）", ({ client }) => {
     expect(results).toEqual(
       tables.map(({ name }) => ({
         name,
+        select: "42501",
         insert: "42501",
         update: "42501",
         delete: "42501",
@@ -156,11 +159,14 @@ describe.each(callers)("anon ロール（$label）", ({ client }) => {
     const results = await Promise.all(
       functions.map(async ({ name, args }) => {
         const { error } = await supabase.rpc(name, args);
-        return { name, code: error?.code ?? null };
+        return { name, message: error?.message ?? null };
       })
     );
     expect(results).toEqual(
-      functions.map(({ name }) => ({ name, code: "42501" }))
+      functions.map(({ name }) => ({
+        name,
+        message: `permission denied for function ${name}`,
+      }))
     );
   });
 });
