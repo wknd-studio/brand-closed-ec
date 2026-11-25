@@ -506,6 +506,34 @@ describe("detectClaudeSettingsWeakening（.claude/settings.json の権限）", (
     ]);
   });
 
+  it("disableAllHooks を足す・hook の timeout を下げると検出する（hook は時間切れで止めずに通るため）", () => {
+    const settings = (extra: Record<string, unknown>, timeout?: number) =>
+      json({
+        permissions: JSON.parse(base).permissions,
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "Edit",
+              hooks: [{ type: "command", command: "tsx guard.ts", timeout }],
+            },
+          ],
+        },
+        ...extra,
+      });
+    const before = settings({}, 30);
+    expect(detect(settings({ disableAllHooks: true }, 30), before)).toEqual([
+      "disableAllHooks の追加",
+    ]);
+    expect(detect(settings({}, 1), before)).toEqual([
+      "hook の timeout の引き下げ（PreToolUse・Edit: tsx guard.ts: 30 → 1）",
+    ]);
+    expect(detect(settings({}, 60), before)).toEqual([]);
+    // timeout を書かない hook は既定（60秒）として扱う
+    expect(detect(settings({}, 30), settings({}))).toEqual([
+      "hook の timeout の引き下げ（PreToolUse・Edit: tsx guard.ts: 60 → 30）",
+    ]);
+  });
+
   it("ファイルを消すと、deny・ask からの削除として検出する", () => {
     expect(detect(null)).toEqual([
       "permissions.ask からの削除（Bash(git push *)）",
