@@ -24,6 +24,8 @@ type QuantityStepperProps = VariantProps<typeof stepperButtonVariants> & {
   onChange: (value: number) => void;
   // これ以上は減らせない数量
   min?: number;
+  // これ以上は増やせない数量（在庫切れの商品等）。「増やす」だけを押せなくする
+  max?: number;
   // 送信中など、増やす・減らすの両方を押せなくする
   disabled?: boolean;
   className?: string;
@@ -34,6 +36,7 @@ export function QuantityStepper({
   value,
   onChange,
   min = 1,
+  max,
   disabled = false,
   size,
   className,
@@ -68,7 +71,7 @@ export function QuantityStepper({
       <button
         type="button"
         aria-label="数量を増やす"
-        disabled={disabled}
+        disabled={disabled || (max !== undefined && value >= max)}
         onClick={() => onChange(value + 1)}
         className={stepperButtonVariants({ size })}
       >

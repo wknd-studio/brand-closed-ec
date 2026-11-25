@@ -32,3 +32,8 @@ export const Cart: Story = {
 export const Disabled: Story = {
   args: { value: 3, disabled: true },
 };
+
+// 在庫切れの商品（増やせないが減らせる）
+export const AtMax: Story = {
+  args: { size: "sm", value: 2, max: 2 },
+};

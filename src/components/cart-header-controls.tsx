@@ -13,8 +13,8 @@ import {
 } from "@/domain/services/cart-limit";
 import { cn } from "@/lib/cn";
 
-// 仕入れ枠の金額は、カートの上限チェックと同じ useCart・cart-limit の値から取る
-function useLimitAmounts() {
+// 仕入れ枠の金額は、カートの上限チェックと同じ useCart・cart-limit の値から取る（カートのサイドバーでも使う）
+export function useLimitAmounts() {
   const { cart, confirmedAmount, monthlyLimit, totalUsed } = useCart();
   const status = monthlyLimitStatus({
     lines: cart.items,
