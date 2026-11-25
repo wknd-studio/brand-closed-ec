@@ -26,7 +26,7 @@ ALTER TABLE "public"."subscriptions"
   ENABLE ROW LEVEL SECURITY;
 
 CREATE UNIQUE INDEX subscriptions_user_active_idx ON public.subscriptions USING btree (user_id)
-  WHERE ((user_id IS NOT NULL) AND (status <> 'canceled'::text));
+  WHERE (status <> ALL (ARRAY['canceled'::text, 'incomplete_expired'::text]));
 
 CREATE INDEX subscriptions_user_id_idx ON public.subscriptions USING btree (user_id);
 
