@@ -3,6 +3,7 @@
   "redactSecrets": true,
   "scope": "database",
   "loadOrder": [
+    "_cluster/roles.sql",
     "public/default_privileges.sql",
     "public/schema.sql",
     "_cluster/extensions/pgcrypto.sql",
@@ -45,6 +46,7 @@
   "files": [
     "_cluster/extensions/pgcrypto.sql",
     "_cluster/extensions/uuid-ossp.sql",
+    "_cluster/roles.sql",
     "public/default_privileges.sql",
     "public/functions/apply_rank_change.sql",
     "public/functions/claim_stripe_webhook_event.sql",

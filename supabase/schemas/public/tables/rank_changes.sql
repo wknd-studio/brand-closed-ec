@@ -26,6 +26,6 @@ CREATE POLICY "rank_changes: select own" ON "public"."rank_changes"
   TO PUBLIC
   USING ((user_id = public.get_current_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."rank_changes" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."rank_changes" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON TABLE "public"."rank_changes" IS 'ランク変更の追記専用来歴。UPDATE/DELETEは行わない（訂正は打ち消し行の追加で表現する）。users.rank_code/organizations.rank_codeの更新は、必ず対応するこのテーブルへのINSERTと同一トランザクションで行う。';

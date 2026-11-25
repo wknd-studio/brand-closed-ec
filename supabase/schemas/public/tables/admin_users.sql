@@ -16,4 +16,4 @@ CREATE POLICY "admin_users: select own" ON "public"."admin_users"
   TO PUBLIC
   USING ((id = public.get_current_admin_user_id()));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."admin_users" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."admin_users" TO "authenticated", "postgres", "service_role";

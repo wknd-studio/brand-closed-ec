@@ -40,4 +40,4 @@ CREATE POLICY "order_settlements: select own" ON "public"."order_settlements"
    FROM public.orders
   WHERE (orders.user_id = public.get_current_user_id()))));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_settlements" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_settlements" TO "authenticated", "postgres", "service_role";
