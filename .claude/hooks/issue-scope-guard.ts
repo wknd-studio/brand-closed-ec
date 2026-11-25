@@ -6,6 +6,7 @@ import {
   checkEditScope,
   fetchIssueBodyWithGh,
   loadHighRiskGlobs,
+  parseLinkedIssue,
 } from "../../scripts/ci/issue-scope";
 
 /**
@@ -23,14 +24,14 @@ type HookInput = {
 function linkedIssueFromOrca(cwd: string) {
   return async (): Promise<number | null> => {
     try {
-      const output = execFileSync("orca", ["worktree", "current", "--json"], {
-        cwd,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-        timeout: 10_000,
-      });
-      const issue = JSON.parse(output)?.result?.worktree?.linkedIssue;
-      return typeof issue === "number" ? issue : null;
+      return parseLinkedIssue(
+        execFileSync("orca", ["worktree", "current", "--json"], {
+          cwd,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: 10_000,
+        })
+      );
     } catch {
       return null;
     }
@@ -56,7 +57,8 @@ async function main() {
   });
   if (decision.block) {
     process.stderr.write(`${decision.reason}\n`);
-    process.exit(2);
+    // process.exit だと pipe への stderr の書き込みが終わる前に切れることがあるため、自然に終わらせる
+    process.exitCode = 2;
   }
 }
 

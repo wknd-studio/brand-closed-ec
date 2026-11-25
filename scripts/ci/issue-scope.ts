@@ -101,10 +101,17 @@ export function outOfScopeFiles(
 // PR の CI
 // ---------------------------------------------------------------------------
 
-/** PR 本文の `Closes #n`（GitHub がリンクする closes・fixes・resolves とその活用形） */
+/**
+ * PR 本文の `Closes #n`（GitHub がリンクする closes・fixes・resolves とその活用形）。
+ * PR テンプレートの「## 関連issue」の節があればその節だけを読む（説明文の `fix #n` で範囲が広がらないように）
+ */
 export function closingIssueNumbers(prBody: string): number[] {
+  const section =
+    /^##\s*関連issue\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(
+      prBody.replace(/\r\n/g, "\n")
+    )?.[1] ?? prBody;
   const numbers = [
-    ...prBody.matchAll(
+    ...section.matchAll(
       /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b/gi
     ),
   ].map((m) => Number(m[1]));
@@ -280,8 +287,24 @@ export function fetchIssueBodyWithGh(cwd?: string) {
     execFileSync(
       "gh",
       ["api", `repos/{owner}/{repo}/issues/${issue}`, "--jq", '.body // ""'],
-      { encoding: "utf8", cwd, stdio: ["ignore", "pipe", "pipe"] }
+      {
+        encoding: "utf8",
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+        // 固まったときに hook の timeout で打ち切られる（止めずに通る）より先に、取得できなかったとして止める
+        timeout: 15_000,
+      }
     );
+}
+
+/** `orca worktree current --json` の出力から担当 issue を読む。無い・読めないときは null */
+export function parseLinkedIssue(orcaOutput: string): number | null {
+  try {
+    const issue = JSON.parse(orcaOutput)?.result?.worktree?.linkedIssue;
+    return typeof issue === "number" ? issue : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
