@@ -4,8 +4,10 @@ import type { Database } from "@/types/database.types";
 /**
  * 個人・STARTERプランのusers行を、画面を経由せずDBに直接用意する。
  * `onboardingCompleted`がtrueならオンボーディング（決済完了）を終えた状態、falseなら決済直前の状態にする。
- * middlewareはusers.onboarding_completedだけを見て業務画面へのアクセスを許可するため、
- * Clerk側のメタデータは更新不要。前回の実行が中断されて行が残っていれば、下記`profile`の列だけを
+ * middlewareはusers.onboarding_completedと、解約済みでないsubscriptions行の有無（#380）を見て
+ * 業務画面へのアクセスを許可するため、Clerk側のメタデータは更新不要。入会済みにするときは有効な
+ * サブスクリプションの行も用意し、決済直前に戻すときは消す（Stripeには実在しない仮のIDを入れる）。
+ * 前回の実行が中断されて行が残っていれば、下記`profile`の列だけを
  * 指定した状態に上書きする（それ以外の列は前回の値のまま残る）。
  *
  * Playwrightに依存させず、統合テスト（tests/integration/e2e-helpers/）から呼べるように分けている。
@@ -13,6 +15,63 @@ import type { Database } from "@/types/database.types";
  * 統合テストで再現するためのもの
  */
 export async function ensureMemberRow(
+  supabase: SupabaseClient<Database>,
+  clerkUserId: string,
+  email: string,
+  options: { onboardingCompleted: boolean; beforeInsert?: () => Promise<void> }
+): Promise<string> {
+  const userId = await ensureUserRow(supabase, clerkUserId, email, options);
+  await ensureSubscriptionRow(supabase, userId, options.onboardingCompleted);
+  return userId;
+}
+
+/** E2Eの会員に入れる、Stripeに実在しない仮のサブスクリプションID */
+export function placeholderStripeSubscriptionId(userId: string): string {
+  return `sub_e2e_${userId}`;
+}
+
+async function ensureSubscriptionRow(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  onboardingCompleted: boolean
+): Promise<void> {
+  if (!onboardingCompleted) {
+    // 入会の確定（confirm_subscription_onboarding）が行を作るため、決済直前の会員には残さない
+    const { error } = await supabase
+      .from("subscriptions")
+      .delete()
+      .eq("user_id", userId);
+    if (error) {
+      throw new Error(
+        `テスト会員のサブスクリプションの削除に失敗しました: ${error.message}`
+      );
+    }
+    return;
+  }
+
+  const now = new Date();
+  const periodEnd = new Date(now);
+  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  const { error } = await supabase.from("subscriptions").upsert(
+    {
+      user_id: userId,
+      stripe_customer_id: `cus_e2e_${userId}`,
+      stripe_subscription_id: placeholderStripeSubscriptionId(userId),
+      status: "active",
+      rank_code: "starter",
+      current_period_start: now.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+    },
+    { onConflict: "stripe_subscription_id" }
+  );
+  if (error) {
+    throw new Error(
+      `テスト会員のサブスクリプションの作成に失敗しました: ${error.message}`
+    );
+  }
+}
+
+async function ensureUserRow(
   supabase: SupabaseClient<Database>,
   clerkUserId: string,
   email: string,

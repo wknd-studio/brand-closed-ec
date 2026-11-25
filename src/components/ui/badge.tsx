@@ -16,6 +16,8 @@ export const badgeVariants = cva(
           "bg-[color-mix(in_srgb,var(--color-warning)_12%,white)] text-warning",
         danger:
           "bg-[color-mix(in_srgb,var(--color-danger)_12%,white)] text-danger",
+        // 請求書払い
+        info: "bg-[color-mix(in_srgb,var(--color-info)_12%,white)] text-info",
       },
     },
     defaultVariants: {

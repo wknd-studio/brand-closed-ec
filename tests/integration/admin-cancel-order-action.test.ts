@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { cancelOrder } from "@/app/admin/orders/[id]/actions";
+import { randomOrderNumber } from "../helpers/order-number";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,6 +79,7 @@ beforeAll(async () => {
   for (const insert of [
     () =>
       supabase.from("orders").insert({
+        order_number: randomOrderNumber(),
         id: ORDER_ID,
         user_id: USER_ID,
         status: "processing",

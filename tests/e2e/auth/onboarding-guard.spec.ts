@@ -8,6 +8,9 @@ import { cleanupTestUser, slotEmail } from "../helpers/clerk-test-invitation";
 
 type UserInsert = Database["public"]["Tables"]["users"]["Insert"];
 
+/** users行と、その行に紐づけるサブスクリプションの状態（無ければ subscriptions 行を作らない） */
+type MemberRowSpec = { user: UserInsert; subscriptionStatus?: string };
+
 function supabaseAdmin() {
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,6 +76,17 @@ async function ensureClerkUser(email: string): Promise<string> {
 
 /** このClerkユーザーのusers行をすべて消す（Webhookが作った行を含む） */
 async function deleteUserRows(clerkUserId: string): Promise<void> {
+  const { data: users } = await supabaseAdmin()
+    .from("users")
+    .select("id")
+    .eq("clerk_user_id", clerkUserId);
+  await supabaseAdmin()
+    .from("subscriptions")
+    .delete()
+    .in(
+      "user_id",
+      (users ?? []).map((user) => user.id)
+    );
   const { error } = await supabaseAdmin()
     .from("users")
     .delete()
@@ -83,8 +97,9 @@ async function deleteUserRows(clerkUserId: string): Promise<void> {
 }
 
 /**
- * users行を直接用意したClerkユーザーでログインする。middlewareはusers.deleted_at・
- * onboarding_completedだけを見るため、退会時のClerkユーザー削除が失敗してセッションが
+ * users行（とsubscriptions行）を直接用意したClerkユーザーでログインする。middlewareは
+ * users.deleted_at・onboarding_completedと、解約済みでないsubscriptions行の有無（#380）だけを
+ * 見るため、退会時のClerkユーザー削除が失敗してセッションが
  * 残った状態（src/use-cases/withdraw.ts が許容している）を、Clerkユーザーを残したまま
  * users行に deleted_at を入れることで再現できる
  */
@@ -92,16 +107,40 @@ async function signInWithUserRows(
   browser: Browser,
   baseURL: string | undefined,
   email: string,
-  rows: (clerkUserId: string) => UserInsert[]
+  rows: (clerkUserId: string) => MemberRowSpec[]
 ): Promise<Page> {
   const clerkUserId = await ensureClerkUser(email);
   // 前回の実行で残った行や、user.created Webhookが作った行を消してから、このテストの行だけを入れる
   await deleteUserRows(clerkUserId);
-  const { error } = await supabaseAdmin()
-    .from("users")
-    .insert(rows(clerkUserId));
-  if (error) {
-    throw new Error(`テスト会員行の作成に失敗しました: ${error.message}`);
+  for (const [index, spec] of rows(clerkUserId).entries()) {
+    const { data: user, error } = await supabaseAdmin()
+      .from("users")
+      .insert(spec.user)
+      .select("id")
+      .single();
+    if (error) {
+      throw new Error(`テスト会員行の作成に失敗しました: ${error.message}`);
+    }
+    if (!spec.subscriptionStatus) continue;
+    const now = new Date();
+    const { error: subscriptionError } = await supabaseAdmin()
+      .from("subscriptions")
+      .insert({
+        user_id: user.id,
+        stripe_customer_id: `cus_e2e_guard_${user.id}`,
+        stripe_subscription_id: `sub_e2e_guard_${user.id}_${index}`,
+        status: spec.subscriptionStatus,
+        rank_code: "starter",
+        current_period_start: now.toISOString(),
+        current_period_end: new Date(
+          now.getTime() + 30 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+      });
+    if (subscriptionError) {
+      throw new Error(
+        `テスト会員のサブスクリプションの作成に失敗しました: ${subscriptionError.message}`
+      );
+    }
   }
 
   const context = await browser.newContext({ baseURL });
@@ -143,10 +182,14 @@ base.describe.serial("退会済みの会員", () => {
       browser,
       workerInfo.project.use.baseURL,
       email,
+      // 退会でStripeのサブスクリプションも解約済み。利用停止より退会の判定を先に行う（#380）
       (id) => [
-        memberRow(id, email, {
-          deleted_at: new Date().toISOString(),
-        }),
+        {
+          user: memberRow(id, email, {
+            deleted_at: new Date().toISOString(),
+          }),
+          subscriptionStatus: "canceled",
+        },
       ]
     );
   });
@@ -205,10 +248,13 @@ base.describe.serial("退会済み行と入会済みの有効な行が併存す�
       workerInfo.project.use.baseURL,
       email,
       (id) => [
-        memberRow(id, email, {
-          deleted_at: new Date().toISOString(),
-        }),
-        memberRow(id, email, {}),
+        {
+          user: memberRow(id, email, {
+            deleted_at: new Date().toISOString(),
+          }),
+          subscriptionStatus: "canceled",
+        },
+        { user: memberRow(id, email, {}), subscriptionStatus: "active" },
       ]
     );
   });
@@ -230,6 +276,95 @@ base.describe.serial("退会済み行と入会済みの有効な行が併存す�
     "/onboarding/plan を開くと有効な行で入会済みと判定され /shop へリダイレクトされる",
     async () => {
       await page.goto("/onboarding/plan");
+      await expect(page).toHaveURL(/\/shop$/);
+    }
+  );
+});
+
+// GitHub issue #380: 再請求が尽きて Stripe がサブスクリプションを解約した（canceled）会員は、
+// ログインはできるが、会員画面のどこを開いても利用停止の案内画面だけを表示する
+base.describe.serial("Stripe 側でサブスクリプションが解約された会員", () => {
+  let email: string;
+  let page: Page;
+
+  base.beforeAll(async ({ browser }, workerInfo) => {
+    email = slotEmail(
+      `info+clerk_test_guard_subscription_ended_w${workerInfo.parallelIndex}@wknd-studio.com`
+    );
+    page = await signInWithUserRows(
+      browser,
+      workerInfo.project.use.baseURL,
+      email,
+      (id) => [
+        { user: memberRow(id, email, {}), subscriptionStatus: "canceled" },
+      ]
+    );
+  });
+
+  base.afterAll(async () => {
+    await page?.context().close();
+    await cleanupTestUser(email);
+  });
+
+  for (const path of ["/shop", "/settings", "/onboarding/plan"]) {
+    base(
+      `${path} を開くと /subscription-ended へリダイレクトされる`,
+      async () => {
+        await page.goto(path);
+        await expect(page).toHaveURL(/\/subscription-ended$/);
+      }
+    );
+  }
+
+  base(
+    "/subscription-ended に契約の終了・注文と閲覧ができないこと・運営の連絡先が表示される",
+    async () => {
+      await page.goto("/subscription-ended");
+      await expect(
+        page.getByRole("heading", { name: "ご契約が終了しました" })
+      ).toBeVisible();
+      await expect(
+        page.getByText("商品の閲覧・ご注文はできません", { exact: false })
+      ).toBeVisible();
+      await expect(page.getByText("運営の問い合わせ先")).toBeVisible();
+      await expect(page.getByText(/メール:/)).toBeVisible();
+    }
+  );
+});
+
+// 支払い失敗中（past_due）は Stripe が再請求している間のため、画面の利用は止めない（新規注文の停止は #378）
+base.describe.serial("支払い失敗中（past_due）の会員", () => {
+  let email: string;
+  let page: Page;
+
+  base.beforeAll(async ({ browser }, workerInfo) => {
+    email = slotEmail(
+      `info+clerk_test_guard_past_due_w${workerInfo.parallelIndex}@wknd-studio.com`
+    );
+    page = await signInWithUserRows(
+      browser,
+      workerInfo.project.use.baseURL,
+      email,
+      (id) => [
+        { user: memberRow(id, email, {}), subscriptionStatus: "past_due" },
+      ]
+    );
+  });
+
+  base.afterAll(async () => {
+    await page?.context().close();
+    await cleanupTestUser(email);
+  });
+
+  base("/shop を開ける（利用停止の画面へ飛ばされない）", async () => {
+    await page.goto("/shop");
+    await expect(page).toHaveURL(/\/shop$/);
+  });
+
+  base(
+    "/subscription-ended を開くと利用停止ではないため /shop へリダイレクトされる",
+    async () => {
+      await page.goto("/subscription-ended");
       await expect(page).toHaveURL(/\/shop$/);
     }
   );

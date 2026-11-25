@@ -16,6 +16,7 @@ supabase start                  # ローカルDB起動
 supabase migration new <name>   # マイグレーション作成
 supabase db reset               # ローカルDBに適用
 supabase gen types typescript --local > src/types/database.types.ts
+task db:schema                  # DBの今の定義を supabase/schemas/ に書き出す（マイグレーション作成後に）
 
 wrangler pages secret put <KEY> # シークレット設定
 wrangler pages deployment tail  # ログ確認
@@ -132,7 +133,7 @@ feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Cler
 - `package.json`・`pnpm-lock.yaml`・`.github/` を変えるため `high-risk` が付く。人間が差分を精読してからマージする
 - CIが落ちたら、オーケストレーションのセッションが修正の issue を起票する（Dependabot のPRのブランチに直接コミットしない）
 
-**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、失敗は依存グラフのページの一番上の帯に出る。
+**developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、生成物の検査（`Schema Types Drift`・`Schema Files Drift`）も動く（stgの動作には影響しないため `Deploy (staging)` は待たない。#789）。どれの失敗も依存グラフのページの一番上の帯に出る。
 
 - developのCIが赤なら、新しいPRのマージより、直す・revertすることを優先する。原因のPRがすぐ直せなければ、まずそのマージコミットをrevertする（`git revert -m 1 <マージコミット>` をfeatureブランチで行い、develop向けのPRにする）
 - 赤のdevelopに別のPRを重ねてマージしない（どのマージで壊れたかが分からなくなり、stgにも出なくなる）
@@ -178,6 +179,8 @@ E2E は主要な流れだけを持ち、細かい分岐は統合・ユニット�
 `tests/e2e/`配下のSupabase admin clientは`createClient<Database>(...)`のように型を付ける（lintで強制済み。#310）。
 
 **マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。`database.types.ts` は `.gitattributes` で `linguist-generated=true` を指定しており、GitHubのPR差分表示では既定で折りたたまれる。正しさは `Schema Types Drift` が検査するので、レビューで中身を読む必要は無い。他の生成物（`pnpm-lock.yaml` 等）も `.gitattributes` に並べてあり、それぞれの正しさの確かめ方は同ファイルのコメントに書いてある。
+
+**マイグレーション作成後は、`task db:schema` も実行して `supabase/schemas/` をコミットする。** `supabase/schemas/` は、全マイグレーションを当てたDBの今の定義を1オブジェクト1ファイル（`public/functions/<関数名>.sql`・`public/tables/<テーブル名>.sql` 等）で書き出した写しで、関数・テーブルの今の中身を読む場所（宣言的スキーマの段階A。#783）。正はマイグレーションのままで、`supabase/schemas/` は直接編集しない（`[db.migrations].schema_paths` は空のまま）。`supabase db reset`（ワークツリーでは `bash scripts/with-worktree-db.sh supabase db reset`）のあとに実行する。CIの `Schema Files Drift` が、マイグレーションを当てたDBから書き出し直した結果とコミット済みのファイルの食い違いを検出し、ずれたファイルを出す。`database.types.ts` と同じく `linguist-generated=true` で、レビューで読む必要は無い。書き出しにはDBが要るため `Mechanical-Change:` のtrailerでは再現できない（trailerは付けず、生成物だけのコミットにする。正しさは `Schema Files Drift` が検査する）
 
 CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
 

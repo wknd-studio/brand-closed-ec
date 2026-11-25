@@ -5,6 +5,7 @@ import { placeOrder, type PlaceOrderDeps } from "@/use-cases/place-order";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
+import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supabase-subscription-repository";
 import { SupabaseAddressRepository } from "@/infrastructure/supabase/supabase-address-repository";
 import type { ProductRepository } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
@@ -89,6 +90,7 @@ function makeDeps(sessionId: string): PlaceOrderDeps {
     orderRepo: new SupabaseOrderRepository(supabase),
     addressRepo: new SupabaseAddressRepository(supabase),
     memberRankRepo: new SupabaseMemberRankRepository(supabase),
+    subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
     productRepo,
     paymentGateway,
     notificationService,

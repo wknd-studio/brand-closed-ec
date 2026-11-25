@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
+import { randomOrderNumber } from "../helpers/order-number";
 
 // docs/db-schema-redesign.md「locations」節・移行方針ステップ13（GitHub issue #354）
 // locations新設・order_items.fulfillment_location_code追加を検証する統合テスト。
@@ -66,6 +67,7 @@ async function createOrder(): Promise<string> {
   const { data, error } = await adminClient
     .from("orders")
     .insert({
+      order_number: randomOrderNumber(),
       user_id: USER_ID,
       shipping_address_snapshot: {},
       billing_address_snapshot: {},

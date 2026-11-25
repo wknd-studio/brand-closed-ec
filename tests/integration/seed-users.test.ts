@@ -48,7 +48,29 @@ async function seededRows() {
   return data;
 }
 
+async function seededSubscriptions() {
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("status, rank_code, users!inner(email, clerk_user_id)")
+    .like("users.clerk_user_id", `${CLERK_ID_PREFIX}%`);
+  if (error) throw error;
+  return data
+    .map((row) => [row.users.email, row.status, row.rank_code])
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
 async function cleanup() {
+  const { data } = await supabase
+    .from("users")
+    .select("id")
+    .like("clerk_user_id", `${CLERK_ID_PREFIX}%`);
+  await supabase
+    .from("subscriptions")
+    .delete()
+    .in(
+      "user_id",
+      (data ?? []).map((row) => row.id)
+    );
   await supabase
     .from("users")
     .delete()
@@ -113,6 +135,19 @@ describe("seedUsers（実DB）", () => {
     await seedUsers({ clerk, supabase, password: "unused", logger });
 
     expect(await seededRows()).toEqual(first);
+  });
+
+  // GitHub issue #380: 解約済みでない subscriptions 行が無い入会済みの会員は利用停止になるため、
+  // 会員ごとに有効なサブスクリプションの行も入れる。何度実行しても1つのまま
+  it("会員ごとに、ランクと同じ有効なサブスクリプションの行を1つだけ入れる", async () => {
+    await seedUsers({ clerk, supabase, password: "unused", logger });
+    await seedUsers({ clerk, supabase, password: "unused", logger });
+
+    expect(await seededSubscriptions()).toEqual(
+      members
+        .map((u) => [u.email, "active", u.rank])
+        .sort(([a], [b]) => a.localeCompare(b))
+    );
   });
 
   it("退会済みの行が残っていても失敗せず、有効な行を別に作る", async () => {

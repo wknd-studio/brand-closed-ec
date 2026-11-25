@@ -40,6 +40,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `--color-primary-strong`: 白地の小さい文字（「必須」の印等）に使う濃いゴールド（`text-primary-strong`）。`--color-primary` は白地とのコントラストが約3.6:1で、小さい文字の基準（4.5:1）に届かない。4.5:1以上は `tests/unit/ui/color-tokens.test.ts` で検査している
 - `--color-secondary`: 補助テキスト色
 - `--color-neutral-50〜900`: 暖色寄りのウォームグレー。ボーダー・非活性テキスト・背景に使う（純グレーではない点に注意）
+- `--color-info`: 請求書払いを表す紺（`text-info` `bg-info/5` 等）。バッジ・お知らせの文字にも使うため、白地で4.5:1以上を `tests/unit/ui/color-tokens.test.ts` で検査している
 - `--font-sans`: 本文用（日本語フォールバック込み）
 - `--font-display`: 見出し用の明朝体。`font-display`クラスで使う（本文には使わない）
 - `--radius-2xl` (14px) / `--radius-3xl` (18px): カード・パネルの角丸。`rounded-2xl` `rounded-3xl` で使う
@@ -57,12 +58,18 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `Input` / `Select` / `Checkbox` / `Radio`: フォーム部品。すでにトークン参照で書かれているため追加対応不要
 - `FormField`: ラベル・入力欄・項目ごとのエラー文言の組。`error` を渡すと入力欄の下に文言を出し、ラベルの `htmlFor` と `aria-describedby` を自動で結び付ける。子は `{(field) => <Input name="..." {...field} />}` のように受け取った属性を `Input` / `Select` に展開する。項目ごとのエラーを出すフォームは `<p id="...-error">` を手書きせずこれを使う。`required` でラベルの横に「必須」の印（ラベルの文字列・読み上げには含めない）、`hint` で入力のヒント（エラーのときはエラー文言に置き換わる）を出す。画面上部のエラーのまとめから項目へリンクするときは `id` を渡す（最初の利用は `/onboarding/plan`）
 - `Table`（`TableHeader` / `TableBody` / `TableRow` / `TableHead` / `TableCell`）: 管理画面の一覧用テーブル。角丸の枠付きで、狭い画面では横スクロールする（最初の利用は `/admin/procurement/queue`）
-- `Badge`: 状態・区分を示す小さなラベル。`tone`(neutral/primary/success/warning/danger)
+- `Badge`: 状態・区分を示す小さなラベル。`tone`(neutral/primary/success/warning/danger/info)。請求書払いは `info`
 - `Steps`: 手続きの進み具合（`steps` のラベルの配列と、今の位置 `current`（0始まり））。`<nav aria-label="お手続きの進み具合">` で囲み、今のステップに `aria-current="step"` を付ける（最初の利用はオンボーディング）
+- `Alert`: お知らせの枠（「カートに追加しました」・上限超過のエラー・請求書の案内等）。`tone`(success/danger/warning/info/neutral)で色とアイコンが変わる。`role` は必須で、操作の結果を知らせるものは `status`、エラーは `alert`。`title`（太字の1行目）・本文（children）・右側の `action`（「カートを見る」等のリンク・ボタン）を置ける。`ref`・`tabIndex` を渡してフォーカスを移せる（最初の利用は `/onboarding/plan` のエラーのまとめ）。お知らせの枠を手書きしない
+- `Breadcrumb`: パンくず。`items` に上の階層から `{ label, href }` を並べ、最後の項目が今のページ（リンクにせず `aria-current="page"`）。`<nav aria-label="パンくずリスト">` の中の `<ol>` になる（ブランドのページ・商品詳細で使う）
+- `QuantityStepper`: 数量の増減。`label`（group の読み上げ名。例:「レザートートバッグの数量」）・`value`・`onChange`。`size` は `md`（商品詳細。高さ52px、Button の md と同じ）と `sm`（カート。40px）。`min`（既定1）では「減らす」を、`disabled` のときは両方を押せなくする
 - `ChoiceCard`: ラジオボタンを中に置いて、カード全体で選ばせる `<label>`。選ばれた（ゴールドの枠・薄いグラデーション）・キーボードのフォーカスがある見た目は、中の入力欄の状態（`:has`）から付くため、選択状態を props で渡さない。中の要素は `group-has-checked:` で選ばれたときの見た目を変えられる。余白・並びは `className` で足す（最初の利用は `/onboarding/account-type`）。オンボーディングのステップのラベルは `src/app/onboarding/onboarding-steps.ts` の `ONBOARDING_STEPS` を使う
-
 - `Popover`（`PopoverTrigger` / `PopoverContent` / `usePopoverOpen`）: ボタンで開閉する浮いた枠。`aria-expanded`・`aria-controls` の付与、外側を押す・Escape（ボタンにフォーカスを戻す）・中のリンクを押すと閉じる動きをまとめてある。`PopoverContent` の `align` は `end`（ボタンの右端にそろえた白いカード。既定）と `full`（基準の要素の幅いっぱい。スマホ幅のメニュー）。`role`・`aria-label` は使う側で付ける（最初の利用は会員のヘッダーのアカウントのメニュー・仕入れ枠の内訳）
 - `LimitMeter`: 今月の仕入れ枠。上限・使用・残りと、確定した注文（`bg-primary`）・カートの商品（`bg-primary-light`）の2色のバー。上限間近（`status.isNearLimit`。使用率90%以上・上限0。判定は `MonthlyLimit.isNearlyExceededBy`）で注意色（`warning`）、無制限（`monthlyLimit: null`）はバーを出さず「上限なし」。`variant` は `compact`（ヘッダー用。`cartBreakdown` で「うちカート」を添える）と `detail`（内訳とカートも枠に含める旨）。`status` には `src/domain/services/cart-limit.ts` の `monthlyLimitStatus` の戻り値を、`cartAmount` には `sumCartFixedTotal` を渡し、部品の中で使用・残り・上限間近を判定・計算しない（最初の利用は会員のヘッダー）
+
+## トークンの一覧（Storybook）
+
+- `Foundations/Colors`・`Foundations/Typography`（`src/components/ui/foundations/`）に、色・フォント・`Heading` の各 `level` を見本付きで並べている。値は見本の要素の計算済みのスタイルから読むので、`globals.css` と二重に書かない。トークンを足したら、ここに名前と使いどころを足す
 
 ## Clerk のコンポーネントの見た目
 

@@ -26,6 +26,7 @@ import {
 } from "../src/domain/value-objects/member-rank";
 import type { Database, Json } from "../src/types/database.types";
 import { SEED_PRODUCTS, seedProductRankPrices } from "./seed-products";
+import { OrderNumber } from "../src/domain/value-objects/order-number";
 
 type Supabase = SupabaseClient<Database>;
 type Tables = Database["public"]["Tables"];
@@ -64,6 +65,12 @@ const scenarioId = (kind: keyof typeof ID_KIND, n: number) => {
   }
   return `5eed${ID_KIND[kind]}${String(n).padStart(3, "0")}-0713-4000-8000-000000000000`;
 };
+
+// 注文番号はアプリが注文を作るときと同じく OrderNumber で作る（DB は番号を作らない。#754）
+const randomOrderNumber = () =>
+  OrderNumber.generate((length) =>
+    crypto.getRandomValues(new Uint8Array(length))
+  ).value;
 
 const DAY = 24 * 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
@@ -349,6 +356,7 @@ function buildRows(members: Record<ScenarioAccount, Member>, now: Date): Rows {
     rows.orders.push({
       id: orderId,
       user_id: member.id,
+      order_number: randomOrderNumber(),
       status: def.status,
       rank_at_order: member.rank,
       monthly_limit_at_order: member.monthlyLimit,

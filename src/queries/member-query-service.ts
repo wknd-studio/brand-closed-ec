@@ -37,12 +37,14 @@ export type MemberAccountDto = {
   planName: string;
 };
 
-// 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態、ヘッダーのアカウント）
+// 会員の画面の共通レイアウト（カートの今月の確定額・上限、お気に入りの初期状態、支払い失敗中の案内、ヘッダーのアカウント）
 export type MemberLayoutDto = {
   confirmedAmount: number;
   // 月間仕入れ上限。null なら無制限
   monthlyLimit: number | null;
   favoriteProductIds: string[];
+  // 月額費用の支払い失敗中なら true（カードの更新を案内する。#379）
+  paymentFailing: boolean;
   account: MemberAccountDto;
 };
 

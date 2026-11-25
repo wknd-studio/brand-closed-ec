@@ -7,6 +7,8 @@ import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { FavoritesProvider } from "@/components/favorites/favorites-provider";
 import { addFavoriteAction, removeFavoriteAction } from "./favorites/actions";
 import { memberQueryService } from "@/composition/member-query";
+import { openBillingPortalAction } from "./settings/actions";
+import PaymentFailingNotice from "./payment-failing-notice";
 
 export default async function MemberLayout({
   children,
@@ -34,6 +36,9 @@ export default async function MemberLayout({
       >
         <div className="flex min-h-full flex-col">
           <Header account={layout?.account ?? null} />
+          {layout?.paymentFailing && (
+            <PaymentFailingNotice action={openBillingPortalAction} />
+          )}
           <main className="flex-1">{children}</main>
           <CartSidebar />
         </div>

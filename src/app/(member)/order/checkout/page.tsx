@@ -19,6 +19,7 @@ import {
   PAYMENT_TIMING,
   type LegalNoticeValue,
 } from "@/app/legal/legal-notice";
+import { openBillingPortalAction } from "@/app/(member)/settings/actions";
 import CheckoutForm from "./checkout-form";
 
 type LineItem = {
@@ -148,7 +149,7 @@ export default async function CheckoutPage() {
     await memberOrderQueryService()
   ).findCheckout(userId!);
   if (!checkout) redirect("/shop");
-  const { rank, shippingAddresses, billingAddresses } = checkout;
+  const { rank, shippingAddresses, billingAddresses, paymentFailed } = checkout;
 
   const products = await catalogQueryService().findCheckoutProducts({
     rank,
@@ -236,6 +237,8 @@ export default async function CheckoutPage() {
           hasOutOfStock={hasOutOfStock}
           hasNotAccessible={hasNotAccessible}
           fixedTotal={fixedTotal}
+          paymentFailed={paymentFailed}
+          openBillingPortal={openBillingPortalAction}
         />
       </div>
     </main>

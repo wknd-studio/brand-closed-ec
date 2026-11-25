@@ -13,22 +13,23 @@ PR (develop・main)
 
 push (develop・main)
   └─ Deploy
+       ├─ [develop] typecheck・lint・test・生成物の検査（Schema Types Drift・Schema Files Drift）
        ├─ [develop] DB マイグレーション (stg) → ビルド → デプロイ → E2E（stg環境に対して）
        └─ [main]    DB マイグレーション (prod) → ビルド → デプロイ
 ```
 
-| トリガー            | 実行されるジョブ                           |
-| ------------------- | ------------------------------------------ |
-| PR → develop / main | typecheck・lint・test・E2E（コード変更時） |
-| PR → develop        | プレビューのデプロイ（閉じたら削除）       |
-| push → develop      | migrate stg → deploy stg → E2E             |
-| push → main         | migrate prod → deploy prod                 |
+| トリガー            | 実行されるジョブ                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| PR → develop / main | typecheck・lint・test・E2E（コード変更時）                                                    |
+| PR → develop        | プレビューのデプロイ（閉じたら削除）                                                          |
+| push → develop      | typecheck・lint・test・Schema Types Drift・Schema Files Drift、migrate stg → deploy stg → E2E |
+| push → main         | migrate prod → deploy prod                                                                    |
 
 本番で不具合が出たときの戻し方（アプリ・DB・secret 等）と、マイグレーションを含むデプロイの前に確かめることは `docs/runbooks/production-rollback.md`。
 
 > **PR時のE2Eについて**: `docs/`・`specs/`・`*.md`のみの変更（ドキュメントのみのPR）ではE2Eジョブをスキップする（`dorny/paths-filter`で判定）。実行する場合もstgの本物のDBには触れず、CI実行環境内でSupabaseをローカル起動してテスト用データを使う（PRごとに独立、他のPRのテストと干渉しない）。
 
-> GitHub 無料プランの private リポジトリは branch protection が使えないため、PR なし直接 push のリスクは運用でカバーする。チェックは PR 時のみ実行し、push 時はデプロイのみ行う。
+> GitHub 無料プランの private リポジトリは branch protection が使えないため、PR なし直接 push のリスクは運用でカバーする。チェックは主に PR 時に実行し、develop への push では上の表のマージごとのチェックとデプロイを行う。
 
 ---
 
