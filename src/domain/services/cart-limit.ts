@@ -84,20 +84,9 @@ export function canChangeCartQuantity({
   return !isOverLimit(fixedTotalOf(changed), confirmedAmount, monthlyLimit);
 }
 
-/** monthlyLimitStatus の戻り値。used は今月の確定額 + カートの確定額 */
-export type MonthlyLimitStatus =
-  | { isUnlimited: true; used: number }
-  | {
-      isUnlimited: false;
-      used: number;
-      remaining: number;
-      isOver: boolean;
-      isNearLimit: boolean;
-    };
-
 /**
- * 月間仕入れ上限の使用・残量（上限 - 今月の確定額 - カートの確定額）。超過していれば負。
- * 上限間近（使用率90%以上）かも返す。無制限なら使用だけを持ち、残量・超過・上限間近を持たない
+ * 月間仕入れ上限の残量（上限 - 今月の確定額 - カートの確定額）。超過していれば負になる。
+ * 無制限なら残量・超過を持たない
  */
 export function monthlyLimitStatus({
   lines,
@@ -107,16 +96,16 @@ export function monthlyLimitStatus({
   lines: readonly CartLine[];
   confirmedAmount: number;
   monthlyLimit: number | null;
-}): MonthlyLimitStatus {
+}):
+  | { isUnlimited: true }
+  | { isUnlimited: false; remaining: number; isOver: boolean } {
   const limit = MonthlyLimit.fromNullable(monthlyLimit);
   const used = Money.of(confirmedAmount).add(fixedTotalOf(lines));
   const remaining = limit.remainingAfter(used);
-  if (remaining === null) return { isUnlimited: true, used: used.amount };
+  if (remaining === null) return { isUnlimited: true };
   return {
     isUnlimited: false,
-    used: used.amount,
     remaining,
     isOver: limit.isExceededBy(used),
-    isNearLimit: limit.isNearlyExceededBy(used),
   };
 }

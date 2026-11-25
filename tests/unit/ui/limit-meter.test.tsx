@@ -32,21 +32,23 @@ describe("LimitMeter", () => {
   const segment = (name: string) =>
     container.querySelector<HTMLElement>(`[data-segment="${name}"]`);
 
-  // 金額と、ヘッダーと同じく cart-limit の monthlyLimitStatus で求めた状態
+  // 金額と、ヘッダーと同じく useCart の totalUsed（使用）と cart-limit の monthlyLimitStatus（残り）で渡す値
   function meter(
     monthlyLimit: number | null,
     confirmedAmount: number,
     cartAmount: number
   ) {
+    const status = monthlyLimitStatus({
+      lines: [{ productId: "p", unitPrice: cartAmount, quantity: 1 }],
+      confirmedAmount,
+      monthlyLimit,
+    });
     return {
       monthlyLimit,
       confirmedAmount,
       cartAmount,
-      status: monthlyLimitStatus({
-        lines: [{ productId: "p", unitPrice: cartAmount, quantity: 1 }],
-        confirmedAmount,
-        monthlyLimit,
-      }),
+      used: confirmedAmount + cartAmount,
+      remaining: status.isUnlimited ? null : status.remaining,
     };
   }
 
@@ -109,13 +111,13 @@ describe("LimitMeter", () => {
       expect(segment("cart")?.style.width).toBe("10%");
     });
 
-    it("上限0（会員の情報が無い）なら、上限間近として扱う", () => {
+    it("上限0（会員の情報が無い）なら、残り ¥0 と出し、注意色にはしない（作り直す前のヘッダーと同じ）", () => {
       render({
         ...meter(0, 0, 0),
       });
 
       expect(text()).toContain("残り ¥0");
-      expect(container.innerHTML).toContain("text-warning");
+      expect(container.innerHTML).not.toContain("warning");
     });
 
     it("無制限のプランはバーを出さず「上限なし」と出す", () => {

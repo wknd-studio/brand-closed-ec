@@ -62,26 +62,6 @@ describe("MonthlyLimit", () => {
     });
   });
 
-  describe("isNearlyExceededBy()", () => {
-    it("使った金額が上限の90%以上なら上限間近", () => {
-      const limit = MonthlyLimit.of(1_000_000);
-
-      expect(limit.isNearlyExceededBy(Money.of(900_000))).toBe(true);
-      expect(limit.isNearlyExceededBy(Money.of(1_200_000))).toBe(true);
-      expect(limit.isNearlyExceededBy(Money.of(899_999))).toBe(false);
-    });
-
-    it("上限0は、何も買えないため上限間近とする", () => {
-      expect(MonthlyLimit.of(0).isNearlyExceededBy(Money.zero())).toBe(true);
-    });
-
-    it("無制限なら上限間近にならない", () => {
-      expect(
-        MonthlyLimit.unlimited().isNearlyExceededBy(Money.of(10 ** 12))
-      ).toBe(false);
-    });
-  });
-
   describe("remainingAfter()", () => {
     it("上限から使った金額を引いた残りを返す。超過していれば負", () => {
       expect(MonthlyLimit.of(100_000).remainingAfter(Money.of(30_000))).toBe(
