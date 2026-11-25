@@ -608,6 +608,12 @@ describe("Labeler ワークフロー（.github/workflows/labeler.yml）", () => 
     expect(highRiskJob).toContain("scripts/ci/high-risk.ts");
   });
 
+  it("判定が失敗したら high-risk を付ける側に倒す（精読せずにマージされないように）", () => {
+    const step = workflow.split("- name: Add or remove the high-risk label")[1];
+    expect(step).toMatch(/\n {8}if: always\(\)\n/);
+    expect(step).toContain('if [[ "$HIGH_RISK" != "false" ]]; then');
+  });
+
   it("PRのコードを checkout・実行しない（pull_request_target で書き込み権限があるため。PRの変更はデータとして読む）", () => {
     expect(workflow).not.toMatch(
       /ref:\s*\$\{\{\s*github\.event\.pull_request\.head/
