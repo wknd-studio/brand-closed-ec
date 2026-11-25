@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { SupabaseReturnRepository } from "@/infrastructure/supabase/supabase-return-repository";
+import { SupabaseMemberOrderQueryService } from "@/infrastructure/supabase/supabase-member-order-query-service";
 import { reconstituteReturnRequest } from "@/domain/entities/return-request";
 import { randomOrderNumber } from "../helpers/order-number";
 
@@ -30,11 +31,16 @@ function base64url(input: Buffer | string): string {
     .replace(/=+$/, "");
 }
 
-function signTestJwt(sub: string): string {
+// role クレームの無いトークンは、Clerk のセッショントークンと同じ形（CI の Clerk のインスタンスは
+// role を付けない）。PostgREST は role クレームが無いと anon ロールで実行し、RLS は sub で絞る
+function signTestJwt(
+  sub: string,
+  { withRole = true }: { withRole?: boolean } = {}
+): string {
   const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const payload = base64url(
     JSON.stringify({
-      role: "authenticated",
+      ...(withRole ? { role: "authenticated" } : {}),
       exp: Math.floor(Date.now() / 1000) + 3600,
       sub,
     })
@@ -64,12 +70,12 @@ const ITEM_A_AFTER_ORDER_ID = "00000000-0000-0000-0000-000000381102";
 const ITEM_A_UNPAID_ID = "00000000-0000-0000-0000-000000381103";
 const ITEM_B_ID = "00000000-0000-0000-0000-000000381104";
 
-// ログイン中の会員は常に会員A。Clerk のセッショントークンの代わりに、
-// ローカルのJWTシークレットで署名した sub = Clerk ID のトークンを返す
+// ログイン中の会員は常に会員A。Clerk のセッショントークンの代わりに、ローカルのJWTシークレットで
+// 署名した sub = Clerk ID のトークンを返す。Clerk のトークンと同じく role クレームを付けない
 vi.mock("@/lib/auth/current-user", () => ({
   requireAuth: vi.fn(async () => ({
     userId: CLERK_A,
-    getToken: async () => signTestJwt(CLERK_A),
+    getToken: async () => signTestJwt(CLERK_A, { withRole: false }),
   })),
 }));
 
@@ -86,18 +92,27 @@ const adminClient = createClient<Database>(
   { auth: { persistSession: false } }
 );
 
-function clientAs(clerkUserId: string) {
+function clientAs(clerkUserId: string, options?: { withRole?: boolean }) {
   return createClient<Database>(
     supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: { persistSession: false },
       global: {
-        headers: { Authorization: `Bearer ${signTestJwt(clerkUserId)}` },
+        headers: {
+          Authorization: `Bearer ${signTestJwt(clerkUserId, options)}`,
+        },
       },
     }
   );
 }
+
+// トークンの無いクライアント（ログインしていない）
+const anonClient = createClient<Database>(
+  supabaseUrl,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  { auth: { persistSession: false } }
+);
 
 // 申請はリポジトリで注文を集約として読むため、住所のスナップショットにも値を入れる
 const addressSnapshot = {
@@ -434,5 +449,97 @@ describe("requestReturnAction（会員Aとしてログイン中）", () => {
     expect(
       await requestReturnAction("not-a-uuid", returnForm({ x: "1" }))
     ).toEqual({ error: expect.any(String) });
+  });
+});
+
+// Clerk のセッショントークンには role クレームが無く、PostgREST は anon ロールで実行する。
+// 返品の表だけ authenticated にしか権限が無いと、注文詳細・申請が 42501（permission denied）になる（PR #779 の E2E）
+describe("role クレームの無いトークン（Clerk のセッショントークンと同じ形）", () => {
+  const clerkLikeClient = clientAs(CLERK_A, { withRole: false });
+  const repo = new SupabaseReturnRepository(clerkLikeClient);
+
+  it("注文詳細（申請できる明細を含む）を取得できる", async () => {
+    const detail = await new SupabaseMemberOrderQueryService(
+      clerkLikeClient
+    ).findOrderDetail({ clerkUserId: CLERK_A, orderId: ORDER_A_ID });
+
+    expect(detail?.returnableItems.map((i) => i.id).sort()).toEqual(
+      [ITEM_A_PAID_ID, ITEM_A_AFTER_ORDER_ID].sort()
+    );
+  });
+
+  it("本人の注文への申請を保存し、読み戻せる", async () => {
+    const returnId = crypto.randomUUID();
+    await repo.save(
+      reconstituteReturnRequest({
+        id: returnId,
+        orderId: ORDER_A_ID,
+        status: "requested",
+        requestedByUserId: USER_A_ID,
+        reason: "不良品",
+        items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 1 }],
+      })
+    );
+
+    expect((await repo.findByOrderId(ORDER_A_ID)).map((r) => r.id)).toEqual([
+      returnId,
+    ]);
+  });
+
+  it("他の会員の注文の申請は読めず、他の会員の注文へは保存できない", async () => {
+    const { error } = await adminClient.from("returns").insert({
+      order_id: ORDER_B_ID,
+      status: "requested",
+      requested_by_user_id: USER_B_ID,
+      reason: "不良品",
+    });
+    if (error) throw error;
+
+    expect(await repo.findByOrderId(ORDER_B_ID)).toHaveLength(0);
+    await expect(
+      repo.save(
+        reconstituteReturnRequest({
+          id: crypto.randomUUID(),
+          orderId: ORDER_B_ID,
+          status: "requested",
+          requestedByUserId: USER_A_ID,
+          reason: "不良品",
+          items: [{ orderItemId: ITEM_B_ID, quantity: 1 }],
+        })
+      )
+    ).rejects.toThrow();
+    expect(await returnsOf(ORDER_B_ID)).toHaveLength(1);
+  });
+
+  it("運営の内部情報（admin_note）は読めない", async () => {
+    const { error } = await clerkLikeClient
+      .from("returns")
+      .select("admin_note")
+      .eq("order_id", ORDER_A_ID);
+
+    expect(error?.code).toBe("42501");
+  });
+
+  it("トークンの無いクライアントは、申請を読めず保存もできない", async () => {
+    await requestReturnAction(
+      ORDER_A_ID,
+      returnForm({ [ITEM_A_PAID_ID]: "1" })
+    );
+    const anonRepo = new SupabaseReturnRepository(anonClient);
+
+    expect(await anonRepo.findByOrderId(ORDER_A_ID)).toEqual([]);
+    await expect(
+      anonRepo.save(
+        reconstituteReturnRequest({
+          id: crypto.randomUUID(),
+          orderId: ORDER_A_ID,
+          status: "requested",
+          requestedByUserId: USER_A_ID,
+          reason: "不良品",
+          items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 1 }],
+        })
+      )
+    ).rejects.toThrow();
+    expect(await returnsOf(ORDER_A_ID)).toHaveLength(1);
   });
 });
