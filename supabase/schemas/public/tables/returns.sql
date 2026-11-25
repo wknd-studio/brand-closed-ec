@@ -54,6 +54,54 @@ CREATE POLICY "returns: select own" ON "public"."returns"
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."returns" TO "postgres", "service_role";
 
+REVOKE ALL ("approved_at") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("approved_at") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("created_at") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("created_at") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("id") ON TABLE "public"."returns" FROM "anon";
+
+GRANT INSERT ("id"), SELECT ("id") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("order_id") ON TABLE "public"."returns" FROM "anon";
+
+GRANT INSERT ("order_id"), SELECT ("order_id") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("reason") ON TABLE "public"."returns" FROM "anon";
+
+GRANT INSERT ("reason"), SELECT ("reason") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("received_at") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("received_at") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("refund_amount") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("refund_amount") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("refunded_at") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("refunded_at") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("requested_by_user_id") ON TABLE "public"."returns" FROM "anon";
+
+GRANT INSERT ("requested_by_user_id"), SELECT ("requested_by_user_id") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("status") ON TABLE "public"."returns" FROM "anon";
+
+GRANT INSERT ("status"), SELECT ("status") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("stripe_refund_id") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("stripe_refund_id") ON TABLE "public"."returns" TO "anon";
+
+REVOKE ALL ("updated_at") ON TABLE "public"."returns" FROM "anon";
+
+GRANT SELECT ("updated_at") ON TABLE "public"."returns" TO "anon";
+
 REVOKE ALL ("approved_at") ON TABLE "public"."returns" FROM "authenticated";
 
 GRANT SELECT ("approved_at") ON TABLE "public"."returns" TO "authenticated";
