@@ -13,18 +13,20 @@ import {
 } from "@/domain/services/cart-limit";
 import { cn } from "@/lib/cn";
 
-// 仕入れ枠の金額は、カートの上限チェックと同じ cart-limit の計算から取る
+// 仕入れ枠の金額は、カートの上限チェックと同じ useCart・cart-limit の値から取る
 function useLimitAmounts() {
-  const { cart, confirmedAmount, monthlyLimit } = useCart();
+  const { cart, confirmedAmount, monthlyLimit, totalUsed } = useCart();
+  const status = monthlyLimitStatus({
+    lines: cart.items,
+    confirmedAmount,
+    monthlyLimit,
+  });
   return {
     monthlyLimit,
     confirmedAmount,
     cartAmount: sumCartFixedTotal(cart.items),
-    status: monthlyLimitStatus({
-      lines: cart.items,
-      confirmedAmount,
-      monthlyLimit,
-    }),
+    used: totalUsed,
+    remaining: status.isUnlimited ? null : status.remaining,
   };
 }
 

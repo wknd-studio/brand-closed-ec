@@ -2,21 +2,23 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { monthlyLimitStatus } from "@/domain/services/cart-limit";
 import { LimitMeter } from "./limit-meter";
 
-// 金額と、画面と同じく cart-limit の monthlyLimitStatus で求めた状態
+// 金額と、画面と同じく useCart の totalUsed（使用）と cart-limit の monthlyLimitStatus（残り）で渡す値
 function meter(
   monthlyLimit: number | null,
   confirmedAmount: number,
   cartAmount: number
 ) {
+  const status = monthlyLimitStatus({
+    lines: [{ productId: "p", unitPrice: cartAmount, quantity: 1 }],
+    confirmedAmount,
+    monthlyLimit,
+  });
   return {
     monthlyLimit,
     confirmedAmount,
     cartAmount,
-    status: monthlyLimitStatus({
-      lines: [{ productId: "p", unitPrice: cartAmount, quantity: 1 }],
-      confirmedAmount,
-      monthlyLimit,
-    }),
+    used: confirmedAmount + cartAmount,
+    remaining: status.isUnlimited ? null : status.remaining,
   };
 }
 
