@@ -54,6 +54,7 @@ const CLERK_USER_A = "clerk_test_server_client_a";
 const CLERK_USER_B = "clerk_test_server_client_b";
 
 async function cleanup() {
+  await adminClient.from("favorites").delete().in("user_id", [USER_A_ID]);
   await adminClient.from("users").delete().in("id", [USER_A_ID, USER_B_ID]);
 }
 
@@ -96,7 +97,29 @@ describe("createServerClient", () => {
     expect(data).toEqual([{ id: USER_A_ID }]);
   });
 
-  it("トークンが無いときは匿名で接続し、会員の行を取得できない", async () => {
+  // Clerk のセッショントークンと同じく role: authenticated を入れたトークン（issue #794）。
+  // anon には public の権限が無いため、読み書きが通れば authenticated で動いている
+  it("ログイン中の会員のトークンで、authenticated として自分の行を書き込み・削除できる", async () => {
+    getToken.mockResolvedValue(signTestJwt({ sub: CLERK_USER_A }));
+    const supabase = await createServerClient();
+
+    const inserted = await supabase
+      .from("favorites")
+      .insert({ user_id: USER_A_ID, sanity_product_id: "server-client-794" })
+      .select("sanity_product_id");
+    expect(inserted.error).toBeNull();
+    expect(inserted.data).toEqual([{ sanity_product_id: "server-client-794" }]);
+
+    const deleted = await supabase
+      .from("favorites")
+      .delete()
+      .eq("user_id", USER_A_ID)
+      .select("sanity_product_id");
+    expect(deleted.error).toBeNull();
+    expect(deleted.data).toEqual([{ sanity_product_id: "server-client-794" }]);
+  });
+
+  it("トークンが無いときは anon として接続し、権限が無いため会員の行を取得できない", async () => {
     getToken.mockResolvedValue(null);
     const supabase = await createServerClient();
 
@@ -105,7 +128,7 @@ describe("createServerClient", () => {
       .select("id")
       .in("id", [USER_A_ID, USER_B_ID]);
 
-    expect(error).toBeNull();
-    expect(data).toEqual([]);
+    expect(error?.code).toBe("42501");
+    expect(data).toBeNull();
   });
 });
