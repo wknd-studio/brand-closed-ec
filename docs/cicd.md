@@ -8,6 +8,7 @@ PR (develop・main)
   ├─ Lint / Format チェック
   ├─ Unit Tests
   ├─ Gitleaks（PR の commit の機密情報の漏れ）
+  ├─ Issue Scope（develop 向け。issue の範囲外の high-risk のファイルの変更。下の「issue の範囲外の high-risk の変更を止める」）
   ├─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
   └─ Preview → Preview Deploy（develop 向けの feature/* のみ。マイグレーションを含むPRは出さない。下の「PRごとのプレビュー」）
 
@@ -305,6 +306,30 @@ doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler 
 ```
 
 ---
+
+## issue の範囲外の high-risk の変更を止める（`Issue Scope`）
+
+issue の範囲外で high-risk のファイル（`.github/labeler.yml` の `high-risk` のパス）を変える変更を、モデルの判断に頼らず機械的に止める（#795）。「issue の範囲」は issue 本文の「- 触るファイル:」の行（`.github/ISSUE_TEMPLATE/task.md` の「並列作業メモ」）で、そこに書いたパスはファイルそのもの・ディレクトリ（前方一致）・グロブのどれでも当たりになる。判定は `scripts/ci/issue-scope.ts` にあり、次の2か所が同じ関数を使う。
+
+- **PreToolUse hook**（`.claude/settings.json` → `.claude/hooks/issue-scope-guard.ts`）: Edit・Write 等の前に動き、high-risk のファイルが担当 issue（`orca worktree current --json` の `linkedIssue`）の「触るファイル」に無ければ exit 2 で止めて、理由と進め方をモデルに返す
+  - high-risk に当たらないファイルは、`orca`・`gh` を呼ばずに通す
+  - Orca のワークツリーでない・`linkedIssue` が無いときは止めない（メインのチェックアウトでの作業等）
+  - issue の本文を取得できないとき（`gh` の認証切れ等）は止める（安全側）
+  - `node_modules` が無いワークツリーでは hook がエラーになり、止めずに通る。そのときは CI が止める
+  - Bash（`sed` 等）での書き換えは対象外。CI が止める
+- **PR の CI**（`.github/workflows/issue-scope.yml` の `Issue Scope`。develop 宛ての PR）: 差分の high-risk のファイルのうち、PR 本文の `Closes #n` の issue の「触るファイル」に無いものがあれば失敗し、範囲外のファイルを並べる
+  - 人間が PR に `scope-approved` ラベルを付けると成功扱いになる（Test Guard の `test-change-approved` と同じ形）
+  - `Closes #n` が無い PR は、high-risk のファイルをすべて範囲外として扱う。high-risk のファイルを変えないなら成功する
+  - Dependabot の PR は issue 無しで扱うため、検査せずに成功扱いにする（high-risk が付き、人間が精読する）
+  - PR 本文の編集・ラベルの付け外しでは動き直すが、issue の本文を書き足したときは動かないため、PR の Checks で `Issue Scope` を再実行する
+
+止まったときの進め方:
+
+- 範囲外の問題なら、変更せずに起票する（CLAUDE.md「並列開発（Orca）」の「担当外の問題」）
+- 担当 issue の範囲で必要な変更なら、人間が issue の「触るファイル」に書き足す（Orca のセッションは自分で issue 本文を書き換えない）。CI は再実行する
+- 人間が差分を確かめて範囲外の変更を認めるなら、`scope-approved` ラベルを付ける
+
+本文に「触るファイル」が書かれていない issue では、high-risk のパスの編集がすべて止まる（安全側）。
 
 ## E2E テスト
 
