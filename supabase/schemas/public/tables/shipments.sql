@@ -28,40 +28,22 @@ CREATE POLICY "shipments: select own" ON "public"."shipments"
    FROM public.orders
   WHERE (orders.user_id = public.get_current_user_id()))));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."shipments" TO "postgres", "service_role";
-
-REVOKE ALL ("carrier") ON TABLE "public"."shipments" FROM "authenticated";
-
 GRANT SELECT ("carrier") ON TABLE "public"."shipments" TO "authenticated";
-
-REVOKE ALL ("created_at") ON TABLE "public"."shipments" FROM "authenticated";
 
 GRANT SELECT ("created_at") ON TABLE "public"."shipments" TO "authenticated";
 
-REVOKE ALL ("delivered_at") ON TABLE "public"."shipments" FROM "authenticated";
-
 GRANT SELECT ("delivered_at") ON TABLE "public"."shipments" TO "authenticated";
-
-REVOKE ALL ("id") ON TABLE "public"."shipments" FROM "authenticated";
 
 GRANT SELECT ("id") ON TABLE "public"."shipments" TO "authenticated";
 
-REVOKE ALL ("order_id") ON TABLE "public"."shipments" FROM "authenticated";
-
 GRANT SELECT ("order_id") ON TABLE "public"."shipments" TO "authenticated";
-
-REVOKE ALL ("origin_location_code") ON TABLE "public"."shipments" FROM "authenticated";
 
 GRANT SELECT ("origin_location_code") ON TABLE "public"."shipments" TO "authenticated";
 
-REVOKE ALL ("shipped_at") ON TABLE "public"."shipments" FROM "authenticated";
-
 GRANT SELECT ("shipped_at") ON TABLE "public"."shipments" TO "authenticated";
-
-REVOKE ALL ("status") ON TABLE "public"."shipments" FROM "authenticated";
 
 GRANT SELECT ("status") ON TABLE "public"."shipments" TO "authenticated";
 
-REVOKE ALL ("tracking_number") ON TABLE "public"."shipments" FROM "authenticated";
-
 GRANT SELECT ("tracking_number") ON TABLE "public"."shipments" TO "authenticated";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."shipments" TO "postgres", "service_role";
