@@ -82,9 +82,8 @@ describe("/shop（ブランドから探す）", () => {
         brand: "Brand A",
         count: 128,
         thumbnail: "https://cdn.example/a.jpg",
-        category: "アパレル",
       },
-      { brand: "Brand B", count: 64, thumbnail: null, category: null },
+      { brand: "Brand B", count: 64, thumbnail: null },
     ]);
   });
 
@@ -105,7 +104,7 @@ describe("/shop（ブランドから探す）", () => {
     );
   });
 
-  it("ブランドを縦長（4:5）のカードで、パソコン幅は4列・スマホ幅は2列に並べ、ブランド名・カテゴリ・点数を出す", async () => {
+  it("ブランドを縦長（4:5）のカードで、パソコン幅は4列・スマホ幅は2列に並べ、ブランド名・点数を出す", async () => {
     const doc = toDocument(await ShopPage());
 
     const links = [...doc.querySelectorAll('a[href^="/shop/Brand"]')];
@@ -114,7 +113,6 @@ describe("/shop（ブランドから探す）", () => {
       "/shop/Brand%20B",
     ]);
     expect(links[0].textContent).toContain("Brand A");
-    expect(links[0].textContent).toContain("アパレル");
     expect(links[0].textContent).toContain("128点");
     expect(links[1].textContent).toContain("64点");
     expect(links[0].querySelector(".aspect-4\\/5")).not.toBeNull();
