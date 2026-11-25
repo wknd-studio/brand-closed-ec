@@ -76,6 +76,20 @@ SELECT 1;
     expect(findDestructiveStatements(sql)).toEqual([]);
   });
 
+  it("文字列の中の -- をコメントと取り違えず、続く文を見つける", () => {
+    expect(
+      findDestructiveStatements(
+        "INSERT INTO public.logs (message) VALUES ('a--b');\nDROP TABLE public.x;"
+      )
+    ).toEqual(["drop table"]);
+  });
+
+  it("DO ブロックの中の文は見つける（マイグレーションの実行時に動くため）", () => {
+    expect(
+      findDestructiveStatements("DO $$ BEGIN TRUNCATE public.x; END $$;")
+    ).toEqual(["truncate"]);
+  });
+
   it("文字列の中の語は見つけない", () => {
     expect(
       findDestructiveStatements(
