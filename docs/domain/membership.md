@@ -92,7 +92,8 @@
   1. 退会（`users.deleted_at`）していれば`/withdrawn`に送る
   2. 入会が終わっていなければ（`users.onboarding_completed = false`）オンボーディングに送る。入会前かどうかは`subscriptions`行の有無では判定しない
   3. 入会済みで、解約済みでない`subscriptions`行（`canceled`・`incomplete_expired`以外）が1つも無ければ利用停止とする
-  - 判定は`src/domain/value-objects/subscription-ended.ts`、`users`と`subscriptions`を1回のクエリで取るのは`src/infrastructure/supabase/supabase-member-status-query-service.ts`、案内画面は`/subscription-ended`（#380）。利用停止でない会員が案内画面を開くと`/shop`に戻す
+  - どの状態が解約済みかは`src/domain/value-objects/subscription-status.ts`の`SubscriptionStatus.isEnded()`が正で、退会で解約するサブスクリプションを取るクエリ（`findActiveByUserId`）・入会の決済画面の二重契約の確認・部分UNIQUEインデックス（`subscriptions_user_active_idx`）も同じ状態を除外する（#777）
+  - 利用停止の判定は`src/domain/value-objects/subscription-ended.ts`、`users`と`subscriptions`を1回のクエリで取るのは`src/infrastructure/supabase/supabase-member-status-query-service.ts`、案内画面は`/subscription-ended`（#380）。利用停止でない会員が案内画面を開くと`/shop`に戻す
   - 手動テスト用のシードの会員（`scripts/seed-users.ts`）とE2Eの会員（`tests/e2e/helpers/onboarded-member-row.ts`）には、有効な`subscriptions`行（Stripeに実在しない仮のID）を入れる（#380）
 - **ログインは許す**（2026-11-23決定、#376）: 利用停止中もサインインでき、会員画面のどこを開いても利用停止の案内画面（#380）だけを表示する。商品の閲覧・カート・注文・マイページは使えない。何が起きたかを会員が分かるようにするため（退会者を`/withdrawn`に送るのと同じ考え方）。案内画面には、契約が終了したこと・注文と閲覧ができないこと・再開したい場合の運営の連絡先を表示する
 - 進行中の注文（請求書払いの未払いなど）がある会員も、画面の利用は止める。未解決の決済単位・進行中の注文は、強制退会と同じく運営側が手動で完了・キャンセルまで処理する（会員は請求書のメールのリンクからStripeで支払うことはできる）
