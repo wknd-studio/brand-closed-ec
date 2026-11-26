@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ローカルDB（全マイグレーションを当てた状態）の今の定義を、supabase/schemas/ に
-# 1オブジェクト1ファイルで書き出す（宣言的スキーマの段階A。#783）。
-# 正はマイグレーションのまま。supabase/schemas/ は自動で書き出した写しで、直接編集しない。
+# 1オブジェクト1ファイルで書き出す（#783）。
+# 段階B（#784）からは supabase/schemas/ が正で、直したら `task db:sync` でマイグレーションを作る。
+# このスクリプトは、マイグレーションの結果とスキーマのファイルが一致することを確かめるために使う。
 #
 # 使い方: bash scripts/db-schema-snapshot.sh          # 書き出して supabase/schemas/ を置き換える
 #         bash scripts/db-schema-snapshot.sh --check  # 書き出し直して、コミット済みと違えば失敗する（CIの Schema Files Drift）
@@ -21,6 +22,27 @@ generate_schema() {
   # --no-cache: 前回の書き出しのカタログを使い回さず、毎回DBから読み直す
   supabase db schema declarative generate --experimental --no-cache --local \
     --output-dir "$out" --overwrite >&2
+  pin_default_privileges "$out"
+}
+
+# 既定の権限のファイルの先頭に、Supabase が最初に付ける既定の権限（anon・authenticated・service_role）を
+# すべて外す文を足す（#784）。書き出しは今ある GRANT しか書かないが、sync はスキーマのファイルを
+# Supabase の初期状態のシャドーDBに当てて比べるため、外した既定の権限が戻り、REVOKE 済みの関数・テーブルに
+# anon への GRANT を作ってしまう。先に外しておくと、書き出した GRANT だけが既定の権限になり、sync の結果と一致する
+# 引数: $1 = 書き出し先
+pin_default_privileges() {
+  local file="$1/public/default_privileges.sql" kind
+  if [[ ! -f "$file" ]]; then
+    echo "::error::public/default_privileges.sql が書き出されていません（$file）。書き出しの形が変わっていないか確かめてください" >&2
+    return 1
+  fi
+  {
+    for kind in TABLES SEQUENCES FUNCTIONS; do
+      printf 'ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON %s FROM "anon", "authenticated", "service_role";\n\n' "$kind"
+    done
+    cat "$file"
+  } >"$file.tmp"
+  mv "$file.tmp" "$file"
 }
 
 # 引数: $1 = ディレクトリ。README.md を除いたファイルの相対パスを並べて出す
@@ -70,8 +92,10 @@ diff_schema_dirs() {
   done
   cat <<MSG
 
-マイグレーションを足した・変えたあとは、\`supabase db reset\` してから \`task db:schema\` を実行し、
-${committed}/ をコミットしてください（ワークツリーでは \`bash scripts/with-worktree-db.sh supabase db reset\`）。
+- スキーマのファイルを直したなら、\`task db:sync -- <名前>\` でマイグレーションを作ってください。
+- マイグレーションを手で書いた（データの変更・名前の変更等）なら、スキーマのファイルも同じ形に直してください。
+どちらも、\`supabase db reset\` してから \`task db:schema\` を実行し、${committed}/ に差分が残らなければ一致しています
+（ワークツリーでは \`bash scripts/with-worktree-db.sh supabase db reset\`。手順は docs/declarative-schema.md）。
 MSG
   return 1
 }

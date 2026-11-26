@@ -115,6 +115,12 @@ jobs:
         # マイグレーションを足した後に `task db:schema` の再実行とコミットを忘れると、
         # 関数・テーブルの今の定義として古いものを読んでしまう。ここでその書き出し忘れを検出する
         run: bash scripts/db-schema-snapshot.sh --check
+      - name: Check that sync finds no difference between supabase/schemas and migrations
+        # supabase/schemas/ が正（#784）。スキーマのファイルを直してマイグレーションを作り忘れた・
+        # sync が作ったマイグレーションを手で直してファイルと食い違った（書いていない GRANT・REVOKE を消した等）ときに、
+        # sync がもう一度マイグレーションを作るので失敗させる。上の書き出しの比較は、手で書いたマイグレーションを足して
+        # ファイルを直し忘れたときに失敗する
+        run: bash scripts/db-schema-sync.sh --check
 
   test:
     name: Unit Tests
@@ -383,7 +389,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
       - uses: ./.github/actions/install-cli
-        with: { tool: supabase, version: 2.102.0 }
+        with: { tool: supabase, version: 2.116.0 }
       - uses: ./.github/actions/install-cli
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
@@ -439,7 +445,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: "pnpm" }
       - uses: ./.github/actions/install-cli
-        with: { tool: supabase, version: 2.102.0 }
+        with: { tool: supabase, version: 2.116.0 }
       - uses: ./.github/actions/install-cli
         with: { tool: doppler, version: 3.77.1 }
       - run: pnpm install --frozen-lockfile
