@@ -8,6 +8,11 @@ import type { Order } from "@/domain/entities/order";
 
 const CHECKOUT_SESSION_EXPIRES_IN_SECONDS = 31 * 60;
 
+// 商品代金の支払い手段はカード（Link で保存したカードを含む）だけ。
+// 指定しないとダッシュボードの支払い手段の設定で決まり、コンビニ払い等が有効になると
+// 画面・特商法の表記の「カードのみ」と食い違うため、コードで指定する（#809）
+const PAYMENT_METHOD_TYPES: ("card" | "link")[] = ["card", "link"];
+
 export class StripePaymentGateway implements PaymentGateway {
   async createCheckoutSession(
     order: Order,
@@ -17,6 +22,7 @@ export class StripePaymentGateway implements PaymentGateway {
     const session = await getStripe().checkout.sessions.create(
       {
         mode: "payment",
+        payment_method_types: PAYMENT_METHOD_TYPES,
         customer_email: undefined,
         line_items: lineItems.map((i) => ({
           price_data: {
@@ -49,6 +55,7 @@ export class StripePaymentGateway implements PaymentGateway {
         customer: stripeCustomerId,
         collection_method: "send_invoice",
         days_until_due: 7,
+        payment_settings: { payment_method_types: PAYMENT_METHOD_TYPES },
         metadata: { order_id: order.id },
       },
       { idempotencyKey: `invoice-${order.id}` }
