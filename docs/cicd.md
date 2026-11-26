@@ -331,6 +331,8 @@ issue の範囲外で high-risk の変更をすることを、モデルの判断
 - 担当 issue の範囲で必要な変更なら、人間が issue の「触るファイル」に書き足す（Orca のセッションは自分で issue 本文を書き換えない）。CI は再実行する
 - 人間が差分を確かめて範囲外の変更を認めるなら、`scope-approved` ラベルを付ける
 
+Orca のセッションが自分で issue の「触るファイル」を書き足したり、PR に `scope-approved` を付けたりして通らないように、`.claude/settings.json` で `gh issue edit`・`gh pr edit` を `ask`（実行のたびに人間の確認が要る）にしている。`gh api` で直接書き換える経路は対象外。
+
 本文に「触るファイル」が書かれていない issue では、high-risk の編集がすべて止まる（安全側）。
 
 ## E2E テスト
