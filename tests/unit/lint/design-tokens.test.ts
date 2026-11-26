@@ -201,11 +201,6 @@ describe("対象の範囲", () => {
     expect(await designTokenMessages(file, code)).toEqual([]);
   });
 
-  it("今残っているファイルの一覧にあるファイルは対象にしない", async () => {
-    const [file] = DESIGN_TOKEN_LEGACY_FILES;
-    expect(await designTokenMessages(file, code)).toEqual([]);
-  });
-
   it("ほかの no-restricted-syntax（catch・テーブルの指定）と併せて効く（設定が置き換わらない）", async () => {
     const [result] = await eslint.lintText(
       `export async function run(db: { from(t: string): unknown }, f: () => Promise<void>) {\n  try {\n    await f();\n  } catch {\n    return db.from("users");\n  }\n  return "text-gray-500";\n}\n`,
@@ -220,24 +215,35 @@ describe("対象の範囲", () => {
   });
 });
 
-describe("今残っているファイルの一覧", () => {
-  it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は存在する", (file) => {
-    expect(existsSync(file)).toBe(true);
-  });
+// 空の it.each は vitest がエラーにするため、一覧が空になったら飛ばす
+describe.skipIf(DESIGN_TOKEN_LEGACY_FILES.length === 0)(
+  "今残っているファイルの一覧",
+  () => {
+    it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は存在する", (file) => {
+      expect(existsSync(file)).toBe(true);
+    });
 
-  // 作り直して0件になったファイルは一覧から消す（一覧に残ると、そのファイルで書き戻しても気付けない）
-  it.each(DESIGN_TOKEN_LEGACY_FILES)(
-    "%s にはまだ対象の書き方が残っている",
-    async (file) => {
-      const renamed = join(
-        dirname(file),
-        `${basename(file, extname(file))}.__legacy-check__${extname(file)}`
-      );
-      const result = await designTokenMessages(
-        renamed,
-        readFileSync(file, "utf8")
-      );
-      expect(result.length).toBeGreaterThan(0);
-    }
-  );
-});
+    // [id] 等の動的ルートのファイルも外れていること
+    it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は対象にしない", async (file) => {
+      expect(
+        await designTokenMessages(file, readFileSync(file, "utf8"))
+      ).toEqual([]);
+    });
+
+    // 作り直して0件になったファイルは一覧から消す（一覧に残ると、そのファイルで書き戻しても気付けない）
+    it.each(DESIGN_TOKEN_LEGACY_FILES)(
+      "%s にはまだ対象の書き方が残っている",
+      async (file) => {
+        const renamed = join(
+          dirname(file),
+          `${basename(file, extname(file))}.__legacy-check__${extname(file)}`
+        );
+        const result = await designTokenMessages(
+          renamed,
+          readFileSync(file, "utf8")
+        );
+        expect(result.length).toBeGreaterThan(0);
+      }
+    );
+  }
+);
