@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  /* OSのダークモード設定に関わらず常時ライト表示にする（.claude/skills/design-system/SKILL.md）。
+     入力欄・スクロールバー等のブラウザ標準の部品もライト表示にそろえる */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -53,13 +56,6 @@
      カード・パネル用に2xl/3xlのみ実測値で上書きする */
   --radius-2xl: 14px;
   --radius-3xl: 18px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
