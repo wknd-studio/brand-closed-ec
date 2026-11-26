@@ -294,7 +294,9 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
       ),
       settlements: groups.map(({ settlement, items }) => ({
         id: settlement.id,
+        flow: settlement.flow,
         flowLabel: settlement.flowLabel(),
+        status: settlement.status,
         statusLabel: settlement.statusLabel(),
         amount: settlement.amount.amount,
         items: items.map(toItemDto),

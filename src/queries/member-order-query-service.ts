@@ -1,5 +1,9 @@
 import type { MemberRank } from "@/domain/value-objects/member-rank";
 import type { OrderStatus } from "@/domain/value-objects/order-status";
+import type {
+  SettlementFlow,
+  SettlementStatus,
+} from "@/domain/entities/order-settlement";
 
 // 注文確認画面で選ぶ住所
 export type CheckoutAddressDto = {
@@ -80,7 +84,10 @@ export type OrderDetailAddressDto = {
 // 注文詳細の決済単位。amount は決済単位の作成時点の金額のスナップショット
 export type OrderDetailSettlementDto = {
   id: string;
+  // 画面で支払い方法・状態ごとに見た目を分けるための値。文言は flowLabel・statusLabel を使う
+  flow: SettlementFlow;
   flowLabel: string;
+  status: SettlementStatus;
   statusLabel: string;
   amount: number;
   items: CompletedOrderItemDto[];
