@@ -272,7 +272,7 @@ export const DESIGN_TOKEN_LEGACY_FILES = [
   "src/app/admin/orders/[id]/cancel-order-button.tsx",
   "src/app/admin/waitlist/page.tsx",
   "src/app/admin/waitlist/waitlist-table.tsx",
-  // 会員の画面のうち、買う流れ（親issue #767）の外のもの。作り直しのissueを起票したら、そのissueで外す
+  // 会員の画面のうち、買う流れ（親issue #767）の外のものと、そのほかの画面。デザインをそろえる作業（マイページ等）で直したら外す
   "src/app/(member)/favorites/page.tsx",
   "src/app/(member)/favorites/favorite-list-card.tsx",
   "src/app/(member)/orders/page.tsx",
@@ -282,7 +282,6 @@ export const DESIGN_TOKEN_LEGACY_FILES = [
   "src/app/(member)/settings/address-list.tsx",
   "src/app/(member)/settings/payment-method-button.tsx",
   "src/app/(member)/settings/withdrawal-dialog.tsx",
-  // そのほかの画面。作り直しのissueを起票したら、そのissueで外す
   "src/app/home-presenter.tsx",
   "src/app/legal/legal-notice-text.tsx",
   "src/app/onboarding/payment/success/payment-status.tsx",
