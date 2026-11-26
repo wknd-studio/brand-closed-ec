@@ -119,4 +119,37 @@ describe("ProductCard", () => {
     expect(button?.parentElement?.className).toContain("right-");
     expect(button?.parentElement?.className).toContain("top-");
   });
+  it("ブランド名を渡すと、商品名の上に出す", () => {
+    render({ brand: "Brand A" });
+
+    expect(container.textContent).toContain("Brand A");
+    expect(container.textContent?.indexOf("Brand A")).toBeLessThan(
+      container.textContent!.indexOf("レザートートバッグ")
+    );
+  });
+
+  it("今のプランで見られない商品は、画像の上に鍵のアイコン（SVG）と「今のプランではご覧いただけません」を出し、価格を出さず、リンクにしない", () => {
+    render({
+      isLocked: true,
+      favorite: <button type="button">お気に入りから削除</button>,
+    });
+
+    expect(container.querySelector("a")).toBeNull();
+    const veil = container.querySelector(
+      "[data-product-image] [data-locked-veil]"
+    );
+    expect(veil?.querySelector("svg")).not.toBeNull();
+    expect(veil?.textContent).toBe("今のプランではご覧いただけません");
+    expect(container.textContent).not.toContain("🔒");
+    expect(container.textContent).not.toContain("¥");
+    expect(container.textContent).not.toContain("価格要相談");
+    expect(container.textContent).toContain("レザートートバッグ");
+    expect(container.querySelector("button")).not.toBeNull();
+  });
+
+  it("見られる商品は、鍵の覆いを出さない", () => {
+    render();
+
+    expect(container.querySelector("[data-locked-veil]")).toBeNull();
+  });
 });
