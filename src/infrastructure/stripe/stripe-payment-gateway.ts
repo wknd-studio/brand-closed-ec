@@ -23,6 +23,9 @@ export class StripePaymentGateway implements PaymentGateway {
       {
         mode: "payment",
         payment_method_types: PAYMENT_METHOD_TYPES,
+        // 円の価格のまま払わせ、換算した外貨の金額を出さない。指定しなければ
+        // ダッシュボードの設定（既定で有効）が効く（#810）
+        adaptive_pricing: { enabled: false },
         customer_email: undefined,
         line_items: lineItems.map((i) => ({
           price_data: {

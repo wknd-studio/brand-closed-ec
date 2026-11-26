@@ -62,6 +62,9 @@ export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGatewa
         // 決済手段（銀行振込等）では支払い前にcompletedが届くため、即時に決済が確定する
         // カードに限定する（issue #413）
         payment_method_types: ["card"],
+        // 円の価格のまま払わせ、換算した外貨の金額を出さない。指定しなければ
+        // ダッシュボードの設定（既定で有効）が効く（#810）
+        adaptive_pricing: { enabled: false },
         line_items: [
           { price: STRIPE_PRICE_IDS[input.rank].monthly, quantity: 1 },
           { price: STRIPE_PRICE_IDS[input.rank].initialFee, quantity: 1 },
