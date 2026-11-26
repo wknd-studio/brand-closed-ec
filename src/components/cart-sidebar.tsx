@@ -2,127 +2,93 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useCart } from "@/components/cart/cart-provider";
-import {
-  sumCartFixedTotal,
-  monthlyLimitStatus,
-} from "@/domain/services/cart-limit";
+import { useLimitAmounts } from "@/components/cart-header-controls";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { LimitMeter } from "@/components/ui/limit-meter";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
+import { sumCartFixedTotal } from "@/domain/services/cart-limit";
+import { cn } from "@/lib/cn";
 import { groupCartItemsByPaymentTiming, type CartItem } from "@/lib/cart/types";
+
+function yen(amount: number): string {
+  return `¥${amount.toLocaleString("ja-JP")}`;
+}
 
 type ItemRowProps = {
   item: CartItem;
-  errors: Record<string, string>;
-  setErrors: (
-    updater: (prev: Record<string, string>) => Record<string, string>
-  ) => void;
-  updateItemQuantity: (
-    productId: string,
-    quantity: number
-  ) => { error?: string };
-  removeFromCart: (productId: string) => void;
+  error?: string;
+  onChangeQuantity: (item: CartItem, quantity: number) => void;
+  onRemove: (item: CartItem) => void;
 };
 
 function CartItemRow({
   item,
-  errors,
-  setErrors,
-  updateItemQuantity,
-  removeFromCart,
+  error,
+  onChangeQuantity,
+  onRemove,
 }: ItemRowProps) {
   return (
-    <li className="flex gap-4 px-6 py-4">
-      {/* サムネイル */}
-      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-        {item.thumbnail ? (
+    <li className="flex gap-3 border-b border-neutral-100 py-3.5">
+      <span
+        data-thumbnail
+        className="relative aspect-[4/5] w-[52px] shrink-0 self-start overflow-hidden rounded-md bg-neutral-100"
+      >
+        {item.thumbnail && (
           <Image
             src={item.thumbnail}
-            alt={item.productName}
+            alt=""
             fill
             className="object-cover"
-            sizes="64px"
+            sizes="52px"
           />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-gray-300">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
         )}
-      </div>
+      </span>
 
-      {/* 商品情報 */}
-      <div className="flex flex-1 flex-col gap-1">
-        <p className="text-sm font-medium leading-snug">{item.productName}</p>
-        <p className="text-xs text-gray-500">
-          {item.unitPrice !== null
-            ? `¥${item.unitPrice.toLocaleString()}`
-            : "価格要相談"}
-        </p>
-        {/* 数量変更 */}
-        <div className="flex items-center gap-1 pt-1">
-          <button
-            onClick={() => {
-              setErrors((prev) => ({ ...prev, [item.productId]: "" }));
-              updateItemQuantity(item.productId, item.quantity - 1);
-            }}
-            disabled={item.quantity <= 1}
-            className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
-            aria-label="数量を減らす"
-          >
-            −
-          </button>
-          <span className="w-7 text-center text-sm tabular-nums">
-            {item.quantity}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex justify-between gap-2">
+          <span className="text-sm leading-snug font-medium">
+            {item.productName}
           </span>
+          <span className="text-sm font-semibold whitespace-nowrap tabular-nums">
+            {item.unitPrice !== null
+              ? yen(item.unitPrice * item.quantity)
+              : "要相談"}
+          </span>
+        </div>
+        <span className="text-xs text-neutral-600 tabular-nums">
+          {item.unitPrice !== null
+            ? `${yen(item.unitPrice)} / 点`
+            : "価格要相談"}
+        </span>
+        <div className="flex items-center justify-between">
+          <QuantityStepper
+            size="sm"
+            label={`${item.productName}の数量`}
+            value={item.quantity}
+            // 在庫切れの商品は増やせない（減らす・削除はできる）
+            max={
+              item.availability === "out_of_stock" ? item.quantity : undefined
+            }
+            onChange={(quantity) => onChangeQuantity(item, quantity)}
+          />
           <button
-            onClick={() => {
-              const result = updateItemQuantity(
-                item.productId,
-                item.quantity + 1
-              );
-              setErrors((prev) => ({
-                ...prev,
-                [item.productId]: result.error ?? "",
-              }));
-            }}
-            disabled={item.availability === "out_of_stock"}
-            className="flex h-6 w-6 items-center justify-center rounded border text-gray-600 disabled:opacity-30 hover:bg-gray-50"
-            aria-label="数量を増やす"
+            type="button"
+            onClick={() => onRemove(item)}
+            aria-label={`${item.productName}をカートから削除`}
+            className="h-10 cursor-pointer px-2.5 text-[0.8125rem] text-neutral-700 underline hover:text-danger"
           >
-            ＋
+            削除
           </button>
         </div>
-        {errors[item.productId] && (
-          <p className="text-xs text-red-600">{errors[item.productId]}</p>
+        {error && (
+          <Alert tone="danger" role="alert" className="px-3 py-2 text-xs">
+            {error}
+          </Alert>
         )}
-      </div>
-
-      {/* 小計＋削除 */}
-      <div className="flex flex-shrink-0 flex-col items-end gap-1">
-        <p className="text-sm font-medium tabular-nums">
-          {item.unitPrice !== null
-            ? `¥${(item.unitPrice * item.quantity).toLocaleString()}`
-            : "—"}
-        </p>
-        <button
-          onClick={() => removeFromCart(item.productId)}
-          className="text-xs text-gray-400 hover:text-red-500"
-          aria-label={`${item.productName}を削除`}
-        >
-          削除
-        </button>
       </div>
     </li>
   );
@@ -136,39 +102,108 @@ function calcGroupSubtotal(items: CartItem[]): number {
 }
 
 type ItemGroupProps = {
+  badge: { label: string; tone: "primary" | "info" };
   title: string;
   items: CartItem[];
-} & Omit<ItemRowProps, "item">;
+  errors: Record<string, string>;
+} & Omit<ItemRowProps, "item" | "error">;
 
 function CartItemGroup({
+  badge,
   title,
   items,
   errors,
-  setErrors,
-  updateItemQuantity,
-  removeFromCart,
+  ...rowProps
 }: ItemGroupProps) {
   return (
-    <div>
-      <div className="flex items-center justify-between bg-gray-50 px-6 py-2">
-        <h3 className="text-xs font-semibold text-gray-600">{title}</h3>
-        <span className="text-xs font-medium tabular-nums text-gray-600">
-          小計 ¥{calcGroupSubtotal(items).toLocaleString()}
+    <section className="flex flex-col">
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-200 pt-3.5 pb-2">
+        <h3 className="m-0 inline-flex items-center gap-2 text-[0.8125rem] font-semibold">
+          <Badge tone={badge.tone}>{badge.label}</Badge>
+          {title}
+        </h3>
+        <span className="text-xs text-neutral-700 tabular-nums">
+          小計 {yen(calcGroupSubtotal(items))}
         </span>
       </div>
-      <ul className="divide-y">
-        {items.map((item) => (
-          <CartItemRow
-            key={item.productId}
-            item={item}
-            errors={errors}
-            setErrors={setErrors}
-            updateItemQuantity={updateItemQuantity}
-            removeFromCart={removeFromCart}
-          />
-        ))}
-      </ul>
-    </div>
+      <CartItemList items={items} errors={errors} {...rowProps} />
+    </section>
+  );
+}
+
+function CartItemList({
+  items,
+  errors,
+  ...rowProps
+}: {
+  items: CartItem[];
+  errors: Record<string, string>;
+} & Omit<ItemRowProps, "item" | "error">) {
+  return (
+    <ul className="m-0 list-none p-0">
+      {items.map((item) => (
+        <CartItemRow
+          key={item.productId}
+          item={item}
+          error={errors[item.productId]}
+          {...rowProps}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function BagIcon() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 7h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 7z" />
+      <path d="M9 7V6a3 3 0 0 1 6 0v1" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
   );
 }
 
@@ -177,29 +212,54 @@ export default function CartSidebar() {
     cart,
     isOpen,
     closeCart,
-    confirmedAmount,
     monthlyLimit,
     updateItemQuantity,
     removeFromCart,
     emptyCart,
   } = useCart();
+  const limitAmounts = useLimitAmounts();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const titleId = useId();
+  const confirmTitleId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const items = cart.items;
-  const cartFixedTotal = sumCartFixedTotal(cart.items);
-  const limitStatus = monthlyLimitStatus({
-    lines: items,
-    confirmedAmount,
-    monthlyLimit,
-  });
   const groups = groupCartItemsByPaymentTiming(items);
+
+  // 開いたら閉じるボタンにフォーカスを移し、閉じたら開く前の場所へ戻す。Esc で閉じる（確認が出ていれば確認を閉じる）
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    return () => previous?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showClearConfirm) setShowClearConfirm(false);
+      else closeCart();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, showClearConfirm, closeCart]);
+
+  const rowProps = {
+    errors,
+    onChangeQuantity: (item: CartItem, quantity: number) => {
+      const result = updateItemQuantity(item.productId, quantity);
+      setErrors((prev) => ({ ...prev, [item.productId]: result.error ?? "" }));
+    },
+    onRemove: (item: CartItem) => removeFromCart(item.productId),
+  };
 
   return (
     <>
       {/* オーバーレイ */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/30"
+          className="fixed inset-0 z-40 bg-neutral-900/45"
           onClick={closeCart}
           aria-hidden="true"
         />
@@ -207,184 +267,163 @@ export default function CartSidebar() {
 
       {/* すべて削除 確認モーダル */}
       {showClearConfirm && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <p className="text-sm font-medium">カートをすべて削除しますか？</p>
-            <p className="mt-1 text-xs text-gray-500">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-neutral-900/40">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={confirmTitleId}
+            className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <p id={confirmTitleId} className="m-0 text-sm font-semibold">
+              カートをすべて削除しますか？
+            </p>
+            <p className="mt-1 mb-0 text-xs text-neutral-600">
               この操作は元に戻せません。
             </p>
             <div className="mt-5 flex gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
                 onClick={() => setShowClearConfirm(false)}
-                className="flex-1 rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
               >
                 キャンセル
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className="flex-1"
                 onClick={() => {
                   emptyCart();
+                  setErrors({});
                   setShowClearConfirm(false);
                 }}
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
               >
                 削除する
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ドロワー */}
-      <div
-        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl transition-transform duration-300 ${
+      {/* ドロワー。パソコン幅は右から440px、スマホ幅は全面 */}
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        inert={!isOpen}
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white text-neutral-900 shadow-[-20px_0_40px_-20px_color-mix(in_srgb,var(--color-neutral-900)_40%,transparent)] transition-transform duration-300 sm:w-[440px]",
           isOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-        aria-label="カート"
+        )}
       >
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-base font-semibold">
+        <div className="flex items-center justify-between border-b border-neutral-200 py-4 pr-4 pl-5">
+          <h2
+            id={titleId}
+            className="m-0 flex items-baseline gap-2 font-display text-xl font-semibold"
+          >
             カート
             {items.length > 0 && (
-              <span className="ml-2 text-sm font-normal text-gray-500">
+              <span className="font-sans text-[0.8125rem] font-normal text-neutral-600">
                 {items.length}種類
               </span>
             )}
           </h2>
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={closeCart}
-            className="text-gray-400 hover:text-gray-600"
             aria-label="カートを閉じる"
+            className="inline-flex size-11 cursor-pointer items-center justify-center rounded-full text-neutral-900 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <CloseIcon />
           </button>
         </div>
 
-        {/* コンテンツ */}
         {items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-gray-400">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-12 w-12"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1}
+          <div className="flex flex-1 flex-col items-center justify-center gap-3.5 p-8 text-center">
+            <span className="inline-flex size-16 items-center justify-center rounded-full bg-neutral-100 text-neutral-700">
+              <BagIcon />
+            </span>
+            <p className="m-0 text-base font-semibold">カートは空です</p>
+            <p className="m-0 text-[0.8125rem] text-neutral-700">
+              気になる商品を、カートに追加してください。
+            </p>
+            <Link
+              href="/shop"
+              onClick={closeCart}
+              className={buttonVariants({ size: "md" })}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"
-              />
-            </svg>
-            <p className="text-sm">カートに商品が入っていません</p>
+              ショップを見る
+            </Link>
           </div>
         ) : (
           <>
-            {/* アイテムリスト */}
-            <div className="flex-1 divide-y overflow-y-auto">
+            <div className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-5 pt-1 pb-4">
               {groups ? (
                 <>
                   <CartItemGroup
+                    badge={{ label: "カード", tone: "primary" }}
                     title="注文時に支払う商品"
                     items={groups.atOrder}
-                    errors={errors}
-                    setErrors={setErrors}
-                    updateItemQuantity={updateItemQuantity}
-                    removeFromCart={removeFromCart}
+                    {...rowProps}
                   />
                   <CartItemGroup
+                    badge={{ label: "請求書", tone: "info" }}
                     title="注文後に請求される商品"
                     items={groups.afterOrder}
-                    errors={errors}
-                    setErrors={setErrors}
-                    updateItemQuantity={updateItemQuantity}
-                    removeFromCart={removeFromCart}
+                    {...rowProps}
                   />
                 </>
               ) : (
-                <ul className="divide-y">
-                  {items.map((item) => (
-                    <CartItemRow
-                      key={item.productId}
-                      item={item}
-                      errors={errors}
-                      setErrors={setErrors}
-                      updateItemQuantity={updateItemQuantity}
-                      removeFromCart={removeFromCart}
-                    />
-                  ))}
-                </ul>
+                <CartItemList items={items} {...rowProps} />
               )}
             </div>
 
-            {/* フッター */}
-            <div className="border-t px-6 py-5 space-y-4">
-              {/* 月間仕入れ残量 */}
+            <div
+              data-cart-footer
+              className="flex flex-col gap-3.5 border-t border-neutral-200 bg-white px-5 pt-4 pb-5"
+            >
               {/* 会員の情報が無いとき（上限0）は出さない。無制限（null）は出す */}
               {monthlyLimit !== 0 && (
-                <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
-                  <div className="flex items-center justify-between text-gray-500">
-                    <span>月間仕入れ残量</span>
-                    {limitStatus.isUnlimited ? (
-                      <span className="font-medium text-gray-900">無制限</span>
-                    ) : (
-                      <span
-                        className={`font-medium tabular-nums ${limitStatus.isOver ? "text-red-600" : "text-gray-900"}`}
-                      >
-                        ¥{limitStatus.remaining.toLocaleString()}
-                      </span>
-                    )}
-                  </div>
+                <div
+                  role="group"
+                  aria-label="今月の仕入れ枠"
+                  className="rounded-xl bg-neutral-50 px-3.5 py-3"
+                >
+                  <LimitMeter {...limitAmounts} cartBreakdown />
                 </div>
               )}
 
-              {/* 合計 */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">合計（固定価格）</span>
-                <span className="text-lg font-bold tabular-nums">
-                  ¥{cartFixedTotal.toLocaleString()}
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold">合計</span>
+                <span className="text-2xl font-bold tabular-nums">
+                  {yen(sumCartFixedTotal(items))}
                 </span>
               </div>
-              {items.some((i) => i.unitPrice === null) && (
-                <p className="text-xs text-gray-400">
-                  ※ 価格要相談の商品は合計に含まれません
-                </p>
-              )}
+              <span className="-mt-2 text-xs text-neutral-600">
+                価格要相談の商品は、合計に含まれません
+              </span>
 
-              {/* ボタン群 */}
-              <div className="flex flex-col gap-2">
-                <Link
-                  href="/order/checkout"
-                  onClick={closeCart}
-                  className="block w-full rounded-lg bg-gray-900 px-6 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-gray-700"
-                >
-                  注文手続きへ
-                </Link>
-                <button
-                  onClick={() => setShowClearConfirm(true)}
-                  className="w-full rounded-lg border px-6 py-2.5 text-sm text-gray-500 transition-colors hover:border-red-300 hover:text-red-500"
-                >
-                  すべて削除
-                </button>
-              </div>
+              <Link
+                href="/order/checkout"
+                onClick={closeCart}
+                className={cn(buttonVariants({ size: "md" }), "w-full gap-2")}
+              >
+                注文手続きへ
+                <ArrowIcon />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(true)}
+                className="h-10 cursor-pointer self-center px-3 text-[0.8125rem] text-neutral-700 underline hover:text-danger"
+              >
+                カートを空にする
+              </button>
             </div>
           </>
         )}
-      </div>
+      </aside>
     </>
   );
 }

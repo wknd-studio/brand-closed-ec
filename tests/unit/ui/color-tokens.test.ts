@@ -29,4 +29,9 @@ describe("色のトークン", () => {
       contrastOnWhite(tokenHex("color-primary-strong"))
     ).toBeGreaterThanOrEqual(4.5);
   });
+
+  // 請求書払いのバッジ・お知らせの文字に使うため、白地で 4.5:1 を満たす
+  it("--color-info は白地とのコントラストが4.5:1以上", () => {
+    expect(contrastOnWhite(tokenHex("color-info"))).toBeGreaterThanOrEqual(4.5);
+  });
 });

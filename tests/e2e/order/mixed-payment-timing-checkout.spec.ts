@@ -143,7 +143,9 @@ test.describe("支払いタイミングが混在するカートのチェック�
       ]);
 
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
 
     // 注文確認画面が支払いタイミングごとにグループ表示されることを確認
     // （カートサイドバーは非表示でもDOM上に同じ見出しが存在するため、mainに限定する）

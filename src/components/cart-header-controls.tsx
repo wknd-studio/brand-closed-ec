@@ -1,73 +1,110 @@
 "use client";
 
 import { useCart } from "@/components/cart/cart-provider";
+import { LimitMeter } from "@/components/ui/limit-meter";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  monthlyLimitStatus,
+  sumCartFixedTotal,
+} from "@/domain/services/cart-limit";
+import { cn } from "@/lib/cn";
 
-export default function CartHeaderControls() {
-  const { cart, totalUsed, monthlyLimit, openCart } = useCart();
-  const cartCount = cart.items.length;
-  const isUnlimited = monthlyLimit === null;
-  const usageRate =
-    monthlyLimit !== null && monthlyLimit > 0
-      ? Math.min(totalUsed / monthlyLimit, 1)
-      : 0;
+// 仕入れ枠の金額は、カートの上限チェックと同じ useCart・cart-limit の値から取る（カートのサイドバーでも使う）
+export function useLimitAmounts() {
+  const { cart, confirmedAmount, monthlyLimit, totalUsed } = useCart();
+  const status = monthlyLimitStatus({
+    lines: cart.items,
+    confirmedAmount,
+    monthlyLimit,
+  });
+  return {
+    monthlyLimit,
+    confirmedAmount,
+    cartAmount: sumCartFixedTotal(cart.items),
+    used: totalUsed,
+    remaining: status.isUnlimited ? null : status.remaining,
+  };
+}
 
-  const barColor =
-    usageRate >= 0.9
-      ? "bg-red-500"
-      : usageRate >= 0.7
-        ? "bg-yellow-400"
-        : "bg-green-500";
-
+/** パソコン幅の今月の仕入れ枠。押すと内訳を出す */
+export function HeaderLimit({ planName }: { planName?: string }) {
+  const amounts = useLimitAmounts();
   return (
-    <div className="flex items-center gap-3">
-      {/* 月次使用率バー */}
-      <div className="flex items-center gap-1.5">
-        {!isUnlimited && (
-          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-200">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-              style={{ width: `${usageRate * 100}%` }}
-            />
-          </div>
-        )}
-        <span className="text-xs tabular-nums text-gray-500">
-          ¥{totalUsed.toLocaleString()}
-          <span className="text-gray-400">
-            {" "}
-            /{" "}
-            {monthlyLimit === null
-              ? "無制限"
-              : `¥${monthlyLimit.toLocaleString()}`}
-          </span>
-        </span>
-      </div>
-
-      {/* カートアイコン */}
-      <button
-        onClick={openCart}
-        className="relative text-gray-500 hover:text-gray-900"
-        aria-label="カートを開く"
+    <Popover className="shrink-0">
+      <PopoverTrigger className="flex w-60 cursor-pointer flex-col rounded-xl border border-neutral-200 bg-white px-3 py-[7px] text-left text-neutral-900 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <LimitMeter {...amounts} />
+      </PopoverTrigger>
+      <PopoverContent
+        role="dialog"
+        aria-label="今月の仕入れ枠の内訳"
+        className="w-[310px] p-[18px]"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"
-          />
-        </svg>
-        {cartCount > 0 && (
-          <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 text-[10px] font-medium text-white">
-            {cartCount > 99 ? "99+" : cartCount}
-          </span>
-        )}
-      </button>
+        <LimitMeter {...amounts} variant="detail" planName={planName} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** スマホ幅で、ヘッダーの下にいつも出す仕入れ枠の帯 */
+export function HeaderLimitBand() {
+  return (
+    <div
+      aria-label="今月の仕入れ枠"
+      className="border-t border-neutral-100 bg-neutral-50 px-4 pt-2 pb-2.5"
+    >
+      <LimitMeter {...useLimitAmounts()} cartBreakdown />
     </div>
+  );
+}
+
+/** カートを開くボタン（件数のバッジ付き） */
+export function CartButton({ compact = false }: { compact?: boolean }) {
+  const { cart, openCart } = useCart();
+  const count = cart.items.length;
+  return (
+    <button
+      type="button"
+      onClick={openCart}
+      aria-label={
+        count > 0 ? `カートを開く（${count}種類）` : "カートを開く（空）"
+      }
+      className={cn(
+        "relative inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        !compact &&
+          "border border-neutral-200 transition-colors hover:border-primary"
+      )}
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M5 7h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 7z" />
+        <path d="M9 7V6a3 3 0 0 1 6 0v1" />
+      </svg>
+      {count > 0 && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute box-border inline-flex items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-primary-light to-primary font-bold text-primary-foreground",
+            compact
+              ? "top-1 right-0.5 h-[18px] min-w-[18px] px-1 text-[0.625rem]"
+              : "-top-1 -right-1 h-5 min-w-5 px-[5px] text-[0.6875rem]"
+          )}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </button>
   );
 }

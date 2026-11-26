@@ -83,15 +83,13 @@ feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Cler
   - 同じ種類の問題が複数の箇所にあるときは、場所ごとに起票しない。lint・テストで検出して一度に直す1件として起票し、見つけた箇所を本文に並べる（1か所ずつ直しても、新しいコードで同じ書き方をすれば再発するため。「PRのレビュー」の「レビューをすり抜けたバグはlint・テストに変換する」と同じ考え方）
   - 担当issueの範囲の作業が増えた場合は、これではなく「タスク分解」に従う
 - **片付け**: PRを作成したら `bash scripts/worktree-db-stop.sh` でSupabaseを停止し、スロットを解放する（レビュー対応で再びテストが必要になれば、`with-worktree-db.sh` が自動で起動し直す）
-- **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、次の2つを満たせば、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop --body-file <本文ファイル>` まで進めてよい。PR本文は `.github/pull_request_template.md` の各項目を埋める（該当しない欄は「なし」と書く）。
-  - `task check` がgreen
-  - レビュー用サブエージェント `spec-reviewer`（`.claude/agents/spec-reviewer.md`）に、`git diff origin/develop...HEAD` の差分・担当issueの本文・関連する `specs/*/spec.md`・層の責務の基準の `docs/ai-prompts/architecture.md` だけを渡してレビューさせ、重大な指摘を解消済み（指摘と対応はPR本文に書く）
+- **自動push・PR**: `linkedIssue` が設定されたワークツリーで、そのissueを実装した場合に限り、`task check` がgreenなら、ユーザーの承認を待たずに `git push -u origin <ブランチ>` と `gh pr create --base develop --body-file <本文ファイル>` まで進めてよい。PR本文は `.github/pull_request_template.md` の各項目を埋める（該当しない欄は「なし」と書く）。
 
   PR本文冒頭の「レビューの要点」は、人間が最初に読み、残りを読むかを決める欄なので短く書く（空欄だとCIの `PR Review Summary` が失敗する）。
   - **変わる振る舞い**: 利用者・運営者・システムから見て何が変わるかを1〜2行で。変更したファイルの列挙にしない
   - **一番危ない箇所**: `ファイル:行` まで特定し、なぜ危ないか（壊れたら何が起きるか）を1行で添える。複数あっても一番のものだけ
   - **人間に判断してほしいこと**: 仕様の解釈・トレードオフ・マージ後の手作業など、人間の判断が要るものだけ。無ければ「なし」
-  - 受け入れ条件ごとの確認結果・実行したチェック・レビューサブエージェントの指摘と対応は、`<details>` の中に今までどおり省略せず書く
+  - 受け入れ条件ごとの確認結果・実行したチェックは、`<details>` の中に今までどおり省略せず書く
 
   「レビューの要点」の直後の「動作確認の手順」は、人間がPRを開けば、どのアカウントで何を確かめるかをこのセッションに聞かずに分かるように書く（人間の確かめ方・`needs-manual-check` ラベルは `docs/manual-check.md`）。手動確認が空欄、または `要（…）` なのに残りの3項目が空欄だとCIの `PR Review Summary` が失敗する。
   - **手動確認**: `要（マージ前）`（人間が画面で確かめるべきものがあるPRは原則これ）・`要（stg）`（プレビューが出ず、`high-risk` でも画面が大きく変わるのでもないPR）・`不要` のどれか。`不要` は理由を1行（例: `不要（CIの設定だけ）`）
@@ -119,18 +117,24 @@ feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Cler
 - 実装中に担当issueの範囲（同じ親issueの目的）の作業が増えたら、PRを大きくせず、新しいissueを起票して親issueのタスクリストに追記する。Orcaのセッションは担当issue以外を実装しない。範囲外の問題を見つけた場合は、親issueに追記せず「並列開発（Orca）」の「担当外の問題」に従う
 - タスクリストは最初から完璧にしなくてよい。大枠から書き、分かった時点で追記する
 
-**PRのレビュー**: スキーマ・RLS、Webhook、認証・認可、決済・注文・金額計算、CI・権限設定・lintなどのゲート、依存に触れるPRには `high-risk` ラベルが自動で付く（対象パスは `.github/labeler.yml`）。
+**PRのレビュー**: 壊れると利用者・お金・権限に直接響くPRにだけ `high-risk` ラベルが自動で付く（#578。判定は `scripts/ci/high-risk.ts`、付け外しは `.github/workflows/labeler.yml`）。
 
+- `high-risk` が付くのは次のどれかに当たるPR
+  - スキーマ・RLS（`risk:db`）・Webhook（`risk:webhook`）・認証・認可（`risk:auth`）・決済・注文・金額計算（`risk:payment`）の対象パスに触れる
+  - ゲートを弱める変更: 既存のワークフローのジョブの削除・`if:` や `continue-on-error` の追加、`scripts/ci/layer-coverage.config.ts` の閾値の引き下げ・例外の追加、`eslint-suppressions.json` への追加、`.claude/settings.json` の権限の追加（`allow` への追加・`ask`・`deny` からの削除）
+  - ゲートの本体（Test Guard・`high-risk` の判定・gitleaks）の変更。弱めたかを機械的に見分けられないため、どう変えても付く
+  - 依存の追加・メジャーバージョンの変更（lockfile だけ・パッチ／マイナーの更新では付かない）
 - `high-risk` ラベルのPRは、人間が差分を精読してからマージする
-- それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する
-- 区分ごとに見るべき観点が違うため、`high-risk` と一緒に区分のラベル（`risk:db`・`risk:webhook`・`risk:auth`・`risk:payment`・`risk:gate`・`risk:deps`）も付く。区分ごとの確認観点は `docs/review-checklists/<区分>.md`（`risk:db` → `db.md`）にあり、CIの `PR Diff Summary` のコメントに、PRが当たった区分ごとの該当ファイルとチェックリストが出る。精読はこのチェックリストに沿って行う
-- 対象パスを足すときは、`.github/labeler.yml` の区分と `high-risk` の両方に足す（ずれると `tests/unit/review-checklists.test.ts` が失敗する）
+- それ以外のPRは、CIの結果とPR本文の証拠欄（実施したテスト等）で判断する。CI・lint・依存（`risk:gate`・`risk:deps`）に触れていても、上記に当たらなければ精読しない
+- 区分ごとに見るべき観点が違うため、区分のラベル（`risk:db`・`risk:webhook`・`risk:auth`・`risk:payment`・`risk:gate`・`risk:deps`）も付く（対象パスは `.github/labeler.yml`）。区分ごとの確認観点は `docs/review-checklists/<区分>.md`（`risk:db` → `db.md`）にあり、CIの `PR Diff Summary` のコメントに、PRが当たった区分ごとの該当ファイルとチェックリストが出る。精読はこのチェックリストに沿って行う
+- 対象パスは `.github/labeler.yml` の区分にだけ足す。`risk:db`・`risk:webhook`・`risk:auth`・`risk:payment` に足したパスは、そのまま `high-risk` の対象になる
+- ゲートを弱める変更の検出は完全ではない（`run:` に `|| true` を足す・lintのルールを無効にする等は検出しない）。すり抜けたら `scripts/ci/high-risk.ts` に検出を足す
 - レビューをすり抜けたバグが出たら、該当パスを `.github/labeler.yml` に加えるか、見落とした観点を `docs/review-checklists/` に足すか、同じバグを検出するlint・テストに変換する
 
 **Dependabot のセキュリティ更新**: Dependabot が、セキュリティの更新をエコシステム（npm・GitHub Actions）ごとに1つのPRにまとめて、develop に向けて自動で作る（設定は `.github/dependabot.yml`。バージョンの定期更新は作らない）。
 
 - このPRは「1PR = 1目的 = 1issue」の例外で、issue 無しで扱う。本文も決まりの書き方にならないため、`PR Review Summary` は作成者が `dependabot[bot]` のPRを検査せずに成功扱いにする。ほかのCIは通常のPRと同じく動く
-- `package.json`・`pnpm-lock.yaml`・`.github/` を変えるため `high-risk` が付く。人間が差分を精読してからマージする
+- パッチ・マイナーの更新では `high-risk` は付かず、CIの結果で判断する。メジャーバージョンの変更・依存の追加を含むときだけ `high-risk` が付き、人間が差分を精読してからマージする
 - CIが落ちたら、オーケストレーションのセッションが修正の issue を起票する（Dependabot のPRのブランチに直接コミットしない）
 
 **developのCIが赤のとき**: PRのCIは「CIが動いた時点のdevelop + そのPR」しか見ていないため、別々に通ったPRの組み合わせでdevelopが壊れることがある。developへのpushのたびに `Deploy` ワークフローで TypeScript・Lint・Unit Tests が動き（通らなければ `Deploy (staging)` は動かない）、生成物の検査（`Schema Types Drift`・`Schema Files Drift`）も動く（stgの動作には影響しないため `Deploy (staging)` は待たない。#789）。どれの失敗も依存グラフのページの一番上の帯に出る。

@@ -56,7 +56,9 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
     await addFirstProductToCart(page);
 
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
 
     await fillNewAddress(page, "お届け先");
     await page.getByRole("radio", { name: /テスト 太郎/ }).check();
@@ -102,7 +104,9 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
 
     await addFirstProductToCart(page);
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
 
     await page
       .getByRole("radio", { name: /テスト 花子/ })
@@ -149,7 +153,9 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
     });
 
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
 
     await fillNewAddress(page, "お届け先");
     await page.getByRole("radio", { name: /テスト 太郎/ }).check();
@@ -178,12 +184,19 @@ test.describe("注文の最終確認画面の表示", () => {
   }) => {
     await addFirstProductToCart(page);
     await page.goto("/order/checkout");
-    await expect(page.getByRole("heading", { name: "注文確認" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ご注文内容の確認" })
+    ).toBeVisible();
 
     // 分量（数量）と販売価格（対価）。カートのサイドバーにも同じ表示があるため、画面の本文に絞る
     const content = page.getByRole("main").first();
     await expect(content.getByText(/¥[\d,]+ × 1/)).toBeVisible();
-    await expect(content.getByText("合計（固定価格）")).toBeVisible();
+    await expect(
+      content
+        .getByRole("complementary", { name: "お支払い金額" })
+        .getByRole("term")
+        .filter({ hasText: /^合計$/ })
+    ).toBeVisible();
 
     const terms = page.getByRole("region", {
       name: "お支払い・お届け・キャンセルについて",
@@ -198,10 +211,13 @@ test.describe("注文の最終確認画面の表示", () => {
         terms.getByRole("term").filter({ hasText: term })
       ).toHaveCount(1);
     }
-    // カートの商品（注文時払い）に合う支払い方法・時期が出て、注文後払いのものは出ない
-    await expect(terms.getByText(/^クレジットカード/)).toBeVisible();
-    await expect(terms.getByText("注文の確定時")).toBeVisible();
-    await expect(terms.getByText(/^請求書払い/)).toHaveCount(0);
+    // カートの商品（注文時払い）に合う支払い方法・時期が出て、注文後払いのものは出ない。
+    // 支払い手段はどちらもクレジットカードで、違いは払う手順（決済画面／請求書）と時期（#808）
+    await expect(terms.getByText(/^クレジットカード.*決済画面/)).toBeVisible();
+    await expect(
+      terms.getByText("注文の確定時", { exact: true })
+    ).toBeVisible();
+    await expect(terms.getByText(/^クレジットカード.*請求書/)).toHaveCount(0);
     await expect(
       terms.getByRole("link", { name: "特定商取引法に基づく表記" })
     ).toHaveAttribute("href", "/legal/tokushoho");

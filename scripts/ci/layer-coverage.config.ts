@@ -3,8 +3,9 @@ import type { LayerCoverageConfig } from "./layer-coverage";
 /**
  * 層ごとのカバレッジ検査の対象・閾値・例外（#455。検査の中身は scripts/ci/layer-coverage.ts）。
  *
- * このファイルの変更（閾値を下げる・例外を足す）は high-risk として人間がレビューする
- * （.github/labeler.yml の scripts/ci/**）。
+ * 閾値を下げる・例外を足す変更は high-risk として人間がレビューする（scripts/ci/high-risk.ts。#578）。
+ * 判定はこのファイルを実行せずに構文木から読むため、値はリテラルで書く（変数・関数呼び出し・スプレッドを
+ * 使うと「読めない」として常に high-risk になる）。
  *
  * 閾値は「層に合った種類のテストで実行されていること」の担保が目的で、網羅率の競争ではない。
  * 業務ロジック（domain・use-cases）は関数100%・分岐100%、外部との境界（アダプタ・Supabase の実装・

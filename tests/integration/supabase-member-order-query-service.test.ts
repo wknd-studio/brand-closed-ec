@@ -85,6 +85,8 @@ const DETAIL_INVOICE_SETTLEMENT_ID = "00000000-0000-0000-0000-000000365a31";
 const DETAIL_CHECKOUT_ITEM_ID = "00000000-0000-0000-0000-000000365a41";
 const DETAIL_INVOICE_ITEM_ID = "00000000-0000-0000-0000-000000365a42";
 const DETAIL_UNASSIGNED_ITEM_ID = "00000000-0000-0000-0000-000000365a43";
+const DETAIL_REQUESTED_RETURN_ID = "00000000-0000-0000-0000-000000381a51";
+const DETAIL_REJECTED_RETURN_ID = "00000000-0000-0000-0000-000000381a52";
 const ALL_ORDER_IDS = [
   MIXED_ORDER_ID,
   AT_ORDER_ONLY_ORDER_ID,
@@ -178,6 +180,8 @@ function item(
 }
 
 async function cleanup() {
+  // return_items は申請の削除と一緒に消える（ON DELETE CASCADE）
+  await supabase.from("returns").delete().in("order_id", ALL_ORDER_IDS);
   await supabase.from("order_items").delete().in("order_id", ALL_ORDER_IDS);
   await supabase
     .from("order_settlements")
@@ -435,6 +439,40 @@ beforeAll(async () => {
       negotiated_unit_price: 7_000,
       payment_timing: "after_order",
     }),
+  ]);
+  // 注文詳細の申請できる数量（#381）: 申請中の申請の分は引き、却下された申請の分は引かない
+  await insert("returns", [
+    {
+      id: DETAIL_REQUESTED_RETURN_ID,
+      order_id: DETAIL_ORDER_ID,
+      status: "requested",
+      requested_by_user_id: USER_ID,
+      reason: "不良品",
+    },
+    {
+      id: DETAIL_REJECTED_RETURN_ID,
+      order_id: DETAIL_ORDER_ID,
+      status: "rejected",
+      requested_by_user_id: USER_ID,
+      reason: "不良品",
+    },
+  ]);
+  await insert("return_items", [
+    {
+      return_id: DETAIL_REQUESTED_RETURN_ID,
+      order_item_id: DETAIL_CHECKOUT_ITEM_ID,
+      quantity: 1,
+    },
+    {
+      return_id: DETAIL_REQUESTED_RETURN_ID,
+      order_item_id: DETAIL_INVOICE_ITEM_ID,
+      quantity: 1,
+    },
+    {
+      return_id: DETAIL_REJECTED_RETURN_ID,
+      order_item_id: DETAIL_UNASSIGNED_ITEM_ID,
+      quantity: 4,
+    },
   ]);
 });
 
@@ -871,7 +909,31 @@ describe("SupabaseMemberOrderQueryService.findOrderDetail", () => {
           isNegotiable: true,
         },
       ],
+      // 支払い済みの Checkout の明細と後払いの明細。全数量が申請中の明細は含めない
+      returnableItems: [
+        {
+          id: DETAIL_CHECKOUT_ITEM_ID,
+          productNameSnapshot: "注文時に支払った商品",
+          returnableQuantity: 1,
+        },
+        {
+          id: DETAIL_UNASSIGNED_ITEM_ID,
+          productNameSnapshot: "これから請求する商品",
+          returnableQuantity: 4,
+        },
+      ],
     });
+  });
+
+  it("支払い完了前の注文時に支払う明細（パターン①）は、申請できる明細に含めない", async () => {
+    const detail = await queryService.findOrderDetail({
+      clerkUserId: CLERK_USER,
+      orderId: MIXED_ORDER_ID,
+    });
+
+    expect(detail?.returnableItems.map((i) => i.id).sort()).toEqual(
+      [AFTER_ORDER_ITEM_ID, NEGOTIABLE_AFTER_ORDER_ITEM_ID].sort()
+    );
   });
 
   it("他の会員の注文は null", async () => {
@@ -969,6 +1031,17 @@ describe("memberOrderQueryService（composition。RLS 付きのクライアン�
     ]);
     expect(detail?.unassignedItems.map((i) => i.id)).toEqual([
       DETAIL_UNASSIGNED_ITEM_ID,
+    ]);
+    // 会員が読めるカラムだけで申請を読み、申請中の分を引いた数量を返す
+    expect(detail?.returnableItems).toEqual([
+      expect.objectContaining({
+        id: DETAIL_CHECKOUT_ITEM_ID,
+        returnableQuantity: 1,
+      }),
+      expect.objectContaining({
+        id: DETAIL_UNASSIGNED_ITEM_ID,
+        returnableQuantity: 4,
+      }),
     ]);
   });
 

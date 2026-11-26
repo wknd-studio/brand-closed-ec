@@ -12,13 +12,13 @@ import { PLANS } from "@/app/home-presenter";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Heading } from "@/components/ui/heading";
+import { NumberedSection } from "@/components/ui/numbered-section";
 import { Steps } from "@/components/ui/steps";
 import {
   MemberRank,
   type MemberRankValue,
 } from "@/domain/value-objects/member-rank";
 import PlanSelector from "./plan-selector";
-import { PlanSection } from "./plan-section";
 
 const SELF_SERVICE_RANKS: readonly MemberRankValue[] =
   MemberRank.selfServiceRanks();
@@ -45,7 +45,7 @@ function MembershipTerms() {
     { label: "解約（退会）", value: MEMBERSHIP_TERMS.cancellation },
   ];
   return (
-    <PlanSection
+    <NumberedSection
       id="membership-terms-heading"
       number={3}
       title="お申し込みの条件"
@@ -60,7 +60,7 @@ function MembershipTerms() {
           </div>
         ))}
       </dl>
-    </PlanSection>
+    </NumberedSection>
   );
 }
 

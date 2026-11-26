@@ -17,6 +17,7 @@ import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { isSubscriptionPaymentFailed } from "@/domain/services/new-order-eligibility";
 import { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
 import { groupItemsBySettlement } from "@/domain/services/settlement-grouping";
+import { returnableQuantities } from "@/domain/services/returnable-quantity";
 import type { OrderItem } from "@/domain/entities/order-item";
 import type { AddressSnapshot } from "@/domain/value-objects/address-snapshot";
 import {
@@ -28,6 +29,11 @@ import {
   type OrderItemRow,
   type OrderSettlementRow,
 } from "@/infrastructure/supabase/supabase-order-repository";
+import {
+  RETURN_COLUMNS,
+  toReturnRequest,
+  type ReturnRow,
+} from "@/infrastructure/supabase/supabase-return-repository";
 
 type AddressRow = {
   id: string;
@@ -251,7 +257,7 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     const { data, error } = await this.db
       .from("orders")
       .select(
-        `status, rank_at_order, shipping_address_snapshot, billing_address_snapshot, ${ORDER_SELECT}, order_settlements(${ORDER_SETTLEMENT_COLUMNS}, created_at)`
+        `status, rank_at_order, shipping_address_snapshot, billing_address_snapshot, ${ORDER_SELECT}, order_settlements(${ORDER_SETTLEMENT_COLUMNS}, created_at), returns(${RETURN_COLUMNS})`
       )
       .eq("id", orderId)
       .eq("users.clerk_user_id", clerkUserId)
@@ -268,14 +274,22 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     }
     if (!data) return null;
 
-    const { groups, unassigned } = groupItemsBySettlement(
-      (data.order_settlements as OrderSettlementRow[]).map(toOrderSettlement),
-      (data.order_items as OrderItemRow[]).map(toOrderItem)
+    const settlements = (data.order_settlements as OrderSettlementRow[]).map(
+      toOrderSettlement
     );
+    const items = (data.order_items as OrderItemRow[]).map(toOrderItem);
+    const { groups, unassigned } = groupItemsBySettlement(settlements, items);
+    const status = OrderStatus.of(data.status);
+    const returnable = returnableQuantities({
+      orderStatus: status,
+      items,
+      settlements,
+      returns: (data.returns as ReturnRow[]).map(toReturnRequest),
+    });
     return {
       orderId: data.id,
       createdAt: new Date(data.created_at).toISOString(),
-      status: OrderStatus.of(data.status),
+      status,
       rankAtOrder: MemberRank.of(data.rank_at_order),
       shippingAddress: toOrderDetailAddressDto(
         toAddressSnapshot(data.shipping_address_snapshot)
@@ -291,6 +305,18 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
         items: items.map(toItemDto),
       })),
       unassignedItems: unassigned.map(toItemDto),
+      returnableItems: items.flatMap((item) => {
+        const quantity = returnable.get(item.id) ?? 0;
+        return quantity > 0
+          ? [
+              {
+                id: item.id,
+                productNameSnapshot: item.productNameSnapshot,
+                returnableQuantity: quantity,
+              },
+            ]
+          : [];
+      }),
     };
   }
 

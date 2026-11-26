@@ -29,3 +29,7 @@ export const Warning: Story = {
 export const Danger: Story = {
   args: { tone: "danger", children: "上限超過" },
 };
+
+export const Info: Story = {
+  args: { tone: "info", children: "請求書払い" },
+};

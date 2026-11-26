@@ -8,6 +8,7 @@ PR (develop・main)
   ├─ Lint / Format チェック
   ├─ Unit Tests
   ├─ Gitleaks（PR の commit の機密情報の漏れ）
+  ├─ Issue Scope（develop 向け。issue の範囲外の high-risk の変更。下の「issue の範囲外の high-risk の変更を止める」）
   ├─ E2E Tests（コード変更を含むPRのみ。ローカルSupabase + ローカルdevサーバーで実行）
   └─ Preview → Preview Deploy（develop 向けの feature/* のみ。マイグレーションを含むPRは出さない。下の「PRごとのプレビュー」）
 
@@ -44,7 +45,7 @@ push (develop・main)
 | prod            | `main`      | 専用プロジェクト  | 「EQ Mart」の Production インスタンス                                     |
 | PR の CI        | —           | ジョブ内の Docker | 「EQ Mart (CI)」の Development インスタンス（`happy-terrier-8249`、#299） |
 
-> **Clerk の application の分け方**: Webhook の送り先はインスタンスごとに1つのため、データの行き先（接続する DB）ごとに application を分けている（#686）。ローカルで Clerk ユーザーを作っても、その Webhook は stg には届かない。ローカル用のインスタンスの Webhook はメインのチェックアウトの ngrok（`https://buffing-flaccid-nutty.ngrok-free.dev/api/webhooks/clerk`）に届く。Doppler の `dev`（と、それを継承する `dev_personal`）の Clerk のキー・`CLERK_ADMIN_ORGANIZATION_ID` はローカル用のインスタンスのもの、`stg`・`stg_deploy` は stg のもの。ローカル用のインスタンスの設定（サインアップの方式・規約同意・Organization・運営組織のロール等）は stg と同じにしてある。ただし captcha（`auth_attack_protection.bot_protection.captcha_enabled`）は API で有効にできず、ローカル用だけ無効のまま（E2E は Testing Token で captcha を通らないため影響しない）。stg の設定を変えたら、ローカル用・CI 用にも同じ変更をする（`clerk config pull --app <application ID>` で比べられる）。運営組織のロール・権限・Role Set と運営組織そのものもインスタンスごとにあり、ローカル用のものは PR #691（issue #390、2026-11-23 時点で未マージ）の `scripts/clerk-admin-rbac.ts setup` で作った
+> **Clerk の application の分け方**: Webhook の送り先はインスタンスごとに1つのため、データの行き先（接続する DB）ごとに application を分けている（#686）。ローカルで Clerk ユーザーを作っても、その Webhook は stg には届かない。ローカル用のインスタンスの Webhook はメインのチェックアウトの ngrok（`https://buffing-flaccid-nutty.ngrok-free.dev/api/webhooks/clerk`）に届く。Doppler の `dev`（と、それを継承する `dev_personal`）の Clerk のキー・`CLERK_ADMIN_ORGANIZATION_ID` はローカル用のインスタンスのもの、`stg`・`stg_deploy` は stg のもの。ローカル用のインスタンスの設定（サインアップの方式・規約同意・Organization・運営組織のロール等）は stg と同じにしてある。ただし captcha（`auth_attack_protection.bot_protection.captcha_enabled`）は API で有効にできず、ローカル用だけ無効のまま（E2E は Testing Token で captcha を通らないため影響しない）。stg の設定を変えたら、ローカル用・CI 用にも同じ変更をする（`clerk config pull --app <application ID>` で比べられる）。全インスタンスで、セッショントークンに `role: "authenticated"` を入れている（`session.claims`。入っていないと会員の操作が `anon` になり、全て `42501` になる。手順は `docs/runbooks/clerk-supabase-role-claim.md`、issue #794）。運営組織のロール・権限・Role Set と運営組織そのものもインスタンスごとにあり、ローカル用のものは PR #691（issue #390、2026-11-23 時点で未マージ）の `scripts/clerk-admin-rbac.ts setup` で作った
 
 ---
 
@@ -306,6 +307,34 @@ doppler run -p brand-closed-ec -c stg_deploy -- sh -c 'yes | pnpm exec wrangler 
 
 ---
 
+## issue の範囲外の high-risk の変更を止める（`Issue Scope`）
+
+issue の範囲外で high-risk の変更をすることを、モデルの判断に頼らず機械的に止める（#795）。「high-risk の変更」は、PR に `high-risk` を付ける判定（`scripts/ci/high-risk.ts` の `judgeHighRisk`。#578）が理由を出したファイルの変更で、精読が必須の区分（`risk:db`・`risk:webhook`・`risk:auth`・`risk:payment`）のパス・ゲートの本体・ゲートを弱める変更・依存の追加とメジャー更新が当たる。`risk:gate`・`risk:deps` のファイルでも、ゲートを弱めない変更は止めない。「issue の範囲」は issue 本文の「- 触るファイル:」の行（`.github/ISSUE_TEMPLATE/task.md` の「並列作業メモ」）で、そこに書いたパスはファイルそのもの・ディレクトリ（前方一致）・グロブのどれでも当たりになる。判定は `scripts/ci/issue-scope.ts` にあり、次の2か所が同じ関数を使う。
+
+- **PreToolUse hook**（`.claude/settings.json` → `.claude/hooks/issue-scope-guard.ts`）: Edit・Write 等の前に動き、その編集が high-risk で、ファイルが担当 issue（`orca worktree current --json` の `linkedIssue`）の「触るファイル」に無ければ exit 2 で止めて、理由と進め方をモデルに返す
+  - 編集前（今のファイル）と編集後の中身で `judgeHighRisk` を動かす。high-risk にならない編集は、`orca`・`gh` を呼ばずに通す
+  - 1回の編集ずつ見るため、何回かに分けて弱める等は CI が止める
+  - Orca のワークツリーでない・`linkedIssue` が無いときは止めない（メインのチェックアウトでの作業等）
+  - issue の本文を取得できないとき（`gh` の認証切れ等）は止める（安全側）
+  - `node_modules` が無いワークツリーでは hook がエラーになり、止めずに通る。そのときは CI が止める
+  - Bash（`sed` 等）での書き換えは対象外。CI が止める
+- **PR の CI**（`.github/workflows/issue-scope.yml` の `Issue Scope`。develop 宛ての PR）: develop との差分（merge-base から）で `judgeHighRisk` を動かし、理由が出たファイルのうち、PR 本文の `Closes #n` の issue の「触るファイル」に無いものがあれば失敗し、範囲外のファイルと high-risk の理由を並べる
+  - 人間が PR に `scope-approved` ラベルを付けると成功扱いになる（Test Guard の `test-change-approved` と同じ形）
+  - 判定は PR の head の `scripts/ci/issue-scope.ts` で動く。判定・ワークフロー・hook（`scripts/ci/issue-scope.ts`・`.github/workflows/issue-scope.yml`・`.claude/hooks/**`）はゲートの本体として、どう変えても `high-risk` が付き、人間が精読する。`.claude/settings.json` から hook を外す変更も、ゲートを弱める変更として `high-risk` が付く
+  - `Closes #n` は PR 本文の「## 関連issue」の節から読む（節が無ければ本文全体）。`Closes #n` が無い PR は、high-risk のファイルをすべて範囲外として扱う。high-risk のファイルを変えないなら成功する
+  - Dependabot の PR は issue 無しで扱うため、検査せずに成功扱いにする（high-risk になる更新なら `high-risk` が付き、人間が精読する）
+  - PR 本文の編集・ラベルの付け外しでは動き直すが、issue の本文を書き足したときは動かないため、PR の Checks で `Issue Scope` を再実行する
+
+止まったときの進め方:
+
+- 範囲外の問題なら、変更せずに起票する（CLAUDE.md「並列開発（Orca）」の「担当外の問題」）
+- 担当 issue の範囲で必要な変更なら、人間が issue の「触るファイル」に書き足す（Orca のセッションは自分で issue 本文を書き換えない）。CI は再実行する
+- 人間が差分を確かめて範囲外の変更を認めるなら、`scope-approved` ラベルを付ける
+
+Orca のセッションが自分で issue の「触るファイル」を書き足したり、PR に `scope-approved` を付けたりして通らないように、`.claude/settings.json` で `gh issue edit`・`gh pr edit` を `ask`（実行のたびに人間の確認が要る）にしている。`gh api` で直接書き換える経路は対象外。
+
+本文に「触るファイル」が書かれていない issue では、high-risk の編集がすべて止まる（安全側）。
+
 ## E2E テスト
 
 ### CI での実行タイミング（3種類）
@@ -433,7 +462,7 @@ API キー・秘密鍵・トークンが commit に入っていないかを、[g
 
 - 鍵の形をしていない漏れ（例: テスト用のアカウントのパスワード = メールアドレス。#651）は gitleaks でも見つけられない。引き続き `high-risk` の精読で見る
 - CI はマージコミットの差分を調べない（gitleaks は `git log -p` を使い、既定ではマージコミットの差分が出ないため）。develop を取り込んだときの衝突の解消で足した値は、ローカルの pre-commit でだけ止まる
-- CI は PR のチェックアウトにある `.gitleaks.toml` を読むため、PR が allowlist を広げるとその PR の検査も弱くなる。`.gitleaks.toml`・`.husky/`・`scripts/gitleaks-staged.sh` を `high-risk`（`risk:gate`）の対象にして、人間が精読する
+- CI は PR のチェックアウトにある `.gitleaks.toml` を読むため、PR が allowlist を広げるとその PR の検査も弱くなる。`.gitleaks.toml`・`.husky/`・`scripts/gitleaks-staged.sh` は、どう変えても `high-risk` が付くゲートの本体にして（`scripts/ci/high-risk.ts`。#578）、人間が精読する
 - gitleaks の公式の action は Organization のリポジトリでは有料のライセンスキーが要るため使わない
 
 ### ローカルの準備

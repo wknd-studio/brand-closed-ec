@@ -11,9 +11,15 @@ import {
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { selectPlan, type SelectPlanResult } from "./actions";
-import { PlanSection } from "./plan-section";
 import { todayPayment } from "./today-payment";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { NumberedSection } from "@/components/ui/numbered-section";
+import {
+  SummaryList,
+  SummaryPanel,
+  SummaryRow,
+} from "@/components/ui/summary-panel";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import type { RequiredProfileField } from "@/domain/errors/missing-required-profile-fields-error";
@@ -115,33 +121,25 @@ export default function PlanSelector({
   return (
     <>
       {(errorFields.length > 0 || failed?.error) && (
-        <div
-          ref={errorSummaryRef}
-          role="alert"
-          tabIndex={-1}
-          className="flex items-start gap-3 rounded-xl border border-danger/25 bg-danger/5 px-4 py-3.5 text-sm text-danger outline-none"
-        >
-          <AlertIcon className="mt-px size-5 shrink-0" />
-          <div className="flex flex-col gap-1">
-            {errorFields.length > 0 && <p>入力内容をご確認ください。</p>}
-            {errorFields.length > 0 && (
-              <ul className="flex flex-col gap-1">
-                {errorFields.map(({ field, message }) => (
-                  <li key={field}>
-                    <a
-                      href={`#${field}`}
-                      onClick={(event) => focusField(event, field)}
-                      className="underline"
-                    >
-                      {message}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {failed?.error && <p>{failed.error}</p>}
-          </div>
-        </div>
+        <Alert ref={errorSummaryRef} tone="danger" role="alert" tabIndex={-1}>
+          {errorFields.length > 0 && <p>入力内容をご確認ください。</p>}
+          {errorFields.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {errorFields.map(({ field, message }) => (
+                <li key={field}>
+                  <a
+                    href={`#${field}`}
+                    onClick={(event) => focusField(event, field)}
+                    className="underline"
+                  >
+                    {message}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          {failed?.error && <p>{failed.error}</p>}
+        </Alert>
       )}
       <form
         ref={formRef}
@@ -152,7 +150,7 @@ export default function PlanSelector({
           <input type="hidden" name="accountType" value="corporate" />
         )}
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
-          <PlanSection id="plan-heading" number={1} title="プランを選ぶ">
+          <NumberedSection id="plan-heading" number={1} title="プランを選ぶ">
             <p className="-mt-3.5 text-[0.8125rem] leading-[1.7] text-secondary">
               月間の仕入れ上限に合わせてお選びください。上限までは、対象商品を卸価格で購入できます。
             </p>
@@ -208,9 +206,9 @@ export default function PlanSelector({
               </div>
             </fieldset>
             {planNote}
-          </PlanSection>
+          </NumberedSection>
 
-          <PlanSection
+          <NumberedSection
             id="profile-heading"
             number={2}
             title={isCorporate ? "法人とご担当者の情報" : "お客様情報"}
@@ -313,15 +311,12 @@ export default function PlanSelector({
                 />
               )}
             </FormField>
-          </PlanSection>
+          </NumberedSection>
 
           {children}
         </div>
 
-        <aside
-          aria-label="お申し込み内容"
-          className="sticky top-6 flex min-w-0 flex-[1_1_300px] flex-col gap-[18px] rounded-3xl border-[1.5px] border-primary bg-white p-6 shadow-[0_18px_40px_-24px_color-mix(in_srgb,var(--color-primary)_45%,transparent)]"
-        >
+        <SummaryPanel aria-label="お申し込み内容">
           <PaymentSummary plan={selectedPlan} minimumPeriod={minimumPeriod} />
           <Button type="submit" disabled={isPending} className="w-full gap-2">
             {isPending ? "処理中..." : "お支払いへ進む"}
@@ -357,7 +352,7 @@ export default function PlanSelector({
             Stripe の決済画面で、クレジットカードでお支払いいただきます。
           </p>
           {legalNote}
-        </aside>
+        </SummaryPanel>
       </form>
     </>
   );
@@ -398,44 +393,19 @@ function PaymentSummary({
         </span>
       </div>
       <div className="h-px bg-neutral-200" />
-      <dl className="flex flex-col gap-2 text-[0.8125rem] tabular-nums">
-        <div className="flex justify-between">
-          <dt className="text-neutral-700">初期費用</dt>
-          <dd>¥{plan.initialFee}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-neutral-700">初月の月額</dt>
-          <dd>¥{plan.monthlyFee}</dd>
-        </div>
-        <div className="mt-1 flex items-baseline justify-between border-t border-neutral-200 pt-2.5">
-          <dt className="font-semibold">本日のお支払い</dt>
-          <dd className="text-2xl font-bold">¥{todayPayment(plan)}</dd>
-        </div>
-        <div className="flex justify-between text-xs text-secondary">
-          <dt>2ヶ月目以降</dt>
-          <dd>毎月 ¥{plan.monthlyFee}</dd>
-        </div>
-      </dl>
+      <SummaryList>
+        <SummaryRow label="初期費用">¥{plan.initialFee}</SummaryRow>
+        <SummaryRow label="初月の月額">¥{plan.monthlyFee}</SummaryRow>
+        <SummaryRow label="本日のお支払い" variant="total">
+          ¥{todayPayment(plan)}
+        </SummaryRow>
+        <SummaryRow label="2ヶ月目以降" variant="note">
+          毎月 ¥{plan.monthlyFee}
+        </SummaryRow>
+      </SummaryList>
       <p className="rounded-lg bg-neutral-50 px-3 py-2.5 text-xs leading-[1.7] text-neutral-700">
         {minimumPeriod}
       </p>
     </>
-  );
-}
-
-function AlertIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-      className={className}
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v6M12 16.5v.5" />
-    </svg>
   );
 }

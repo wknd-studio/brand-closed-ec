@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, it, expect } from "vitest";
 
+import { highRiskGlobs } from "../../scripts/ci/high-risk";
 import {
-  HIGH_RISK_LABEL,
   MAX_LISTED_FILES_PER_RISK,
   checklistPath,
   loadChecklist,
@@ -30,10 +30,13 @@ describe("parseRiskRules（.github/labeler.yml）", () => {
     ]);
   });
 
-  it("high-risk の対象パスは、区分の対象パスの和集合と一致する（区分に分けても high-risk は今までどおり付く）", () => {
-    const globs = parseLabelGlobs(labelerYaml);
-    expect(new Set(globs[HIGH_RISK_LABEL])).toEqual(
-      new Set(rules.flatMap((r) => r.globs))
+  it("high-risk のパスでの対象は、精読が必須の区分の対象パスの和集合と一致する（risk:gate・risk:deps は中身の検出だけで付く。scripts/ci/high-risk.ts）", () => {
+    expect(new Set(highRiskGlobs(rules))).toEqual(
+      new Set(
+        rules
+          .filter((r) => !["risk:gate", "risk:deps"].includes(r.label))
+          .flatMap((r) => r.globs)
+      )
     );
   });
 
@@ -71,6 +74,7 @@ describe("riskLabelsOf（ファイルのパス → 区分）", () => {
     [".github/workflows/labeler.yml", ["risk:gate"]],
     [".github/labeler.yml", ["risk:gate"]],
     [".claude/settings.json", ["risk:gate"]],
+    [".claude/hooks/issue-scope-guard.ts", ["risk:gate"]],
     ["eslint.config.mjs", ["risk:gate"]],
     ["Taskfile.yml", ["risk:gate"]],
     ["scripts/ci/pr-diff-summary.ts", ["risk:gate"]],

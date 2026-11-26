@@ -159,6 +159,7 @@ function item(
 }
 
 async function cleanup() {
+  await supabase.from("subscriptions").delete().in("user_id", ALL_USER_IDS);
   await supabase.from("order_items").delete().in("order_id", ALL_ORDER_IDS);
   await supabase
     .from("order_settlements")
@@ -302,7 +303,30 @@ beforeAll(async () => {
     }),
     item(OTHER_USER_ORDER_ID, { unit_price_snapshot: 9_000 }),
   ]);
+
+  // 月額費用の支払い失敗中の案内（#379）。CLERK_USER は支払い失敗中、CLERK_OTHER_USER は解約済みの過去の契約と有効な契約
+  await insert("subscriptions", [
+    subscription(USER_ID, "sub_test_member_query_past_due", "past_due"),
+    subscription(OTHER_USER_ID, "sub_test_member_query_old", "canceled"),
+    subscription(OTHER_USER_ID, "sub_test_member_query_active", "active"),
+  ]);
 });
+
+function subscription(
+  userId: string,
+  stripeSubscriptionId: string,
+  status: string
+) {
+  return {
+    user_id: userId,
+    stripe_customer_id: `cus_${stripeSubscriptionId}`,
+    stripe_subscription_id: stripeSubscriptionId,
+    status,
+    rank_code: "basic",
+    current_period_start: "2026-11-01T00:00:00.000Z",
+    current_period_end: "2026-12-01T00:00:00.000Z",
+  };
+}
 
 afterAll(cleanup);
 
@@ -402,6 +426,16 @@ describe("SupabaseMemberQueryService.findMemberLayout", () => {
     expect(layout?.favoriteProductIds).toEqual(["prod-new", "prod-old"]);
   });
 
+  it("アカウントのメニューに出す氏名（姓 名）・メールアドレス・プラン名を返す", async () => {
+    const layout = await queryService.findMemberLayout(CLERK_USER);
+
+    expect(layout?.account).toEqual({
+      name: "太郎 テスト",
+      email: `${CLERK_USER}@example.com`,
+      planName: "アドバンス",
+    });
+  });
+
   it("キャンセル済み注文と、キャンセル済みの決済単位の明細を除いた確定額を返す（#444）", async () => {
     const layout = await queryService.findMemberLayout(CLERK_USER);
 
@@ -420,14 +454,32 @@ describe("SupabaseMemberQueryService.findMemberLayout", () => {
     expect(layout?.confirmedAmount).toBe(confirmedForLimitCheck);
   });
 
-  it("他の会員の注文・お気に入りを含めない", async () => {
+  it("他の会員の注文・お気に入り・サブスクリプションを含めない", async () => {
     const layout = await queryService.findMemberLayout(CLERK_OTHER_USER);
 
     expect(layout).toEqual({
       confirmedAmount: 9_000,
       monthlyLimit: expect.any(Number),
       favoriteProductIds: ["prod-other"],
+      paymentFailing: false,
+      account: {
+        name: "次郎 テスト",
+        email: `${CLERK_OTHER_USER}@example.com`,
+        planName: "ベーシック",
+      },
     });
+  });
+
+  it("サブスクリプションが支払い失敗中（past_due）の会員は、支払い失敗中を返す（#379）", async () => {
+    const layout = await queryService.findMemberLayout(CLERK_USER);
+
+    expect(layout?.paymentFailing).toBe(true);
+  });
+
+  it("サブスクリプションの無い会員（入会の確定前）は、支払い失敗中ではない", async () => {
+    const layout = await queryService.findMemberLayout(CLERK_PENDING_USER);
+
+    expect(layout?.paymentFailing).toBe(false);
   });
 
   // 実際より少ない確定額（多い残額）を表示しないよう、0 円にせずエラーにする。
@@ -564,6 +616,12 @@ describe("memberQueryService（composition。RLS 付きのクライアント）"
       confirmedAmount: 3_200_000,
       monthlyLimit: 50_000_000,
       favoriteProductIds: ["prod-new", "prod-old"],
+      paymentFailing: true,
+      account: {
+        name: "太郎 テスト",
+        email: `${CLERK_USER}@example.com`,
+        planName: "アドバンス",
+      },
     });
     expect(await rlsQueryService.findOnboardingCompleted(CLERK_USER)).toBe(
       true

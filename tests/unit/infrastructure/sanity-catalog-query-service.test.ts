@@ -85,12 +85,35 @@ describe("SanityCatalogQueryService.findProducts", () => {
         unitPrice: 6000,
         availability: "available",
         thumbnail: "https://cdn.example/a.jpg",
+        paymentTiming: "at_order",
       },
       expect.objectContaining({
         id: "prod-2",
         isNegotiable: true,
         unitPrice: null,
       }),
+    ]);
+  });
+
+  it("商品カードの支払いの時期は注文で実際に支払う時期にする（要相談の商品・注文後払いの商品は注文後払い、未設定の既存商品は注文時払い）", async () => {
+    fetchMock
+      .mockResolvedValueOnce([
+        sanityProduct({ _id: "after", payment_timing: "after_order" }),
+        sanityProduct({ _id: "negotiable", is_negotiable: true, prices: null }),
+        sanityProduct({ _id: "legacy", payment_timing: null }),
+      ])
+      .mockResolvedValueOnce(3);
+
+    const { products } = await service.findProducts({
+      rank: MemberRank.of("standard"),
+    });
+
+    expect(
+      products.map(({ id, paymentTiming }) => ({ id, paymentTiming }))
+    ).toEqual([
+      { id: "after", paymentTiming: "after_order" },
+      { id: "negotiable", paymentTiming: "after_order" },
+      { id: "legacy", paymentTiming: "at_order" },
     ]);
   });
 

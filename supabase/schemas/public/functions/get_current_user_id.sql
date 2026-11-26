@@ -10,4 +10,6 @@ CREATE OR REPLACE FUNCTION public.get_current_user_id()
     AND deleted_at IS NULL
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."get_current_user_id"() TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."get_current_user_id"() TO "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."get_current_user_id"() FROM PUBLIC;

@@ -7,6 +7,8 @@ import { parseCart, COOKIE_NAME } from "@/lib/cart/cookie";
 import { FavoritesProvider } from "@/components/favorites/favorites-provider";
 import { addFavoriteAction, removeFavoriteAction } from "./favorites/actions";
 import { memberQueryService } from "@/composition/member-query";
+import { openBillingPortalAction } from "./settings/actions";
+import PaymentFailingNotice from "./payment-failing-notice";
 
 export default async function MemberLayout({
   children,
@@ -32,8 +34,11 @@ export default async function MemberLayout({
         addFavorite={addFavoriteAction}
         removeFavorite={removeFavoriteAction}
       >
-        <div className="flex min-h-full flex-col">
-          <Header />
+        <div className="flex min-h-full flex-1 flex-col bg-neutral-50 text-neutral-900">
+          <Header account={layout?.account ?? null} />
+          {layout?.paymentFailing && (
+            <PaymentFailingNotice action={openBillingPortalAction} />
+          )}
           <main className="flex-1">{children}</main>
           <CartSidebar />
         </div>

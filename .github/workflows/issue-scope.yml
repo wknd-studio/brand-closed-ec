@@ -1,0 +1,51 @@
+name: Issue Scope
+
+# 差分の high-risk のファイル（PR に high-risk を付ける判定 scripts/ci/high-risk.ts が理由を出したファイル。#578）のうち、
+# PR本文の `Closes #n` の issue の「触るファイル」に無いものがあれば失敗させる（#795）。issue の範囲外で high-risk の変更を、
+# モデルの判断に頼らず止める。ブランチ保護の必須チェックに登録して使う。
+# 意図的な変更なら、人間がPRに `scope-approved` ラベルを付けると成功扱いになる（Test Guard の test-change-approved と同じ形）。
+# 判定は scripts/ci/issue-scope.ts（Orca のワークツリーの PreToolUse hook と同じ関数）。
+# `Closes #n` が無いPRは high-risk のファイルをすべて範囲外として扱い、Dependabot のPRは検査せずに成功扱いにする。
+# issue の本文を書き足したときは自動では動かないため、PRのチェックを再実行する（docs/cicd.md）
+on:
+  # 必須チェックに登録するため、develop宛てのすべてのPRで実行する。
+  # main宛て（develop→mainのリリース・hotfix）は issue と1対1でないため対象外。mainの保護ルールには登録しない
+  pull_request:
+    branches: [develop]
+    # 本文（Closes #n）の編集・ラベルの付け外しで結果を更新する
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: issue-scope-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  issue-scope:
+    name: Issue Scope
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # issue の本文（触るファイル）を読むため
+      issues: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Check high-risk files are in the issue scope
+        env:
+          # 本文はシェルに埋め込まず環境変数で渡す（スクリプトインジェクション対策）
+          PR_BODY: ${{ github.event.pull_request.body }}
+          # 実行した人ではなくPRの作成者で見る（PR Review Summary と同じ）
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'scope-approved') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: pnpm -s tsx scripts/ci/issue-scope.ts "$BASE_SHA" "$HEAD_SHA"

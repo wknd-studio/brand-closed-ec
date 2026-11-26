@@ -31,6 +31,6 @@ CREATE POLICY "order_status_changes: select own" ON "public"."order_status_chang
    FROM public.orders
   WHERE (orders.user_id = public.get_current_user_id()))));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_status_changes" TO "anon", "authenticated", "postgres", "service_role";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_status_changes" TO "authenticated", "postgres", "service_role";
 
 COMMENT ON TABLE "public"."order_status_changes" IS 'orders.status の変更の追記専用の来歴（issue #237）。UPDATE/DELETE はトリガーで拒否する（注文の削除に伴うカスケードだけは通す）。orders.status の更新は、必ずこのテーブルへの INSERT と同じトランザクションで行う（save_order・place_order_with_limit_check）。';

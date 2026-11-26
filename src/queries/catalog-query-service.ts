@@ -20,6 +20,8 @@ export type ProductCardDto = {
   unitPrice: number | null;
   availability: ProductAvailability;
   thumbnail: string | null;
+  // 注文で実際に支払う時期（要相談の商品は注文後払い）。after_order の商品は請求書払い
+  paymentTiming: ProductPaymentTiming;
 };
 
 export type ProductListDto = {
