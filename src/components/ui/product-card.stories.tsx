@@ -64,3 +64,22 @@ export const LongName: Story = {
     name: "コットンオックスフォードシャツ レギュラーカラー ロングスリーブ（ホワイト）",
   },
 };
+
+// 複数のブランドを並べる画面（お気に入り）では、商品名の上にブランド名を出す
+export const WithBrand: Story = {
+  args: {
+    brand: "Brand A",
+    favorite: <FavoriteButton sanityProductId="prod-1" />,
+  },
+};
+
+// 今のプランで見られない商品（お気に入り）。価格を出さず、リンクにしない
+export const Locked: Story = {
+  args: {
+    brand: "Brand D",
+    name: "ドリップコーヒー 30袋",
+    unitPrice: null,
+    isLocked: true,
+    favorite: <FavoriteButton sanityProductId="prod-1" />,
+  },
+};
