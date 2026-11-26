@@ -280,16 +280,10 @@ export const DESIGN_TOKEN_LEGACY_FILES = [
   "src/app/(member)/orders/page.tsx",
   "src/app/(member)/orders/[id]/page.tsx",
   "src/app/(member)/orders/[id]/return-request-form.tsx",
-  "src/app/(member)/settings/page.tsx",
-  "src/app/(member)/settings/address-form.tsx",
-  "src/app/(member)/settings/address-list.tsx",
-  "src/app/(member)/settings/payment-method-button.tsx",
-  "src/app/(member)/settings/withdrawal-dialog.tsx",
   "src/app/home-presenter.tsx",
   "src/app/legal/legal-notice-text.tsx",
   "src/app/onboarding/payment/success/payment-status.tsx",
   "src/app/subscription-ended/page.tsx",
-  "src/app/withdrawn/page.tsx",
 ];
 
 // app から使われる側の components・lib（#441）。repository・infrastructure を使うと page に読み取りが戻り、
