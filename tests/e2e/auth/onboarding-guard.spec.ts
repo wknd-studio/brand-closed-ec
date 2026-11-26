@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { clerk } from "@clerk/testing/playwright";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
+import { CONTACT } from "@/app/legal/legal-notice";
 import { test, expect } from "../helpers/test-member";
 import { cleanupTestUser, slotEmail } from "../helpers/clerk-test-invitation";
 
@@ -326,8 +327,10 @@ base.describe.serial("Stripe 側でサブスクリプションが解約された
       await expect(
         page.getByText("商品の閲覧・ご注文はできません", { exact: false })
       ).toBeVisible();
-      await expect(page.getByText("運営の問い合わせ先")).toBeVisible();
-      await expect(page.getByText(/メール:/)).toBeVisible();
+      await expect(
+        page.getByText("ご利用の再開・退会をご希望の場合")
+      ).toBeVisible();
+      await expect(page.getByText(CONTACT.email.text)).toBeVisible();
     }
   );
 });

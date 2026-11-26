@@ -280,7 +280,6 @@ export const DESIGN_TOKEN_LEGACY_FILES = [
   "src/app/home-presenter.tsx",
   "src/app/legal/legal-notice-text.tsx",
   "src/app/onboarding/payment/success/payment-status.tsx",
-  "src/app/subscription-ended/page.tsx",
 ];
 
 // app から使われる側の components・lib（#441）。repository・infrastructure を使うと page に読み取りが戻り、

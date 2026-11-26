@@ -1,20 +1,9 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { jaJP } from "@clerk/localizations";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { BRAND_FONT_VARIABLES } from "@/lib/fonts";
+import { ROOT_FONT_CLASS_NAMES } from "@/lib/fonts";
 import SiteFooter from "@/app/site-footer";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 // jaJPのデフォルト文言はClerk汎用のもののため、waitlistまわりのみブランドのトーンに合わせて上書きする
 const localization = {
@@ -73,10 +62,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider afterSignOutUrl="/" localization={localization}>
-      <html
-        lang="ja"
-        className={`${geistSans.variable} ${geistMono.variable} ${BRAND_FONT_VARIABLES} h-full antialiased`}
-      >
+      <html lang="ja" className={`${ROOT_FONT_CLASS_NAMES} h-full antialiased`}>
         <body className="min-h-full flex flex-col">
           {children}
           <SiteFooter />
