@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSubscriptionEnded } from "@/domain/value-objects/subscription-ended";
+import { isSubscriptionEnded } from "@/domain/services/subscription-ended";
 
 // GitHub issue #380: 再請求が尽きて Stripe がサブスクリプションを解約した会員の利用を止める。
 // 判定のルールは docs/domain/membership.md「Stripe側の解約による利用停止」
