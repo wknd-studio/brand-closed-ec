@@ -81,6 +81,12 @@ export const MEMBERSHIP_TERMS = {
     text: "入会から6ヶ月間（最低利用期間）は、ご自身で退会できません。期間内に退会をご希望の場合は運営へご連絡ください。最低利用期間の残りの月数分の月額を解約金としてお支払いいただいたうえで退会となります。6ヶ月を過ぎた後は、アカウント設定から退会でき（進行中の注文がある間を除く）、サブスクリプションはその場で解約されます",
     placeholder: true,
   },
+  // 申込内容のまとめ（「お支払いへ進む」の直前）に出す、最低利用期間と解約金の短い一文（#821）。
+  // 内容は contractPeriod・cancellation と食い違わないようにする
+  minimumPeriodSummary: {
+    text: "最低利用期間は入会日から6ヶ月です。期間内に退会する場合は、残りの月数分の月額を解約金としてお支払いいただきます",
+    placeholder: true,
+  },
 } satisfies Record<string, LegalNoticeValue>;
 
 export const TOKUSHOHO_ITEMS: LegalNoticeItem[] = [
