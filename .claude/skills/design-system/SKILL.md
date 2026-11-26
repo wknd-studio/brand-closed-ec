@@ -54,6 +54,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 - `Container`: 中央寄せ+レスポンシブpadding（max-w-[1080px]）
 - `Section`: `Container`を内包した縦方向リズム付きセクションラッパー
 - `SectionHeader`: Eyebrow+Heading+説明文のセット
+- `LogoHeader`: ロゴだけを中央に置いた白いヘッダー。会員のメニューを出さない画面（ご契約の終了・404・全体のエラー）で使う。`href` を渡すとロゴをそのページへのリンクにする（404 はトップへ）。全体のエラー画面（`global-error.tsx`）はルートのレイアウトの外で描かれるため、`globals.css` と `src/lib/fonts.ts` の `ROOT_FONT_CLASS_NAMES` を自分で読み込んでいる
 - `FeatureGrid`: 罫線区切りのカードグリッド（`columns`/`dense`で調整）
 - `Input` / `Select` / `Checkbox` / `Radio`: フォーム部品。すでにトークン参照で書かれているため追加対応不要。`Input` の `shape="pill"` は検索欄用のピル型（高さは `Button` の md と同じ52px。左に検索のアイコンを重ねるときは使う側で `pl-11` を足す。最初の利用は `/shop`・`/shop/search`）
 - `FormField`: ラベル・入力欄・項目ごとのエラー文言の組。`error` を渡すと入力欄の下に文言を出し、ラベルの `htmlFor` と `aria-describedby` を自動で結び付ける。子は `{(field) => <Input name="..." {...field} />}` のように受け取った属性を `Input` / `Select` に展開する。項目ごとのエラーを出すフォームは `<p id="...-error">` を手書きせずこれを使う。`required` でラベルの横に「必須」の印（ラベルの文字列・読み上げには含めない）、`hint` で入力のヒント（エラーのときはエラー文言に置き換わる）を出す。画面上部のエラーのまとめから項目へリンクするときは `id` を渡す（最初の利用は `/onboarding/plan`）
