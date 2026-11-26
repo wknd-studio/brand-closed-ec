@@ -126,7 +126,7 @@ export default async function OnboardingPlanPage({
             )
           }
           minimumPeriod={
-            <LegalNoticeText value={MEMBERSHIP_TERMS.contractPeriod} />
+            <LegalNoticeText value={MEMBERSHIP_TERMS.minimumPeriodSummary} />
           }
           legalNote={<LegalLinksNote action="お申し込み" />}
         >
