@@ -515,6 +515,7 @@ const RECONSTITUTORS = [
   ["reconstituteOrderItem", "@/domain/entities/order-item"],
   ["reconstituteUser", "@/domain/entities/user"],
   ["reconstituteAddress", "@/domain/entities/address"],
+  ["reconstituteReturnRequest", "@/domain/entities/return-request"],
 ] as const;
 
 const OUTSIDE_RECONSTITUTION = [

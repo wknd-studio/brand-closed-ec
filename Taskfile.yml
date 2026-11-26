@@ -18,9 +18,14 @@ tasks:
       - supabase start
 
   db:schema:
-    desc: ローカルDBの今の定義を supabase/schemas/ に書き出す（先に supabase db reset。ワークツリーではそのスロットのDBを使う。CIの Schema Files Drift が食い違いを検査する）
+    desc: ローカルDBの今の定義を supabase/schemas/ に書き出す（先に supabase db reset。マイグレーションを手で書いたとき・sync の結果の確認に使う。CIの Schema Files Drift が食い違いを検査する）
     cmds:
       - bash scripts/with-worktree-db.sh bash scripts/db-schema-snapshot.sh
+
+  db:sync:
+    desc: supabase/schemas/ とマイグレーションの差を、マイグレーションとして書き出す（task db:sync -- <名前>。手順は docs/declarative-schema.md）
+    cmds:
+      - bash scripts/with-worktree-db.sh bash scripts/db-schema-sync.sh {{.CLI_ARGS}}
 
   dev:ngrok:spawn:
     desc: ngrok を別のTerminalウィンドウで起動する（同一プロセス内で他コマンドと出力を共有するとTUI表示が崩れるため）

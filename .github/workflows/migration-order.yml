@@ -29,6 +29,27 @@ jobs:
           git fetch --no-tags origin "${{ github.base_ref }}"
           bash scripts/ci/check-migration-order.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
 
+  destructive-migrations:
+    name: Destructive Migration Check
+    runs-on: ubuntu-24.04
+    # PRで追加・変更したマイグレーションに drop table・drop column・alter column ... type・truncate があれば失敗させる（#784）。
+    # `supabase db schema declarative sync` は名前の変更を「消して作り直す」にするため、意図しない削除をマージ前に止める。
+    # 意図して消すときは、マイグレーションに `-- destructive-ok: <理由>` を書く（docs/declarative-schema.md）
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Check migrations for statements that can lose data
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          pnpm -s tsx scripts/ci/check-destructive-migrations.ts "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
+
   recheck-open-prs:
     name: Recheck open PRs
     runs-on: ubuntu-24.04
