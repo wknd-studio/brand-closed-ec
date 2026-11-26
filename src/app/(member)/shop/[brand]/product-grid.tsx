@@ -46,24 +46,39 @@ export default function ProductGrid({
   }, [hasMore, loadMore]);
 
   return (
-    <div>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+    <div className="flex flex-col gap-6">
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-7 md:grid-cols-3 md:gap-x-6 md:gap-y-12 lg:grid-cols-4">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <li key={product.id}>
+            <ProductCard product={product} />
+          </li>
         ))}
         {isLoading &&
           Array.from({ length: 4 }).map((_, i) => (
-            <ProductCardSkeleton key={`skeleton-${i}`} />
+            <li key={`skeleton-${i}`} aria-hidden="true">
+              <ProductCardSkeleton />
+            </li>
           ))}
-      </div>
+      </ul>
 
-      <div ref={sentinelRef} className="h-4" />
+      <div ref={sentinelRef} className="h-px" />
 
-      {!hasMore && products.length > 0 && (
-        <p className="mt-8 text-center text-sm text-gray-400">
-          すべての商品を表示しました
-        </p>
-      )}
+      <p
+        role="status"
+        className="flex items-center justify-center gap-2.5 text-center text-[0.8125rem] text-neutral-600"
+      >
+        <span
+          aria-hidden="true"
+          className="h-px w-6 shrink-0 bg-neutral-300 md:w-10"
+        />
+        {hasMore
+          ? `${products.length}点を表示中・下へスクロールすると続きを読み込みます`
+          : "すべての商品を表示しました"}
+        <span
+          aria-hidden="true"
+          className="h-px w-6 shrink-0 bg-neutral-300 md:w-10"
+        />
+      </p>
     </div>
   );
 }

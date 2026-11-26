@@ -74,6 +74,10 @@ function toCardDto(
     unitPrice,
     availability: product.availability,
     thumbnail: product.thumbnail,
+    paymentTiming: settlementTimingOf({
+      paymentTiming: product.payment_timing ?? "at_order",
+      isNegotiable: product.is_negotiable,
+    }),
   };
 }
 
