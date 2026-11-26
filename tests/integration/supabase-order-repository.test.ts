@@ -460,7 +460,33 @@ describe("SupabaseOrderRepository", () => {
     );
   });
 
+  // 管理画面の注文一覧・詳細は注文番号を出す（#755）
+  async function storedOrderNumber(orderId: string): Promise<string> {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("order_number")
+      .eq("id", orderId)
+      .single();
+    if (error) throw error;
+    return data.order_number;
+  }
+
+  describe("findActiveOrdersWithUser()", () => {
+    it("各注文に、保存した注文番号を返す", async () => {
+      const orders = await repo.findActiveOrdersWithUser();
+      const order = orders.find((o) => o.id === ORDER_ID);
+
+      expect(order!.orderNumber.value).toBe(await storedOrderNumber(ORDER_ID));
+    });
+  });
+
   describe("findByIdWithUser()", () => {
+    it("保存した注文番号を返す", async () => {
+      const order = await repo.findByIdWithUser(ORDER_ID);
+
+      expect(order!.orderNumber.value).toBe(await storedOrderNumber(ORDER_ID));
+    });
+
     it("ユーザー情報・明細・決済単位を返す", async () => {
       const order = await repo.findByIdWithUser(ORDER_ID);
       expect(order!.user?.email).toBe("clerk_test_order_infra@example.com");

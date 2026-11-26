@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { SupabaseProcurementQueueQueryService } from "@/infrastructure/supabase/supabase-procurement-queue-query-service";
-import { randomOrderNumber } from "../helpers/order-number";
+import { displayOrderNumber, randomOrderNumber } from "../helpers/order-number";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,11 +84,16 @@ const addressSnapshot = {
   phoneNumber: "03-1234-5678",
 };
 
+// 注文IDごとに入れた注文番号（保存する形）。DTO は表示の形（4文字ずつハイフン区切り。#755）で持つ
+const orderNumbers = new Map<string, string>();
+
 function order(id: string, createdAt: string, status = "processing") {
+  const orderNumber = randomOrderNumber();
+  orderNumbers.set(id, orderNumber);
   return {
     id,
     user_id: USER_ID,
-    order_number: randomOrderNumber(),
+    order_number: orderNumber,
     status,
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,
@@ -317,12 +322,14 @@ describe("SupabaseProcurementQueueQueryService.findQueueItems", () => {
     ]);
   });
 
-  it("各行に商品名・ブランド・数量・注文日時・支払いタイミングを返す。ブランドが分からなければ null", async () => {
+  it("各行に注文番号・商品名・ブランド・数量・注文日時・支払いタイミングを返す。ブランドが分からなければ null", async () => {
     const items = await queueItems();
+    const orderNumber = orderNumbers.get(AT_ORDER_PAID_ORDER_ID)!;
 
     expect(items[0]).toEqual({
       orderItemId: AT_ORDER_PAID_ITEM_ID,
       orderId: AT_ORDER_PAID_ORDER_ID,
+      orderNumber: displayOrderNumber(orderNumber),
       sanityProductId: PRODUCT_A,
       productName: "テスト商品A",
       brandName: "ブランドB",

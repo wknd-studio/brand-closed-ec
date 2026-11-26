@@ -9,6 +9,7 @@ import {
   signInAsAdmin,
 } from "../helpers/admin-user";
 import { cleanupTestUser, slotEmail } from "../helpers/clerk-test-invitation";
+import { displayOrderNumber } from "../../helpers/order-number";
 
 // 注文はStripeの画面を操作せずに確定できるよう、後払い（after_order）の商品だけで作る。
 // 後払いだけの注文は確定後にStripe Checkoutへ遷移せず、/order/invoice-completeへ進む。
@@ -138,11 +139,11 @@ test.describe("運営者の注文の確認とキャンセル", () => {
 
     const { data: orders } = await supabaseAdmin()
       .from("orders")
-      .select("id")
+      .select("id, order_number")
       .eq("user_id", userId);
     expect(orders).toHaveLength(1);
     const orderId = orders![0].id;
-    const orderNumber = orderId.slice(0, 8).toUpperCase();
+    const orderNumber = displayOrderNumber(orders![0].order_number);
 
     // --- 運営者: 一覧で注文を見つけ、詳細を確認する ---
     const { adminContext, adminPage } = await signInAsAdmin(

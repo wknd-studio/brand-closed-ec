@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { test, expect } from "../helpers/test-member";
-import { randomOrderNumber } from "../../helpers/order-number";
+import {
+  displayOrderNumber,
+  randomOrderNumber,
+} from "../../helpers/order-number";
 
 function supabaseAdmin() {
   return createClient<Database>(
@@ -32,8 +35,9 @@ test.describe("注文履歴", () => {
   }) => {
     const supabase = supabaseAdmin();
     const orderId = crypto.randomUUID();
+    const orderNumber = randomOrderNumber();
     const { error: orderError } = await supabase.from("orders").insert({
-      order_number: randomOrderNumber(),
+      order_number: orderNumber,
       id: orderId,
       user_id: member.userId,
       status: "paid",
@@ -61,7 +65,7 @@ test.describe("注文履歴", () => {
 
     // 注文は1件ずつのカードで、カード全体が注文詳細へのリンク
     const row = page.getByRole("link", {
-      name: new RegExp(`注文番号 ${orderId.slice(0, 8).toUpperCase()}`),
+      name: new RegExp(`注文番号 ${displayOrderNumber(orderNumber)}`),
     });
     await expect(row).toContainText("お支払い済み");
     await expect(row).toContainText("¥24,000");
@@ -75,8 +79,9 @@ test.describe("注文履歴", () => {
     const supabase = supabaseAdmin();
     const orderId = crypto.randomUUID();
     const settlementId = crypto.randomUUID();
+    const orderNumber = randomOrderNumber();
     const { error: orderError } = await supabase.from("orders").insert({
-      order_number: randomOrderNumber(),
+      order_number: orderNumber,
       id: orderId,
       user_id: member.userId,
       status: "processing",
@@ -121,7 +126,7 @@ test.describe("注文履歴", () => {
 
     await page.goto("/orders");
     await page
-      .getByRole("link", { name: orderId.slice(0, 8).toUpperCase() })
+      .getByRole("link", { name: displayOrderNumber(orderNumber) })
       .click();
     await expect(page).toHaveURL(new RegExp(`/orders/${orderId}$`));
     await expect(page.getByRole("heading", { name: "注文詳細" })).toBeVisible();

@@ -24,19 +24,19 @@ const invoiceItem = {
 };
 
 const BASE = {
-  orderId: "a1b2c3d4-0000-0000-0000-000000000000",
+  orderNumber: "K7Q2-M9XD",
   createdAt: "2026-11-24T03:00:00.000Z",
 };
 
 describe("注文完了の画面に出す内容（presentOrderComplete）", () => {
-  it("注文番号は注文IDの先頭8文字の大文字、日付は日本の日付で出す", () => {
+  it("注文番号は受け取った表示の形のまま、日付は日本の日付で出す", () => {
     const view = presentOrderComplete({
       ...BASE,
       atOrderItems: [cardItem],
       afterOrderItems: [],
     });
 
-    expect(view.orderNumber).toBe("A1B2C3D4");
+    expect(view.orderNumber).toBe("K7Q2-M9XD");
     expect(view.orderDate).toBe("2026/11/24");
   });
 
