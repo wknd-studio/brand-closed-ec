@@ -369,6 +369,15 @@ describe("SupabaseMemberQueryService.findSettings", () => {
     );
   });
 
+  it("ご契約の欄に出すプラン名と月間仕入れ上限（member_ranks）を返す", async () => {
+    const settings = await queryService.findSettings(CLERK_USER);
+
+    expect(settings?.plan).toEqual({
+      name: "アドバンス",
+      monthlyLimit: 50_000_000,
+    });
+  });
+
   it("最低利用期間を過ぎた会員は、退会できるようになる日時が null", async () => {
     const settings = await queryService.findSettings(CLERK_OTHER_USER);
 
