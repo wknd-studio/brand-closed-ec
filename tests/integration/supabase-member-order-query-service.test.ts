@@ -871,7 +871,9 @@ describe("SupabaseMemberOrderQueryService.findOrderDetail", () => {
       settlements: [
         {
           id: DETAIL_CHECKOUT_SETTLEMENT_ID,
+          flow: "checkout",
           flowLabel: "注文時のお支払い",
+          status: "paid",
           statusLabel: "お支払い済み",
           amount: 100_000,
           items: [
@@ -886,7 +888,9 @@ describe("SupabaseMemberOrderQueryService.findOrderDetail", () => {
         },
         {
           id: DETAIL_INVOICE_SETTLEMENT_ID,
+          flow: "invoice",
           flowLabel: "請求書払い",
+          status: "invoice_sent",
           statusLabel: "請求書をお送りしました（お支払い待ち）",
           amount: 30_000,
           items: [

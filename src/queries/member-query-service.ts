@@ -20,6 +20,13 @@ export type SettingsDto = {
   addresses: SettingsAddressDto[];
   // 入会から6ヶ月の最低利用期間内なら、退会できるようになる日時（ISO文字列）。期間を過ぎていれば null
   withdrawableFrom: string | null;
+  // ご契約の欄。プラン名は member_ranks.display_name_ja、月間仕入れ上限は null なら無制限
+  plan: {
+    name: string;
+    monthlyLimit: number | null;
+    // 今月の集計期間（ISO文字列）。end は含まない。仕入れ枠の集計と同じ請求日から出す
+    period: { start: string; end: string };
+  };
 };
 
 // お気に入り画面（/favorites）。商品の表示制限はランクで判定する

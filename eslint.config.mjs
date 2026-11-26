@@ -239,6 +239,53 @@ const e2eClientSyntax = [
   },
 ];
 
+// 画面のコードで色を決めない（#781）。色はデザインシステム（src/app/globals.css のトークンと src/components/ui/ のプリミティブ）
+// から使い、Tailwind の既定の色（text-gray-500 等。トークンの neutral-* ではない）や色の値（#a9791d 等）を画面ごとに書かない。
+// 文字列（className・cn() の引数・style の値等）の中だけを見るため、ブランドのテーマ（Sanity から来る色）のように
+// 実行時に決まる値は対象にならない。src/components/ui/ のプリミティブと Storybook の見本は対象にしない
+const DESIGN_TOKEN_DOC =
+  "色は src/app/globals.css のトークン（文字・枠・背景の灰色は neutral-50〜900、エラーは danger、成功は success、注意は warning、請求書払いは info、ゴールドは primary・primary-light・primary-strong）か src/components/ui/ のプリミティブ（Alert・Badge 等）で付ける。.claude/skills/design-system/SKILL.md を参照（#781）";
+
+// Tailwind の既定の色（色名＋数字）。neutral はこのプロジェクトのトークンで上書きしているため含めない
+const TAILWIND_DEFAULT_COLOR =
+  "[a-z]-(slate|gray|zinc|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|mauve|olive|mist|taupe)-(50|[1-9]00|950)\\b";
+
+// 16進の色の値。文中の issue 番号（「（#216）」）に当てないよう、直前は文字列の先頭・空白・Tailwind の任意の値の区切り（[ ( , : _）に限る
+const HEX_COLOR =
+  "(^|[\\s\\[(,:_])#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b";
+
+const designTokenSyntax = [
+  {
+    selector: `Literal[value=/${TAILWIND_DEFAULT_COLOR}/], TemplateElement[value.raw=/${TAILWIND_DEFAULT_COLOR}/]`,
+    message: `Tailwind の既定の色（gray・red・green・blue 等＋数字）は使わない。${DESIGN_TOKEN_DOC}`,
+  },
+  {
+    // ページ内リンク（href="#add"）は除く
+    selector: `Literal[value=/${HEX_COLOR}/]:not(JSXAttribute[name.name='href'] > Literal), TemplateElement[value.raw=/${HEX_COLOR}/]`,
+    message: `色の値（#a9791d 等）を直書きしない。${DESIGN_TOKEN_DOC}`,
+  },
+];
+
+// 今残っているファイル（#781 の時点）。作り直しのissue（#768〜#772・管理画面は #255）で外す。
+// 新しいファイルは最初から対象にする。一覧のファイルにまだ対象の書き方が残っていることは tests/unit/lint/design-tokens.test.ts が確かめる
+export const DESIGN_TOKEN_LEGACY_FILES = [
+  // 管理画面（#255 で外す）
+  "src/app/admin/page.tsx",
+  "src/app/admin/orders/page.tsx",
+  "src/app/admin/orders/[id]/page.tsx",
+  "src/app/admin/orders/[id]/cancel-order-button.tsx",
+  "src/app/admin/waitlist/page.tsx",
+  "src/app/admin/waitlist/waitlist-table.tsx",
+  // 会員の画面のうち、買う流れ（親issue #767）の外のものと、そのほかの画面。デザインをそろえる作業（マイページ等）で直したら外す
+  "src/app/(member)/orders/page.tsx",
+  "src/app/(member)/orders/[id]/page.tsx",
+  "src/app/(member)/orders/[id]/return-request-form.tsx",
+  "src/app/home-presenter.tsx",
+  "src/app/legal/legal-notice-text.tsx",
+  "src/app/onboarding/payment/success/payment-status.tsx",
+  "src/app/subscription-ended/page.tsx",
+];
+
 // app から使われる側の components・lib（#441）。repository・infrastructure を使うと page に読み取りが戻り、
 // app を使うと依存が循環する。表の許可リストより緩い、禁止リストの形で入れている
 const APP_SIDE_DOC =
@@ -430,6 +477,25 @@ const eslintConfig = defineConfig([
     ignores: ["src/infrastructure/**", "src/sanity/**"],
     rules: {
       "no-restricted-syntax": ["error", ...clientSyntax, ...catchSyntax],
+    },
+  },
+  {
+    files: ["src/app/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
+    ignores: [
+      "src/components/ui/**",
+      "**/*.stories.tsx",
+      // [id] 等の動的ルートの [ ] は glob の文字クラスになるため、文字として当てる
+      ...DESIGN_TOKEN_LEGACY_FILES.map((file) =>
+        file.replace(/[[\]]/g, "\\$&")
+      ),
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...clientSyntax,
+        ...catchSyntax,
+        ...designTokenSyntax,
+      ],
     },
   },
   {

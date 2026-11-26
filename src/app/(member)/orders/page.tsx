@@ -1,6 +1,19 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { memberOrderQueryService } from "@/composition/member-order-query";
+import type { OrderHistoryItemDto } from "@/queries/member-order-query-service";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { cardVariants } from "@/components/ui/card";
+import { Container } from "@/components/ui/container";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { Heading } from "@/components/ui/heading";
+import { cn } from "@/lib/cn";
+import {
+  ORDER_STATUS_TONES,
+  formatOrderDate,
+  formatOrderNumber,
+} from "./order-display";
 
 const PAGE_SIZE = 20;
 
@@ -14,6 +27,142 @@ function parsePage(value: string | undefined): number {
   return Number.isSafeInteger(page * PAGE_SIZE) && page >= 1 ? page : 1;
 }
 
+function OrderRow({ order }: { order: OrderHistoryItemDto }) {
+  return (
+    <li>
+      <Link
+        href={`/orders/${order.orderId}`}
+        className={cn(
+          cardVariants(),
+          "grid grid-cols-[minmax(0,1fr)_auto_18px] items-center gap-x-3 gap-y-2.5 px-4 py-3.5 transition-colors hover:border-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none md:grid-cols-[minmax(0,1fr)_220px_180px_18px] md:gap-5 md:py-[18px] md:pr-5 md:pl-6"
+        )}
+      >
+        <span className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-neutral-700 tabular-nums">
+            {formatOrderDate(order.createdAt)}
+          </span>
+          <span className="text-[15px] font-semibold tracking-[0.04em] whitespace-nowrap tabular-nums">
+            注文番号 {formatOrderNumber(order.orderId)}
+          </span>
+          <span className="text-xs text-neutral-700">{order.itemCount}点</span>
+        </span>
+        <Badge
+          tone={ORDER_STATUS_TONES[order.status.value]}
+          // スマホ幅では日付・番号の下の行に置く
+          className="col-span-2 row-start-2 justify-self-start md:col-span-1 md:row-start-auto"
+        >
+          {order.status.label()}
+        </Badge>
+        <span className="col-start-2 row-start-1 flex flex-col items-end gap-0.5 text-right md:col-start-auto md:row-start-auto">
+          <span className="text-[17px] font-bold tabular-nums">
+            ¥{order.fixedTotal.toLocaleString()}
+          </span>
+          {order.includesNegotiable && (
+            <span className="text-[11px] text-neutral-700">
+              ＋価格未確定の商品を含む
+            </span>
+          )}
+        </span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="col-start-3 row-span-2 row-start-1 size-[18px] shrink-0 justify-self-end text-neutral-600 md:col-start-auto md:row-span-1 md:row-start-auto"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </Link>
+    </li>
+  );
+}
+
+const pagerLinkClass = buttonVariants({ variant: "secondary", size: "sm" });
+
+function Pager({ page, totalPages }: { page: number; totalPages: number }) {
+  const disabledClass =
+    "inline-flex h-10 items-center rounded-full border border-neutral-200 px-5 text-[0.85rem] font-semibold tracking-[0.04em] text-neutral-400";
+  return (
+    <nav
+      aria-label="ページ送り"
+      className="flex flex-wrap items-center justify-center gap-3"
+    >
+      {page > 1 ? (
+        <Link href={`/orders?page=${page - 1}`} className={pagerLinkClass}>
+          新しい注文
+        </Link>
+      ) : (
+        <span aria-disabled="true" className={disabledClass}>
+          新しい注文
+        </span>
+      )}
+      <span className="text-[13px] text-neutral-700 tabular-nums">
+        {page} / {totalPages} ページ
+      </span>
+      {page < totalPages ? (
+        <Link href={`/orders?page=${page + 1}`} className={pagerLinkClass}>
+          古い注文
+        </Link>
+      ) : (
+        <span aria-disabled="true" className={disabledClass}>
+          古い注文
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function EmptyState({ hasOrders }: { hasOrders: boolean }) {
+  return (
+    <div
+      className={cn(
+        cardVariants(),
+        "flex flex-col items-center gap-3 rounded-3xl px-6 py-12 text-center"
+      )}
+    >
+      <span className="inline-flex size-14 items-center justify-center rounded-full bg-neutral-100 text-neutral-700">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="size-6"
+        >
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+          <path d="M14 3v5h5M9 13h6M9 17h4" />
+        </svg>
+      </span>
+      {hasOrders ? (
+        // URL で範囲外のページを開いたとき
+        <>
+          <p className="text-base font-semibold">
+            このページに注文はありません
+          </p>
+          <Link
+            href="/orders"
+            className={cn(buttonVariants({ variant: "secondary" }), "mt-1")}
+          >
+            1ページ目に戻る
+          </Link>
+        </>
+      ) : (
+        <>
+          <p className="text-base font-semibold">注文はまだありません</p>
+          <Link href="/shop" className={cn(buttonVariants(), "mt-1")}>
+            ショップを見る
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default async function OrdersPage({ searchParams }: Props) {
   const { userId } = await requireAuth();
   const page = parsePage((await searchParams).page);
@@ -23,81 +172,31 @@ export default async function OrdersPage({ searchParams }: Props) {
   const totalPages = Math.max(1, Math.ceil(history.totalCount / PAGE_SIZE));
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="mb-8 text-xl font-semibold">注文履歴</h1>
-      {history.orders.length === 0 ? (
-        <p className="text-center text-sm text-gray-400">
-          {history.totalCount === 0 ? (
-            "注文はまだありません"
-          ) : (
-            <Link href="/orders" className="underline">
-              1ページ目に戻る
-            </Link>
-          )}
+    <Container className="flex flex-col gap-5 pt-6 pb-14 lg:gap-7 lg:pt-12 lg:pb-20">
+      <div className="flex flex-col gap-2.5">
+        <Eyebrow withLine>MY PAGE</Eyebrow>
+        <Heading as="h1" level="compact">
+          注文履歴
+        </Heading>
+        <p className="text-sm leading-[1.8] text-neutral-700">
+          ご注文の状況と、お支払いの状況を確かめられます。
         </p>
+      </div>
+
+      {history.orders.length === 0 ? (
+        <EmptyState hasOrders={history.totalCount > 0} />
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="pb-3 pr-6 font-medium">注文日</th>
-              <th className="pb-3 pr-6 font-medium">注文番号</th>
-              <th className="pb-3 pr-6 font-medium">ステータス</th>
-              <th className="pb-3 pr-6 text-right font-medium">合計金額</th>
-              <th className="pb-3 text-right font-medium">商品点数</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
+        <>
+          <ul className="flex flex-col gap-2.5">
             {history.orders.map((order) => (
-              <tr key={order.orderId}>
-                <td className="py-3 pr-6 text-gray-500">
-                  {new Date(order.createdAt).toLocaleDateString("ja-JP", {
-                    timeZone: "Asia/Tokyo",
-                  })}
-                </td>
-                <td className="py-3 pr-6 font-mono text-xs">
-                  <Link href={`/orders/${order.orderId}`} className="underline">
-                    {order.orderId.slice(0, 8).toUpperCase()}
-                  </Link>
-                </td>
-                <td className="py-3 pr-6">{order.status.label()}</td>
-                <td className="py-3 pr-6 text-right">
-                  ¥{order.fixedTotal.toLocaleString()}
-                  {order.includesNegotiable && (
-                    <span className="block text-xs text-gray-400">
-                      ＋価格未確定の商品を含む
-                    </span>
-                  )}
-                </td>
-                <td className="py-3 text-right">{order.itemCount}点</td>
-              </tr>
+              <OrderRow key={order.orderId} order={order} />
             ))}
-          </tbody>
-        </table>
-      )}
-      {history.totalCount > PAGE_SIZE && (
-        <nav
-          aria-label="ページ送り"
-          className="mt-8 flex items-center justify-center gap-6 text-sm"
-        >
-          {page > 1 ? (
-            <Link href={`/orders?page=${page - 1}`} className="underline">
-              新しい注文
-            </Link>
-          ) : (
-            <span className="text-gray-300">新しい注文</span>
+          </ul>
+          {history.totalCount > PAGE_SIZE && (
+            <Pager page={page} totalPages={totalPages} />
           )}
-          <span className="text-gray-500">
-            {page} / {totalPages} ページ
-          </span>
-          {page < totalPages ? (
-            <Link href={`/orders?page=${page + 1}`} className="underline">
-              古い注文
-            </Link>
-          ) : (
-            <span className="text-gray-300">古い注文</span>
-          )}
-        </nav>
+        </>
       )}
-    </main>
+    </Container>
   );
 }
