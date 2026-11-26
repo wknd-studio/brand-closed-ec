@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
 import { CONTACT } from "@/app/legal/legal-notice";
+import { CartProvider } from "@/components/cart/cart-provider";
 
 // /settings のご契約・項目のナビ・最低利用期間内の問い合わせ先（#825）
 
@@ -33,13 +34,30 @@ function settings(overrides: Record<string, unknown> = {}) {
   return {
     addresses: [],
     withdrawableFrom: null,
-    plan: { name: "アドバンス", monthlyLimit: 50_000_000 },
+    plan: {
+      name: "アドバンス",
+      monthlyLimit: 50_000_000,
+      // JST の 2026年11月1日〜11月30日
+      period: {
+        start: "2026-10-31T15:00:00.000Z",
+        end: "2026-11-30T15:00:00.000Z",
+      },
+    },
     ...overrides,
   };
 }
 
+// 仕入れ枠は会員の画面の共通レイアウトの CartProvider（ヘッダーと同じ値）から読む
 async function render() {
-  return renderToStaticMarkup((await SettingsPage()) as ReactElement);
+  return renderToStaticMarkup(
+    <CartProvider
+      confirmedAmount={1_000_000}
+      monthlyLimit={50_000_000}
+      initialCart={{ items: [] }}
+    >
+      {(await SettingsPage()) as ReactElement}
+    </CartProvider>
+  );
 }
 
 describe("SettingsPage", () => {
@@ -58,9 +76,51 @@ describe("SettingsPage", () => {
     expect(html).toContain("¥50,000,000");
   });
 
+  it("ご契約: 今月の仕入れ枠の残り（ヘッダーと同じ値）を出す", async () => {
+    findSettings.mockResolvedValue(settings());
+
+    const html = await render();
+
+    expect(html).toContain("今月の仕入れ枠の内訳");
+    expect(html).toContain("¥49,000,000");
+  });
+
+  it("ご契約: 今月の集計期間（JST）を出す", async () => {
+    findSettings.mockResolvedValue(settings());
+
+    const html = await render();
+
+    expect(html).toContain("2026年11月1日〜2026年11月30日");
+  });
+
+  it("ご契約: 最低利用期間中は、最低利用期間の終わる日を出す", async () => {
+    findSettings.mockResolvedValue(
+      settings({ withdrawableFrom: "2027-05-23T15:00:00Z" })
+    );
+
+    const html = await render();
+
+    expect(html).toContain("最低利用期間");
+    expect(html).toContain("2027年5月23日まで");
+  });
+
+  it("ご契約: アップグレード・プラン変更の導線は出さない（#372 と一緒に入れる）", async () => {
+    findSettings.mockResolvedValue(settings());
+
+    const html = await render();
+
+    expect(html).not.toMatch(/アップグレード|プラン変更|プランを変更/);
+  });
+
   it("ご契約: 上限が無いプランは「上限なし」", async () => {
     findSettings.mockResolvedValue(
-      settings({ plan: { name: "エンタープライズ", monthlyLimit: null } })
+      settings({
+        plan: {
+          ...settings().plan,
+          name: "エンタープライズ",
+          monthlyLimit: null,
+        },
+      })
     );
 
     const html = await render();

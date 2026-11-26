@@ -375,6 +375,17 @@ describe("SupabaseMemberQueryService.findSettings", () => {
     expect(settings?.plan).toEqual({
       name: "アドバンス",
       monthlyLimit: 50_000_000,
+      period: expect.any(Object),
+    });
+  });
+
+  it("今月の集計期間を、仕入れ枠の集計と同じ請求日（billing_anchor_day）から返す", async () => {
+    const settings = await queryService.findSettings(CLERK_USER);
+    const period = MonthlyPeriod.fromBillingAnchorDay(1);
+
+    expect(settings?.plan.period).toEqual({
+      start: period.start.toISOString(),
+      end: period.end.toISOString(),
     });
   });
 
