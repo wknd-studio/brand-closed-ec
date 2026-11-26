@@ -299,39 +299,85 @@ afterAll(cleanup);
 describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
   const repo = new SupabaseReturnRepository(clientAs(CLERK_A));
 
-  it("申請と明細を保存し、注文の申請として状態・理由・明細ごとの数量を読み戻せる", async () => {
-    const returnId = crypto.randomUUID();
-    await repo.save(
+  it("複数の申請と明細をまとめて保存し、注文の申請として状態・理由・明細ごとの数量を読み戻せる", async () => {
+    const paidReturnId = crypto.randomUUID();
+    const afterOrderReturnId = crypto.randomUUID();
+    await repo.saveAll([
       reconstituteReturnRequest({
-        id: returnId,
+        id: paidReturnId,
         orderId: ORDER_A_ID,
         status: "requested",
         requestedByUserId: USER_A_ID,
         reason: "不良品: 割れていた",
-        items: [
-          { orderItemId: ITEM_A_PAID_ID, quantity: 2 },
-          { orderItemId: ITEM_A_AFTER_ORDER_ID, quantity: 1 },
-        ],
-      })
-    );
+        items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 2 }],
+      }),
+      reconstituteReturnRequest({
+        id: afterOrderReturnId,
+        orderId: ORDER_A_ID,
+        status: "requested",
+        requestedByUserId: USER_A_ID,
+        reason: "不良品: 割れていた",
+        items: [{ orderItemId: ITEM_A_AFTER_ORDER_ID, quantity: 1 }],
+      }),
+    ]);
 
     const found = await repo.findByOrderId(ORDER_A_ID);
-    expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({
-      id: returnId,
-      orderId: ORDER_A_ID,
-      status: "requested",
-      requestedByUserId: USER_A_ID,
-      reason: "不良品: 割れていた",
-    });
     expect(
-      [...found[0]!.items].sort((a, b) =>
-        a.orderItemId.localeCompare(b.orderItemId)
-      )
-    ).toEqual([
-      { orderItemId: ITEM_A_PAID_ID, quantity: 2 },
-      { orderItemId: ITEM_A_AFTER_ORDER_ID, quantity: 1 },
-    ]);
+      found
+        .map((r) => ({
+          id: r.id,
+          orderId: r.orderId,
+          status: r.status,
+          requestedByUserId: r.requestedByUserId,
+          reason: r.reason,
+          items: r.items,
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    ).toEqual(
+      [
+        {
+          id: paidReturnId,
+          items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 2 }],
+        },
+        {
+          id: afterOrderReturnId,
+          items: [{ orderItemId: ITEM_A_AFTER_ORDER_ID, quantity: 1 }],
+        },
+      ]
+        .map((r) => ({
+          ...r,
+          orderId: ORDER_A_ID,
+          status: "requested",
+          requestedByUserId: USER_A_ID,
+          reason: "不良品: 割れていた",
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    );
+  });
+
+  it("まとめて保存する申請の1つでも保存できなければ、どの申請も保存しない", async () => {
+    await expect(
+      repo.saveAll([
+        reconstituteReturnRequest({
+          id: crypto.randomUUID(),
+          orderId: ORDER_A_ID,
+          status: "requested",
+          requestedByUserId: USER_A_ID,
+          reason: "不良品",
+          items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 1 }],
+        }),
+        // 他の会員の注文への申請は RLS で拒否される
+        reconstituteReturnRequest({
+          id: crypto.randomUUID(),
+          orderId: ORDER_B_ID,
+          status: "requested",
+          requestedByUserId: USER_A_ID,
+          reason: "不良品",
+          items: [{ orderItemId: ITEM_B_ID, quantity: 1 }],
+        }),
+      ])
+    ).rejects.toThrow();
+    expect(await returnsOf(ORDER_A_ID)).toEqual([]);
   });
 
   it("他の会員の注文の申請は、RLS により読めない", async () => {
@@ -348,7 +394,7 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
 
   it("他の会員の注文への申請は、RLS により保存できず例外を投げる", async () => {
     await expect(
-      repo.save(
+      repo.saveAll([
         reconstituteReturnRequest({
           id: crypto.randomUUID(),
           orderId: ORDER_B_ID,
@@ -356,8 +402,8 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
           requestedByUserId: USER_A_ID,
           reason: "不良品",
           items: [{ orderItemId: ITEM_B_ID, quantity: 1 }],
-        })
-      )
+        }),
+      ])
     ).rejects.toThrow();
     expect(await returnsOf(ORDER_B_ID)).toEqual([]);
   });
@@ -380,6 +426,33 @@ describe("requestReturnAction（会員Aとしてログイン中）", () => {
         return_items: [{ order_item_id: ITEM_A_PAID_ID, quantity: 2 }],
       },
     ]);
+  });
+
+  it("支払いのまとまりが違う明細を選ぶと、まとまりごとに申請が作られる", async () => {
+    const result = await requestReturnAction(
+      ORDER_A_ID,
+      returnForm({ [ITEM_A_PAID_ID]: "1", [ITEM_A_AFTER_ORDER_ID]: "2" })
+    );
+
+    expect(result).toEqual({ success: true });
+    const created = await returnsOf(ORDER_A_ID);
+    expect(
+      created
+        .map((r) => r.return_items)
+        .sort((a, b) => a[0]!.order_item_id.localeCompare(b[0]!.order_item_id))
+    ).toEqual(
+      [
+        [{ order_item_id: ITEM_A_PAID_ID, quantity: 1 }],
+        [{ order_item_id: ITEM_A_AFTER_ORDER_ID, quantity: 2 }],
+      ].sort((a, b) => a[0]!.order_item_id.localeCompare(b[0]!.order_item_id))
+    );
+    for (const r of created) {
+      expect(r).toMatchObject({
+        status: "requested",
+        requested_by_user_id: USER_A_ID,
+        reason: "不良品: 割れていた",
+      });
+    }
   });
 
   it("他の会員（B）の注文への申請はエラーを返し、申請は作られない", async () => {
@@ -489,7 +562,7 @@ describe("返品の表の権限（ロールごと）", () => {
 
     await expect(repo.findByOrderId(ORDER_A_ID)).rejects.toThrow();
     await expect(
-      repo.save(
+      repo.saveAll([
         reconstituteReturnRequest({
           id: crypto.randomUUID(),
           orderId: ORDER_A_ID,
@@ -497,8 +570,8 @@ describe("返品の表の権限（ロールごと）", () => {
           requestedByUserId: USER_A_ID,
           reason: "不良品",
           items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 1 }],
-        })
-      )
+        }),
+      ])
     ).rejects.toThrow();
     expect(await returnsOf(ORDER_A_ID)).toHaveLength(1);
   });

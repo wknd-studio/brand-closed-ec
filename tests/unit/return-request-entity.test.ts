@@ -90,8 +90,9 @@ const defective = ReturnReason.of("defective", "");
 function request(
   params: Partial<Parameters<typeof ReturnRequest.request>[0]> = {}
 ) {
+  let n = 0;
   return ReturnRequest.request({
-    id: "return-new",
+    generateId: () => `return-new-${++n}`,
     order: makeReturnableOrder(),
     requesterUserId: USER_ID,
     reason: defective,
@@ -231,23 +232,90 @@ describe("returnableQuantities", () => {
 describe("ReturnRequest.request", () => {
   it("申請中（requested）の申請を、申請した会員・理由の文・明細ごとの数量で作る", () => {
     const created = request({
-      items: [
-        { orderItemId: AT_ORDER_ITEM, quantity: 3 },
-        { orderItemId: UNASSIGNED_ITEM, quantity: 1 },
-      ],
+      items: [{ orderItemId: AT_ORDER_ITEM, quantity: 3 }],
       reason: ReturnReason.of("defective", "割れていた"),
     });
 
-    expect(created.id).toBe("return-new");
-    expect(created.orderId).toBe(ORDER_ID);
-    expect(created.status).toBe("requested");
-    expect(created.requestedByUserId).toBe(USER_ID);
-    expect(created.reason).toBe("不良品: 割れていた");
-    expect(created.items).toEqual([
+    expect(created).toHaveLength(1);
+    expect(created[0]!.id).toBe("return-new-1");
+    expect(created[0]!.orderId).toBe(ORDER_ID);
+    expect(created[0]!.status).toBe("requested");
+    expect(created[0]!.requestedByUserId).toBe(USER_ID);
+    expect(created[0]!.reason).toBe("不良品: 割れていた");
+    expect(created[0]!.items).toEqual([
       { orderItemId: AT_ORDER_ITEM, quantity: 3 },
-      { orderItemId: UNASSIGNED_ITEM, quantity: 1 },
     ]);
-    expect(created.isActive()).toBe(true);
+    expect(created[0]!.isActive()).toBe(true);
+  });
+
+  it("明細を支払いのまとまり（決済単位、または未請求）ごとに分けて、まとまりごとに申請を作る", () => {
+    const UNASSIGNED_ITEM_2 = "item-unassigned-2";
+    const order = makeOrder({
+      items: [
+        item(AT_ORDER_ITEM, "at_order", CHECKOUT_ID),
+        item(AFTER_ORDER_ITEM, "after_order", INVOICE_ID),
+        item(UNASSIGNED_ITEM, "after_order", null),
+        item(UNASSIGNED_ITEM_2, "after_order", null),
+      ],
+      settlements: [
+        makeSettlement({ id: CHECKOUT_ID, status: "paid" }),
+        makeSettlement({
+          id: INVOICE_ID,
+          flow: "invoice",
+          stripeCheckoutSessionId: null,
+          stripeInvoiceId: "in_1",
+          status: "invoice_sent",
+        }),
+      ],
+    });
+
+    const created = request({
+      order,
+      reason: ReturnReason.of("wrong_item", ""),
+      items: [
+        { orderItemId: UNASSIGNED_ITEM, quantity: 1 },
+        { orderItemId: AT_ORDER_ITEM, quantity: 2 },
+        { orderItemId: UNASSIGNED_ITEM_2, quantity: 3 },
+        { orderItemId: AFTER_ORDER_ITEM, quantity: 1 },
+      ],
+    });
+
+    // まとまりは、送られた明細に最初に出てきた順に並ぶ。未請求の明細は1つの申請にまとめる
+    expect(created.map((r) => r.items)).toEqual([
+      [
+        { orderItemId: UNASSIGNED_ITEM, quantity: 1 },
+        { orderItemId: UNASSIGNED_ITEM_2, quantity: 3 },
+      ],
+      [{ orderItemId: AT_ORDER_ITEM, quantity: 2 }],
+      [{ orderItemId: AFTER_ORDER_ITEM, quantity: 1 }],
+    ]);
+    expect(created.map((r) => r.id)).toEqual([
+      "return-new-1",
+      "return-new-2",
+      "return-new-3",
+    ]);
+    // 理由・申請した会員・状態はどの申請も同じ
+    for (const r of created) {
+      expect(r).toMatchObject({
+        orderId: ORDER_ID,
+        status: "requested",
+        requestedByUserId: USER_ID,
+        reason: "誤配送",
+      });
+    }
+  });
+
+  it("分けた申請のどれかの明細が受け付けられなければ、どの申請も作らない", () => {
+    expectInvalid(
+      () =>
+        request({
+          items: [
+            { orderItemId: AT_ORDER_ITEM, quantity: 1 },
+            { orderItemId: AFTER_ORDER_ITEM, quantity: 4 },
+          ],
+        }),
+      "quantity_exceeded"
+    );
   });
 
   it("他の会員の注文には申請できない（注文が無いのと同じエラー）", () => {
@@ -342,8 +410,8 @@ describe("ReturnRequest.request", () => {
       request({
         existingReturns,
         items: [{ orderItemId: AFTER_ORDER_ITEM, quantity: 1 }],
-      }).items
-    ).toEqual([{ orderItemId: AFTER_ORDER_ITEM, quantity: 1 }]);
+      }).map((r) => r.items)
+    ).toEqual([[{ orderItemId: AFTER_ORDER_ITEM, quantity: 1 }]]);
   });
 });
 

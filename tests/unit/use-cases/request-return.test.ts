@@ -20,22 +20,32 @@ const USER_ID = "00000000-0000-0000-0000-000000000001";
 const ORDER_ID = "00000000-0000-0000-0000-000000000001";
 const ITEM_ID = "00000000-0000-0000-0000-000000000031";
 
+const UNASSIGNED_ITEM_ID = "00000000-0000-0000-0000-000000000032";
+
+function orderItem(
+  id: string,
+  paymentTiming: "at_order" | "after_order",
+  settlementId: string | null
+) {
+  return reconstituteOrderItem({
+    id,
+    sanityProductId: "prod-1",
+    productNameSnapshot: "テスト商品",
+    unitPriceSnapshot: Money.of(10_000),
+    quantity: 3,
+    isNegotiable: false,
+    negotiatedUnitPrice: null,
+    paymentTiming,
+    settlementId,
+  });
+}
+
 // 支払い済みの Checkout の明細（数量3）1件を持つ会員の注文
 function makePaidOrder(userId = USER_ID) {
   return makeOrder({
     userId,
     items: [
-      reconstituteOrderItem({
-        id: ITEM_ID,
-        sanityProductId: "prod-1",
-        productNameSnapshot: "テスト商品",
-        unitPriceSnapshot: Money.of(10_000),
-        quantity: 3,
-        isNegotiable: false,
-        negotiatedUnitPrice: null,
-        paymentTiming: "at_order",
-        settlementId: "00000000-0000-0000-0000-0000000000a1",
-      }),
+      orderItem(ITEM_ID, "at_order", "00000000-0000-0000-0000-0000000000a1"),
     ],
     settlements: [makeSettlement({ status: "paid" })],
   });
@@ -46,7 +56,7 @@ function makeReturnRepo(
 ): ReturnRepository {
   return {
     findByOrderId: vi.fn().mockResolvedValue(existing),
-    save: vi.fn().mockResolvedValue(undefined),
+    saveAll: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -83,15 +93,51 @@ describe("requestReturn", () => {
 
     expect(orderRepo.findById).toHaveBeenCalledWith(ORDER_ID);
     expect(returnRepo.findByOrderId).toHaveBeenCalledWith(ORDER_ID);
-    const saved = vi.mocked(returnRepo.save).mock.calls[0]?.[0];
-    expect(saved).toMatchObject({
-      id: result.returnId,
+    const saved = vi.mocked(returnRepo.saveAll).mock.calls[0]?.[0];
+    expect(saved).toHaveLength(1);
+    expect(saved?.[0]).toMatchObject({
+      id: result.returnIds[0],
       orderId: ORDER_ID,
       status: "requested",
       requestedByUserId: USER_ID,
       reason: "不良品: 割れていた",
       items: [{ orderItemId: ITEM_ID, quantity: 2 }],
     });
+  });
+
+  it("支払いのまとまりが違う明細を選んだら、まとまりごとの申請を1回の保存でまとめて保存する", async () => {
+    const returnRepo = makeReturnRepo();
+    const order = makeOrder({
+      items: [
+        orderItem(ITEM_ID, "at_order", "00000000-0000-0000-0000-0000000000a1"),
+        orderItem(UNASSIGNED_ITEM_ID, "after_order", null),
+      ],
+      settlements: [makeSettlement({ status: "paid" })],
+    });
+
+    const result = await requestReturn(
+      {
+        ...baseInput,
+        items: [
+          { orderItemId: ITEM_ID, quantity: 1 },
+          { orderItemId: UNASSIGNED_ITEM_ID, quantity: 2 },
+        ],
+      },
+      {
+        userRepo: makeUserRepo(makeUser({ id: USER_ID })),
+        orderRepo: makeOrderRepo(order),
+        returnRepo,
+      }
+    );
+
+    expect(returnRepo.saveAll).toHaveBeenCalledTimes(1);
+    const saved = vi.mocked(returnRepo.saveAll).mock.calls[0]?.[0];
+    expect(saved?.map((r) => r.items)).toEqual([
+      [{ orderItemId: ITEM_ID, quantity: 1 }],
+      [{ orderItemId: UNASSIGNED_ITEM_ID, quantity: 2 }],
+    ]);
+    expect(result.returnIds).toEqual(saved?.map((r) => r.id));
+    expect(new Set(result.returnIds).size).toBe(2);
   });
 
   it("運営者向けの通知・顧客向けのメールを送らない（保存だけを行う）", async () => {
@@ -107,7 +153,7 @@ describe("requestReturn", () => {
 
     await requestReturn(baseInput, deps);
 
-    expect(returnRepo.save).toHaveBeenCalledTimes(1);
+    expect(returnRepo.saveAll).toHaveBeenCalledTimes(1);
     for (const send of Object.values(notificationService)) {
       expect(send).not.toHaveBeenCalled();
     }
@@ -125,7 +171,7 @@ describe("requestReturn", () => {
         returnRepo,
       })
     ).rejects.toThrow(ReturnOrderNotFoundError);
-    expect(returnRepo.save).not.toHaveBeenCalled();
+    expect(returnRepo.saveAll).not.toHaveBeenCalled();
   });
 
   it("見つからない注文（RLS で他の会員の注文が見えない場合を含む）への申請は拒否する", async () => {
@@ -138,7 +184,7 @@ describe("requestReturn", () => {
         returnRepo,
       })
     ).rejects.toThrow(ReturnOrderNotFoundError);
-    expect(returnRepo.save).not.toHaveBeenCalled();
+    expect(returnRepo.saveAll).not.toHaveBeenCalled();
   });
 
   it("別の注文の明細を指す申請は拒否し、保存しない", async () => {
@@ -162,7 +208,7 @@ describe("requestReturn", () => {
         }
       )
     ).rejects.toThrow(InvalidReturnRequestError);
-    expect(returnRepo.save).not.toHaveBeenCalled();
+    expect(returnRepo.saveAll).not.toHaveBeenCalled();
   });
 
   it("既存の有効な申請の数量と合わせて注文数量を超える申請は拒否する", async () => {
@@ -184,7 +230,7 @@ describe("requestReturn", () => {
         returnRepo,
       })
     ).rejects.toThrow(InvalidReturnRequestError);
-    expect(returnRepo.save).not.toHaveBeenCalled();
+    expect(returnRepo.saveAll).not.toHaveBeenCalled();
   });
 
   it("理由が空の申請は、注文を読む前に拒否する", async () => {
@@ -215,6 +261,6 @@ describe("requestReturn", () => {
         returnRepo,
       })
     ).rejects.toThrow("ユーザーが見つかりません");
-    expect(returnRepo.save).not.toHaveBeenCalled();
+    expect(returnRepo.saveAll).not.toHaveBeenCalled();
   });
 });
