@@ -84,7 +84,7 @@ function ContactItem({
         {icon}
         {label}
       </dt>
-      <dd className="text-sm font-semibold break-all">
+      <dd className="text-sm font-semibold [overflow-wrap:anywhere]">
         <LegalNoticeText value={value} />
       </dd>
     </div>
