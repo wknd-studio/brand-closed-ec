@@ -20,7 +20,7 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     const { data, error } = await this.db
       .from("users")
       .select(
-        "created_at, addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number)"
+        "created_at, member_ranks!users_rank_code_fkey(monthly_limit_amount, display_name_ja), addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number)"
       )
       .eq("clerk_user_id", clerkUserId)
       .is("deleted_at", null)
@@ -38,6 +38,10 @@ export class SupabaseMemberQueryService implements MemberQueryService {
       withdrawableFrom: minimumPeriod.includes(new Date())
         ? minimumPeriod.withdrawableFrom.toISOString()
         : null,
+      plan: {
+        name: data.member_ranks.display_name_ja,
+        monthlyLimit: data.member_ranks.monthly_limit_amount,
+      },
       addresses: data.addresses.map((a) => ({
         id: a.id,
         type: a.type,

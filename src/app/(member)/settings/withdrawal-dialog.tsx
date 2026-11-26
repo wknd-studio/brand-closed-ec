@@ -2,8 +2,20 @@
 
 import { useTransition, useState } from "react";
 import { deleteAccount } from "./actions";
+import { Button } from "@/components/ui/button";
+import { formatJstDate } from "./format-jst-date";
+import { cn } from "@/lib/cn";
 
-export default function WithdrawalDialog() {
+// Button の secondary と同じ大きさのピル。cn は同じ種類のクラスを上書きしないため、色を変えるボタンは Button を使わない
+const PILL_CLASS =
+  "inline-flex h-10 items-center justify-center self-start rounded-full border px-5 text-[0.85rem] font-semibold tracking-[0.04em] transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none";
+
+type Props = {
+  // 最低利用期間内なら、退会できるようになる日時（ISO文字列）。期間を過ぎていれば null（SettingsDto と同じ）
+  withdrawableFrom: string | null;
+};
+
+export default function WithdrawalDialog({ withdrawableFrom }: Props) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -23,42 +35,84 @@ export default function WithdrawalDialog() {
     });
   }
 
+  // 期間内の退会は運営への問い合わせで受ける。退会の判定（User.withdraw）は期間内なら拒むため、押せても退会はできない
+  if (withdrawableFrom) {
+    return (
+      <button
+        type="button"
+        disabled
+        className={cn(
+          PILL_CLASS,
+          "border-neutral-200 bg-neutral-100 text-neutral-700"
+        )}
+      >
+        {formatJstDate(new Date(withdrawableFrom))}から退会できます
+      </button>
+    );
+  }
+
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="text-sm text-red-600 underline underline-offset-4 hover:text-red-700"
+        className={cn(
+          PILL_CLASS,
+          "border-danger/30 bg-white text-danger hover:border-danger"
+        )}
       >
         退会する
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-sm space-y-6 rounded-lg bg-white p-8 shadow-lg">
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold">退会の確認</h2>
-              <p className="text-sm text-gray-500">
-                退会後はサービスをご利用いただけなくなります。この操作は取り消せません。
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-neutral-900/45 px-4 pt-40 pb-4"
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && !isPending) setOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="withdrawal-dialog-title"
+            className="flex w-full max-w-[440px] flex-col gap-3.5 rounded-3xl bg-white p-7 shadow-[0_30px_60px_-30px_color-mix(in_srgb,var(--color-neutral-900)_60%,transparent)]"
+          >
+            <h2
+              id="withdrawal-dialog-title"
+              className="font-display text-[22px] font-semibold"
+            >
+              退会の確認
+            </h2>
+            <p className="text-sm leading-[1.8] text-neutral-800">
+              退会後はサービスをご利用いただけなくなります。この操作は取り消せません。
+            </p>
+
+            {error && (
+              <p role="alert" className="text-sm text-danger">
+                {error}
               </p>
-            </div>
+            )}
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <div className="flex gap-3">
-              <button
+            <div className="mt-1.5 flex gap-2.5">
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setOpen(false)}
                 disabled={isPending}
-                className="flex-1 rounded border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                autoFocus
+                className="flex-1"
               >
                 キャンセル
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={handleWithdraw}
                 disabled={isPending}
-                className="flex-1 rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                className="flex-1"
               >
                 {isPending ? "処理中..." : "退会する"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
