@@ -4,6 +4,7 @@ import { memberQueryService } from "@/composition/member-query";
 import WithdrawalDialog from "./withdrawal-dialog";
 import AddressList from "./address-list";
 import PaymentMethodButton from "./payment-method-button";
+import PlanLimit from "./plan-limit";
 import { openBillingPortalAction } from "./actions";
 import LegalNoticeText from "@/app/legal/legal-notice-text";
 import { CONTACT, MEMBERSHIP_TERMS } from "@/app/legal/legal-notice";
@@ -20,6 +21,11 @@ const CONTACT_TEL = CONTACT.phone.text.split("（")[0].replace(/\D/g, "");
 // Button の secondary と同じ大きさのピル。cn は同じ種類のクラスを上書きしないため、buttonVariants の色を変えずに書く
 const contactLinkClass =
   "inline-flex h-10 items-center justify-center rounded-full border border-info/25 bg-white px-4 text-[13px] font-semibold text-info transition-colors hover:border-info focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none";
+
+// 含まない終わりの日時（集計期間の end・退会できるようになる日時）から、期間の最後の日を出す
+function lastDayOf(exclusiveEnd: string): Date {
+  return new Date(new Date(exclusiveEnd).getTime() - 24 * 60 * 60 * 1000);
+}
 
 function formatMonthlyLimit(amount: number | null): string {
   return amount === null ? "上限なし" : `¥${amount.toLocaleString("ja-JP")}`;
@@ -76,20 +82,40 @@ export default async function SettingsPage() {
         <div className="flex min-w-0 flex-1 flex-col gap-5">
           {plan && (
             <SettingsSection id="plan" title="ご契約">
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
-                <div className="flex flex-col gap-1">
-                  <dt className="text-xs text-neutral-700">プラン</dt>
-                  <dd className="font-display text-lg font-semibold">
-                    {plan.name}
-                  </dd>
+              <div className="flex flex-wrap items-start gap-6">
+                <dl className="grid flex-[1_1_280px] grid-cols-2 gap-x-6 gap-y-4">
+                  <div className="flex flex-col gap-1">
+                    <dt className="text-xs text-neutral-700">プラン</dt>
+                    <dd className="font-display text-lg font-semibold">
+                      {plan.name}
+                    </dd>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <dt className="text-xs text-neutral-700">月間仕入れ上限</dt>
+                    <dd className="text-lg font-semibold tabular-nums">
+                      {formatMonthlyLimit(plan.monthlyLimit)}
+                    </dd>
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <dt className="text-xs text-neutral-700">今月の集計期間</dt>
+                    <dd className="text-sm tabular-nums">
+                      {formatJstDate(new Date(plan.period.start))}〜
+                      {formatJstDate(lastDayOf(plan.period.end))}
+                    </dd>
+                  </div>
+                  {withdrawableFrom && (
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <dt className="text-xs text-neutral-700">最低利用期間</dt>
+                      <dd className="text-sm tabular-nums">
+                        {formatJstDate(lastDayOf(withdrawableFrom))}まで
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                <div className="flex-[1_1_280px] rounded-2xl border border-neutral-200 p-[18px]">
+                  <PlanLimit />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <dt className="text-xs text-neutral-700">月間仕入れ上限</dt>
-                  <dd className="text-lg font-semibold tabular-nums">
-                    {formatMonthlyLimit(plan.monthlyLimit)}
-                  </dd>
-                </div>
-              </dl>
+              </div>
             </SettingsSection>
           )}
 
