@@ -706,8 +706,11 @@ Metabaseの導入はSupabaseへの接続設定のみで完了し、開発工数�
 # ローカル開発環境の起動（DB含む）
 supabase start
 
-# マイグレーションファイルの新規作成
-supabase migration new add_birthday_to_users
+# supabase/schemas/ を直したあと、差をマイグレーションにする（docs/declarative-schema.md）
+task db:sync -- add_birthday_to_users
+
+# 手で書くマイグレーションの新規作成（データの変更・名前の変更等）
+supabase migration new backfill_birthday
 
 # マイグレーションをローカルDBに適用
 supabase db reset

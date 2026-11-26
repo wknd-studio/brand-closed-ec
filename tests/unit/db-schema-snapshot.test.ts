@@ -118,6 +118,33 @@ describe("diff_schema_dirs", () => {
   });
 });
 
+describe("pin_default_privileges", () => {
+  const file = "public/default_privileges.sql";
+  const grants =
+    'ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT EXECUTE ON FUNCTIONS TO "service_role";\n';
+
+  it("既定の権限のファイルの先頭で、Supabase が最初に付ける既定の権限をすべて外してから、書き出した GRANT を続ける", () => {
+    put(generated, file, grants);
+
+    expect(call("pin_default_privileges", generated).status).toBe(0);
+
+    const content = readFileSync(path.join(generated, file), "utf8");
+    for (const kind of ["TABLES", "SEQUENCES", "FUNCTIONS"]) {
+      expect(content).toContain(
+        `ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" REVOKE ALL ON ${kind} FROM "anon", "authenticated", "service_role";`
+      );
+    }
+    expect(content.endsWith(grants)).toBe(true);
+    expect(content.indexOf("REVOKE")).toBeLessThan(content.indexOf("GRANT"));
+  });
+
+  it("既定の権限のファイルが無ければ失敗する（書き出しの形が変わったことに気づくため）", () => {
+    const { status, output } = call("pin_default_privileges", generated);
+    expect(status).not.toBe(0);
+    expect(output).toContain(file);
+  });
+});
+
 describe("CI の Schema Files Drift", () => {
   const workflow = readFileSync(
     path.resolve(__dirname, "../../.github/workflows/deploy.yml"),
