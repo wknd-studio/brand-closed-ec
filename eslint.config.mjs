@@ -115,6 +115,10 @@ const RECONSTITUTORS = [
   { module: "domain/entities/order-item", name: "reconstituteOrderItem" },
   { module: "domain/entities/user", name: "reconstituteUser" },
   { module: "domain/entities/address", name: "reconstituteAddress" },
+  {
+    module: "domain/entities/return-request",
+    name: "reconstituteReturnRequest",
+  },
 ];
 
 const reconstitutionPatterns = RECONSTITUTORS.map(({ module, name }) => ({

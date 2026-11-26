@@ -52,52 +52,28 @@ CREATE POLICY "returns: select own" ON "public"."returns"
    FROM public.orders
   WHERE (orders.user_id = public.get_current_user_id()))));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."returns" TO "postgres", "service_role";
-
-REVOKE ALL ("approved_at") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT SELECT ("approved_at") ON TABLE "public"."returns" TO "authenticated";
-
-REVOKE ALL ("created_at") ON TABLE "public"."returns" FROM "authenticated";
 
 GRANT SELECT ("created_at") ON TABLE "public"."returns" TO "authenticated";
 
-REVOKE ALL ("id") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT INSERT ("id"), SELECT ("id") ON TABLE "public"."returns" TO "authenticated";
-
-REVOKE ALL ("order_id") ON TABLE "public"."returns" FROM "authenticated";
 
 GRANT INSERT ("order_id"), SELECT ("order_id") ON TABLE "public"."returns" TO "authenticated";
 
-REVOKE ALL ("reason") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT INSERT ("reason"), SELECT ("reason") ON TABLE "public"."returns" TO "authenticated";
-
-REVOKE ALL ("received_at") ON TABLE "public"."returns" FROM "authenticated";
 
 GRANT SELECT ("received_at") ON TABLE "public"."returns" TO "authenticated";
 
-REVOKE ALL ("refund_amount") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT SELECT ("refund_amount") ON TABLE "public"."returns" TO "authenticated";
-
-REVOKE ALL ("refunded_at") ON TABLE "public"."returns" FROM "authenticated";
 
 GRANT SELECT ("refunded_at") ON TABLE "public"."returns" TO "authenticated";
 
-REVOKE ALL ("requested_by_user_id") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT INSERT ("requested_by_user_id"), SELECT ("requested_by_user_id") ON TABLE "public"."returns" TO "authenticated";
-
-REVOKE ALL ("status") ON TABLE "public"."returns" FROM "authenticated";
 
 GRANT INSERT ("status"), SELECT ("status") ON TABLE "public"."returns" TO "authenticated";
 
-REVOKE ALL ("stripe_refund_id") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT SELECT ("stripe_refund_id") ON TABLE "public"."returns" TO "authenticated";
 
-REVOKE ALL ("updated_at") ON TABLE "public"."returns" FROM "authenticated";
-
 GRANT SELECT ("updated_at") ON TABLE "public"."returns" TO "authenticated";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."returns" TO "postgres", "service_role";

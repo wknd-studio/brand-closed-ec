@@ -13,10 +13,11 @@ pnpm test:e2e --ui              # Playwright UIモード
 task check                      # push・PR前の完了チェック（typecheck → lint → ユニット → 統合）
 
 supabase start                  # ローカルDB起動
-supabase migration new <name>   # マイグレーション作成
+task db:sync -- <name>          # supabase/schemas/ を直したあと、差をマイグレーションにする
+supabase migration new <name>   # 手で書くマイグレーション作成（データの変更・名前の変更等）
 supabase db reset               # ローカルDBに適用
 supabase gen types typescript --local > src/types/database.types.ts
-task db:schema                  # DBの今の定義を supabase/schemas/ に書き出す（マイグレーション作成後に）
+task db:schema                  # DBの今の定義を supabase/schemas/ に書き出す（db reset のあと。差分が残らないことを確かめる）
 
 wrangler pages secret put <KEY> # シークレット設定
 wrangler pages deployment tail  # ログ確認
@@ -76,6 +77,7 @@ feature/* →  develop 向けのPRごとにプレビューURL（stg のDB・Cler
 - **環境**: ワークツリーはOrcaが作る。自分で `EnterWorktree` や `git worktree add` をしない
 - **担当issue**: `orca worktree current --json` の `linkedIssue` が担当issue。ブランチはOrcaが付けた名前のまま使わず、`git fetch origin develop` のあと `git switch -c feature/<issue番号>-<内容> origin/develop` で切り直す
 - **依存の確認**: 着手前に `gh api repos/{owner}/{repo}/issues/<issue番号>/dependencies/blocked_by --jq '.[] | select(.state=="open") | .number'` を実行し、1件でも出たら実装を始めずユーザーに報告して止まる
+- **スキーマの変更**: マイグレーションを直接書かず、`supabase/schemas/` を直して `task db:sync -- <名前>` で作る（上記「マイグレーション」の段落・`docs/declarative-schema.md`）。`task db:sync`・`task db:schema` は内部で `with-worktree-db.sh` を通すため、ワークツリーでもそのまま実行してよい。develop を取り込んだあと `Schema Files Drift` が失敗したら、`bash scripts/with-worktree-db.sh supabase db reset` → `task db:schema` で書き出し直してコミットする
 - **DBを使うコマンド**: 統合テスト・E2Eは `task test:integration` / `task test:e2e`（内部で `with-worktree-db.sh` を通す）で実行する。それ以外の `supabase db reset` 等は、必ず `bash scripts/with-worktree-db.sh <コマンド>` で実行する。このワークツリー専用スロットのSupabaseが止まっていれば自動で起動し、Dopplerの値をそのスロットのものに上書きして実行する。`doppler run -- pnpm test:integration` を直接実行しない（メインのチェックアウト用のスロット1のDBに接続してしまうため、ワークツリー内では統合テスト・E2Eの開始時に失敗するようにしてある）
 - **開発サーバー**: ワークツリーで `task dev`（`dev:services`・`dev:next` 等も含む）を使わない。メインのチェックアウト専用の構成（スロット1のDB・ポート3000・ngrok・Stripe CLI）で動くため、実行するとエラーで止まる。Webhookを含む手動確認は、メインのチェックアウトでブランチを `git switch` して行う
 - **担当外の問題**: 作業中に担当issueの範囲外の問題（不具合・設計の歪み等）を見つけたら、実装せずに起票する。見つけることは続ける
@@ -184,7 +186,7 @@ E2E は主要な流れだけを持ち、細かい分岐は統合・ユニット�
 
 **マイグレーション作成後は必ず`supabase gen types typescript --local > src/types/database.types.ts`を再実行してコミットする。** CIの`Schema Types Drift`ジョブが、ローカルDBから再生成した型とコミット済みファイルの差分を検出し、更新忘れを機械的に防ぐ。`database.types.ts` は `.gitattributes` で `linguist-generated=true` を指定しており、GitHubのPR差分表示では既定で折りたたまれる。正しさは `Schema Types Drift` が検査するので、レビューで中身を読む必要は無い。他の生成物（`pnpm-lock.yaml` 等）も `.gitattributes` に並べてあり、それぞれの正しさの確かめ方は同ファイルのコメントに書いてある。
 
-**マイグレーション作成後は、`task db:schema` も実行して `supabase/schemas/` をコミットする。** `supabase/schemas/` は、全マイグレーションを当てたDBの今の定義を1オブジェクト1ファイル（`public/functions/<関数名>.sql`・`public/tables/<テーブル名>.sql` 等）で書き出した写しで、関数・テーブルの今の中身を読む場所（宣言的スキーマの段階A。#783）。正はマイグレーションのままで、`supabase/schemas/` は直接編集しない（`[db.migrations].schema_paths` は空のまま）。`supabase db reset`（ワークツリーでは `bash scripts/with-worktree-db.sh supabase db reset`）のあとに実行する。CIの `Schema Files Drift` が、マイグレーションを当てたDBから書き出し直した結果とコミット済みのファイルの食い違いを検出し、ずれたファイルを出す。`database.types.ts` と同じく `linguist-generated=true` で、レビューで読む必要は無い。書き出しにはDBが要るため `Mechanical-Change:` のtrailerでは再現できない（trailerは付けず、生成物だけのコミットにする。正しさは `Schema Files Drift` が検査する）
+**スキーマを変えるときは、`supabase/schemas/` のファイルを直し、マイグレーションは `task db:sync -- <名前>` で作る（宣言的スキーマ。#784）。** 手順は「ファイルを直す → `task db:sync` → 作ったマイグレーションを読んで直す（名前の変更が `DROP` になっていないか・書いていない `GRANT`/`REVOKE` が無いか）→ `supabase db reset`（ワークツリーでは `bash scripts/with-worktree-db.sh supabase db reset`）→ `task db:schema` で `supabase/schemas/` に差分が残らないことを確かめる → `supabase gen types` → コミット」。データの変更（`insert`・`update`・`delete`）・テーブルや列の名前の変更・sync が追えないオブジェクトは `supabase migration new` で手で書き、ファイルも同じ形に直す（順番の決まり・試した結果・権限の扱いは `docs/declarative-schema.md`）。`public` に新しく作るテーブル・関数には `anon`・`authenticated` への権限が自動で付かないため、使わせるロールへの `GRANT` をファイルに書く。本番・stg に当たるのはマイグレーションだけで、`[db.migrations].schema_paths` は空のまま。CIの `Schema Files Drift` が、マイグレーションを当てたDBから書き出し直した結果とファイルの食い違い（手で書いたマイグレーションに合わせてファイルを直し忘れた）と、sync が差を見つけること（ファイルを直してマイグレーションを作り忘れた）を検出する。`Destructive Migration Check` が、`drop table`・`drop column`・`alter column ... type`・`truncate` を含むマイグレーションを止める（意図して消すなら、マイグレーションに `-- destructive-ok: <理由>` を書く）。ローカルの Supabase CLI はCIと同じ版にする（違うと `task db:sync` が止まる）。`supabase/schemas/` は `linguist-generated=true` で折りたたまれる（変更はマイグレーションの差分で読む）。`task db:schema` の書き出しはDBが要るため `Mechanical-Change:` のtrailerでは再現できない（trailerは付けない）
 
 CIの`Migration Order`が失敗したら、developの最新より新しいタイムスタンプでマイグレーションを作り直す（`supabase migration new`で作り直すかリネームし、`supabase gen types`を再実行する）。
 
