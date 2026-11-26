@@ -278,7 +278,6 @@ export const DESIGN_TOKEN_LEGACY_FILES = [
   "src/app/admin/waitlist/waitlist-table.tsx",
   // 会員の画面のうち、買う流れ（親issue #767）の外のものと、そのほかの画面。デザインをそろえる作業（マイページ等）で直したら外す
   "src/app/home-presenter.tsx",
-  "src/app/legal/legal-notice-text.tsx",
   "src/app/onboarding/payment/success/payment-status.tsx",
 ];
 
