@@ -97,6 +97,12 @@ flowchart TD
 - 商品代金の支払い手段は、`checkout`・`invoice`のどちらもクレジットカード（Link で保存したカードを含む）だけ。Apple Pay・Google Pay はカードの一種として出る
 - Stripe のダッシュボードの支払い手段の設定によらないよう、コードで指定している（`src/infrastructure/stripe/stripe-payment-gateway.ts`。Checkout Session は`payment_method_types: ["card", "link"]`、Invoice は`payment_settings.payment_method_types: ["card", "link"]`）。ダッシュボードでコンビニ払い・銀行振込などを有効にしても、商品代金の支払いには出ない
 
+**支払いの通貨（2026-11-26 決定、issue #810）**
+
+- 入会（初期費用・月額）と商品代金は、どれも円で払わせる。Stripe の Adaptive Pricing（海外からの利用者に、その地域の通貨に換算した金額で払わせる機能）は使わない。会員は日本の法人・事業者で、特商法の表記も税込の円の価格のため、換算した外貨の金額が出ると表示と食い違い、返金が払った通貨で戻ると為替の差で額がずれるおそれもある
+- Checkout Session は、ダッシュボードの設定（既定で有効）によらないよう、コードで`adaptive_pricing: { enabled: false }`を指定している（入会は`src/infrastructure/stripe/stripe-onboarding-checkout-gateway.ts`、`checkout`決済単位は`src/infrastructure/stripe/stripe-payment-gateway.ts`の`createCheckoutSession`）
+- 請求書（`invoice`決済単位）の支払いページ（Hosted Invoices）は、Invoice を作る API に指定する引数が無いため、Stripe のダッシュボードの Adaptive Pricing の設定で無効にする。環境（サンドボックス・本番）ごとに設定が要る
+
 **決済単位ごとの状態遷移**
 
 - `checkout`決済単位: `pending_payment` →（Stripeの`checkout.session.completed` Webhook）→ `paid`。`paid_at`を設定する
