@@ -74,6 +74,7 @@ describe("riskLabelsOf（ファイルのパス → 区分）", () => {
     [".github/workflows/labeler.yml", ["risk:gate"]],
     [".github/labeler.yml", ["risk:gate"]],
     [".claude/settings.json", ["risk:gate"]],
+    [".claude/hooks/issue-scope-guard.ts", ["risk:gate"]],
     ["eslint.config.mjs", ["risk:gate"]],
     ["Taskfile.yml", ["risk:gate"]],
     ["scripts/ci/pr-diff-summary.ts", ["risk:gate"]],

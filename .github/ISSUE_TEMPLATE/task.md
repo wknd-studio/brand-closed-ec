@@ -42,6 +42,11 @@ issue と PR は常に1対1にする（CLAUDE.md「タスク分解」）。
 
 ## 並列作業メモ
 
-<!-- 並列実装時の衝突確認用 -->
+<!--
+並列実装時の衝突確認用。触るファイルのパスをバッククォートで囲み、読点で区切って書く（例: `src/components/ui/`、`src/domain/services/cart-limit.ts`、`.github/workflows/*.yml`）。
+ファイルそのもの・ディレクトリ（前方一致）・グロブのどれでもよい。
+PRに high-risk が付く変更（マイグレーション・Webhook・認証・決済・注文・金額計算のパス、ゲートの本体、ゲートを弱める変更、依存の追加とメジャー更新。CLAUDE.md「PRのレビュー」）をするなら、そのファイルを必ずここに書く。
+書かないと、Orca のワークツリーの hook がその編集を止め、PR の CI（Issue Scope）が失敗する（docs/cicd.md「issue の範囲外の high-risk の変更を止める（Issue Scope）」）。
+-->
 
 - 触るファイル:

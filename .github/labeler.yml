@@ -59,6 +59,8 @@ risk:gate:
       - any-glob-to-any-file:
           - ".github/**"
           - ".claude/settings.json"
+          # PreToolUse hook（#795 の Issue Scope）。外す・弱めるとゲートを弱められる
+          - ".claude/hooks/**"
           - "eslint.config.mjs"
           # 既存の lint 違反の抑制（#440）。抑制を足すとゲートを弱められる
           - "eslint-suppressions.json"
