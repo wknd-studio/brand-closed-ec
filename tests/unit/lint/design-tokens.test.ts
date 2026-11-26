@@ -215,35 +215,32 @@ describe("対象の範囲", () => {
   });
 });
 
-// 空の it.each は vitest がエラーにするため、一覧が空になったら飛ばす
-describe.skipIf(DESIGN_TOKEN_LEGACY_FILES.length === 0)(
-  "今残っているファイルの一覧",
-  () => {
-    it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は存在する", (file) => {
-      expect(existsSync(file)).toBe(true);
-    });
+// 一覧が空になったら、この describe も消す（空の it.each は vitest がエラーにする）
+describe("今残っているファイルの一覧", () => {
+  it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は存在する", (file) => {
+    expect(existsSync(file)).toBe(true);
+  });
 
-    // [id] 等の動的ルートのファイルも外れていること
-    it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は対象にしない", async (file) => {
-      expect(
-        await designTokenMessages(file, readFileSync(file, "utf8"))
-      ).toEqual([]);
-    });
-
-    // 作り直して0件になったファイルは一覧から消す（一覧に残ると、そのファイルで書き戻しても気付けない）
-    it.each(DESIGN_TOKEN_LEGACY_FILES)(
-      "%s にはまだ対象の書き方が残っている",
-      async (file) => {
-        const renamed = join(
-          dirname(file),
-          `${basename(file, extname(file))}.__legacy-check__${extname(file)}`
-        );
-        const result = await designTokenMessages(
-          renamed,
-          readFileSync(file, "utf8")
-        );
-        expect(result.length).toBeGreaterThan(0);
-      }
+  // [id] 等の動的ルートのファイルも外れていること
+  it.each(DESIGN_TOKEN_LEGACY_FILES)("%s は対象にしない", async (file) => {
+    expect(await designTokenMessages(file, readFileSync(file, "utf8"))).toEqual(
+      []
     );
-  }
-);
+  });
+
+  // 作り直して0件になったファイルは一覧から消す（一覧に残ると、そのファイルで書き戻しても気付けない）
+  it.each(DESIGN_TOKEN_LEGACY_FILES)(
+    "%s にはまだ対象の書き方が残っている",
+    async (file) => {
+      const renamed = join(
+        dirname(file),
+        `${basename(file, extname(file))}.__legacy-check__${extname(file)}`
+      );
+      const result = await designTokenMessages(
+        renamed,
+        readFileSync(file, "utf8")
+      );
+      expect(result.length).toBeGreaterThan(0);
+    }
+  );
+});
