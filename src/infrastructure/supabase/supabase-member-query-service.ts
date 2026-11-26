@@ -20,7 +20,7 @@ export class SupabaseMemberQueryService implements MemberQueryService {
     const { data, error } = await this.db
       .from("users")
       .select(
-        "created_at, addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number)"
+        "created_at, billing_anchor_day, member_ranks!users_rank_code_fkey(monthly_limit_amount, display_name_ja), addresses(id, type, is_default, recipient_last_name, recipient_first_name, postal_code, prefecture, city, address_line1, address_line2, phone_number)"
       )
       .eq("clerk_user_id", clerkUserId)
       .is("deleted_at", null)
@@ -34,10 +34,21 @@ export class SupabaseMemberQueryService implements MemberQueryService {
       new Date(data.created_at)
     );
 
+    // 仕入れ枠の確定額の集計（findMemberLayout）と同じ期間
+    const period = MonthlyPeriod.fromBillingAnchorDay(data.billing_anchor_day);
+
     return {
       withdrawableFrom: minimumPeriod.includes(new Date())
         ? minimumPeriod.withdrawableFrom.toISOString()
         : null,
+      plan: {
+        name: data.member_ranks.display_name_ja,
+        monthlyLimit: data.member_ranks.monthly_limit_amount,
+        period: {
+          start: period.start.toISOString(),
+          end: period.end.toISOString(),
+        },
+      },
       addresses: data.addresses.map((a) => ({
         id: a.id,
         type: a.type,

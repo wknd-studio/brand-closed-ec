@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth, useClerk } from "@clerk/nextjs";
+import { Button } from "@/components/ui/button";
 
 // 退会でClerkユーザーがbanされるとセッションは失効済みで、signOutは何もせず遷移もしない。
 // セッションが残っている場合（banの失敗時など）はログアウトしてから、どちらでもトップへ移る。
@@ -20,12 +21,13 @@ export function SignOutToTopButton() {
   }
 
   return (
-    <button
+    <Button
+      variant="secondary"
       onClick={handleClick}
       disabled={!isLoaded}
-      className="text-sm underline underline-offset-4"
+      className="mt-2 w-full max-w-[280px]"
     >
       トップへ戻る
-    </button>
+    </Button>
   );
 }

@@ -14,6 +14,7 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 type AddressDto = {
   id: string;
@@ -30,6 +31,11 @@ type AddressDto = {
 type Props =
   | { mode: "create"; type: "shipping" | "billing"; onClose: () => void }
   | { mode: "edit"; address: AddressDto; onClose: () => void };
+
+const TYPE_LABELS = {
+  shipping: "お届け先住所",
+  billing: "請求先住所",
+} as const;
 
 const PREFECTURES = [
   "北海道",
@@ -139,6 +145,8 @@ export default function AddressForm(props: Props) {
   const [city, setCity] = useState(addr?.city ?? "");
   const [addressLine1, setAddressLine1] = useState(addr?.addressLine1 ?? "");
   const [zipcodeLoading, setZipcodeLoading] = useState(false);
+  const title =
+    props.mode === "create" ? `${TYPE_LABELS[props.type]}を追加` : "住所を編集";
 
   async function handleZipcodeChange(value: string) {
     const digits = value.replace(/\D/g, "");
@@ -154,154 +162,162 @@ export default function AddressForm(props: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h3 className="mb-5 text-sm font-semibold">
-          {props.mode === "create" ? "住所を追加" : "住所を編集"}
-        </h3>
+    <form
+      onSubmit={handleSubmit}
+      aria-label={title}
+      className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-primary bg-[color-mix(in_srgb,var(--color-primary)_5%,white)] p-[18px]"
+    >
+      <p className="text-sm font-semibold">{title}</p>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {props.mode === "create" && (
-            <input type="hidden" name="type" value={props.type} />
+      {props.mode === "create" && (
+        <input type="hidden" name="type" value={props.type} />
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormField label="姓" required error={fieldErrors?.recipientLastName}>
+          {(field) => (
+            <Input
+              name="recipient_last_name"
+              defaultValue={addr?.recipientLastName ?? ""}
+              required
+              className="w-full"
+              {...field}
+            />
           )}
+        </FormField>
+        <FormField label="名" required error={fieldErrors?.recipientFirstName}>
+          {(field) => (
+            <Input
+              name="recipient_first_name"
+              defaultValue={addr?.recipientFirstName ?? ""}
+              required
+              className="w-full"
+              {...field}
+            />
+          )}
+        </FormField>
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="姓" error={fieldErrors?.recipientLastName}>
-              {(field) => (
-                <Input
-                  name="recipient_last_name"
-                  defaultValue={addr?.recipientLastName ?? ""}
-                  required
-                  className="w-full"
-                  {...field}
-                />
+        <FormField label="郵便番号" required error={fieldErrors?.postalCode}>
+          {(field) => (
+            <div className="relative">
+              <Input
+                name="postal_code"
+                defaultValue={addr?.postalCode ?? ""}
+                required
+                // domain の InvalidPostalCodeError と同じ形式（tests/unit/address-form.test.tsx で一致を確かめる）
+                pattern="\d{3}-?\d{4}"
+                title="7桁の数字（例: 150-0001）"
+                placeholder="1500001"
+                onChange={(e) => handleZipcodeChange(e.target.value)}
+                className="w-full"
+                {...field}
+              />
+              {zipcodeLoading && (
+                <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-neutral-600">
+                  検索中…
+                </span>
               )}
-            </FormField>
-            <FormField label="名" error={fieldErrors?.recipientFirstName}>
-              {(field) => (
-                <Input
-                  name="recipient_first_name"
-                  defaultValue={addr?.recipientFirstName ?? ""}
-                  required
-                  className="w-full"
-                  {...field}
-                />
-              )}
-            </FormField>
-          </div>
+            </div>
+          )}
+        </FormField>
 
-          <FormField label="郵便番号" error={fieldErrors?.postalCode}>
-            {(field) => (
-              <div className="relative">
-                <Input
-                  name="postal_code"
-                  defaultValue={addr?.postalCode ?? ""}
-                  required
-                  // domain の InvalidPostalCodeError と同じ形式（tests/unit/address-form.test.tsx で一致を確かめる）
-                  pattern="\d{3}-?\d{4}"
-                  title="7桁の数字（例: 150-0001）"
-                  placeholder="1500001"
-                  onChange={(e) => handleZipcodeChange(e.target.value)}
-                  className="w-full"
-                  {...field}
-                />
-                {zipcodeLoading && (
-                  <span className="absolute right-3 top-2 text-xs text-gray-400">
-                    検索中…
-                  </span>
-                )}
-              </div>
-            )}
-          </FormField>
+        <FormField label="都道府県" required error={fieldErrors?.prefecture}>
+          {(field) => (
+            <Select
+              name="prefecture"
+              value={prefecture}
+              onChange={(e) => setPrefecture(e.target.value)}
+              required
+              className="w-full"
+              options={PREFECTURE_OPTIONS}
+              {...field}
+            />
+          )}
+        </FormField>
 
-          <FormField label="都道府県" error={fieldErrors?.prefecture}>
-            {(field) => (
-              <Select
-                name="prefecture"
-                value={prefecture}
-                onChange={(e) => setPrefecture(e.target.value)}
-                required
-                className="w-full"
-                options={PREFECTURE_OPTIONS}
-                {...field}
-              />
-            )}
-          </FormField>
+        <FormField
+          label="市区町村"
+          required
+          error={fieldErrors?.city}
+          className="sm:col-span-2"
+        >
+          {(field) => (
+            <Input
+              name="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              required
+              className="w-full"
+              {...field}
+            />
+          )}
+        </FormField>
 
-          <FormField label="市区町村" error={fieldErrors?.city}>
-            {(field) => (
-              <Input
-                name="city"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                required
-                className="w-full"
-                {...field}
-              />
-            )}
-          </FormField>
+        <FormField
+          label="番地・建物名"
+          required
+          error={fieldErrors?.addressLine1}
+          className="sm:col-span-2"
+        >
+          {(field) => (
+            <Input
+              name="address_line1"
+              value={addressLine1}
+              onChange={(e) => setAddressLine1(e.target.value)}
+              required
+              className="w-full"
+              {...field}
+            />
+          )}
+        </FormField>
 
-          <FormField label="番地・建物名" error={fieldErrors?.addressLine1}>
-            {(field) => (
-              <Input
-                name="address_line1"
-                value={addressLine1}
-                onChange={(e) => setAddressLine1(e.target.value)}
-                required
-                className="w-full"
-                {...field}
-              />
-            )}
-          </FormField>
+        <FormField label="建物名・部屋番号（任意）" className="sm:col-span-2">
+          {(field) => (
+            <Input
+              name="address_line2"
+              defaultValue={addr?.addressLine2 ?? ""}
+              className="w-full"
+              {...field}
+            />
+          )}
+        </FormField>
 
-          <FormField label="建物名・部屋番号（任意）">
-            {(field) => (
-              <Input
-                name="address_line2"
-                defaultValue={addr?.addressLine2 ?? ""}
-                className="w-full"
-                {...field}
-              />
-            )}
-          </FormField>
-
-          <FormField label="電話番号" error={fieldErrors?.phoneNumber}>
-            {(field) => (
-              <Input
-                type="tel"
-                name="phone_number"
-                defaultValue={addr?.phoneNumber ?? ""}
-                required
-                // domain の PhoneNumber と同じ形式（ハイフンをすべて除いて0始まりの10〜11桁。tests/unit/address-form.test.tsx で一致を確かめる）
-                pattern="-*0(?:-*\d){9,10}-*"
-                title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
-                placeholder="09012345678"
-                className="w-full"
-                {...field}
-              />
-            )}
-          </FormField>
-
-          {formError && <p className="text-xs text-danger">{formError}</p>}
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={props.onClose}
-              className="flex-1 rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-            >
-              キャンセル
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              className="flex-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-40"
-            >
-              {isPending ? "保存中..." : "保存"}
-            </button>
-          </div>
-        </form>
+        <FormField label="電話番号" required error={fieldErrors?.phoneNumber}>
+          {(field) => (
+            <Input
+              type="tel"
+              name="phone_number"
+              defaultValue={addr?.phoneNumber ?? ""}
+              required
+              // domain の PhoneNumber と同じ形式（ハイフンをすべて除いて0始まりの10〜11桁。tests/unit/address-form.test.tsx で一致を確かめる）
+              pattern="-*0(?:-*\d){9,10}-*"
+              title="0から始まる10〜11桁の数字（例: 090-1234-5678）"
+              placeholder="09012345678"
+              className="w-full"
+              {...field}
+            />
+          )}
+        </FormField>
       </div>
-    </div>
+
+      {formError && (
+        <p role="alert" className="text-xs text-danger">
+          {formError}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending ? "保存中..." : "保存する"}
+        </Button>
+        <button
+          type="button"
+          onClick={props.onClose}
+          className="h-10 px-4 text-sm text-neutral-700 underline underline-offset-4 hover:text-neutral-900"
+        >
+          やめる
+        </button>
+      </div>
+    </form>
   );
 }

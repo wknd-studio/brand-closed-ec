@@ -3,6 +3,9 @@
 import { useState, useTransition } from "react";
 import { setDefaultAddressAction, deleteAddressAction } from "./actions";
 import AddressForm from "./address-form";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type AddressDto = {
   id: string;
@@ -24,6 +27,9 @@ type Props = {
   label: string;
 };
 
+const textButtonClass =
+  "h-9 px-3 text-[13px] text-neutral-900 underline underline-offset-4 hover:text-primary-strong disabled:opacity-40";
+
 export default function AddressList({ addresses, type, label }: Props) {
   const [isPending, startTransition] = useTransition();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -33,45 +39,60 @@ export default function AddressList({ addresses, type, label }: Props) {
   const filtered = addresses.filter((a) => a.type === type);
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-gray-700">{label}</h2>
-        <button
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">{label}</h3>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setShowAddForm(true)}
-          className="text-xs text-gray-500 hover:text-gray-900"
+          className="gap-1.5"
         >
-          ＋ 追加
-        </button>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          追加
+        </Button>
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-gray-400">登録済みの住所がありません</p>
+        <p className="text-sm text-neutral-600">登録済みの住所がありません</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="flex flex-col gap-2">
           {filtered.map((addr) => (
-            <li key={addr.id} className="rounded-lg border p-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-0.5 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">
+            <li
+              key={addr.id}
+              className="rounded-xl border border-neutral-200 px-4 py-3.5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5 text-sm leading-[1.7]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">
                       {addr.recipientLastName} {addr.recipientFirstName}
                     </span>
-                    {addr.isDefault && (
-                      <span className="rounded bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        デフォルト
-                      </span>
-                    )}
+                    {addr.isDefault && <Badge>いつもの住所</Badge>}
                   </div>
-                  <p className="text-gray-500">
+                  <p className="text-neutral-700">
                     〒{addr.postalCode} {addr.prefecture}
                     {addr.city}
                     {addr.addressLine1}
                     {addr.addressLine2 ? ` ${addr.addressLine2}` : ""}
                   </p>
-                  <p className="text-gray-500">{addr.phoneNumber}</p>
+                  <p className="text-neutral-700 tabular-nums">
+                    {addr.phoneNumber}
+                  </p>
                 </div>
 
-                <div className="ml-4 flex flex-shrink-0 flex-col items-end gap-1">
+                <div className="flex flex-wrap gap-1">
                   {!addr.isDefault && (
                     <button
                       disabled={isPending}
@@ -80,40 +101,44 @@ export default function AddressList({ addresses, type, label }: Props) {
                           await setDefaultAddressAction(addr.id, type);
                         })
                       }
-                      className="text-xs text-gray-400 hover:text-gray-900 disabled:opacity-40"
+                      className={textButtonClass}
                     >
-                      デフォルトに設定
+                      いつもの住所にする
                     </button>
                   )}
                   <button
                     onClick={() => setEditingAddress(addr)}
-                    className="text-xs text-gray-400 hover:text-gray-900"
+                    className={textButtonClass}
                   >
                     編集
                   </button>
                   <button
                     onClick={() => setDeleteConfirmId(addr.id)}
-                    className="text-xs text-gray-400 hover:text-red-500"
+                    className="h-9 px-3 text-[13px] text-danger underline underline-offset-4 hover:opacity-80"
                   >
                     削除
                   </button>
                 </div>
               </div>
 
-              {/* 削除確認 */}
               {deleteConfirmId === addr.id && (
-                <div className="mt-3 rounded-lg bg-red-50 p-3">
-                  <p className="text-xs text-red-700">
-                    この住所を削除しますか？
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <button
+                <Alert
+                  tone="danger"
+                  role="alert"
+                  title="この住所を削除しますか？"
+                  className="mt-3"
+                >
+                  <div className="mt-1 flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setDeleteConfirmId(null)}
-                      className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
                     >
                       キャンセル
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
                       disabled={isPending}
                       onClick={() =>
                         startTransition(async () => {
@@ -121,12 +146,11 @@ export default function AddressList({ addresses, type, label }: Props) {
                           setDeleteConfirmId(null);
                         })
                       }
-                      className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-40"
                     >
                       削除する
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Alert>
               )}
             </li>
           ))}
@@ -142,11 +166,13 @@ export default function AddressList({ addresses, type, label }: Props) {
       )}
       {editingAddress && (
         <AddressForm
+          // 別の住所の編集に切り替えたとき、入力欄を作り直す
+          key={editingAddress.id}
           mode="edit"
           address={editingAddress}
           onClose={() => setEditingAddress(null)}
         />
       )}
-    </section>
+    </div>
   );
 }
