@@ -23,6 +23,7 @@
       "Bash(cp *)",
       "Bash(mv *)"
     ],
+    "ask": ["Bash(gh issue edit *)", "Bash(gh pr edit *)"],
     "deny": [
       "Bash(git push --force *)",
       "Bash(git reset --hard *)",
