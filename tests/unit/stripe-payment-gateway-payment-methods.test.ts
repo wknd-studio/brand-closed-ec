@@ -51,6 +51,25 @@ describe("StripePaymentGateway - 支払い手段", () => {
     );
   });
 
+  // 換算した外貨で払わせない。ダッシュボードの設定（既定で有効）によらないよう、
+  // コードで指定する（#810）
+  it("createCheckoutSessionは、Adaptive Pricingを無効にし、円で払わせる", async () => {
+    const gateway = new StripePaymentGateway();
+
+    await gateway.createCheckoutSession(
+      makeOrder(),
+      [{ productName: "商品A", unitPrice: 1000, quantity: 1 }],
+      "http://localhost:3000"
+    );
+
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ adaptive_pricing: { enabled: false } }),
+      {
+        idempotencyKey: "checkout-session-00000000-0000-0000-0000-000000000001",
+      }
+    );
+  });
+
   it("createInvoiceForOrderは、請求書の支払い手段をカードとLinkだけに指定する", async () => {
     const gateway = new StripePaymentGateway();
 

@@ -171,5 +171,27 @@ describe("StripeOnboardingCheckoutGateway", () => {
       const [params] = createCheckoutSessionMock.mock.calls[0];
       expect(params.payment_method_types).toEqual(["card"]);
     });
+
+    // 会員は日本の法人・事業者で、特商法の表記も円の価格のため、換算した外貨で
+    // 払わせない。ダッシュボードの設定（既定で有効）によらないよう、コードで指定する（#810）
+    it("Adaptive Pricingを無効にし、円で払わせる", async () => {
+      createCheckoutSessionMock.mockResolvedValue({
+        id: "cs_1",
+        url: "https://checkout.stripe.com/c/pay/cs_1",
+      });
+
+      await gateway.createCheckoutSession({
+        userId: USER_ID,
+        clerkUserId: "clerk-1",
+        stripeCustomerId: "cus_1",
+        rank: "premium",
+      });
+
+      const [params, options] = createCheckoutSessionMock.mock.calls[0];
+      expect(params.adaptive_pricing).toEqual({ enabled: false });
+      expect(options).toEqual({
+        idempotencyKey: `onboarding-checkout-session-${USER_ID}-premium`,
+      });
+    });
   });
 });
