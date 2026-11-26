@@ -37,9 +37,7 @@ export const PAYMENT_METHOD = {
 
 export const PAYMENT_TIMING = {
   atOrder: { text: "注文の確定時" },
-  afterOrder: {
-    text: "請求書の発行日から7日以内（注文の確定時にはお支払いいただきません）",
-  },
+  afterOrder: { text: "請求書の発行日から7日以内" },
 } satisfies Record<string, LegalNoticeValue>;
 
 export const DELIVERY_TIMING: LegalNoticeValue = {
