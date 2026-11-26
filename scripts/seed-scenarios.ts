@@ -45,7 +45,8 @@ export const SCENARIO_ACCOUNT_EMAILS: Record<ScenarioAccount, string> = {
 export const NO_ORDER_ACCOUNT_EMAIL = "info+test_starter@wknd-studio.com";
 
 // 目印: シナリオの行のIDは、先頭8文字を `5eed` ＋種類（1文字）＋通し番号（10進3桁）にする。
-// 管理画面は注文IDの先頭8文字を注文番号として出すため、注文ごとに番号が違って見えるようにする（issue #736）。
+// issue #736 の時点では画面が注文IDの先頭8文字を注文番号として出していたため、注文ごとに先頭8文字を変えた
+// （今の注文番号は orders.order_number。issue #755）。
 // 消すときは注文のIDの範囲で選び、明細・決済単位はその注文のものを消す。
 // ランダムなUUIDが注文の範囲（5eed1000〜5eed1999）に入る確率は 1/2^20 程度
 const ID_KIND = { order: "1", settlement: "2", item: "3" } as const;

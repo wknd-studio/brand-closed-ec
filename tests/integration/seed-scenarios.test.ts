@@ -20,7 +20,7 @@ import { randomOrderNumber } from "../helpers/order-number";
 // GitHub issue #713: テスト用アカウントに各状態の注文（シナリオのデータ）を入れるシード。
 // 実DBに入れ、2回実行しても行が増えないこと・目印の無い行を消さないこと・
 // 入れた注文がアプリから読めて画面に出ることを確認する。
-// GitHub issue #736: 管理画面の注文番号（IDの先頭8文字）が注文ごとに違うこと・
+// GitHub issue #736: 注文のIDの先頭8文字が注文ごとに違うこと（当時は画面の注文番号だった。今は orders.order_number。#755）・
 // 古い形（5eed0713-）のIDで入れた行も入れ直しで消えることを確認する
 const PREFIX = "seed_scenarios_it_";
 
@@ -218,7 +218,7 @@ describe("seedScenarios（実DB）", () => {
     }
   });
 
-  it("管理画面の注文番号（IDの先頭8文字）が、シナリオの注文ごとに違う", async () => {
+  it("注文のIDの先頭8文字が、シナリオの注文ごとに違う", async () => {
     await seedScenarios({ supabase, logger, now, accounts });
 
     const orderNumbers = (await scenarioOrders()).map((o) =>
