@@ -59,8 +59,9 @@ test.describe("注文履歴", () => {
     await expect(page).toHaveURL(/\/orders$/);
     await expect(page.getByRole("heading", { name: "注文履歴" })).toBeVisible();
 
-    const row = page.getByRole("row", {
-      name: new RegExp(orderId.slice(0, 8).toUpperCase()),
+    // 注文は1件ずつのカードで、カード全体が注文詳細へのリンク
+    const row = page.getByRole("link", {
+      name: new RegExp(`注文番号 ${orderId.slice(0, 8).toUpperCase()}`),
     });
     await expect(row).toContainText("お支払い済み");
     await expect(row).toContainText("¥24,000");
