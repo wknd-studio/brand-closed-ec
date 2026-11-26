@@ -1,11 +1,13 @@
 import type { InvoiceSettlementDraft, Order } from "@/domain/entities/order";
 import type { Money } from "@/domain/value-objects/money";
+import type { OrderNumber } from "@/domain/value-objects/order-number";
 import type { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import type { SettlementStatus } from "@/domain/entities/order-settlement";
 
 export type OrderWithUser = {
   id: string;
+  orderNumber: OrderNumber;
   createdAt: Date;
   status: string;
   user: {

@@ -7,13 +7,13 @@ import { presentOrderComplete } from "@/app/(member)/order/order-complete-presen
 import OrderCompleteView from "@/app/(member)/order/order-complete-view";
 
 type Props = {
-  orderId: string;
+  orderNumber: string;
   createdAt: string;
   items: CompletedOrderItemDto[];
 };
 
 export default function InvoiceCompleteClient({
-  orderId,
+  orderNumber,
   createdAt,
   items,
 }: Props) {
@@ -26,7 +26,7 @@ export default function InvoiceCompleteClient({
   return (
     <OrderCompleteView
       view={presentOrderComplete({
-        orderId,
+        orderNumber,
         createdAt,
         atOrderItems: [],
         afterOrderItems: items,

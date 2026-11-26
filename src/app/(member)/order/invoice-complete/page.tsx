@@ -24,7 +24,7 @@ export default async function InvoiceCompletePage({ searchParams }: Props) {
 
   return (
     <InvoiceCompleteClient
-      orderId={order.orderId}
+      orderNumber={order.orderNumber}
       createdAt={order.createdAt}
       items={order.items}
     />

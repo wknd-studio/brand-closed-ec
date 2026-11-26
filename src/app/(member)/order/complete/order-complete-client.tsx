@@ -7,7 +7,7 @@ import { presentOrderComplete } from "@/app/(member)/order/order-complete-presen
 import OrderCompleteView from "@/app/(member)/order/order-complete-view";
 
 type Props = {
-  orderId: string;
+  orderNumber: string;
   createdAt: string;
   /** 今回のお支払い（Checkout）の対象商品 */
   items: CompletedOrderItemDto[];
@@ -16,7 +16,7 @@ type Props = {
 };
 
 export default function OrderCompleteClient({
-  orderId,
+  orderNumber,
   createdAt,
   items,
   afterOrderItems,
@@ -30,7 +30,7 @@ export default function OrderCompleteClient({
   return (
     <OrderCompleteView
       view={presentOrderComplete({
-        orderId,
+        orderNumber,
         createdAt,
         atOrderItems: items,
         afterOrderItems,

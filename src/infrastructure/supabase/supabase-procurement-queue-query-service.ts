@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { PaymentTiming } from "@/domain/entities/order-item";
+import { OrderNumber } from "@/domain/value-objects/order-number";
 import type {
   ProcurementQueueItemDto,
   ProcurementQueueQueryService,
@@ -15,11 +16,11 @@ type QueueItemRow = {
   quantity: number;
   payment_timing: string;
   created_at: string;
-  orders: { created_at: string };
+  orders: { order_number: string; created_at: string };
 };
 
 const QUEUE_ITEM_COLUMNS =
-  "id, order_id, sanity_product_id, product_name_snapshot, quantity, payment_timing, created_at, orders!inner(created_at, status)";
+  "id, order_id, sanity_product_id, product_name_snapshot, quantity, payment_timing, created_at, orders!inner(order_number, created_at, status)";
 
 // 対応待ちになった順（docs/domain/procurement.md「キューの並び順」）。基準は注文日時とし、
 // at_order の決済完了時刻との差は無視する（#348 の懸念 (a)）。同じ注文の中は明細の作成順
@@ -74,6 +75,7 @@ export class SupabaseProcurementQueueQueryService implements ProcurementQueueQue
       (row): ProcurementQueueItemDto => ({
         orderItemId: row.id,
         orderId: row.order_id,
+        orderNumber: OrderNumber.of(row.orders.order_number).display(),
         sanityProductId: row.sanity_product_id,
         productName: row.product_name_snapshot,
         brandName: brandNames.get(row.sanity_product_id) ?? null,

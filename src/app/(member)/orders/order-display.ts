@@ -31,8 +31,3 @@ export function formatOrderDate(iso: string): string {
     day: "2-digit",
   });
 }
-
-// 注文番号は今の作り方のまま（注文IDの先頭8文字。置き換えは issue #755）
-export function formatOrderNumber(orderId: string): string {
-  return orderId.slice(0, 8).toUpperCase();
-}

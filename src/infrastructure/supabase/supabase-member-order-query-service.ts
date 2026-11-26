@@ -12,6 +12,7 @@ import type {
   OrderHistoryDto,
 } from "@/queries/member-order-query-service";
 import { MemberRank } from "@/domain/value-objects/member-rank";
+import { OrderNumber } from "@/domain/value-objects/order-number";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { isSubscriptionPaymentFailed } from "@/domain/services/new-order-eligibility";
@@ -87,7 +88,7 @@ function toOrderDetailAddressDto(
 // 注文の会員を users との内部結合で絞る。部分UNIQUEのため同じ clerk_user_id の退会済みの行が
 // 残りうるので、有効な行（deleted_at IS NULL）の会員の注文だけにする
 // 明細は OrderItem に変換し、後払いかどうかの振り分けを domain（OrderItem.isAfterOrder）に任せる
-const ORDER_SELECT = `id, created_at, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at), order_items(${ORDER_ITEM_COLUMNS})`;
+const ORDER_SELECT = `id, order_number, created_at, users!orders_user_id_fkey!inner(clerk_user_id, deleted_at), order_items(${ORDER_ITEM_COLUMNS})`;
 
 // PostgREST は件数を超える範囲（最後より後のページ）を 416（PGRST103）で返す
 function isRangeNotSatisfiable(error: PostgrestError): boolean {
@@ -156,6 +157,7 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     const items = (data.order_items as OrderItemRow[]).map(toOrderItem);
     return {
       orderId: data.id,
+      orderNumber: OrderNumber.of(data.order_number).display(),
       createdAt: new Date(data.created_at).toISOString(),
       atOrderItems: items.filter((i) => !i.isAfterOrder()).map(toItemDto),
       afterOrderItems: items.filter((i) => i.isAfterOrder()).map(toItemDto),
@@ -188,6 +190,7 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     if (afterOrderItems.length === 0) return null;
     return {
       orderId: data.id,
+      orderNumber: OrderNumber.of(data.order_number).display(),
       createdAt: new Date(data.created_at).toISOString(),
       items: afterOrderItems.map(toItemDto),
     };
@@ -229,6 +232,7 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
         const items = (row.order_items as OrderItemRow[]).map(toOrderItem);
         return {
           orderId: row.id,
+          orderNumber: OrderNumber.of(row.order_number).display(),
           createdAt: new Date(row.created_at).toISOString(),
           status: OrderStatus.of(row.status),
           fixedTotal: sumFixedTotal(items).amount,
@@ -283,6 +287,7 @@ export class SupabaseMemberOrderQueryService implements MemberOrderQueryService 
     });
     return {
       orderId: data.id,
+      orderNumber: OrderNumber.of(data.order_number).display(),
       createdAt: new Date(data.created_at).toISOString(),
       status,
       rankAtOrder: MemberRank.of(data.rank_at_order),

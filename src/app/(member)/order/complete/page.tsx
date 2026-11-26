@@ -23,7 +23,7 @@ export default async function OrderCompletePage({ searchParams }: Props) {
 
   return (
     <OrderCompleteClient
-      orderId={order.orderId}
+      orderNumber={order.orderNumber}
       createdAt={order.createdAt}
       items={order.atOrderItems}
       afterOrderItems={order.afterOrderItems}

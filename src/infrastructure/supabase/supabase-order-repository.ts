@@ -235,10 +235,11 @@ export const ORDER_SETTLEMENT_COLUMNS =
 const ORDER_SELECT = `*, order_items(${ORDER_ITEM_COLUMNS}), order_settlements(*)`;
 
 const ORDER_WITH_USER_SELECT =
-  "id, created_at, status, users!orders_user_id_fkey(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable, payment_timing, settlement_id), order_settlements(id, flow, status, amount_snapshot, stripe_checkout_session_id, stripe_invoice_id)";
+  "id, order_number, created_at, status, users!orders_user_id_fkey(last_name, first_name, email, stripe_customer_id), order_items(id, product_name_snapshot, quantity, unit_price_snapshot, is_negotiable, payment_timing, settlement_id), order_settlements(id, flow, status, amount_snapshot, stripe_checkout_session_id, stripe_invoice_id)";
 
 type OrderWithUserRow = {
   id: string;
+  order_number: string;
   created_at: string;
   status: string;
   users:
@@ -278,6 +279,7 @@ function toOrderWithUser(row: OrderWithUserRow): OrderWithUser {
   const u = Array.isArray(row.users) ? row.users[0] : row.users;
   return {
     id: row.id,
+    orderNumber: OrderNumber.of(row.order_number),
     createdAt: new Date(row.created_at),
     status: row.status,
     user: u

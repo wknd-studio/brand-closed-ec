@@ -18,7 +18,6 @@ import {
   ORDER_STATUS_TONES,
   SETTLEMENT_STATUS_TONES,
   formatOrderDate,
-  formatOrderNumber,
   type BadgeTone,
 } from "@/app/(member)/orders/order-display";
 import { requestReturnAction } from "./actions";
@@ -145,7 +144,7 @@ export default async function OrderDetailPage({ params }: Props) {
   // 他の会員の注文・存在しない注文は、存在を明かさないよう同じ 404 にする
   if (!order) notFound();
 
-  const orderNumber = formatOrderNumber(order.orderId);
+  const { orderNumber } = order;
   const hasPayments =
     order.settlements.length > 0 || order.unassignedItems.length > 0;
 

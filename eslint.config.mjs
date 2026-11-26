@@ -185,6 +185,17 @@ const catchSyntax = [
   },
 ];
 
+// 注文IDから注文番号を作らない（#755）。注文番号は orders.order_number（#754）で、画面ごとに注文IDの先頭を
+// 切り出すと番号が食い違う。注文IDらしい名前（id・orderId・order_id 等）の文字列の先頭を切り出す書き方を止める
+const orderNumberSyntax = [
+  {
+    selector:
+      "CallExpression[callee.property.name=/^(slice|substring|substr)$/]:matches([callee.object.name=/^(id|\\w*Id|\\w*_id)$/], [callee.object.property.name=/^(id|\\w*Id|\\w*_id)$/])",
+    message:
+      "注文IDから注文番号を作らない。画面用の DTO の orderNumber（Query Service が OrderNumber.display() で作る）か、OrderNumber の display() を使う。注文ID以外のIDを切り出すときは // eslint-disable-next-line no-restricted-syntax -- <理由> で外す（#755）",
+  },
+];
+
 // middleware で Sentry.setUser を呼んでも後続のリクエストに引き継がれない（#310）
 const middlewareSetUserSyntax = [
   {
@@ -469,14 +480,19 @@ const eslintConfig = defineConfig([
   {
     files: ["src/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-syntax": ["error", ...catchSyntax],
+      "no-restricted-syntax": ["error", ...catchSyntax, ...orderNumberSyntax],
     },
   },
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/infrastructure/**", "src/sanity/**"],
     rules: {
-      "no-restricted-syntax": ["error", ...clientSyntax, ...catchSyntax],
+      "no-restricted-syntax": [
+        "error",
+        ...clientSyntax,
+        ...catchSyntax,
+        ...orderNumberSyntax,
+      ],
     },
   },
   {
@@ -494,6 +510,7 @@ const eslintConfig = defineConfig([
         "error",
         ...clientSyntax,
         ...catchSyntax,
+        ...orderNumberSyntax,
         ...designTokenSyntax,
       ],
     },
@@ -505,6 +522,7 @@ const eslintConfig = defineConfig([
         "error",
         ...clientSyntax,
         ...catchSyntax,
+        ...orderNumberSyntax,
         ...middlewareSetUserSyntax,
       ],
     },
@@ -512,7 +530,12 @@ const eslintConfig = defineConfig([
   {
     files: ["src/infrastructure/supabase/**/*.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...supabaseErrorSyntax, ...catchSyntax],
+      "no-restricted-syntax": [
+        "error",
+        ...supabaseErrorSyntax,
+        ...catchSyntax,
+        ...orderNumberSyntax,
+      ],
     },
   },
   // E2Eでnetworkidleを待たない（#519）。Next.jsのprefetch・Clerkのトークン更新等で

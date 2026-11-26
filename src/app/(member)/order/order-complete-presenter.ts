@@ -42,12 +42,13 @@ const INVOICE_DUE = `${PAYMENT_TIMING.afterOrder.text}にお支払いくださ�
  * atOrderItems はカード（Checkout）で払った商品、afterOrderItems は請求書払いの商品
  */
 export function presentOrderComplete({
-  orderId,
+  orderNumber,
   createdAt,
   atOrderItems,
   afterOrderItems,
 }: {
-  orderId: string;
+  // 表示の形（DTO の orderNumber）
+  orderNumber: string;
   createdAt: string;
   atOrderItems: CompletedOrderItemDto[];
   afterOrderItems: CompletedOrderItemDto[];
@@ -126,7 +127,7 @@ export function presentOrderComplete({
   );
 
   return {
-    orderNumber: orderId.slice(0, 8).toUpperCase(),
+    orderNumber,
     orderDate: new Date(createdAt).toLocaleDateString("ja-JP", {
       timeZone: "Asia/Tokyo",
       year: "numeric",

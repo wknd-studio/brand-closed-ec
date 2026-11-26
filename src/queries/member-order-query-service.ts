@@ -38,6 +38,8 @@ export type CompletedOrderItemDto = {
 // Checkout 完了画面（/order/complete）
 export type CheckoutCompletedOrderDto = {
   orderId: string;
+  // 表示の形（OrderNumber.display()。4文字ずつハイフン区切り）
+  orderNumber: string;
   createdAt: string;
   atOrderItems: CompletedOrderItemDto[];
   afterOrderItems: CompletedOrderItemDto[];
@@ -46,6 +48,8 @@ export type CheckoutCompletedOrderDto = {
 // 後払いの注文完了画面（/order/invoice-complete）。後払いの明細だけを持つ
 export type InvoiceRequestedOrderDto = {
   orderId: string;
+  // 表示の形（OrderNumber.display()。4文字ずつハイフン区切り）
+  orderNumber: string;
   createdAt: string;
   items: CompletedOrderItemDto[];
 };
@@ -54,6 +58,8 @@ export type InvoiceRequestedOrderDto = {
 // includesNegotiable が true（金額が未確定の分を含むと表示する。#275 と同じ0円扱いを避ける）
 export type OrderHistoryItemDto = {
   orderId: string;
+  // 表示の形（OrderNumber.display()。4文字ずつハイフン区切り）
+  orderNumber: string;
   createdAt: string;
   status: OrderStatus;
   fixedTotal: number;
@@ -105,6 +111,8 @@ export type ReturnableItemDto = {
 // 割り当てられていない明細（注文後に請求予定の商品）
 export type OrderDetailDto = {
   orderId: string;
+  // 表示の形（OrderNumber.display()。4文字ずつハイフン区切り）
+  orderNumber: string;
   createdAt: string;
   status: OrderStatus;
   rankAtOrder: MemberRank;

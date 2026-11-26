@@ -116,7 +116,7 @@ export default async function ProcurementQueuePage({
                     href={`/admin/orders/${item.orderId}`}
                     className="font-mono text-xs text-primary hover:underline"
                   >
-                    {item.orderId.slice(0, 8).toUpperCase()}
+                    {item.orderNumber}
                   </Link>
                 </TableCell>
               </TableRow>

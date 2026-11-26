@@ -5,6 +5,9 @@ import { InvalidOrderNumberError } from "@/domain/errors/invalid-order-number-er
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ORDER_NUMBER_PATTERN = /^[0-9A-HJKMNP-TV-Z]{8}$/;
 const RANDOM_BYTES_LENGTH = 5;
+// 書き写した番号の揺れ（#755）。区切り（ハイフン・空白）は捨て、番号に使わない O・I・L は形の似た数字として読む
+const SEPARATORS = /[\s-]/g;
+const MISREAD_CHARACTERS: Record<string, string> = { O: "0", I: "1", L: "1" };
 
 export class OrderNumber {
   private constructor(readonly value: string) {}
@@ -14,6 +17,21 @@ export class OrderNumber {
       throw new InvalidOrderNumberError(rawValue);
     }
     return new OrderNumber(rawValue);
+  }
+
+  /**
+   * 会員・運営者が入力した番号を読む。小文字・ハイフンや空白の有無・O と 0・I/L と 1 の違いを吸収し、
+   * 揺れを除いても番号の形にならなければ InvalidOrderNumberError（入力された値のまま持つ）
+   */
+  static parse(input: string): OrderNumber {
+    const normalized = input
+      .replace(SEPARATORS, "")
+      .toUpperCase()
+      .replace(/[OIL]/g, (c) => MISREAD_CHARACTERS[c]);
+    if (!ORDER_NUMBER_PATTERN.test(normalized)) {
+      throw new InvalidOrderNumberError(input);
+    }
+    return new OrderNumber(normalized);
   }
 
   /**
@@ -38,6 +56,11 @@ export class OrderNumber {
       value += ALPHABET[Math.floor(bits / 32 ** i) % 32];
     }
     return new OrderNumber(value);
+  }
+
+  // 画面・メールに出す形。読み上げ・書き写しやすいよう4文字ずつハイフンで区切る（例: K7Q2-M9XD）
+  display(): string {
+    return `${this.value.slice(0, 4)}-${this.value.slice(4)}`;
   }
 
   equals(other: OrderNumber): boolean {
