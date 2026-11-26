@@ -157,6 +157,40 @@ test.describe.serial("認証済みアクセス", () => {
     await expect(terms).toContainText("残りの月数分の月額を解約金");
   });
 
+  // 最も不利な条件（最低利用期間内の退会の解約金）を、条件の表だけでなく、
+  // 「お支払いへ進む」を押す前に読める位置（まとめのボタンより上）にも出す（#821）
+  for (const viewport of [
+    { name: "パソコン幅", size: { width: 1280, height: 800 } },
+    { name: "スマホ幅", size: { width: 390, height: 844 } },
+  ]) {
+    test(`${viewport.name}で、申込内容のまとめの「お支払いへ進む」より上に、最低利用期間内の退会の解約金が表示される`, async () => {
+      await page.setViewportSize(viewport.size);
+      try {
+        await page.goto("/onboarding/plan?accountType=individual");
+        await page.getByRole("radio", { name: /STARTER/ }).check();
+
+        const summary = page.getByRole("complementary", {
+          name: "お申し込み内容",
+        });
+        const notice = summary.getByText(
+          "期間内に退会する場合は、残りの月数分の月額を解約金としてお支払いいただきます"
+        );
+        await expect(notice).toBeVisible();
+        await expect(notice).toContainText("最低利用期間は入会日から6ヶ月");
+
+        const noticeBox = await notice.boundingBox();
+        const buttonBox = await summary
+          .getByRole("button", { name: "お支払いへ進む" })
+          .boundingBox();
+        expect(noticeBox!.y + noticeBox!.height).toBeLessThanOrEqual(
+          buttonBox!.y
+        );
+      } finally {
+        await page.setViewportSize({ width: 1280, height: 720 });
+      }
+    });
+  }
+
   test("ステップと、選んだ種別のまま種別選択へ戻るリンクが表示される", async () => {
     await page.goto("/onboarding/plan?accountType=individual");
 
