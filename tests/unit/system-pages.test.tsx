@@ -47,7 +47,6 @@ describe("全体のエラー画面", () => {
   let container: HTMLDivElement;
   let root: Root;
   const retry = vi.fn();
-  const reset = vi.fn();
 
   function error(digest?: string) {
     return Object.assign(new Error("boom"), digest ? { digest } : {});
@@ -67,7 +66,7 @@ describe("全体のエラー画面", () => {
 
   it('<html lang="ja"> で、見出し・もう一度読み込む・トップへ戻るを出す', () => {
     const html = renderToStaticMarkup(
-      <GlobalError error={error()} retry={retry} reset={reset} />
+      <GlobalError error={error()} retry={retry} />
     );
     const doc = new DOMParser().parseFromString(html, "text/html");
 
@@ -84,24 +83,20 @@ describe("全体のエラー画面", () => {
 
   it("エラー番号（digest）があれば出す", () => {
     const doc = renderHtml(
-      <GlobalError error={error("3f9a1c2e")} retry={retry} reset={reset} />
+      <GlobalError error={error("3f9a1c2e")} retry={retry} />
     );
 
     expect(doc.body.textContent).toContain("エラー番号 3f9a1c2e");
   });
 
   it("エラー番号（digest）が無ければ、エラー番号の案内を出さない", () => {
-    const doc = renderHtml(
-      <GlobalError error={error()} retry={retry} reset={reset} />
-    );
+    const doc = renderHtml(<GlobalError error={error()} retry={retry} />);
 
     expect(doc.body.textContent).not.toContain("エラー番号");
   });
 
   it("もう一度読み込むで、画面を読み込み直す", () => {
-    act(() =>
-      root.render(<GlobalError error={error()} retry={retry} reset={reset} />)
-    );
+    act(() => root.render(<GlobalError error={error()} retry={retry} />));
 
     const button = [...document.querySelectorAll("button")].find(
       (b) => b.textContent === "もう一度読み込む"
@@ -113,9 +108,7 @@ describe("全体のエラー画面", () => {
 
   it("エラーを Sentry に送る", () => {
     const e = error("123");
-    act(() =>
-      root.render(<GlobalError error={e} retry={retry} reset={reset} />)
-    );
+    act(() => root.render(<GlobalError error={e} retry={retry} />));
 
     expect(Sentry.captureException).toHaveBeenCalledWith(e);
   });
