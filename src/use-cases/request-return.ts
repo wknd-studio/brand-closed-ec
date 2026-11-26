@@ -30,7 +30,7 @@ export type RequestReturnDeps = {
 export async function requestReturn(
   input: RequestReturnInput,
   deps: RequestReturnDeps
-): Promise<{ returnId: string }> {
+): Promise<{ returnIds: string[] }> {
   const reason = ReturnReason.of(input.reasonKind, input.reasonDetail);
 
   const user = await deps.userRepo.findByClerkUserId(input.clerkUserId);
@@ -39,15 +39,16 @@ export async function requestReturn(
   const order = await deps.orderRepo.findById(input.orderId);
   if (!order) throw new ReturnOrderNotFoundError(input.orderId);
 
-  // 他の会員の注文・申請対象にならない明細・数量の超過は ReturnRequest.request() が拒否する
-  const returnRequest = ReturnRequest.request({
-    id: crypto.randomUUID(),
+  // 他の会員の注文・申請対象にならない明細・数量の超過は ReturnRequest.request() が拒否する。
+  // 支払いのまとまりごとに分けた申請を、まとめて1回で保存する
+  const returnRequests = ReturnRequest.request({
+    generateId: () => crypto.randomUUID(),
     order,
     requesterUserId: user.id,
     reason,
     items: input.items,
     existingReturns: await deps.returnRepo.findByOrderId(order.id),
   });
-  await deps.returnRepo.save(returnRequest);
-  return { returnId: returnRequest.id };
+  await deps.returnRepo.saveAll(returnRequests);
+  return { returnIds: returnRequests.map((r) => r.id) };
 }

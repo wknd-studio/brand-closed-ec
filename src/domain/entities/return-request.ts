@@ -62,17 +62,22 @@ export class ReturnRequest {
   /**
    * 会員が自分の注文の明細について申請する（requested）。
    * 返品数量は、明細ごとに既存の有効な申請との合計が注文数量以下であること
-   * （return_items.quantity の上限はDBで持たない）。返品受付期間はシステムで締め切らない
+   * （return_items.quantity の上限はDBで持たない）。返品受付期間はシステムで締め切らない。
+   * 選んだ明細は支払いのまとまり（決済単位。決済単位がまだ無い後払いの明細は「未請求」として1つ）
+   * ごとに分け、まとまりごとに申請を1件作る。解決確定で、1件の申請が1回の返金（または1枚の
+   * 請求書の無効化）になるようにするため（1件の申請が持つ返金の記録は1つ）。
+   * どれかの明細が受け付けられなければ、どの申請も作らない
    */
   static request(params: {
-    id: string;
+    /** 申請のIDを割り当てる（分けた申請ごとに1回呼ぶ） */
+    generateId: () => string;
     order: Order;
     requesterUserId: string;
     reason: ReturnReason;
     items: ReturnItem[];
     /** 同じ注文の既存の申請（状態を問わない） */
     existingReturns: readonly ReturnRequest[];
-  }): ReturnRequest {
+  }): ReturnRequest[] {
     const { order, items } = params;
     if (order.userId !== params.requesterUserId) {
       throw new ReturnOrderNotFoundError(order.id);
@@ -102,17 +107,30 @@ export class ReturnRequest {
       }
     }
 
-    return new ReturnRequest({
-      id: params.id,
-      orderId: order.id,
-      status: "requested",
-      requestedByUserId: params.requesterUserId,
-      reason: params.reason.text(),
-      items: items.map((i) => ({
-        orderItemId: i.orderItemId,
-        quantity: i.quantity,
-      })),
-    });
+    // まとまりは、送られた明細に最初に出てきた順に並べる。未請求のまとまりのキーは null
+    const settlementIdOf = new Map(
+      order.items.map((item) => [item.id, item.settlementId])
+    );
+    const groups = new Map<string | null, ReturnItem[]>();
+    for (const item of items) {
+      const key = settlementIdOf.get(item.orderItemId) ?? null;
+      groups.set(key, [
+        ...(groups.get(key) ?? []),
+        { orderItemId: item.orderItemId, quantity: item.quantity },
+      ]);
+    }
+
+    return [...groups.values()].map(
+      (groupItems) =>
+        new ReturnRequest({
+          id: params.generateId(),
+          orderId: order.id,
+          status: "requested",
+          requestedByUserId: params.requesterUserId,
+          reason: params.reason.text(),
+          items: groupItems,
+        })
+    );
   }
 
   /** 明細の返品数量の合計に含める申請か（却下・取消でない） */
