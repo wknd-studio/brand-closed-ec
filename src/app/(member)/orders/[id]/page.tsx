@@ -2,10 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/current-user";
 import { memberOrderQueryService } from "@/composition/member-order-query";
+import { ReturnReason } from "@/domain/value-objects/return-reason";
 import type {
   CompletedOrderItemDto,
   OrderDetailAddressDto,
 } from "@/queries/member-order-query-service";
+import { requestReturnAction } from "./actions";
+import { ReturnRequestForm } from "./return-request-form";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -154,6 +157,13 @@ export default async function OrderDetailPage({ params }: Props) {
             <Address title="請求先" address={order.billingAddress} />
           </div>
         </section>
+
+        {/* 申請できる明細が無ければ何も出さない。全数量を申請した直後も受け付けの表示を残すため、常に置く */}
+        <ReturnRequestForm
+          items={order.returnableItems}
+          reasonOptions={ReturnReason.options()}
+          action={requestReturnAction.bind(null, order.orderId)}
+        />
       </div>
     </main>
   );

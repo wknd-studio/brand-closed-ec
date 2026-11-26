@@ -144,13 +144,14 @@ export function makeSettlement(
 
 /** デフォルトは「at_order明細1件が、未払いのCheckout決済単位に紐づく」注文 */
 export function makeOrder(overrides?: {
+  userId?: string;
   status?: string;
   items?: OrderItem[];
   settlements?: OrderSettlement[];
 }) {
   return reconstituteOrder({
     id: "00000000-0000-0000-0000-000000000001",
-    userId: "00000000-0000-0000-0000-000000000001",
+    userId: overrides?.userId ?? "00000000-0000-0000-0000-000000000001",
     orderNumber: OrderNumber.of("K7Q2M9XD"),
     status: OrderStatus.of(overrides?.status ?? "processing"),
     shippingAddress: makeAddressSnapshot(),
