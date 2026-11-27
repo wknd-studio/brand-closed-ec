@@ -40,7 +40,7 @@ vi.mock("@/lib/auth/current-user", () => ({
 }));
 
 import { memberOrderQueryService } from "@/composition/member-order-query";
-import { randomOrderNumber } from "../helpers/order-number";
+import { displayOrderNumber, randomOrderNumber } from "../helpers/order-number";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -143,6 +143,21 @@ function address(
   };
 }
 
+// 注文IDごとに入れる注文番号（保存する形）。期待する値をテストの定義時（beforeAll より前）にも作れるよう、
+// 最初に求められたときに作って覚える
+const orderNumbers = new Map<string, string>();
+
+function orderNumberOf(orderId: string): string {
+  if (!orderNumbers.has(orderId))
+    orderNumbers.set(orderId, randomOrderNumber());
+  return orderNumbers.get(orderId)!;
+}
+
+// 画面用の DTO は表示の形（4文字ずつハイフン区切り。#755）で持つ
+function displayOrderNumberOf(orderId: string): string {
+  return displayOrderNumber(orderNumberOf(orderId));
+}
+
 function order(
   id: string,
   userId = USER_ID,
@@ -151,7 +166,7 @@ function order(
   return {
     id,
     user_id: userId,
-    order_number: randomOrderNumber(),
+    order_number: orderNumberOf(id),
     status,
     shipping_address_snapshot: addressSnapshot,
     billing_address_snapshot: addressSnapshot,
@@ -567,6 +582,7 @@ describe("SupabaseMemberOrderQueryService.findCheckoutCompletedOrder", () => {
 
     expect(order).toEqual({
       orderId: MIXED_ORDER_ID,
+      orderNumber: displayOrderNumberOf(MIXED_ORDER_ID),
       createdAt: CREATED_AT,
       atOrderItems: [atOrderItem],
       afterOrderItems: expect.any(Array),
@@ -614,6 +630,7 @@ describe("SupabaseMemberOrderQueryService.findInvoiceRequestedOrder", () => {
 
     expect(order).toEqual({
       orderId: MIXED_ORDER_ID,
+      orderNumber: displayOrderNumberOf(MIXED_ORDER_ID),
       createdAt: CREATED_AT,
       items: expect.any(Array),
     });
@@ -679,7 +696,12 @@ describe("SupabaseMemberOrderQueryService.findOrderHistory", () => {
       includesNegotiable: boolean;
       itemCount: number;
     }
-  ) => ({ orderId, createdAt, ...rest });
+  ) => ({
+    orderId,
+    orderNumber: displayOrderNumberOf(orderId),
+    createdAt,
+    ...rest,
+  });
 
   const processing = historyRow(
     HISTORY_PROCESSING_ORDER_ID,
@@ -841,6 +863,7 @@ describe("SupabaseMemberOrderQueryService.findOrderDetail", () => {
 
     expect(plain(detail)).toEqual({
       orderId: DETAIL_ORDER_ID,
+      orderNumber: displayOrderNumberOf(DETAIL_ORDER_ID),
       createdAt: CREATED_AT,
       status: "processing",
       rankAtOrder: "standard",

@@ -46,7 +46,7 @@ export default async function AdminOrdersPage() {
             {orders.map((order) => (
               <tr key={order.id}>
                 <td className="py-3 pr-6 font-mono text-xs">
-                  {order.id.slice(0, 8).toUpperCase()}
+                  {order.orderNumber.display()}
                 </td>
                 <td className="py-3 pr-6">
                   {order.user

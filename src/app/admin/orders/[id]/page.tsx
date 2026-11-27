@@ -60,7 +60,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           ← 一覧へ戻る
         </Link>
         <h1 className="text-xl font-semibold">
-          注文 {order.id.slice(0, 8).toUpperCase()}
+          注文 {order.orderNumber.display()}
         </h1>
         <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
           {STATUS_LABEL[order.status] ?? order.status}

@@ -66,12 +66,5 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
   ],
   // 閾値を下回るが、テストの追加を別issueで行うファイル。テストを足して閾値を満たしたら、
   // 検査が「例外から外す」よう失敗するので削除する
-  exceptions: [
-    {
-      // findActiveOrdersWithUser を Query Service へ移すときに無くなる
-      file: "src/infrastructure/supabase/supabase-order-repository.ts",
-      suite: "integration",
-      issue: 452,
-    },
-  ],
+  exceptions: [],
 };

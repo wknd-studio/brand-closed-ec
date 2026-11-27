@@ -7,6 +7,8 @@ export type ProcurementQueueSort = "queued" | "product";
 export type ProcurementQueueItemDto = {
   orderItemId: string;
   orderId: string;
+  // 表示の形（OrderNumber.display()。4文字ずつハイフン区切り）
+  orderNumber: string;
   sanityProductId: string;
   productName: string;
   // Sanity の商品のブランド名。商品・ブランドが Sanity から消えていれば null

@@ -9,11 +9,7 @@ import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Heading } from "@/components/ui/heading";
 import { cn } from "@/lib/cn";
-import {
-  ORDER_STATUS_TONES,
-  formatOrderDate,
-  formatOrderNumber,
-} from "./order-display";
+import { ORDER_STATUS_TONES, formatOrderDate } from "./order-display";
 
 const PAGE_SIZE = 20;
 
@@ -42,7 +38,7 @@ function OrderRow({ order }: { order: OrderHistoryItemDto }) {
             {formatOrderDate(order.createdAt)}
           </span>
           <span className="text-[15px] font-semibold tracking-[0.04em] whitespace-nowrap tabular-nums">
-            注文番号 {formatOrderNumber(order.orderId)}
+            注文番号 {order.orderNumber}
           </span>
           <span className="text-xs text-neutral-700">{order.itemCount}点</span>
         </span>
