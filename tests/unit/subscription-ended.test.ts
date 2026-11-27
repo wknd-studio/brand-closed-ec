@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSubscriptionEnded } from "@/domain/value-objects/subscription-ended";
+import { isSubscriptionEnded } from "@/domain/services/subscription-ended";
 
 // GitHub issue #380: 再請求が尽きて Stripe がサブスクリプションを解約した会員の利用を止める。
 // 判定のルールは docs/domain/membership.md「Stripe側の解約による利用停止」
@@ -36,6 +36,15 @@ describe("isSubscriptionEnded", () => {
       ).toBe(false);
     }
   );
+
+  it("subscriptions.status に無い値は例外にする（黙って有効・解約済みのどちらかに倒さない）", () => {
+    expect(() =>
+      isSubscriptionEnded({
+        onboardingCompleted: true,
+        subscriptionStatuses: ["unknown"],
+      })
+    ).toThrow();
+  });
 
   it("入会前（オンボーディング中）は、サブスクリプションの行が無くても利用停止ではない", () => {
     expect(

@@ -1,18 +1,33 @@
 import type Stripe from "stripe";
-import type { SubscriptionStatus } from "@/repositories/subscription-repository";
+import {
+  SubscriptionStatus,
+  type SubscriptionStatusValue,
+} from "@/domain/value-objects/subscription-status";
 
 // docs/db-schema-redesign.md「subscriptions」節のstatus CHECK制約に対応する。
 // Stripe側の'paused'は現状アプリケーションコードが扱う経路
 // （チェックアウト完了時のオンボーディング確定）では発生しないため未対応。
 export function toSubscriptionStatus(
   status: Stripe.Subscription.Status
-): SubscriptionStatus {
+): SubscriptionStatusValue {
   if (status === "paused") {
     throw new Error(
       `未対応のStripe Subscriptionステータスです: ${status}（'paused'はsubscriptionsテーブルのCHECK制約に未追加）`
     );
   }
   return status;
+}
+
+/**
+ * Stripe のサブスクリプションが解約済み（以後の請求が無い）か。判定は domain の
+ * SubscriptionStatus.isEnded() に任せる。'paused' は domain に無い状態だが、再開すると
+ * 請求が続くため解約済みにしない（新しく決済させると二重課金になる）
+ */
+export function isEndedStripeSubscription(
+  status: Stripe.Subscription.Status
+): boolean {
+  if (status === "paused") return false;
+  return SubscriptionStatus.of(toSubscriptionStatus(status)).isEnded();
 }
 
 // Stripe API 2025年以降、current_period_start/endはSubscriptionのルートから

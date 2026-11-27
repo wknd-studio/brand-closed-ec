@@ -2,6 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
+import {
+  SubscriptionStatus,
+  type SubscriptionStatusValue,
+} from "@/domain/value-objects/subscription-status";
 
 // ローカル開発用Supabase CLIが固定で発行するJWTシークレット（`supabase start`の出力に
 // 常に表示される既知の定数であり、プロジェクト固有の秘密情報ではない）。
@@ -147,6 +151,41 @@ describe("subscriptions", () => {
       });
     expect(secondError).not.toBeNull();
   });
+
+  // GitHub issue #777: インデックスは TypeScript を参照できないため、domain が解約済みとする状態
+  // （SubscriptionStatus.endedValues()）がインデックスでも除外されていることをここで確かめる
+  it.each(SubscriptionStatus.endedValues())(
+    "解約済み（%s）の行は部分UNIQUEの対象外で、同じuser_idに有効な行を作れる",
+    async (status) => {
+      const row = (
+        stripeSubscriptionId: string,
+        rowStatus: SubscriptionStatusValue
+      ) => ({
+        user_id: USER_B_ID,
+        stripe_customer_id: "cus_test_b",
+        stripe_subscription_id: stripeSubscriptionId,
+        status: rowStatus,
+        rank_code: "starter",
+        current_period_start: new Date().toISOString(),
+        current_period_end: new Date().toISOString(),
+      });
+      try {
+        const { error } = await adminClient
+          .from("subscriptions")
+          .insert([
+            row(`sub_test_b_ended_${status}`, status),
+            row(`sub_test_b_ended2_${status}`, status),
+            row(`sub_test_b_active_${status}`, "active"),
+          ]);
+        expect(error).toBeNull();
+      } finally {
+        await adminClient
+          .from("subscriptions")
+          .delete()
+          .eq("user_id", USER_B_ID);
+      }
+    }
+  );
 
   it("本人は自分のsubscriptionsを参照できるが、他人のものは参照できない", async () => {
     const asUserA = clientAs({ sub: CLERK_USER_A });

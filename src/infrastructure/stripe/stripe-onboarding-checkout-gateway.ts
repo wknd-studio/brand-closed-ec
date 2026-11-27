@@ -1,16 +1,9 @@
-import type Stripe from "stripe";
 import { getStripe, STRIPE_PRICE_IDS } from "@/infrastructure/stripe/client";
+import { isEndedStripeSubscription } from "@/infrastructure/stripe/stripe-subscription-mapper";
 import type {
   OnboardingCheckoutGateway,
   OnboardingCheckoutSessionInput,
 } from "@/repositories/onboarding-checkout-gateway";
-
-// 解約済み（canceled）と、初回の支払いが期限内に完了せず失効した（incomplete_expired）
-// もの以外は、まだ請求が続きうるため、新しく決済させると二重課金になる
-const ENDED_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new Set([
-  "canceled",
-  "incomplete_expired",
-]);
 
 export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGateway {
   async createCustomer(input: {
@@ -48,7 +41,8 @@ export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGatewa
       status: "all",
       limit: 100,
     });
-    return data.some((s) => !ENDED_STATUSES.has(s.status));
+    // 解約済みのもの以外は、まだ請求が続きうるため、新しく決済させると二重課金になる
+    return data.some((s) => !isEndedStripeSubscription(s.status));
   }
 
   async createCheckoutSession(

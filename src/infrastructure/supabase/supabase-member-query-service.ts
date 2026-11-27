@@ -9,7 +9,7 @@ import type {
 import { MemberRank } from "@/domain/value-objects/member-rank";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
-import type { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
+import { SubscriptionStatus } from "@/domain/value-objects/subscription-status";
 import { isSubscriptionPaymentFailed } from "@/domain/services/new-order-eligibility";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 
@@ -158,9 +158,8 @@ export class SupabaseMemberQueryService implements MemberQueryService {
       monthlyLimit: data.member_ranks.monthly_limit_amount,
       favoriteProductIds: data.favorites.map((f) => f.sanity_product_id),
       // 解約済みの過去の契約も含む（解約済みは支払い失敗中にならない）
-      // status の値は CHECK 制約で domain の SubscriptionStatus に限られる
       subscriptionStatuses: data.subscriptions.map(
-        (s) => s.status as SubscriptionStatus
+        (s) => SubscriptionStatus.of(s.status).value
       ),
       account: {
         name: `${data.last_name} ${data.first_name}`,

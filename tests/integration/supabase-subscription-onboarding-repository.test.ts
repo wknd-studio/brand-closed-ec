@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { SupabaseSubscriptionOnboardingRepository } from "@/infrastructure/supabase/supabase-subscription-onboarding-repository";
 import type { ConfirmSubscriptionOnboardingInput } from "@/repositories/subscription-onboarding-repository";
-import type { SubscriptionStatus } from "@/repositories/subscription-repository";
+import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -156,7 +156,9 @@ describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC�
 
     await expect(
       repo.confirm(
-        makeInput({ status: "not_a_status" as unknown as SubscriptionStatus })
+        makeInput({
+          status: "not_a_status" as unknown as SubscriptionStatusValue,
+        })
       )
     ).rejects.toThrow();
 
@@ -197,7 +199,9 @@ describe("SupabaseSubscriptionOnboardingRepository.confirm（入会確定のRPC�
     await insertUser();
     await expect(
       repo.confirm(
-        makeInput({ status: "not_a_status" as unknown as SubscriptionStatus })
+        makeInput({
+          status: "not_a_status" as unknown as SubscriptionStatusValue,
+        })
       )
     ).rejects.toThrow();
 

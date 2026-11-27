@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { isSubscriptionEnded } from "@/domain/value-objects/subscription-ended";
+import { isSubscriptionEnded } from "@/domain/services/subscription-ended";
 import type {
   MemberStatusDto,
   MemberStatusQueryService,

@@ -278,10 +278,15 @@ beforeAll(async () => {
       billing_anchor_day: 10,
     },
   ]);
-  // 注文確認の会員は支払い失敗中（過去に解約した行も残っている）、他の会員は通常。
+  // 注文確認の会員は支払い失敗中（過去に解約・失効した行も残っている）、他の会員は通常。
   // 注文履歴の会員はサブスクリプションの行が無い
   await insert("subscriptions", [
     subscription(USER_ID, "sub_test_member_order_query_old", "canceled"),
+    subscription(
+      USER_ID,
+      "sub_test_member_order_query_expired",
+      "incomplete_expired"
+    ),
     subscription(USER_ID, "sub_test_member_order_query", "past_due"),
     subscription(OTHER_USER_ID, "sub_test_member_order_query_other", "active"),
   ]);

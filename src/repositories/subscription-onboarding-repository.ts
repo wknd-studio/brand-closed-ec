@@ -1,12 +1,12 @@
 import type { MemberRankValue } from "@/domain/value-objects/member-rank";
-import type { SubscriptionStatus } from "@/repositories/subscription-repository";
+import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 
 export type ConfirmSubscriptionOnboardingInput = {
   userId: string;
   rank: MemberRankValue;
   stripeCustomerId: string;
   stripeSubscriptionId: string;
-  status: SubscriptionStatus;
+  status: SubscriptionStatusValue;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   billingAnchorDay: number;
