@@ -4,6 +4,7 @@ import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
+import { Money } from "@/domain/value-objects/money";
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
 import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
@@ -18,21 +19,30 @@ export class ResendNotificationService implements NotificationService {
     user: User,
     items: ProductSnapshot[]
   ): Promise<void> {
+    const lines = items.map((i) => ({
+      productName: i.productName,
+      quantity:
+        order.items.find((oi) => oi.sanityProductId === i.sanityProductId)
+          ?.quantity ?? 1,
+      unitPrice: i.unitPrice,
+      isNegotiable: i.isNegotiable,
+    }));
     await sendOrderConfirmingEmail({
       to: user.email,
       orderId: order.id,
       orderedAt: order.createdAt,
-      lineItems: items.map((i) => ({
-        productName: i.productName,
-        quantity:
-          order.items.find((oi) => oi.sanityProductId === i.sanityProductId)
-            ?.quantity ?? 1,
-        unitPrice: i.isNegotiable ? null : i.unitPrice.amount,
-        isNegotiable: i.isNegotiable,
+      lineItems: lines.map((line) => ({
+        productName: line.productName,
+        quantity: line.quantity,
+        unitPrice: line.isNegotiable ? null : line.unitPrice.amount,
+        isNegotiable: line.isNegotiable,
       })),
-      // このメールは後払いの明細だけを載せる（place-order の afterOrderProducts）
+      // 合計は表に載せる明細と同じものから作る（別のものから作ると表と合計が食い違う）
       fixedTotal: sumFixedTotal(
-        order.items.filter((item) => item.isAfterOrder())
+        lines.map((line) => ({
+          isNegotiable: line.isNegotiable,
+          getSubtotal: () => Money.of(line.unitPrice.amount * line.quantity),
+        }))
       ).amount,
     });
   }
