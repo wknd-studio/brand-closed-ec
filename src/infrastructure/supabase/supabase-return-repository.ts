@@ -1,6 +1,9 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import type { ReturnRepository } from "@/repositories/return-repository";
+import type {
+  ReturnRepository,
+  ReturnReview,
+} from "@/repositories/return-repository";
 import {
   type ReturnRequest,
   type ReturnStatus,
@@ -9,7 +12,7 @@ import {
 
 // 会員のクライアントでも読めるカラムだけを指定する（admin_note 等の運営の内部情報はカラム単位の権限で読めない）
 export const RETURN_COLUMNS =
-  "id, order_id, status, requested_by_user_id, reason, return_items(order_item_id, quantity)";
+  "id, order_id, status, requested_by_user_id, reason, approved_at, return_items(order_item_id, quantity)";
 
 export type ReturnRow = {
   id: string;
@@ -17,6 +20,7 @@ export type ReturnRow = {
   status: string;
   requested_by_user_id: string | null;
   reason: string;
+  approved_at: string | null;
   return_items: { order_item_id: string; quantity: number }[];
 };
 
@@ -31,7 +35,13 @@ export function toReturnRequest(row: ReturnRow): ReturnRequest {
       orderItemId: item.order_item_id,
       quantity: item.quantity,
     })),
+    approvedAt: row.approved_at ? new Date(row.approved_at) : null,
   });
+}
+
+// 画面から来た申請IDが UUID の形でないとき（invalid_text_representation）
+function isInvalidUuid(error: PostgrestError): boolean {
+  return error.code === "22P02";
 }
 
 export class SupabaseReturnRepository implements ReturnRepository {
@@ -73,5 +83,54 @@ export class SupabaseReturnRepository implements ReturnRepository {
     if (itemsError) {
       throw new Error(`返品明細の保存に失敗: ${itemsError.message}`);
     }
+  }
+
+  async findById(returnId: string): Promise<ReturnRequest | null> {
+    const { data, error } = await this.db
+      .from("returns")
+      .select(RETURN_COLUMNS)
+      .eq("id", returnId)
+      .maybeSingle();
+    if (error) {
+      if (isInvalidUuid(error)) return null;
+      throw new Error(`返品申請の取得に失敗: ${error.message}`);
+    }
+    return data ? toReturnRequest(data) : null;
+  }
+
+  async saveReview(
+    returnRequest: ReturnRequest,
+    review: ReturnReview
+  ): Promise<boolean> {
+    // status='requested' を条件にして、読んだ後に顧客が取り消した申請を書き換えない
+    const { data, error } = await this.db
+      .from("returns")
+      .update({
+        status: returnRequest.status,
+        approved_at: returnRequest.approvedAt?.toISOString() ?? null,
+        reviewed_by_admin_user_id: review.adminUserId,
+        admin_note: review.adminNote,
+      })
+      .eq("id", returnRequest.id)
+      .eq("status", "requested")
+      .select("id");
+    if (error) throw new Error(`返品申請の確認の保存に失敗: ${error.message}`);
+    return data.length > 0;
+  }
+
+  async updateAdminNote(
+    returnId: string,
+    adminNote: string | null
+  ): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("returns")
+      .update({ admin_note: adminNote })
+      .eq("id", returnId)
+      .select("id");
+    if (error) {
+      if (isInvalidUuid(error)) return false;
+      throw new Error(`返品申請の運営メモの保存に失敗: ${error.message}`);
+    }
+    return data.length > 0;
   }
 }
