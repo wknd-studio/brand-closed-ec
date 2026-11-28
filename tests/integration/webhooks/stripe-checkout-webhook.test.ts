@@ -519,6 +519,16 @@ describe("Stripe Checkout入会確定Webhook（mode: subscription・実DB・署�
             },
           }) as never
       );
+    // 入会の完了のメール（#852）に出す支払った金額の取得も、本物のStripeに問い合わせない
+    vi.spyOn(getStripe().checkout.sessions, "listLineItems").mockResolvedValue({
+      data: [
+        {
+          amount_total: 5_000,
+          price: { unit_amount: 5_000, recurring: { interval: "month" } },
+        },
+        { amount_total: 5_000, price: { unit_amount: 5_000, recurring: null } },
+      ],
+    } as never);
   });
 
   beforeEach(() => {
