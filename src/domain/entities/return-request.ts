@@ -3,6 +3,7 @@ import type { ReturnReason } from "@/domain/value-objects/return-reason";
 import { returnableQuantities } from "@/domain/services/returnable-quantity";
 import { InvalidReturnRequestError } from "@/domain/errors/invalid-return-request-error";
 import { ReturnOrderNotFoundError } from "@/domain/errors/return-order-not-found-error";
+import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 
 export type ReturnStatus =
   | "requested"
@@ -26,6 +27,8 @@ interface ReturnRequestProps {
   requestedByUserId: string | null;
   reason: string;
   items: ReturnItem[];
+  /** 運営者が承認した日時。承認していなければ null */
+  approvedAt: Date | null;
 }
 
 // 却下・取消の申請は、明細の返品数量の合計に含めない
@@ -49,6 +52,7 @@ export class ReturnRequest {
   readonly requestedByUserId: string | null;
   readonly reason: string;
   readonly items: readonly ReturnItem[];
+  readonly approvedAt: Date | null;
 
   private constructor(props: ReturnRequestProps) {
     this.id = props.id;
@@ -57,6 +61,7 @@ export class ReturnRequest {
     this.requestedByUserId = props.requestedByUserId;
     this.reason = props.reason;
     this.items = props.items;
+    this.approvedAt = props.approvedAt;
   }
 
   /**
@@ -129,8 +134,44 @@ export class ReturnRequest {
           requestedByUserId: params.requesterUserId,
           reason: params.reason.text(),
           items: groupItems,
+          approvedAt: null,
         })
     );
+  }
+
+  /**
+   * 運営者が承認する（requested → approved）。承認するかどうかの基準（不良品・誤配送など運営側・
+   * 仕入れ先側に起因するか）はシステムで強制せず、運営者に委ねる（docs/domain/returns.md）
+   */
+  approve(now: Date): ReturnRequest {
+    this.assertReviewable("approved");
+    return this.with({ status: "approved", approvedAt: now });
+  }
+
+  /** 運営者が却下する（requested → rejected） */
+  reject(): ReturnRequest {
+    this.assertReviewable("rejected");
+    return this.with({ status: "rejected" });
+  }
+
+  // 承認・却下できるのは、運営者がまだ確認していない（顧客が取り消してもいない）申請だけ
+  private assertReviewable(to: ReturnStatus): void {
+    if (this.status !== "requested") {
+      throw new InvalidStatusTransitionError(this.status, to);
+    }
+  }
+
+  private with(overrides: Partial<ReturnRequestProps>): ReturnRequest {
+    return new ReturnRequest({
+      id: this.id,
+      orderId: this.orderId,
+      status: this.status,
+      requestedByUserId: this.requestedByUserId,
+      reason: this.reason,
+      items: [...this.items],
+      approvedAt: this.approvedAt,
+      ...overrides,
+    });
   }
 
   /** 明細の返品数量の合計に含める申請か（却下・取消でない） */

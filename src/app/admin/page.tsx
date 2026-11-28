@@ -7,6 +7,11 @@ const sections = [
     description: "注文一覧の確認・ステータス更新・Invoice発行",
   },
   {
+    href: "/admin/returns",
+    label: "返品管理",
+    description: "返品・返金の申請の確認・承認・却下",
+  },
+  {
     href: "/admin/procurement/queue",
     label: "対応待ちキュー",
     description: "まだ発注タスクに入っていない注文明細の確認",
