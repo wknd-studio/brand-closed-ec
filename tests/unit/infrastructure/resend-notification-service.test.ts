@@ -207,7 +207,10 @@ describe("ResendNotificationService", () => {
       expect(sendOrderConfirmingEmail).toHaveBeenCalledWith({
         to: "test@example.com",
         orderId: "order-1",
+        orderedAt: new Date(2026, 8, 1),
         lineItems: expectedLineItems,
+        // 後払いの明細（未払いの後払い商品 ¥5,000 × 1）の固定額の合計
+        fixedTotal: 5_000,
       });
     });
   });
@@ -267,7 +270,10 @@ describe("ResendNotificationService", () => {
 
       expect(sendCheckoutPaidEmails).toHaveBeenCalledWith({
         orderId: "order-1",
+        orderedAt: new Date(2026, 8, 1),
         memberEmail: "test@example.com",
+        // 支払い済みの決済単位の明細のうち、要相談を除いた固定額（¥10,000 × 2）
+        fixedTotal: 20_000,
         lineItems: [
           {
             productName: "支払い済み商品",

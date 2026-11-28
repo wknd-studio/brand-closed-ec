@@ -59,7 +59,9 @@ describe("メール送信失敗時のSentry送信", () => {
     await sendOrderConfirmingEmail({
       to: "test@example.com",
       orderId: "order-1",
+      orderedAt: new Date(),
       lineItems: [],
+      fixedTotal: 0,
     });
 
     expect(Sentry.captureException).toHaveBeenCalledWith(
@@ -73,8 +75,10 @@ describe("メール送信失敗時のSentry送信", () => {
   it("sendCheckoutPaidEmails失敗時に会員・運営者それぞれでSentry.captureExceptionを呼ぶ", async () => {
     await sendCheckoutPaidEmails({
       orderId: "order-1",
+      orderedAt: new Date(),
       memberEmail: "member@example.com",
       lineItems: [],
+      fixedTotal: 0,
     });
 
     expect(Sentry.captureException).toHaveBeenCalledWith(
