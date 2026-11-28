@@ -12,6 +12,11 @@ const sections = [
     description: "まだ発注タスクに入っていない注文明細の確認",
   },
   {
+    href: "/admin/procurement/tasks",
+    label: "発注タスク",
+    description: "発注タスクのステータス・担当者・明細の確認",
+  },
+  {
     href: "/admin/waitlist",
     label: "Waitlist管理",
     description: "参加希望の承認・却下",

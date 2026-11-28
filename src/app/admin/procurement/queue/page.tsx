@@ -55,7 +55,15 @@ export default async function ProcurementQueuePage({
           対応待ちキュー
         </Heading>
         <p className="text-sm text-secondary">
-          まだどの発注タスクにも入っていない注文明細です（{items.length}件）
+          まだどの発注タスクにも入っていない注文明細です（{items.length}
+          件）。タスクに入った明細は
+          <Link
+            href="/admin/procurement/tasks"
+            className="text-primary hover:underline"
+          >
+            発注タスク
+          </Link>
+          で確かめられます
         </p>
       </div>
 
