@@ -48,7 +48,9 @@ describe("メール送信失敗時のSentry送信", () => {
     await sendOrderConfirmingEmail({
       to: "test@example.com",
       orderId: "order-1",
+      orderedAt: new Date(),
       lineItems: [],
+      fixedTotal: 0,
     });
 
     expect(Sentry.captureException).toHaveBeenCalledWith(
@@ -62,8 +64,10 @@ describe("メール送信失敗時のSentry送信", () => {
   it("sendCheckoutPaidEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
     await sendCheckoutPaidEmail({
       orderId: "order-1",
+      orderedAt: new Date(),
       memberEmail: "member@example.com",
       lineItems: [],
+      fixedTotal: 0,
     });
 
     expect(Sentry.captureException).toHaveBeenCalledWith(
@@ -79,12 +83,16 @@ describe("メール送信失敗時のSentry送信", () => {
 
     await sendCheckoutPaidEmail({
       orderId: "order-1",
+      orderedAt: new Date(),
       memberEmail: "member@example.com",
       lineItems: [],
+      fixedTotal: 0,
     });
 
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(sendMock.mock.calls[0][0].subject).toContain("注文確定・入金確認");
+    expect(sendMock.mock.calls[0][0].subject).toContain(
+      "お支払いが完了しました"
+    );
   });
 
   it("sendDeliveryNotificationEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
