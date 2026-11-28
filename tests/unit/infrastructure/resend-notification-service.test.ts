@@ -20,6 +20,9 @@ vi.mock("@/infrastructure/resend/checkout-paid", () => ({
 vi.mock("@/infrastructure/resend/welcome", () => ({
   sendWelcomeEmail: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/infrastructure/resend/withdrawn", () => ({
+  sendWithdrawnEmail: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
@@ -27,6 +30,7 @@ import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
+import { sendWithdrawnEmail } from "@/infrastructure/resend/withdrawn";
 import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { reconstituteOrder } from "@/domain/entities/order";
@@ -331,6 +335,24 @@ describe("ResendNotificationService", () => {
       expect(sendWelcomeEmail).toHaveBeenCalledWith(
         expect.objectContaining({ monthlyLimit: null })
       );
+    });
+  });
+
+  // GitHub issue #853
+  describe("sendWithdrawn", () => {
+    it("会員のメールアドレス宛てに、退会日とサブスクリプションを解約したかを渡す", async () => {
+      const withdrawnAt = new Date("2027-06-10T00:00:00Z");
+
+      await service.sendWithdrawn(user, {
+        withdrawnAt,
+        subscriptionCancelled: true,
+      });
+
+      expect(sendWithdrawnEmail).toHaveBeenCalledWith({
+        to: "test@example.com",
+        withdrawnAt,
+        subscriptionCancelled: true,
+      });
     });
   });
 });

@@ -80,3 +80,31 @@ describe("sendWelcomeEmail", () => {
     expect(ResendMock).not.toHaveBeenCalled();
   });
 });
+
+// GitHub issue #853。退会の完了のメールも getResend() のガードを通る
+describe("sendWithdrawnEmail", () => {
+  const ORIGINAL_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.doUnmock("resend");
+    vi.resetModules();
+  });
+
+  it("DISABLE_EMAIL_SENDING=trueの場合、Resendのクライアントを作らず・送信APIを呼ばない", async () => {
+    vi.resetModules();
+    process.env.DISABLE_EMAIL_SENDING = "true";
+    const ResendMock = vi.fn();
+    vi.doMock("resend", () => ({ Resend: ResendMock }));
+    const { sendWithdrawnEmail } =
+      await import("@/infrastructure/resend/withdrawn");
+
+    await sendWithdrawnEmail({
+      to: "member@example.com",
+      withdrawnAt: new Date("2027-06-10T00:00:00Z"),
+      subscriptionCancelled: true,
+    });
+
+    expect(ResendMock).not.toHaveBeenCalled();
+  });
+});

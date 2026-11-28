@@ -104,6 +104,7 @@ function makeDeps() {
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn().mockResolvedValue(undefined),
     sendWelcome: vi.fn(),
+    sendWithdrawn: vi.fn(),
   };
   return { productRepo, paymentGateway, notificationService };
 }

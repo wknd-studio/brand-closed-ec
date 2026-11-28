@@ -19,6 +19,13 @@ export type MembershipWelcome = {
   minimumPeriod: MinimumMembershipPeriod;
 };
 
+/** 退会の完了のメールに出す退会の内容 */
+export type MemberWithdrawal = {
+  withdrawnAt: Date;
+  // 退会で有効なサブスクリプションを解約したか。無かった会員は false
+  subscriptionCancelled: boolean;
+};
+
 export interface NotificationService {
   sendOrderConfirming(
     order: Order,
@@ -58,4 +65,6 @@ export interface NotificationService {
   ): Promise<void>;
 
   sendWelcome(user: User, membership: MembershipWelcome): Promise<void>;
+
+  sendWithdrawn(user: User, withdrawal: MemberWithdrawal): Promise<void>;
 }
