@@ -1,14 +1,13 @@
 import type { OrderRepository } from "@/repositories/order-repository";
-import type { UserRepository } from "@/repositories/user-repository";
-import type { NotificationService } from "@/repositories/notification-service";
+import type { OperatorNotifier } from "@/repositories/operator-notifier";
 import type { ErrorReporter } from "@/repositories/error-reporter";
 import { retryOnOrderConflict } from "@/use-cases/retry-on-order-conflict";
+import { notifyOperator } from "@/use-cases/notify-operator";
 
 export type MarkInvoiceOrderAsPaidInput = { stripeInvoiceId: string };
 export type MarkInvoiceOrderAsPaidDeps = {
   orderRepo: OrderRepository;
-  userRepo: UserRepository;
-  notificationService: NotificationService;
+  operatorNotifier: OperatorNotifier;
   errorReporter: ErrorReporter;
 };
 
@@ -28,7 +27,7 @@ async function markPaidOnce(
   input: MarkInvoiceOrderAsPaidInput,
   deps: MarkInvoiceOrderAsPaidDeps
 ): Promise<void> {
-  const { orderRepo, userRepo, notificationService, errorReporter } = deps;
+  const { orderRepo, errorReporter } = deps;
 
   const order = await orderRepo.findByStripeInvoiceId(input.stripeInvoiceId);
   // サブスクリプション請求など、注文に紐づかないInvoiceは対象外
@@ -59,11 +58,19 @@ async function markPaidOnce(
     return;
   }
 
-  const paidOrder = order.applySettlement(settlement.markPaid(new Date()));
-  await orderRepo.save(paidOrder, { type: "system" });
+  const paidSettlement = settlement.markPaid(new Date());
+  await orderRepo.save(order.applySettlement(paidSettlement), {
+    type: "system",
+  });
 
-  const user = await userRepo.findById(order.userId);
-  if (user) {
-    await notificationService.sendInvoicePaid(paidOrder, user);
-  }
+  await notifyOperator(
+    deps,
+    {
+      type: "invoicePaid",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount: paidSettlement.amount,
+    },
+    "markInvoiceOrderAsPaid"
+  );
 }

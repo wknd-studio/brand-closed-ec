@@ -4,12 +4,10 @@ import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
-import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
-import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
-import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
+import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 
 export class ResendNotificationService implements NotificationService {
   async sendOrderConfirming(
@@ -20,25 +18,6 @@ export class ResendNotificationService implements NotificationService {
     await sendOrderConfirmingEmail({
       to: user.email,
       orderId: order.id,
-      lineItems: items.map((i) => ({
-        productName: i.productName,
-        quantity:
-          order.items.find((oi) => oi.sanityProductId === i.sanityProductId)
-            ?.quantity ?? 1,
-        unitPrice: i.isNegotiable ? null : i.unitPrice.amount,
-        isNegotiable: i.isNegotiable,
-      })),
-    });
-  }
-
-  async sendOrderOperatorNotification(
-    order: Order,
-    customerEmail: string,
-    items: ProductSnapshot[]
-  ): Promise<void> {
-    await sendOrderOperatorNotification({
-      orderId: order.id,
-      customerEmail,
       lineItems: items.map((i) => ({
         productName: i.productName,
         quantity:
@@ -83,14 +62,10 @@ export class ResendNotificationService implements NotificationService {
         unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
         isNegotiable: item.isNegotiable,
       }));
-    await sendCheckoutPaidEmails({
+    await sendCheckoutPaidEmail({
       orderId: order.id,
       memberEmail: user.email,
       lineItems,
     });
-  }
-
-  async sendInvoicePaid(order: Order, user: User): Promise<void> {
-    await sendInvoicePaidEmail({ orderId: order.id, memberEmail: user.email });
   }
 }

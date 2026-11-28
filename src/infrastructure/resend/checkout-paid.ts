@@ -1,7 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { CheckoutPaidMemberEmail } from "@/emails/checkout-paid-member";
-import { CheckoutPaidOperatorEmail } from "@/emails/checkout-paid-operator";
 import { getResend } from "./client";
 
 type LineItem = {
@@ -17,62 +16,28 @@ type Params = {
   lineItems: LineItem[];
 };
 
-export async function sendCheckoutPaidEmails({
+export async function sendCheckoutPaidEmail({
   orderId,
   memberEmail,
   lineItems,
 }: Params): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL!;
-  const myPageUrl = `${baseUrl}/orders/${orderId}`;
-  const adminOrderUrl = `${baseUrl}/admin/orders/${orderId}`;
+  const myPageUrl = `${process.env.NEXT_PUBLIC_APP_URL!}/orders/${orderId}`;
+  const html = await render(
+    CheckoutPaidMemberEmail({ orderId, lineItems, myPageUrl })
+  );
 
-  const [memberHtml, operatorHtml] = await Promise.all([
-    render(CheckoutPaidMemberEmail({ orderId, lineItems, myPageUrl })),
-    render(
-      CheckoutPaidOperatorEmail({
-        orderId,
-        customerEmail: memberEmail,
-        lineItems,
-        adminOrderUrl,
-      })
-    ),
-  ]);
+  const { error } = await getResend().emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: process.env.RESEND_TEST_TO ?? memberEmail,
+    subject: `【注文確定・入金確認】注文番号: ${orderId}`,
+    html,
+  });
 
-  const resend = getResend();
-  const to = process.env.RESEND_TEST_TO;
-
-  await Promise.all([
-    resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: to ?? memberEmail,
-        subject: `【注文確定・入金確認】注文番号: ${orderId}`,
-        html: memberHtml,
-      })
-      .then(({ error }) => {
-        if (error) {
-          Sentry.captureException(error, {
-            tags: { email: "checkout-paid-member" },
-            extra: { orderId, memberEmail },
-          });
-          console.error("[Checkout入金メール/会員] 送信失敗:", error);
-        }
-      }),
-    resend.emails
-      .send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to: to ?? process.env.RESEND_ADMIN_EMAIL!,
-        subject: `【入金確認・手配依頼】${memberEmail} より入金がありました`,
-        html: operatorHtml,
-      })
-      .then(({ error }) => {
-        if (error) {
-          Sentry.captureException(error, {
-            tags: { email: "checkout-paid-operator" },
-            extra: { orderId, memberEmail },
-          });
-          console.error("[Checkout入金メール/運営者] 送信失敗:", error);
-        }
-      }),
-  ]);
+  if (error) {
+    Sentry.captureException(error, {
+      tags: { email: "checkout-paid-member" },
+      extra: { orderId, memberEmail },
+    });
+    console.error("[Checkout入金メール/会員] 送信失敗:", error);
+  }
 }
