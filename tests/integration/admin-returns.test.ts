@@ -11,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { SupabaseReturnRepository } from "@/infrastructure/supabase/supabase-return-repository";
 import { SupabaseAdminReturnQueryService } from "@/infrastructure/supabase/supabase-admin-return-query-service";
+import { reconstituteReturnRequest } from "@/domain/entities/return-request";
 import { OrderNumber } from "@/domain/value-objects/order-number";
 import { randomOrderNumber } from "../helpers/order-number";
 
@@ -301,6 +302,29 @@ describe("SupabaseAdminReturnQueryService（service role）", () => {
     });
     expect(second!.returns[0]!.status).toBe("approved");
     expect(adminCreated!.requesterName).toBeNull();
+  });
+
+  it("会員の申請の保存（saveAll の1回の INSERT）で分けて作られた申請は、同じまとまりになる", async () => {
+    await cleanupReturns();
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    await new SupabaseReturnRepository(adminClient).saveAll(
+      [ITEM_PAID_ID, ITEM_AFTER_ORDER_ID].map((orderItemId, i) =>
+        reconstituteReturnRequest({
+          id: ids[i]!,
+          orderId: ORDER_ID,
+          status: "requested",
+          requestedByUserId: USER_ID,
+          reason: "不良品",
+          items: [{ orderItemId, quantity: 1 }],
+          approvedAt: null,
+        })
+      )
+    );
+
+    const submissions = await submissionsOfOrder(null);
+    expect(submissions.map((s) => s.returns.map((r) => r.id).sort())).toEqual([
+      [...ids].sort(),
+    ]);
   });
 
   it("状態で絞り込むと、その状態の申請だけを返す", async () => {
