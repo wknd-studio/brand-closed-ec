@@ -287,6 +287,7 @@ export function makeNotificationService(): NotificationService {
     sendDeliveryNotification: vi.fn().mockResolvedValue(undefined),
     sendCheckoutPaid: vi.fn().mockResolvedValue(undefined),
     sendWelcome: vi.fn().mockResolvedValue(undefined),
+    sendWithdrawn: vi.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -6,6 +6,7 @@ import { OrderConfirmingEmail } from "@/emails/order-confirming";
 import { ShippingNotificationEmail } from "@/emails/shipping-notification";
 import { DeliveryNotificationEmail } from "@/emails/delivery-notification";
 import { WelcomeEmail } from "@/emails/welcome";
+import { WithdrawnEmail } from "@/emails/withdrawn";
 import {
   EMAIL_COLORS,
   MemberEmailLayout,
@@ -318,6 +319,68 @@ describe("WelcomeEmail", () => {
 
   it("会員向けの共通の型（ロゴ・フッター）で作る", async () => {
     const html = await render(welcome());
+    expect(html).toContain(`src="${APP_URL}/logo.png"`);
+    expect(html).toContain("このメールは送信専用です");
+    expect(html).toContain(`href="${APP_URL}/legal/terms"`);
+  });
+});
+
+// GitHub issue #853
+describe("WithdrawnEmail", () => {
+  const withdrawn = (overrides?: { subscriptionCancelled?: boolean }) => (
+    <WithdrawnEmail
+      // JST 2027/06/10 9:00
+      withdrawnAt={new Date("2027-06-10T00:00:00Z")}
+      subscriptionCancelled={overrides?.subscriptionCancelled ?? true}
+    />
+  );
+
+  it("プレビュー文・見出しが出る", async () => {
+    const html = await render(withdrawn());
+    expect(html).toContain(
+      "退会の手続きが完了しました。ご利用いただきありがとうございました。"
+    );
+    expect(html).toContain("退会の手続きが完了しました");
+    expect(html).toContain(
+      "これまで EQ×Mart をご利用いただき、ありがとうございました。"
+    );
+  });
+
+  it("退会日（JST）が出る", async () => {
+    const html = await render(withdrawn());
+    expect(html).toContain("退会日");
+    expect(html).toContain("2027/06/10");
+  });
+
+  it("サブスクリプションを解約したこと・以後の請求が無いことが出る", async () => {
+    const html = await render(withdrawn());
+    expect(html).toContain("月額のサブスクリプション");
+    expect(html).toContain("解約しました。以後のご請求はありません");
+  });
+
+  it("解約するサブスクリプションが無かったときは、解約したとは書かず、以後の請求が無いことだけを出す", async () => {
+    const html = await render(withdrawn({ subscriptionCancelled: false }));
+    expect(html).not.toContain("解約しました");
+    expect(html).toContain("以後のご請求はありません");
+  });
+
+  it("心当たりが無い場合の問い合わせ先を出す", async () => {
+    const html = await render(withdrawn());
+    expect(html).toContain(
+      "このメールにお心当たりがない場合は、下記のお問い合わせ先までご連絡ください。"
+    );
+    expect(html).toContain(legalNoticePlainText(CONTACT.email));
+  });
+
+  it("ログインできなくなるため、サイトへのボタンを出さない", async () => {
+    const html = await render(withdrawn());
+    expect(html).not.toContain(`href="${APP_URL}/shop"`);
+    expect(html).not.toContain(`href="${APP_URL}/orders`);
+    expect(html).not.toContain(`href="${APP_URL}/settings"`);
+  });
+
+  it("会員向けの共通の型（ロゴ・フッター）で作る", async () => {
+    const html = await render(withdrawn());
     expect(html).toContain(`src="${APP_URL}/logo.png"`);
     expect(html).toContain("このメールは送信専用です");
     expect(html).toContain(`href="${APP_URL}/legal/terms"`);

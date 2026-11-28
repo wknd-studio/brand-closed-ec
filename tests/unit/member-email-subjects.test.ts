@@ -11,6 +11,7 @@ import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
+import { sendWithdrawnEmail } from "@/infrastructure/resend/withdrawn";
 import { OrderNumber } from "@/domain/value-objects/order-number";
 
 const APP_URL = "https://shop.example.com";
@@ -141,6 +142,31 @@ describe("会員向けメール: ご入会", () => {
     await sendWelcomeEmail(WELCOME_PARAMS);
     expect(sentTo("member@example.com").subject).toBe(
       "【EQ×Mart】ご入会ありがとうございます"
+    );
+  });
+});
+
+describe("会員向けメール: 退会", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("RESEND_TEST_TO", undefined);
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", APP_URL);
+    sendMock.mockResolvedValue({ data: { id: "id" }, error: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  // GitHub issue #853。注文ではないため注文番号は付けない
+  it("退会した会員のメールアドレス宛てに、注文番号の無い件名で送る", async () => {
+    await sendWithdrawnEmail({
+      to: "member@example.com",
+      withdrawnAt: new Date("2027-06-10T00:00:00Z"),
+      subscriptionCancelled: true,
+    });
+    expect(sentTo("member@example.com").subject).toBe(
+      "【EQ×Mart】退会の手続きが完了しました"
     );
   });
 });

@@ -83,6 +83,7 @@ function makeDeps(sessionId: string): PlaceOrderDeps {
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn().mockResolvedValue(undefined),
     sendWelcome: vi.fn(),
+    sendWithdrawn: vi.fn(),
   };
   return {
     userRepo: new SupabaseUserRepository(supabase),

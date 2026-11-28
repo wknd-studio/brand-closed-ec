@@ -26,6 +26,9 @@ vi.mock("@/emails/limit-exceeded-member", () => ({
 vi.mock("@/emails/welcome", () => ({
   WelcomeEmail: vi.fn(),
 }));
+vi.mock("@/emails/withdrawn", () => ({
+  WithdrawnEmail: vi.fn(),
+}));
 
 const sendMock = vi.fn();
 vi.mock("@/infrastructure/resend/client", () => ({
@@ -42,6 +45,7 @@ import { OrderNumber } from "@/domain/value-objects/order-number";
 
 const orderNumber = OrderNumber.of("K7Q2M9XD");
 import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
+import { sendWithdrawnEmail } from "@/infrastructure/resend/withdrawn";
 
 const resendError = { name: "application_error", message: "送信失敗" };
 
@@ -166,6 +170,22 @@ describe("メール送信失敗時のSentry送信", () => {
       resendError,
       expect.objectContaining({
         tags: expect.objectContaining({ email: "welcome" }),
+      })
+    );
+  });
+
+  // GitHub issue #853
+  it("sendWithdrawnEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
+    await sendWithdrawnEmail({
+      to: "member@example.com",
+      withdrawnAt: new Date(),
+      subscriptionCancelled: true,
+    });
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      resendError,
+      expect.objectContaining({
+        tags: expect.objectContaining({ email: "withdrawn" }),
       })
     );
   });
