@@ -13,21 +13,33 @@ type LineItem = {
 
 type Params = {
   orderId: string;
+  orderedAt: Date;
   memberEmail: string;
   lineItems: LineItem[];
+  fixedTotal: number;
 };
 
 export async function sendCheckoutPaidEmails({
   orderId,
+  orderedAt,
   memberEmail,
   lineItems,
+  fixedTotal,
 }: Params): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!;
   const myPageUrl = `${baseUrl}/orders/${orderId}`;
   const adminOrderUrl = `${baseUrl}/admin/orders/${orderId}`;
 
   const [memberHtml, operatorHtml] = await Promise.all([
-    render(CheckoutPaidMemberEmail({ orderId, lineItems, myPageUrl })),
+    render(
+      CheckoutPaidMemberEmail({
+        orderId,
+        orderedAt,
+        lineItems,
+        fixedTotal,
+        myPageUrl,
+      })
+    ),
     render(
       CheckoutPaidOperatorEmail({
         orderId,
@@ -46,7 +58,7 @@ export async function sendCheckoutPaidEmails({
       .send({
         from: process.env.RESEND_FROM_EMAIL!,
         to: to ?? memberEmail,
-        subject: `【注文確定・入金確認】注文番号: ${orderId}`,
+        subject: `【EQ×Mart】お支払いが完了しました（注文番号 ${orderId}）`,
         html: memberHtml,
       })
       .then(({ error }) => {

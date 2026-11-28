@@ -23,7 +23,7 @@ export async function sendDeliveryNotificationEmail({
   const { error } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL!,
     to: to ?? memberEmail,
-    subject: `【配送完了】注文番号: ${orderId}`,
+    subject: `【EQ×Mart】お届けが完了しました（注文番号 ${orderId}）`,
     html,
   });
 
