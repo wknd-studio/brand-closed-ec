@@ -9,25 +9,11 @@ import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/cn";
 
 const signUpAppearance = {
   ...clerkAppearance,
   elements: {
     ...clerkAppearance.elements,
-    // 共通の指定のうち!の無いもの（影・枠・余白）はClerkのスタイルに負け、
-    // カードの中にClerkのカードが重なって見えるため、ここでは!を付けて打ち消す
-    cardBox: cn(
-      clerkAppearance.elements.cardBox,
-      "!overflow-visible !rounded-none !border-none !shadow-none"
-    ),
-    card: cn(
-      clerkAppearance.elements.card,
-      "!overflow-visible !border-none !bg-transparent !p-0 !shadow-none"
-    ),
-    // 上のメールアドレス欄（自前のInput）と角丸を揃える
-    formFieldInput: cn(clerkAppearance.elements.formFieldInput, "!rounded-md"),
-    footer: cn(clerkAppearance.elements.footer, "!bg-none !bg-transparent"),
     // 登録フォームの見出し・説明文はカードの上部に自前で出すため、Clerkのものは隠す。
     // 取り消し済みの招待で出る「アクセス制限」の見出しも同じheader要素に出るため、
     // 一律には隠さず、登録フォーム（signUp.continue）の見出しのときだけ隠す
