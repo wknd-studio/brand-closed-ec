@@ -50,6 +50,7 @@ function makeDeps(
       minRank: "starter",
       availability: "available",
       paymentTiming: "at_order",
+      fulfillmentLocationCode: "office",
     },
   ]
 ) {
@@ -242,6 +243,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         minRank: "starter",
         availability: "available",
         paymentTiming: "at_order",
+        fulfillmentLocationCode: "office",
       },
       {
         sanityProductId: "prod-split-after-order",
@@ -251,6 +253,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         minRank: "starter",
         availability: "available",
         paymentTiming: "after_order",
+        fulfillmentLocationCode: "office",
       },
     ]);
 
@@ -342,6 +345,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         minRank: "starter",
         availability: "available",
         paymentTiming: "after_order",
+        fulfillmentLocationCode: "office",
       },
     ]);
 
@@ -428,6 +432,116 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
     expect(orders).toHaveLength(1);
     expect(orders![0].order_settlements).toEqual([
       { flow: "checkout", status: "pending_payment" },
+    ]);
+  });
+});
+
+describe("placeOrder（実DB・発送拠点のスナップショット。#357）", () => {
+  beforeAll(async () => {
+    await cleanupSplitUser();
+    await seedSplitUser();
+  });
+
+  afterAll(async () => {
+    await cleanupSplitUser();
+  });
+
+  const officeProduct: ProductSnapshot = {
+    sanityProductId: "prod-location-office",
+    productName: "事務所経由の商品",
+    unitPrice: Money.of(10_000),
+    isNegotiable: false,
+    minRank: "starter",
+    availability: "available",
+    paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
+  };
+  const directProduct: ProductSnapshot = {
+    sanityProductId: "prod-location-direct",
+    productName: "直送の商品",
+    unitPrice: Money.of(20_000),
+    isNegotiable: false,
+    minRank: "starter",
+    availability: "available",
+    paymentTiming: "after_order",
+    fulfillmentLocationCode: "supplier_direct",
+  };
+
+  function placeOrderWithProducts(products: ProductSnapshot[]) {
+    const { productRepo, paymentGateway, notificationService } =
+      makeDeps(products);
+    return placeOrder(
+      {
+        clerkUserId: SPLIT_TEST_CLERK_ID,
+        cartItems: products.map((p) => ({
+          sanityProductId: p.sanityProductId,
+          quantity: 1,
+          productName: p.productName,
+        })),
+        shippingAddressId: SPLIT_TEST_ADDRESS_ID,
+        billingAddressId: SPLIT_TEST_ADDRESS_ID,
+        baseUrl: "http://localhost:3000",
+      },
+      {
+        userRepo: new SupabaseUserRepository(supabase),
+        orderRepo: new SupabaseOrderRepository(supabase),
+        addressRepo: new SupabaseAddressRepository(supabase),
+        productRepo,
+        paymentGateway,
+        notificationService,
+        errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
+        memberRankRepo: new SupabaseMemberRankRepository(supabase),
+        subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
+      }
+    );
+  }
+
+  async function itemLocations() {
+    const { data, error } = await supabase
+      .from("orders")
+      .select(
+        "created_at, order_items(sanity_product_id, fulfillment_location_code)"
+      )
+      .eq("user_id", SPLIT_TEST_USER_ID)
+      .order("created_at");
+    if (error) throw error;
+    return data.map((o) =>
+      Object.fromEntries(
+        o.order_items.map((i) => [
+          i.sanity_product_id,
+          i.fulfillment_location_code,
+        ])
+      )
+    );
+  }
+
+  it("officeとsupplier_directの商品を混ぜた注文は、明細ごとに商品の発送拠点を記録する", async () => {
+    await placeOrderWithProducts([officeProduct, directProduct]);
+
+    expect(await itemLocations()).toEqual([
+      {
+        "prod-location-office": "office",
+        "prod-location-direct": "supplier_direct",
+      },
+    ]);
+  });
+
+  it("注文後に商品の発送拠点が変わっても、既存の明細の値は変わらない（スナップショット）", async () => {
+    // Sanity 側で発送拠点を入れ替えた後の商品情報で、もう1件注文する
+    await placeOrderWithProducts([
+      { ...officeProduct, fulfillmentLocationCode: "supplier_direct" },
+      { ...directProduct, fulfillmentLocationCode: "office" },
+    ]);
+
+    expect(await itemLocations()).toEqual([
+      {
+        "prod-location-office": "office",
+        "prod-location-direct": "supplier_direct",
+      },
+      {
+        "prod-location-office": "supplier_direct",
+        "prod-location-direct": "office",
+      },
     ]);
   });
 });

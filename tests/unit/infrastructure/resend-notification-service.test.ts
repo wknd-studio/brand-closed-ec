@@ -116,6 +116,7 @@ function makeOrder() {
         isNegotiable: false,
         negotiatedUnitPrice: null,
         paymentTiming: "at_order",
+        fulfillmentLocationCode: "office",
         settlementId: "settlement-paid",
       }),
       reconstituteOrderItem({
@@ -127,6 +128,7 @@ function makeOrder() {
         isNegotiable: false,
         negotiatedUnitPrice: null,
         paymentTiming: "after_order",
+        fulfillmentLocationCode: "office",
         settlementId: null,
       }),
       reconstituteOrderItem({
@@ -138,6 +140,7 @@ function makeOrder() {
         isNegotiable: true,
         negotiatedUnitPrice: null,
         paymentTiming: "at_order",
+        fulfillmentLocationCode: "office",
         settlementId: "settlement-paid",
       }),
     ],
@@ -156,6 +159,7 @@ function snapshot(
     minRank: "standard",
     availability: "available",
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
     ...props,
   };
 }

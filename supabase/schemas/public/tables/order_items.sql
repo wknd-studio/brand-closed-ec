@@ -12,7 +12,7 @@ CREATE TABLE "public"."order_items" (
   "settlement_id"             uuid,
   "procurement_task_id"       uuid,
   "received_at"               timestamp with time zone,
-  "fulfillment_location_code" text                     NOT NULL DEFAULT 'office'::text,
+  "fulfillment_location_code" text                     NOT NULL,
   "shipment_id"               uuid,
   CONSTRAINT "order_items_fulfillment_location_code_fkey" FOREIGN KEY (fulfillment_location_code) REFERENCES public.locations(code),
   CONSTRAINT "order_items_payment_timing_check" CHECK ((payment_timing = ANY (ARRAY['at_order'::text, 'after_order'::text]))),
@@ -49,4 +49,4 @@ CREATE POLICY "order_items: select own" ON "public"."order_items"
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."order_items" TO "authenticated", "postgres", "service_role";
 
-COMMENT ON COLUMN "public"."order_items"."fulfillment_location_code" IS 'この明細が事務所経由（office）か仕入れ先直送（supplier_direct）かの、注文時点のスナップショット。DEFAULT ''office'' は #357 で外す暫定。';
+COMMENT ON COLUMN "public"."order_items"."fulfillment_location_code" IS 'この明細が事務所経由（office）か仕入れ先直送（supplier_direct）かの、注文時点のスナップショット。注文確定時に商品の設定から必ず入れるため既定値は置かない（#357）。';

@@ -109,6 +109,7 @@ async function seedOrder(items: ItemSpec[]) {
       isNegotiable: false,
       negotiatedUnitPrice: null,
       paymentTiming: spec.timing,
+      fulfillmentLocationCode: "office",
       settlementId: spec.timing === "at_order" ? checkoutId : null,
     })
   );
@@ -477,6 +478,7 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
             isNegotiable: false,
             negotiatedUnitPrice: null,
             paymentTiming: "after_order",
+            fulfillmentLocationCode: "office",
             settlementId: null,
           }),
         ],
@@ -604,6 +606,7 @@ describe("請求作成の月次上限チェックと決済単位の作成", () =
             isNegotiable: false,
             negotiatedUnitPrice: null,
             paymentTiming: "after_order",
+            fulfillmentLocationCode: "office",
             settlementId: null,
           }),
         ],

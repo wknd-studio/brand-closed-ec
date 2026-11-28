@@ -36,6 +36,7 @@ function orderItem(
     isNegotiable: false,
     negotiatedUnitPrice: null,
     paymentTiming,
+    fulfillmentLocationCode: "office",
     settlementId,
   });
 }

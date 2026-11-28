@@ -10,6 +10,7 @@ import {
 } from "@/domain/value-objects/member-rank";
 import { RankPrices } from "@/domain/value-objects/rank-prices";
 import { Money } from "@/domain/value-objects/money";
+import type { FulfillmentLocationCode } from "@/domain/value-objects/fulfillment-location";
 import { ProductPriceNotSetError } from "@/domain/errors/product-price-not-set-error";
 
 type SanityProduct = {
@@ -24,6 +25,8 @@ type SanityProduct = {
   // null/undefinedが返り得る（Sanity StudioのinitialValueは新規作成時のみ適用され、
   // 既存ドキュメントには遡及しないため）
   payment_timing: "at_order" | "after_order" | null | undefined;
+  // payment_timing と同じく、発送拠点の追加（#356）より前に作られた商品には無い
+  fulfillment_location: FulfillmentLocationCode | null | undefined;
 };
 
 export class SanityProductRepository implements ProductRepository {
@@ -34,7 +37,7 @@ export class SanityProductRepository implements ProductRepository {
     if (ids.length === 0) return [];
 
     const products = await sanityClient.fetch<SanityProduct[]>(
-      `*[_type=="product"&&_id in $ids]{_id,name,is_negotiable,prices,min_rank,availability,payment_timing}`,
+      `*[_type=="product"&&_id in $ids]{_id,name,is_negotiable,prices,min_rank,availability,payment_timing,fulfillment_location}`,
       { ids }
     );
 
@@ -57,6 +60,8 @@ export class SanityProductRepository implements ProductRepository {
         availability: p.availability ?? "available",
         // 後方互換: payment_timing未設定の既存商品はat_order（従来のcheckoutフロー相当）として扱う
         paymentTiming: p.payment_timing ?? "at_order",
+        // 後方互換: 発送拠点未設定の既存商品は、Studio の初期値と同じ事務所経由として扱う
+        fulfillmentLocationCode: p.fulfillment_location ?? "office",
       };
     });
   }

@@ -35,6 +35,7 @@ function makeItem(
     negotiatedUnitPrice: number | null;
     quantity: number;
     paymentTiming: "at_order" | "after_order";
+    fulfillmentLocationCode: "office" | "supplier_direct";
     settlementId: string | null;
   }> = {}
 ) {
@@ -45,6 +46,7 @@ function makeItem(
     negotiatedUnitPrice = null,
     quantity = 1,
     paymentTiming = "at_order",
+    fulfillmentLocationCode = "office",
     settlementId = null,
   } = overrides;
   return reconstituteOrderItem({
@@ -57,6 +59,7 @@ function makeItem(
     negotiatedUnitPrice:
       negotiatedUnitPrice !== null ? Money.of(negotiatedUnitPrice) : null,
     paymentTiming,
+    fulfillmentLocationCode,
     settlementId,
   });
 }
@@ -125,6 +128,7 @@ function makeCartItem(
     unitPrice: Money.of(10_000),
     isNegotiable: false,
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
     ...overrides,
   });
 }
@@ -189,6 +193,29 @@ describe("Order", () => {
         ]
       );
       expect(order.status.value).toBe("processing");
+    });
+
+    it("明細ごとに、カートの明細の発送拠点をそのまま持たせる（#357）", () => {
+      const order = placeOrder([
+        makeCartItem({ fulfillmentLocationCode: "office" }),
+        makeCartItem({
+          sanityProductId: "prod-direct",
+          fulfillmentLocationCode: "supplier_direct",
+        }),
+        makeCartItem({
+          sanityProductId: "prod-after-direct",
+          paymentTiming: "after_order",
+          fulfillmentLocationCode: "supplier_direct",
+        }),
+      ]);
+
+      expect(
+        order.items.map((i) => [i.sanityProductId, i.fulfillmentLocationCode])
+      ).toEqual([
+        ["prod-at", "office"],
+        ["prod-direct", "supplier_direct"],
+        ["prod-after-direct", "supplier_direct"],
+      ]);
     });
 
     it("after_orderの明細のみ: 決済単位を作らず、明細のsettlementIdはNULL", () => {

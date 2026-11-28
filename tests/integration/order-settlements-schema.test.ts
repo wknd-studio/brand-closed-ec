@@ -33,6 +33,7 @@ const baseItem = {
   product_name_snapshot: "テスト商品",
   unit_price_snapshot: 1000,
   quantity: 1,
+  fulfillment_location_code: "office",
 };
 
 async function createOrder(): Promise<string> {

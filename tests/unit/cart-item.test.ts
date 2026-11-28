@@ -14,6 +14,7 @@ describe("CartItem", () => {
     unitPrice: Money.of(10_000),
     isNegotiable: false,
     paymentTiming: "at_order" as const,
+    fulfillmentLocationCode: "office" as const,
   };
 
   describe("of()", () => {
@@ -26,6 +27,14 @@ describe("CartItem", () => {
     it("paymentTiming を保持する", () => {
       const item = CartItem.of({ ...base, paymentTiming: "after_order" });
       expect(item.paymentTiming).toBe("after_order");
+    });
+
+    it("数量を変えても発送拠点は変わらない", () => {
+      const item = CartItem.of({
+        ...base,
+        fulfillmentLocationCode: "supplier_direct",
+      }).updateQuantity(5);
+      expect(item.fulfillmentLocationCode).toBe("supplier_direct");
     });
 
     it("数量 0 はエラー", () => {
@@ -72,6 +81,7 @@ describe("CartItem", () => {
       minRank: "standard",
       availability: "available",
       paymentTiming: "at_order",
+      fulfillmentLocationCode: "office",
     };
     const negotiableProduct: ProductSnapshot = {
       sanityProductId: "prod-2",
@@ -81,6 +91,7 @@ describe("CartItem", () => {
       minRank: "starter",
       availability: "available",
       paymentTiming: "after_order",
+      fulfillmentLocationCode: "supplier_direct",
     };
 
     it("サーバー側の商品情報とカートの数量から明細を作る", () => {
@@ -95,6 +106,16 @@ describe("CartItem", () => {
       expect(item.unitPrice.amount).toBe(100_000);
       expect(item.isNegotiable).toBe(false);
       expect(item.paymentTiming).toBe("at_order");
+      expect(item.fulfillmentLocationCode).toBe("office");
+    });
+
+    it("発送拠点はサーバー側の商品情報の値を明細に持たせる", () => {
+      const [item] = CartItem.fromProducts(
+        [{ sanityProductId: "prod-2", quantity: 1 }],
+        [negotiableProduct],
+        MemberRank.of("standard")
+      );
+      expect(item.fulfillmentLocationCode).toBe("supplier_direct");
     });
 
     it("カートの商品が商品情報に無ければエラーにする", () => {
@@ -194,6 +215,7 @@ describe("CartItem", () => {
         productName: "偽装商品名",
         unitPrice: 1,
         paymentTiming: "after_order",
+        fulfillmentLocationCode: "supplier_direct",
       };
       const [item] = CartItem.fromProducts(
         [tamperedLine],
@@ -203,6 +225,7 @@ describe("CartItem", () => {
       expect(item.productName).toBe("固定商品");
       expect(item.unitPrice.amount).toBe(100_000);
       expect(item.paymentTiming).toBe("at_order");
+      expect(item.fulfillmentLocationCode).toBe("office");
       expect(item.quantity).toBe(2);
     });
 

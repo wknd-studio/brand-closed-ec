@@ -1,4 +1,5 @@
 import { Money } from "@/domain/value-objects/money";
+import type { FulfillmentLocationCode } from "@/domain/value-objects/fulfillment-location";
 
 export type PaymentTiming = "at_order" | "after_order";
 
@@ -12,6 +13,8 @@ interface OrderItemProps {
   negotiatedUnitPrice: Money | null;
   /** 注文確定時点の支払いタイミングのスナップショット */
   paymentTiming: PaymentTiming;
+  /** 注文確定時点の発送拠点のスナップショット。後で商品の設定が変わっても変えない */
+  fulfillmentLocationCode: FulfillmentLocationCode;
   /** 属する決済単位。NULL＝まだ決済単位が作られていない（請求作成前のafter_order等） */
   settlementId: string | null;
 }
@@ -32,6 +35,7 @@ export class OrderItem {
   readonly isNegotiable: boolean;
   readonly negotiatedUnitPrice: Money | null;
   readonly paymentTiming: PaymentTiming;
+  readonly fulfillmentLocationCode: FulfillmentLocationCode;
   readonly settlementId: string | null;
 
   private constructor(props: OrderItemProps) {
@@ -43,6 +47,7 @@ export class OrderItem {
     this.isNegotiable = props.isNegotiable;
     this.negotiatedUnitPrice = props.negotiatedUnitPrice;
     this.paymentTiming = props.paymentTiming;
+    this.fulfillmentLocationCode = props.fulfillmentLocationCode;
     this.settlementId = props.settlementId;
   }
 

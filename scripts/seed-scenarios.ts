@@ -316,6 +316,7 @@ function buildRows(members: Record<ScenarioAccount, Member>, now: Date): Rows {
           quantity,
           is_negotiable: false,
           payment_timing: paymentTiming,
+          fulfillment_location_code: "office",
           settlement_id: settlementId,
         });
         return price * quantity;

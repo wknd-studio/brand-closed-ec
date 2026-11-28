@@ -159,6 +159,7 @@ function makeItem(
     isNegotiable: false,
     negotiatedUnitPrice: null,
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
     settlementId: null,
     ...overrides,
   });
@@ -295,6 +296,68 @@ describe("SupabaseOrderRepository", () => {
       expect(reloaded!.settlements).toEqual([]);
       expect(reloaded!.items[0]?.paymentTiming).toBe("after_order");
       expect(reloaded!.items[0]?.settlementId).toBeNull();
+    });
+  });
+
+  describe("save() — 発送拠点（#357）", () => {
+    it("明細の発送拠点を保存・復元し、更新の保存でも書き換えない", async () => {
+      const ORDER_ID_LOCATION = "00000000-0000-0000-0000-000000000357";
+      await supabase
+        .from("order_items")
+        .delete()
+        .eq("order_id", ORDER_ID_LOCATION);
+      await supabase.from("orders").delete().eq("id", ORDER_ID_LOCATION);
+      try {
+        await repo.save(
+          makeOrder({
+            id: ORDER_ID_LOCATION,
+            items: [
+              makeItem("00000000-0000-0000-0000-000000003571", {
+                paymentTiming: "after_order",
+                fulfillmentLocationCode: "office",
+              }),
+              makeItem("00000000-0000-0000-0000-000000003572", {
+                paymentTiming: "after_order",
+                fulfillmentLocationCode: "supplier_direct",
+              }),
+            ],
+            settlements: [],
+          }),
+          SYSTEM
+        );
+
+        const reloaded = await repo.findById(ORDER_ID_LOCATION);
+        expect(
+          reloaded!.items.map((i) => [i.id, i.fulfillmentLocationCode]).sort()
+        ).toEqual([
+          ["00000000-0000-0000-0000-000000003571", "office"],
+          ["00000000-0000-0000-0000-000000003572", "supplier_direct"],
+        ]);
+
+        // 読み直した注文をそのまま保存し直しても（save_order の ON CONFLICT 更新）値は変わらない
+        await repo.save(reloaded!, SYSTEM);
+        const { data: rows } = await supabase
+          .from("order_items")
+          .select("id, fulfillment_location_code")
+          .eq("order_id", ORDER_ID_LOCATION)
+          .order("id");
+        expect(rows).toEqual([
+          {
+            id: "00000000-0000-0000-0000-000000003571",
+            fulfillment_location_code: "office",
+          },
+          {
+            id: "00000000-0000-0000-0000-000000003572",
+            fulfillment_location_code: "supplier_direct",
+          },
+        ]);
+      } finally {
+        await supabase
+          .from("order_items")
+          .delete()
+          .eq("order_id", ORDER_ID_LOCATION);
+        await supabase.from("orders").delete().eq("id", ORDER_ID_LOCATION);
+      }
     });
   });
 
@@ -650,6 +713,7 @@ describe("SupabaseOrderRepository", () => {
           quantity: 1,
           is_negotiable: false,
           payment_timing: "at_order",
+          fulfillment_location_code: "office",
           settlement_id: DELETE_FAIL_SETTLEMENT_ID,
         });
         if (itemError) throw itemError;

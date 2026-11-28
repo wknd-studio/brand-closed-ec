@@ -150,6 +150,7 @@ test.describe("実際のカタログ〜チェックアウト画面遷移フロ�
       quantity: 1,
       is_negotiable: false,
       payment_timing: "at_order",
+      fulfillment_location_code: "office",
     });
 
     await page.goto("/order/checkout");

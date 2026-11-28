@@ -66,6 +66,7 @@ function makeDeps(sessionId: string): PlaceOrderDeps {
         minRank: "starter",
         availability: "available",
         paymentTiming: "at_order",
+        fulfillmentLocationCode: "office",
       },
     ]),
   };

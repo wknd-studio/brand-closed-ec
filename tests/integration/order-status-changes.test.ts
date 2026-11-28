@@ -119,6 +119,7 @@ function makeOrder(orderId: string, userId: string, suffix: string) {
         isNegotiable: false,
         negotiatedUnitPrice: null,
         paymentTiming: "at_order",
+        fulfillmentLocationCode: "office",
         settlementId,
       }),
     ],

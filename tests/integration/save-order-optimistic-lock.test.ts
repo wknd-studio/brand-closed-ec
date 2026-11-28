@@ -79,6 +79,7 @@ function buildOrder(timings: PaymentTiming[]): Order {
         isNegotiable: false,
         negotiatedUnitPrice: null,
         paymentTiming: timing,
+        fulfillmentLocationCode: "office",
         settlementId: timing === "at_order" ? checkoutId : null,
       })
     ),

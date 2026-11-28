@@ -24,6 +24,7 @@ import {
 } from "@/domain/entities/order-settlement";
 import { OrderStatus } from "@/domain/value-objects/order-status";
 import { OrderNumber } from "@/domain/value-objects/order-number";
+import type { FulfillmentLocationCode } from "@/domain/value-objects/fulfillment-location";
 import { Money } from "@/domain/value-objects/money";
 import { LimitExceededError } from "@/domain/errors/limit-exceeded-error";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
@@ -84,6 +85,7 @@ function toItemRowsForInsert(order: Order) {
     is_negotiable: item.isNegotiable,
     negotiated_unit_price: item.negotiatedUnitPrice?.amount ?? null,
     payment_timing: item.paymentTiming,
+    fulfillment_location_code: item.fulfillmentLocationCode,
     settlement_id: item.settlementId,
   }));
 }
@@ -147,6 +149,7 @@ export type OrderItemRow = {
   is_negotiable: boolean;
   negotiated_unit_price: number | null;
   payment_timing: string;
+  fulfillment_location_code: string;
   settlement_id: string | null;
 };
 
@@ -189,6 +192,8 @@ export function toOrderItem(row: OrderItemRow): OrderItem {
         ? Money.of(row.negotiated_unit_price)
         : null,
     paymentTiming: row.payment_timing as PaymentTiming,
+    fulfillmentLocationCode:
+      row.fulfillment_location_code as FulfillmentLocationCode,
     settlementId: row.settlement_id,
   });
 }
@@ -226,7 +231,7 @@ function toOrder(row: OrderRow): Order {
 
 // toOrderItem が読む order_items の列（Query Service の実装でも使う）
 export const ORDER_ITEM_COLUMNS =
-  "id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price, payment_timing, settlement_id";
+  "id, sanity_product_id, product_name_snapshot, unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price, payment_timing, fulfillment_location_code, settlement_id";
 
 // toOrderSettlement が読む order_settlements の列（Query Service の実装でも使う）
 export const ORDER_SETTLEMENT_COLUMNS =

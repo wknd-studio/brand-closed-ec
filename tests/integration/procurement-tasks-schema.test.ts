@@ -35,6 +35,7 @@ const baseItem = {
   unit_price_snapshot: 1000,
   quantity: 1,
   payment_timing: "at_order" as const,
+  fulfillment_location_code: "office",
 };
 
 async function createOrder(): Promise<string> {

@@ -101,6 +101,7 @@ const baseItem = {
   unit_price_snapshot: 10_000,
   quantity: 1,
   payment_timing: "at_order",
+  fulfillment_location_code: "office",
 };
 
 async function cleanup() {

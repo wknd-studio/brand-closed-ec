@@ -190,6 +190,7 @@ function item(
     quantity: 2,
     is_negotiable: false,
     payment_timing: "at_order",
+    fulfillment_location_code: "office",
     ...overrides,
   };
 }

@@ -178,6 +178,7 @@ export class Order {
           isNegotiable: c.isNegotiable,
           negotiatedUnitPrice: null,
           paymentTiming,
+          fulfillmentLocationCode: c.fulfillmentLocationCode,
           settlementId,
         })
       );

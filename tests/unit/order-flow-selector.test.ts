@@ -14,6 +14,7 @@ function makeAtOrderItem(): CartItem {
     unitPrice: Money.of(10_000),
     isNegotiable: false,
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
   });
 }
 
@@ -25,6 +26,7 @@ function makeAfterOrderItem(): CartItem {
     unitPrice: Money.of(20_000),
     isNegotiable: false,
     paymentTiming: "after_order",
+    fulfillmentLocationCode: "office",
   });
 }
 
@@ -36,6 +38,7 @@ function makeNegotiableItem(): CartItem {
     unitPrice: Money.zero(),
     isNegotiable: true,
     paymentTiming: "after_order",
+    fulfillmentLocationCode: "office",
   });
 }
 

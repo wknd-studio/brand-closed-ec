@@ -64,7 +64,7 @@ BEGIN
   INSERT INTO public.order_items (
     id, order_id, sanity_product_id, product_name_snapshot,
     unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price,
-    payment_timing, settlement_id
+    payment_timing, fulfillment_location_code, settlement_id
   )
   SELECT
     (item->>'id')::uuid,
@@ -76,6 +76,7 @@ BEGIN
     (item->>'is_negotiable')::boolean,
     NULLIF(item->>'negotiated_unit_price', '')::bigint,
     item->>'payment_timing',
+    item->>'fulfillment_location_code',
     NULLIF(item->>'settlement_id', '')::uuid
   FROM jsonb_array_elements(p_items) AS item;
 END;

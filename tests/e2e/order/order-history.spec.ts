@@ -55,6 +55,7 @@ test.describe("注文履歴", () => {
       quantity: 2,
       is_negotiable: false,
       payment_timing: "at_order",
+      fulfillment_location_code: "office",
     });
     expect(itemError).toBeNull();
 
@@ -110,6 +111,7 @@ test.describe("注文履歴", () => {
         quantity: 2,
         is_negotiable: false,
         payment_timing: "at_order",
+        fulfillment_location_code: "office",
         settlement_id: settlementId,
       },
       {
@@ -120,6 +122,7 @@ test.describe("注文履歴", () => {
         quantity: 1,
         is_negotiable: false,
         payment_timing: "after_order",
+        fulfillment_location_code: "office",
       },
     ]);
     expect(itemError).toBeNull();
