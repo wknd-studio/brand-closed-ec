@@ -6,7 +6,7 @@ vi.mock("@/infrastructure/resend/client", () => ({
 }));
 
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
-import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
+import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
@@ -42,7 +42,7 @@ describe("会員向けメールの件名", () => {
   });
 
   it("お支払いの完了", async () => {
-    await sendCheckoutPaidEmails({
+    await sendCheckoutPaidEmail({
       orderId: "order-1",
       orderedAt,
       memberEmail: "member@example.com",

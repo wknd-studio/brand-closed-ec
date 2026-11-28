@@ -9,12 +9,10 @@ import type { ProductSnapshot } from "@/repositories/product-repository";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { Money } from "@/domain/value-objects/money";
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
-import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
-import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
-import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
+import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
 
 export class ResendNotificationService implements NotificationService {
@@ -51,25 +49,6 @@ export class ResendNotificationService implements NotificationService {
     });
   }
 
-  async sendOrderOperatorNotification(
-    order: Order,
-    customerEmail: string,
-    items: ProductSnapshot[]
-  ): Promise<void> {
-    await sendOrderOperatorNotification({
-      orderId: order.id,
-      customerEmail,
-      lineItems: items.map((i) => ({
-        productName: i.productName,
-        quantity:
-          order.items.find((oi) => oi.sanityProductId === i.sanityProductId)
-            ?.quantity ?? 1,
-        unitPrice: i.isNegotiable ? null : i.unitPrice.amount,
-        isNegotiable: i.isNegotiable,
-      })),
-    });
-  }
-
   async sendLimitExceeded(to: string, orderId: string): Promise<void> {
     await sendLimitExceededEmail({ to, orderId });
   }
@@ -102,17 +81,13 @@ export class ResendNotificationService implements NotificationService {
       unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
       isNegotiable: item.isNegotiable,
     }));
-    await sendCheckoutPaidEmails({
+    await sendCheckoutPaidEmail({
       orderId: order.id,
       orderedAt: order.createdAt,
       memberEmail: user.email,
       lineItems,
       fixedTotal: sumFixedTotal(paidItems).amount,
     });
-  }
-
-  async sendInvoicePaid(order: Order, user: User): Promise<void> {
-    await sendInvoicePaidEmail({ orderId: order.id, memberEmail: user.email });
   }
 
   async sendWelcome(user: User, membership: MembershipWelcome): Promise<void> {

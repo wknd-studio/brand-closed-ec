@@ -70,12 +70,10 @@ function makeDeps() {
   };
   const notificationService: NotificationService = {
     sendOrderConfirming: vi.fn().mockResolvedValue(undefined),
-    sendOrderOperatorNotification: vi.fn().mockResolvedValue(undefined),
     sendLimitExceeded: vi.fn(),
     sendShippingNotification: vi.fn(),
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
-    sendInvoicePaid: vi.fn(),
     sendWelcome: vi.fn(),
   };
   return { productRepo, paymentGateway, notificationService };
@@ -108,6 +106,7 @@ async function runPlaceOrder() {
       productRepo,
       paymentGateway,
       notificationService,
+      operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
       errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
       memberRankRepo: new SupabaseMemberRankRepository(supabase),
       subscriptionRepo: new SupabaseSubscriptionRepository(supabase),

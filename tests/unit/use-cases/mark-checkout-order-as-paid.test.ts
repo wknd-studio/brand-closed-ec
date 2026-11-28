@@ -2,10 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 
 import { markCheckoutOrderAsPaid } from "@/use-cases/mark-checkout-order-as-paid";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
+import { Money } from "@/domain/value-objects/money";
 import {
   makeOrderRepo,
   makeUserRepo,
   makeNotificationService,
+  makeOperatorNotifier,
   makeOrder,
   makeOrderItem,
   makeSettlement,
@@ -24,6 +26,7 @@ describe("markCheckoutOrderAsPaid", () => {
         orderRepo,
         userRepo: makeUserRepo(),
         notificationService,
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       }
     );
@@ -35,6 +38,62 @@ describe("markCheckoutOrderAsPaid", () => {
     expect(notificationService.sendCheckoutPaid).toHaveBeenCalled();
   });
 
+  it("会員には支払い完了のメールを、運営者には種類・注文番号・決済単位の金額をポートで1回だけ送る", async () => {
+    const order = makeOrder();
+    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
+
+    await markCheckoutOrderAsPaid(
+      { stripeCheckoutSessionId: "sess_1" },
+      {
+        orderRepo: makeOrderRepo(order),
+        userRepo: makeUserRepo(),
+        notificationService,
+        operatorNotifier,
+        errorReporter: makeErrorReporter(),
+      }
+    );
+
+    expect(notificationService.sendCheckoutPaid).toHaveBeenCalledTimes(1);
+    expect(operatorNotifier.notify).toHaveBeenCalledTimes(1);
+    expect(operatorNotifier.notify).toHaveBeenCalledWith({
+      type: "checkoutPaid",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount: Money.of(100_000),
+    });
+  });
+
+  it("運営者への通知に失敗しても入金の記録・会員へのメールは行い、ErrorReporterへ送る", async () => {
+    const order = makeOrder();
+    const orderRepo = makeOrderRepo(order);
+    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
+    const slackError = new Error("Slack への送信に失敗しました");
+    vi.mocked(operatorNotifier.notify).mockRejectedValue(slackError);
+    const errorReporter = makeErrorReporter();
+
+    await expect(
+      markCheckoutOrderAsPaid(
+        { stripeCheckoutSessionId: "sess_1" },
+        {
+          orderRepo,
+          userRepo: makeUserRepo(),
+          notificationService,
+          operatorNotifier,
+          errorReporter,
+        }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(orderRepo.save).toHaveBeenCalledTimes(1);
+    expect(notificationService.sendCheckoutPaid).toHaveBeenCalledTimes(1);
+    expect(errorReporter.captureException).toHaveBeenCalledWith(slackError, {
+      tags: { useCase: "markCheckoutOrderAsPaid", step: "notifyOperator" },
+      extra: { orderId: order.id },
+    });
+  });
+
   it("決済完了による状態の変化は system が変えたとして保存する", async () => {
     const orderRepo = makeOrderRepo(makeOrder());
 
@@ -44,6 +103,7 @@ describe("markCheckoutOrderAsPaid", () => {
         orderRepo,
         userRepo: makeUserRepo(),
         notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       }
     );
@@ -69,6 +129,7 @@ describe("markCheckoutOrderAsPaid", () => {
         orderRepo,
         userRepo: makeUserRepo(),
         notificationService,
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       }
     );
@@ -93,6 +154,7 @@ describe("markCheckoutOrderAsPaid", () => {
         orderRepo,
         userRepo: makeUserRepo(),
         notificationService,
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       }
     );
@@ -111,6 +173,7 @@ describe("markCheckoutOrderAsPaid", () => {
           orderRepo,
           userRepo: makeUserRepo(),
           notificationService: makeNotificationService(),
+          operatorNotifier: makeOperatorNotifier(),
           errorReporter: makeErrorReporter(),
         }
       )
@@ -130,6 +193,7 @@ describe("markCheckoutOrderAsPaid", () => {
           orderRepo,
           userRepo: makeUserRepo(),
           notificationService: makeNotificationService(),
+          operatorNotifier: makeOperatorNotifier(),
           errorReporter: makeErrorReporter(),
         }
       )
@@ -137,11 +201,12 @@ describe("markCheckoutOrderAsPaid", () => {
     expect(orderRepo.save).not.toHaveBeenCalled();
   });
 
-  it("会員が見つからない（退会済み等）場合も入金は記録し、通知だけ送らない", async () => {
+  it("会員が見つからない（退会済み等）場合も入金は記録し、会員へのメールだけ送らない（運営者には通知する）", async () => {
     const orderRepo = makeOrderRepo(makeOrder());
     const userRepo = makeUserRepo();
     vi.mocked(userRepo.findById).mockResolvedValue(null);
     const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
 
     await markCheckoutOrderAsPaid(
       { stripeCheckoutSessionId: "sess_1" },
@@ -149,6 +214,7 @@ describe("markCheckoutOrderAsPaid", () => {
         orderRepo,
         userRepo,
         notificationService,
+        operatorNotifier,
         errorReporter: makeErrorReporter(),
       }
     );
@@ -156,6 +222,7 @@ describe("markCheckoutOrderAsPaid", () => {
     const saved = vi.mocked(orderRepo.save).mock.calls[0]?.[0];
     expect(saved?.settlements[0]?.status).toBe("paid");
     expect(notificationService.sendCheckoutPaid).not.toHaveBeenCalled();
+    expect(operatorNotifier.notify).toHaveBeenCalledTimes(1);
   });
 
   // issue #270: 運営者が未払い決済単位をキャンセルした後、顧客が古いCheckoutページで
@@ -178,6 +245,7 @@ describe("markCheckoutOrderAsPaid", () => {
           orderRepo,
           userRepo: makeUserRepo(),
           notificationService,
+          operatorNotifier: makeOperatorNotifier(),
           errorReporter,
         }
       )
@@ -221,6 +289,7 @@ describe("markCheckoutOrderAsPaid", () => {
         orderRepo,
         userRepo: makeUserRepo(),
         notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       };
     }
@@ -243,6 +312,7 @@ describe("markCheckoutOrderAsPaid", () => {
       expect(deps.notificationService.sendCheckoutPaid).toHaveBeenCalledTimes(
         1
       );
+      expect(deps.operatorNotifier.notify).toHaveBeenCalledTimes(1);
     });
 
     it("読み直した注文で決済単位が支払い済みなら（同じイベントの同時配信）、保存も通知もせずに終える", async () => {

@@ -124,12 +124,10 @@ function runPlaceOrder(
   };
   const notificationService: NotificationService = {
     sendOrderConfirming: vi.fn().mockResolvedValue(undefined),
-    sendOrderOperatorNotification: vi.fn().mockResolvedValue(undefined),
     sendLimitExceeded: vi.fn(),
     sendShippingNotification: vi.fn(),
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
-    sendInvoicePaid: vi.fn(),
     sendWelcome: vi.fn(),
   };
 
@@ -156,6 +154,7 @@ function runPlaceOrder(
       productRepo,
       paymentGateway,
       notificationService,
+      operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
       errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
     }
   );

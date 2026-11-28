@@ -1,14 +1,17 @@
 import type { OrderRepository } from "@/repositories/order-repository";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { NotificationService } from "@/repositories/notification-service";
+import type { OperatorNotifier } from "@/repositories/operator-notifier";
 import type { ErrorReporter } from "@/repositories/error-reporter";
 import { retryOnOrderConflict } from "@/use-cases/retry-on-order-conflict";
+import { notifyOperator } from "@/use-cases/notify-operator";
 
 export type MarkCheckoutOrderAsPaidInput = { stripeCheckoutSessionId: string };
 export type MarkCheckoutOrderAsPaidDeps = {
   orderRepo: OrderRepository;
   userRepo: UserRepository;
   notificationService: NotificationService;
+  operatorNotifier: OperatorNotifier;
   errorReporter: ErrorReporter;
 };
 
@@ -69,4 +72,15 @@ async function markPaidOnce(
   if (user) {
     await notificationService.sendCheckoutPaid(paidOrder, paidSettlement, user);
   }
+  // 運営者への通知は会員の情報を使わないため、会員が見つからなくても送る
+  await notifyOperator(
+    deps,
+    {
+      type: "checkoutPaid",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount: paidSettlement.amount,
+    },
+    "markCheckoutOrderAsPaid"
+  );
 }

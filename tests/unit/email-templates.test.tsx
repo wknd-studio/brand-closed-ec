@@ -1,11 +1,8 @@
 import { render } from "@react-email/components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CheckoutPaidMemberEmail } from "@/emails/checkout-paid-member";
-import { CheckoutPaidOperatorEmail } from "@/emails/checkout-paid-operator";
-import { InvoicePaidOperatorEmail } from "@/emails/invoice-paid-operator";
 import { LimitExceededMemberEmail } from "@/emails/limit-exceeded-member";
 import { OrderConfirmingEmail } from "@/emails/order-confirming";
-import { OrderOperatorNotificationEmail } from "@/emails/order-operator-notification";
 import { ShippingNotificationEmail } from "@/emails/shipping-notification";
 import { DeliveryNotificationEmail } from "@/emails/delivery-notification";
 import { WelcomeEmail } from "@/emails/welcome";
@@ -92,77 +89,6 @@ const memberEmails = {
     <LimitExceededMemberEmail orderId="ORDER-001" myPageUrl={myPageUrl} />
   ),
 };
-
-describe("OrderOperatorNotificationEmail", () => {
-  it("注文IDと注文者メールと商品名が含まれる", async () => {
-    const html = await render(
-      <OrderOperatorNotificationEmail
-        orderId="ORDER-001"
-        customerEmail="member@example.com"
-        lineItems={[fixedItem]}
-        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
-      />
-    );
-    expect(html).toContain("ORDER-001");
-    expect(html).toContain("member@example.com");
-    expect(html).toContain("テスト商品A");
-  });
-
-  it("管理画面リンクが含まれる", async () => {
-    const html = await render(
-      <OrderOperatorNotificationEmail
-        orderId="ORDER-001"
-        customerEmail="member@example.com"
-        lineItems={[fixedItem]}
-        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
-      />
-    );
-    expect(html).toContain("https://example.com/admin/orders/ORDER-001");
-  });
-
-  it("要相談商品は「要相談」と表示される", async () => {
-    const html = await render(
-      <OrderOperatorNotificationEmail
-        orderId="ORDER-001"
-        customerEmail="member@example.com"
-        lineItems={[negotiableItem]}
-        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
-      />
-    );
-    expect(html).toContain("要相談");
-  });
-});
-
-describe("CheckoutPaidOperatorEmail", () => {
-  it("注文IDと注文者メールと管理画面リンクが含まれる", async () => {
-    const html = await render(
-      <CheckoutPaidOperatorEmail
-        orderId="ORDER-001"
-        customerEmail="member@example.com"
-        lineItems={[fixedItem]}
-        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
-      />
-    );
-    expect(html).toContain("ORDER-001");
-    expect(html).toContain("member@example.com");
-    expect(html).toContain("https://example.com/admin/orders/ORDER-001");
-  });
-});
-
-describe("InvoicePaidOperatorEmail", () => {
-  it("注文IDと注文者メールと管理画面リンクが含まれる", async () => {
-    const html = await render(
-      <InvoicePaidOperatorEmail
-        orderId="ORDER-001"
-        customerEmail="member@example.com"
-        adminOrderUrl="https://example.com/admin/orders/ORDER-001"
-      />
-    );
-    expect(html).toContain("ORDER-001");
-    expect(html).toContain("member@example.com");
-    expect(html).toContain("https://example.com/admin/orders/ORDER-001");
-  });
-});
 
 describe.each(Object.entries(memberEmails))(
   "%s（会員向けの共通の型）",
