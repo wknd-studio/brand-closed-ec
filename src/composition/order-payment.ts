@@ -2,6 +2,7 @@ import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseOrderRepository } from "@/infrastructure/supabase/supabase-order-repository";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
+import { SlackOperatorNotifier } from "@/infrastructure/slack/slack-operator-notifier";
 import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 import {
   markCheckoutOrderAsPaid as markCheckoutOrderAsPaidUseCase,
@@ -23,6 +24,7 @@ function paidOrderDeps() {
     orderRepo: new SupabaseOrderRepository(supabase),
     userRepo: new SupabaseUserRepository(supabase),
     notificationService: new ResendNotificationService(),
+    operatorNotifier: new SlackOperatorNotifier(),
     errorReporter: new SentryErrorReporter(),
   };
 }

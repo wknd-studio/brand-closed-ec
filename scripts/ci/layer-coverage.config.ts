@@ -33,7 +33,9 @@ export const LAYER_COVERAGE: LayerCoverageConfig = {
     {
       name: "外部サービスのアダプタ",
       suite: "unit",
-      include: ["src/infrastructure/{stripe,clerk,resend,sanity}/**/*.ts"],
+      include: [
+        "src/infrastructure/{stripe,clerk,resend,sanity,slack}/**/*.ts",
+      ],
       min: { functions: 100 },
       howToTest:
         "ユニットテストで、SDK だけをモックし、アダプタ自身のコード（SDK に渡す引数・戻り値の変換）を実行する",

@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 
 import { markInvoiceOrderAsPaid } from "@/use-cases/mark-invoice-order-as-paid";
 import { OrderConcurrentlyModifiedError } from "@/domain/errors/order-concurrently-modified-error";
+import { Money } from "@/domain/value-objects/money";
 import {
   makeOrderRepo,
-  makeUserRepo,
-  makeNotificationService,
+  makeOperatorNotifier,
   makeOrder,
   makeOrderItem,
   makeSettlement,
@@ -24,20 +24,19 @@ const invoiceSettlement = (overrides?: Parameters<typeof makeSettlement>[0]) =>
 const afterOrderItem = () => makeOrderItem({ paymentTiming: "after_order" });
 
 describe("markInvoiceOrderAsPaid", () => {
-  it("決済単位をpaidにし、全明細が支払い済みなら注文もpaidにしてsendInvoicePaidを呼ぶ", async () => {
+  it("決済単位をpaidにし、全明細が支払い済みなら注文もpaidにして運営者に通知する", async () => {
     const order = makeOrder({
       items: [afterOrderItem()],
       settlements: [invoiceSettlement()],
     });
     const orderRepo = makeOrderRepo(order);
-    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
 
     await markInvoiceOrderAsPaid(
       { stripeInvoiceId: "inv_1" },
       {
         orderRepo,
-        userRepo: makeUserRepo(),
-        notificationService,
+        operatorNotifier,
         errorReporter: makeErrorReporter(),
       }
     );
@@ -46,7 +45,38 @@ describe("markInvoiceOrderAsPaid", () => {
     expect(saved?.settlements[0]?.status).toBe("paid");
     expect(saved?.settlements[0]?.paidAt).toBeInstanceOf(Date);
     expect(saved?.status.value).toBe("paid");
-    expect(notificationService.sendInvoicePaid).toHaveBeenCalled();
+    expect(operatorNotifier.notify).toHaveBeenCalledTimes(1);
+    expect(operatorNotifier.notify).toHaveBeenCalledWith({
+      type: "invoicePaid",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount: Money.of(100_000),
+    });
+  });
+
+  it("運営者への通知に失敗しても入金は記録して正常終了し、ErrorReporterへ送る", async () => {
+    const order = makeOrder({
+      items: [afterOrderItem()],
+      settlements: [invoiceSettlement()],
+    });
+    const orderRepo = makeOrderRepo(order);
+    const operatorNotifier = makeOperatorNotifier();
+    const slackError = new Error("Slack への送信に失敗しました");
+    vi.mocked(operatorNotifier.notify).mockRejectedValue(slackError);
+    const errorReporter = makeErrorReporter();
+
+    await expect(
+      markInvoiceOrderAsPaid(
+        { stripeInvoiceId: "inv_1" },
+        { orderRepo, operatorNotifier, errorReporter }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(orderRepo.save).toHaveBeenCalledTimes(1);
+    expect(errorReporter.captureException).toHaveBeenCalledWith(slackError, {
+      tags: { useCase: "markInvoiceOrderAsPaid", step: "notifyOperator" },
+      extra: { orderId: order.id },
+    });
   });
 
   it("入金による状態の変化は system が変えたとして保存する", async () => {
@@ -61,8 +91,7 @@ describe("markInvoiceOrderAsPaid", () => {
       { stripeInvoiceId: "inv_1" },
       {
         orderRepo,
-        userRepo: makeUserRepo(),
-        notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       }
     );
@@ -95,8 +124,7 @@ describe("markInvoiceOrderAsPaid", () => {
       { stripeInvoiceId: "inv_1" },
       {
         orderRepo,
-        userRepo: makeUserRepo(),
-        notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       }
     );
@@ -112,38 +140,36 @@ describe("markInvoiceOrderAsPaid", () => {
       settlements: [invoiceSettlement({ status: "paid", paidAt: new Date() })],
     });
     const orderRepo = makeOrderRepo(order);
-    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
 
     await markInvoiceOrderAsPaid(
       { stripeInvoiceId: "inv_1" },
       {
         orderRepo,
-        userRepo: makeUserRepo(),
-        notificationService,
+        operatorNotifier,
         errorReporter: makeErrorReporter(),
       }
     );
 
     expect(orderRepo.save).not.toHaveBeenCalled();
-    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    expect(operatorNotifier.notify).not.toHaveBeenCalled();
   });
 
   it("該当する注文が無いInvoice（サブスクリプション請求等）は無視する", async () => {
     const orderRepo = makeOrderRepo();
-    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
 
     await markInvoiceOrderAsPaid(
       { stripeInvoiceId: "inv_subscription" },
       {
         orderRepo,
-        userRepo: makeUserRepo(),
-        notificationService,
+        operatorNotifier,
         errorReporter: makeErrorReporter(),
       }
     );
 
     expect(orderRepo.save).not.toHaveBeenCalled();
-    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    expect(operatorNotifier.notify).not.toHaveBeenCalled();
   });
 
   it("注文に該当Invoice IDの決済単位が無ければ、何も記録せず正常終了する", async () => {
@@ -152,47 +178,21 @@ describe("markInvoiceOrderAsPaid", () => {
       settlements: [invoiceSettlement({ stripeInvoiceId: "inv_other" })],
     });
     const orderRepo = makeOrderRepo(order);
-    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
 
     await expect(
       markInvoiceOrderAsPaid(
         { stripeInvoiceId: "inv_1" },
         {
           orderRepo,
-          userRepo: makeUserRepo(),
-          notificationService,
+          operatorNotifier,
           errorReporter: makeErrorReporter(),
         }
       )
     ).resolves.toBeUndefined();
 
     expect(orderRepo.save).not.toHaveBeenCalled();
-    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
-  });
-
-  it("会員が見つからない（退会済み等）場合も入金は記録し、通知だけ送らない", async () => {
-    const order = makeOrder({
-      items: [afterOrderItem()],
-      settlements: [invoiceSettlement()],
-    });
-    const orderRepo = makeOrderRepo(order);
-    const userRepo = makeUserRepo();
-    vi.mocked(userRepo.findById).mockResolvedValue(null);
-    const notificationService = makeNotificationService();
-
-    await markInvoiceOrderAsPaid(
-      { stripeInvoiceId: "inv_1" },
-      {
-        orderRepo,
-        userRepo,
-        notificationService,
-        errorReporter: makeErrorReporter(),
-      }
-    );
-
-    const saved = vi.mocked(orderRepo.save).mock.calls[0]?.[0];
-    expect(saved?.settlements[0]?.status).toBe("paid");
-    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    expect(operatorNotifier.notify).not.toHaveBeenCalled();
   });
 
   // issue #270: 運営者が未払い決済単位をキャンセルした後、Stripeが遅延Webhookを
@@ -206,7 +206,7 @@ describe("markInvoiceOrderAsPaid", () => {
       ],
     });
     const orderRepo = makeOrderRepo(order);
-    const notificationService = makeNotificationService();
+    const operatorNotifier = makeOperatorNotifier();
     const errorReporter = makeErrorReporter();
 
     await expect(
@@ -214,15 +214,14 @@ describe("markInvoiceOrderAsPaid", () => {
         { stripeInvoiceId: "inv_1" },
         {
           orderRepo,
-          userRepo: makeUserRepo(),
-          notificationService,
+          operatorNotifier,
           errorReporter,
         }
       )
     ).resolves.toBeUndefined();
 
     expect(orderRepo.save).not.toHaveBeenCalled();
-    expect(notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+    expect(operatorNotifier.notify).not.toHaveBeenCalled();
     expect(errorReporter.captureException).toHaveBeenCalledWith(
       expect.any(Error),
       expect.objectContaining({
@@ -263,8 +262,7 @@ describe("markInvoiceOrderAsPaid", () => {
     function depsWith(orderRepo: ReturnType<typeof makeOrderRepo>) {
       return {
         orderRepo,
-        userRepo: makeUserRepo(),
-        notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
       };
     }
@@ -281,7 +279,7 @@ describe("markInvoiceOrderAsPaid", () => {
       expect(
         vi.mocked(orderRepo.save).mock.calls[1]?.[0].settlements[0]?.status
       ).toBe("paid");
-      expect(deps.notificationService.sendInvoicePaid).toHaveBeenCalledTimes(1);
+      expect(deps.operatorNotifier.notify).toHaveBeenCalledTimes(1);
     });
 
     it("読み直した注文で決済単位が支払い済みなら（同じイベントの同時配信）、保存も通知もせずに終える", async () => {
@@ -295,7 +293,7 @@ describe("markInvoiceOrderAsPaid", () => {
       await markInvoiceOrderAsPaid({ stripeInvoiceId: "inv_1" }, deps);
 
       expect(orderRepo.save).toHaveBeenCalledTimes(1);
-      expect(deps.notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+      expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
     });
 
     it("読み直した注文で決済単位がキャンセル済みなら、要対応として通知し、保存せずに終える", async () => {
@@ -310,7 +308,7 @@ describe("markInvoiceOrderAsPaid", () => {
 
       expect(orderRepo.save).toHaveBeenCalledTimes(1);
       expect(deps.errorReporter.captureException).toHaveBeenCalledTimes(1);
-      expect(deps.notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+      expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
     });
 
     it("3回続けて競合したら OrderConcurrentlyModifiedError を投げる（Webhookは失敗を返し、Stripeが再送する）", async () => {
@@ -322,7 +320,7 @@ describe("markInvoiceOrderAsPaid", () => {
         markInvoiceOrderAsPaid({ stripeInvoiceId: "inv_1" }, deps)
       ).rejects.toBeInstanceOf(OrderConcurrentlyModifiedError);
       expect(orderRepo.save).toHaveBeenCalledTimes(3);
-      expect(deps.notificationService.sendInvoicePaid).not.toHaveBeenCalled();
+      expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
     });
 
     it("競合以外の保存の失敗は、やり直さずに投げる", async () => {

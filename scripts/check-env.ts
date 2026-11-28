@@ -38,7 +38,7 @@ const DOPPLER_PROJECT = "brand-closed-ec";
 /** stg にだけ置き、本番には置かない名前と理由（Worker 用の config） */
 export const STG_ONLY_NAMES: Record<string, string> = {
   RESEND_TEST_TO:
-    "会員・運営者へのメールの宛先をすべてこのアドレスに差し替えるため、本番に置くとお客様にメールが届かない",
+    "会員へのメールの宛先をすべてこのアドレスに差し替えるため、本番に置くとお客様にメールが届かない",
 };
 
 /** stg にだけ置く名前と理由（デプロイ用の config） */
@@ -51,10 +51,7 @@ export const STG_DEPLOY_ONLY_NAMES: Record<string, string> = {
 };
 
 /** stg では空でよい名前と理由 */
-export const STG_EMPTY_OK_NAMES: Record<string, string> = {
-  RESEND_ADMIN_EMAIL:
-    "stg は RESEND_TEST_TO があり、運営者宛てのメールもそちらに送るため使わない",
-};
+export const STG_EMPTY_OK_NAMES: Record<string, string> = {};
 
 /** 本番にだけ置く名前と理由 */
 export const PROD_ONLY_NAMES: Record<string, string> = {};
@@ -79,6 +76,13 @@ export const MUST_DIFFER_NAMES = [
   "SANITY_WRITE_TOKEN",
   "CLOUDFLARE_API_TOKEN",
   "NEXT_PUBLIC_APP_URL",
+  // stg は全て #運営-通知-stg に送るため、本番で同じだと運営者に届かない（#830）
+  "SLACK_WEBHOOK_URL_ORDERS",
+  "SLACK_WEBHOOK_URL_BILLING",
+  "SLACK_WEBHOOK_URL_PROCUREMENT",
+  "SLACK_WEBHOOK_URL_RETURNS",
+  "SLACK_WEBHOOK_URL_MEMBERS",
+  "SLACK_WEBHOOK_URL_GENERAL",
 ];
 
 /** 環境ごとに決まっている値（requirements.md の 13-2）。違ったときに実際の値を出すため、秘密でない値（`NEXT_PUBLIC_*`）だけを置く */

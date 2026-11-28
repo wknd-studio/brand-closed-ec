@@ -26,6 +26,7 @@ import type {
 } from "@/repositories/product-repository";
 import type { PaymentGateway } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
+import type { OperatorNotifier } from "@/repositories/operator-notifier";
 import type { SubscriptionGateway } from "@/repositories/subscription-gateway";
 import type { AccountGateway } from "@/repositories/account-gateway";
 import type { ErrorReporter } from "@/repositories/error-reporter";
@@ -281,13 +282,15 @@ export function makePaymentGateway(): PaymentGateway {
 export function makeNotificationService(): NotificationService {
   return {
     sendOrderConfirming: vi.fn().mockResolvedValue(undefined),
-    sendOrderOperatorNotification: vi.fn().mockResolvedValue(undefined),
     sendLimitExceeded: vi.fn().mockResolvedValue(undefined),
     sendShippingNotification: vi.fn().mockResolvedValue(undefined),
     sendDeliveryNotification: vi.fn().mockResolvedValue(undefined),
     sendCheckoutPaid: vi.fn().mockResolvedValue(undefined),
-    sendInvoicePaid: vi.fn().mockResolvedValue(undefined),
   };
+}
+
+export function makeOperatorNotifier(): OperatorNotifier {
+  return { notify: vi.fn().mockResolvedValue(undefined) };
 }
 
 export function makeSubscriptionGateway(): SubscriptionGateway {

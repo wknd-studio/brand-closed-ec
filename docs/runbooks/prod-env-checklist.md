@@ -22,7 +22,7 @@ SUPABASE_ACCESS_TOKEN=<Supabase の個人用トークン> task env:check -- prod
 | 区分     | 確かめること                                                                                                                                                                                                                                                                                                |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Doppler  | `prod`・`prod_deploy` に、`stg`・`stg_deploy` にある名前が全部ある。stg に無い名前が無い。stg だけの名前（`RESEND_TEST_TO`・`E2E_*`・`SEED_USER_PASSWORD`・`SANITY_AUTH_TOKEN`）が無い。値が空のものが無い                                                                                                  |
-| Doppler  | 本番の値が stg と同じでない（Stripe・Clerk・Supabase・Sentry の `SENTRY_AUTH_TOKEN`・Resend・Sanity・Cloudflare のキーと `NEXT_PUBLIC_APP_URL`）。`NEXT_PUBLIC_SENTRY_DSN` は stg と同じ Sentry のプロジェクトを使うため比べない（requirements.md の 13-2）                                                 |
+| Doppler  | 本番の値が stg と同じでない（Stripe・Clerk・Supabase・Sentry の `SENTRY_AUTH_TOKEN`・Resend・Sanity・Cloudflare のキーと `NEXT_PUBLIC_APP_URL`・運営者向けの Slack の `SLACK_WEBHOOK_URL_*`）。`NEXT_PUBLIC_SENTRY_DSN` は stg と同じ Sentry のプロジェクトを使うため比べない（requirements.md の 13-2）    |
 | Doppler  | Stripe・Clerk のキーが live（`sk_live_`・`rk_live_`・`pk_live_`）。`NEXT_PUBLIC_SENTRY_ENVIRONMENT` が `prod`、`NEXT_PUBLIC_SANITY_DATASET` が `production`                                                                                                                                                 |
 | Stripe   | `<NEXT_PUBLIC_APP_URL>/api/webhooks/stripe` に向いた有効な Webhook の送り先があり、アプリが処理するイベント（`src/app/api/webhooks/stripe/route.ts` の `event.type`）を全部受け取る。`STRIPE_PRICE_ID_*` の Price が存在し、有効で、本番モードで、月額は `recurring`・入会金（`_INITIAL_FEE`）は `one_time` |
 | Clerk    | `CLERK_SECRET_KEY` のインスタンスが Production。publishable key の Frontend API がそのインスタンスのドメインと一致し、`NEXT_PUBLIC_APP_URL` がそのドメインの下にある                                                                                                                                        |
@@ -44,6 +44,7 @@ API で確かめられない、またはダッシュボードでしか見えな�
 - [ ] **Stripe のインボイスの設定**: 本番モードの Settings → Billing → Invoices の、事業者の情報・適格請求書発行事業者の登録番号・請求書の表記がそろっている（#243）
 - [ ] **Stripe のアカウント**: 本番モードが有効化済み（本人確認・入金先の口座）で、明細書表記がサービス名
 - [ ] **Resend の送信元ドメイン**: `RESEND_FROM_EMAIL` のドメインが Resend の Domains で Verified。本番の `RESEND_API_KEY` がそのドメインだけに送れる
+- [ ] **運営者向けの Slack**: `#運営-注文`・`#運営-請求`・`#運営-発注発送`・`#運営-返品`・`#運営-会員`・`#運営-全体` の Incoming Webhook の URL が、prod の `SLACK_WEBHOOK_URL_ORDERS`・`_BILLING`・`_PROCUREMENT`・`_RETURNS`・`_MEMBERS`・`_GENERAL` に入っている。担当者がそれぞれのチャンネルに招待され、スマートフォンのアプリで通知を受け取れる（#830）
 - [ ] **Sentry の通知先**: `environment:prod` の error が、運営者の通知先（メール等）に届くアラートのルールがある
 - [ ] **Cloudflare の独自ドメイン**: Worker `brand-closed-ec-prod` に本番のドメインが Custom Domain として付き、`NEXT_PUBLIC_APP_URL` で開ける。証明書が有効
 - [ ] **Supabase のバックアップ**: 本番のプロジェクトのプランで日次バックアップ（必要なら PITR）が有効。復元の手順を確かめてある

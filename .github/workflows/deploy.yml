@@ -184,7 +184,8 @@ jobs:
         # 上書きする（本物のstg DBには一切アクセスしない）。
         # sanity-products.test.tsは共有のSanityデータセットに書き込むため、
         # RUN_SANITY_INTEGRATIONを渡さずスキップさせる。
-        # ciにはRESEND_API_KEYを入れていないため、メールは送らない（DISABLE_EMAIL_SENDING）
+        # ciにはRESEND_API_KEYを入れていないため、メールは送らない（DISABLE_EMAIL_SENDING）。
+        # 運営者向けのSlackにも送らない（DISABLE_SLACK_NOTIFICATION。#830）
         run: |
           eval "$(supabase status -o env | sed 's/^/export /')"
           doppler run -- env \
@@ -192,6 +193,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_ANON_KEY="$PUBLISHABLE_KEY" \
             SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" \
             DISABLE_EMAIL_SENDING="true" \
+            DISABLE_SLACK_NOTIFICATION="true" \
             pnpm test:integration
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PR }}
@@ -320,6 +322,7 @@ jobs:
             SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" \
             NEXT_PUBLIC_APP_URL="http://localhost:3000" \
             DISABLE_EMAIL_SENDING="true" \
+            DISABLE_SLACK_NOTIFICATION="true" \
             pnpm test:e2e
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PR }}
@@ -611,12 +614,14 @@ jobs:
           '
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Disable Resend email sending on stg for the duration of E2E
+      - name: Disable Resend email sending and Slack notification on stg for the duration of E2E
         # E2Eは実際にデプロイ済みのstg Workerに対してテストするため、Doppler側の
-        # 値を変えるとstg環境全体（手動QA含む）でメール送信が止まってしまう。
+        # 値を変えるとstg環境全体（手動QA含む）でメール・運営者向けのSlack（#830）の送信が止まってしまう。
         # E2E実行中だけ一時的にシークレットを上書きし、直後のステップで必ず
         # 元に戻す（下のRe-enableステップはif: always()で失敗時も実行される）
-        run: doppler run -- sh -c 'echo "true" | pnpm exec wrangler secret put DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
+        run: |
+          doppler run -- sh -c 'echo "true" | pnpm exec wrangler secret put DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
+          doppler run -- sh -c 'echo "true" | pnpm exec wrangler secret put DISABLE_SLACK_NOTIFICATION --config wrangler.stg.jsonc'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: 環境の確認（スモークテスト）
@@ -633,9 +638,14 @@ jobs:
         run: doppler run -- sh -c 'BASE_URL=$NEXT_PUBLIC_APP_URL pnpm test:e2e'
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Re-enable Resend email sending on stg
+      - name: Re-enable Resend email sending and Slack notification on stg
+        # 片方の削除が失敗しても、もう片方は消す（残った値は docs/runbooks/production-rollback.md の 2-1 で消す）
         if: always()
-        run: doppler run -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc'
+        run: |
+          status=0
+          doppler run -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_EMAIL_SENDING --config wrangler.stg.jsonc' || status=1
+          doppler run -- sh -c 'yes | pnpm exec wrangler secret delete DISABLE_SLACK_NOTIFICATION --config wrangler.stg.jsonc' || status=1
+          exit $status
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Install age (暗号化用・E2Eの失敗時のみ)

@@ -8,6 +8,7 @@ import { SupabaseAdminUserRepository } from "@/infrastructure/supabase/supabase-
 import { SanityProductRepository } from "@/infrastructure/sanity/sanity-product-repository";
 import { StripePaymentGateway } from "@/infrastructure/stripe/stripe-payment-gateway";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
+import { SlackOperatorNotifier } from "@/infrastructure/slack/slack-operator-notifier";
 import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
 import {
   placeOrder as placeOrderUseCase,
@@ -30,6 +31,7 @@ export function placeOrder(input: PlaceOrderInput) {
     productRepo: new SanityProductRepository(),
     paymentGateway: new StripePaymentGateway(),
     notificationService: new ResendNotificationService(),
+    operatorNotifier: new SlackOperatorNotifier(),
     errorReporter: new SentryErrorReporter(),
   });
 }

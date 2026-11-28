@@ -20,6 +20,7 @@ import {
   parseRemoteMigrations,
   parseTarget,
   requireValues,
+  MUST_DIFFER_NAMES,
   STG_EMPTY_OK_NAMES,
   type CheckResult,
 } from "../../scripts/check-env";
@@ -611,11 +612,25 @@ describe("checkEmptyValues", () => {
     expect(checkEmptyValues("prod", { A: "x" })[0].status).toBe("ok");
   });
 
-  it("空でよいと許可した名前は除く（stg の RESEND_ADMIN_EMAIL は RESEND_TEST_TO があるので使わない）", () => {
+  it("空でよいと許可した名前は除く", () => {
     expect(
       checkEmptyValues("stg", { A: "x", B: "" }, { B: "使わない" })[0].status
     ).toBe("ok");
-    expect(Object.keys(STG_EMPTY_OK_NAMES)).toEqual(["RESEND_ADMIN_EMAIL"]);
+    // 運営者宛てのメール（RESEND_ADMIN_EMAIL）は Slack に移したため、stg でも空でよい名前は無い（#830）
+    expect(STG_EMPTY_OK_NAMES).toEqual({});
+  });
+
+  it("運営者向けの Slack の送り先は、本番で stg と同じ値であってはいけない（stg は全て #運営-通知-stg に送るため。#830）", () => {
+    expect(MUST_DIFFER_NAMES).toEqual(
+      expect.arrayContaining([
+        "SLACK_WEBHOOK_URL_ORDERS",
+        "SLACK_WEBHOOK_URL_BILLING",
+        "SLACK_WEBHOOK_URL_PROCUREMENT",
+        "SLACK_WEBHOOK_URL_RETURNS",
+        "SLACK_WEBHOOK_URL_MEMBERS",
+        "SLACK_WEBHOOK_URL_GENERAL",
+      ])
+    );
   });
 });
 

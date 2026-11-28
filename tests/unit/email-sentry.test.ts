@@ -14,20 +14,11 @@ vi.mock("@/emails/order-confirming", () => ({
 vi.mock("@/emails/checkout-paid-member", () => ({
   CheckoutPaidMemberEmail: vi.fn(),
 }));
-vi.mock("@/emails/checkout-paid-operator", () => ({
-  CheckoutPaidOperatorEmail: vi.fn(),
-}));
 vi.mock("@/emails/delivery-notification", () => ({
   DeliveryNotificationEmail: vi.fn(),
 }));
-vi.mock("@/emails/invoice-paid-operator", () => ({
-  InvoicePaidOperatorEmail: vi.fn(),
-}));
 vi.mock("@/emails/shipping-notification", () => ({
   ShippingNotificationEmail: vi.fn(),
-}));
-vi.mock("@/emails/order-operator-notification", () => ({
-  OrderOperatorNotificationEmail: vi.fn(),
 }));
 vi.mock("@/emails/limit-exceeded-member", () => ({
   LimitExceededMemberEmail: vi.fn(),
@@ -40,11 +31,9 @@ vi.mock("@/infrastructure/resend/client", () => ({
 
 import * as Sentry from "@sentry/nextjs";
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
-import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
+import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
-import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
-import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 
 const resendError = { name: "application_error", message: "送信失敗" };
@@ -72,8 +61,8 @@ describe("メール送信失敗時のSentry送信", () => {
     );
   });
 
-  it("sendCheckoutPaidEmails失敗時に会員・運営者それぞれでSentry.captureExceptionを呼ぶ", async () => {
-    await sendCheckoutPaidEmails({
+  it("sendCheckoutPaidEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
+    await sendCheckoutPaidEmail({
       orderId: "order-1",
       orderedAt: new Date(),
       memberEmail: "member@example.com",
@@ -87,11 +76,22 @@ describe("メール送信失敗時のSentry送信", () => {
         tags: expect.objectContaining({ email: "checkout-paid-member" }),
       })
     );
-    expect(Sentry.captureException).toHaveBeenCalledWith(
-      resendError,
-      expect.objectContaining({
-        tags: expect.objectContaining({ email: "checkout-paid-operator" }),
-      })
+  });
+
+  it("sendCheckoutPaidEmailは会員宛ての1通だけを送る（運営者への通知はSlack。#830）", async () => {
+    sendMock.mockResolvedValue({ data: null, error: null });
+
+    await sendCheckoutPaidEmail({
+      orderId: "order-1",
+      orderedAt: new Date(),
+      memberEmail: "member@example.com",
+      lineItems: [],
+      fixedTotal: 0,
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0][0].subject).toContain(
+      "お支払いが完了しました"
     );
   });
 
@@ -109,20 +109,6 @@ describe("メール送信失敗時のSentry送信", () => {
     );
   });
 
-  it("sendInvoicePaidEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
-    await sendInvoicePaidEmail({
-      orderId: "order-1",
-      memberEmail: "member@example.com",
-    });
-
-    expect(Sentry.captureException).toHaveBeenCalledWith(
-      resendError,
-      expect.objectContaining({
-        tags: expect.objectContaining({ email: "invoice-paid" }),
-      })
-    );
-  });
-
   it("sendShippingNotificationEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
     await sendShippingNotificationEmail({
       orderId: "order-1",
@@ -133,21 +119,6 @@ describe("メール送信失敗時のSentry送信", () => {
       resendError,
       expect.objectContaining({
         tags: expect.objectContaining({ email: "shipping-notification" }),
-      })
-    );
-  });
-
-  it("sendOrderOperatorNotification失敗時にSentry.captureExceptionを呼ぶ", async () => {
-    await sendOrderOperatorNotification({
-      orderId: "order-1",
-      customerEmail: "member@example.com",
-      lineItems: [],
-    });
-
-    expect(Sentry.captureException).toHaveBeenCalledWith(
-      resendError,
-      expect.objectContaining({
-        tags: expect.objectContaining({ email: "order-operator-notification" }),
       })
     );
   });

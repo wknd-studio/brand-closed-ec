@@ -18,7 +18,9 @@ import type {
   CheckoutLineItem,
 } from "@/repositories/payment-gateway";
 import type { NotificationService } from "@/repositories/notification-service";
+import type { OperatorNotifier } from "@/repositories/operator-notifier";
 import type { ErrorReporter } from "@/repositories/error-reporter";
+import { notifyOperator } from "@/use-cases/notify-operator";
 
 export type PlaceOrderInput = {
   clerkUserId: string;
@@ -41,6 +43,7 @@ export type PlaceOrderDeps = {
   productRepo: ProductRepository;
   paymentGateway: PaymentGateway;
   notificationService: NotificationService;
+  operatorNotifier: OperatorNotifier;
   errorReporter: ErrorReporter;
 };
 
@@ -154,10 +157,15 @@ export async function placeOrder(
         user,
         afterOrderProducts()
       ),
-      notificationService.sendOrderOperatorNotification(
-        order,
-        user.email,
-        afterOrderProducts()
+      notifyOperator(
+        deps,
+        {
+          type: "orderPlaced",
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          amount: order.getFixedTotal(),
+        },
+        "placeOrder"
       ),
     ]);
   };

@@ -66,12 +66,10 @@ function makeDeps(
   };
   const notificationService: NotificationService = {
     sendOrderConfirming: vi.fn().mockResolvedValue(undefined),
-    sendOrderOperatorNotification: vi.fn().mockResolvedValue(undefined),
     sendLimitExceeded: vi.fn(),
     sendShippingNotification: vi.fn(),
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
-    sendInvoicePaid: vi.fn(),
   };
   return { productRepo, paymentGateway, notificationService };
 }
@@ -137,6 +135,7 @@ describe("placeOrder（実DB・7ランクのスナップショット）", () => 
         productRepo,
         paymentGateway,
         notificationService,
+        operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
         subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
@@ -280,6 +279,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         productRepo,
         paymentGateway,
         notificationService,
+        operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
         subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
@@ -366,6 +366,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         productRepo,
         paymentGateway,
         notificationService,
+        operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
         subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
@@ -414,6 +415,7 @@ describe("placeOrder（実DB・支払いタイミング混在の決済単位）"
         productRepo,
         paymentGateway,
         notificationService,
+        operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
         subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
@@ -527,6 +529,7 @@ describe("placeOrder（実DB・住所の持ち主。#619）", () => {
         productRepo,
         paymentGateway,
         notificationService,
+        operatorNotifier: { notify: vi.fn().mockResolvedValue(undefined) },
         errorReporter: { captureException: vi.fn(), captureMessage: vi.fn() },
         memberRankRepo: new SupabaseMemberRankRepository(supabase),
         subscriptionRepo: new SupabaseSubscriptionRepository(supabase),
