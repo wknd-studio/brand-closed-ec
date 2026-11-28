@@ -3,6 +3,7 @@ import type { Order } from "@/domain/entities/order";
 import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
+import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
 import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
@@ -20,6 +21,7 @@ export class ResendNotificationService implements NotificationService {
     await sendOrderConfirmingEmail({
       to: user.email,
       orderId: order.id,
+      orderedAt: order.createdAt,
       lineItems: items.map((i) => ({
         productName: i.productName,
         quantity:
@@ -28,6 +30,10 @@ export class ResendNotificationService implements NotificationService {
         unitPrice: i.isNegotiable ? null : i.unitPrice.amount,
         isNegotiable: i.isNegotiable,
       })),
+      // このメールは後払いの明細だけを載せる（place-order の afterOrderProducts）
+      fixedTotal: sumFixedTotal(
+        order.items.filter((item) => item.isAfterOrder())
+      ).amount,
     });
   }
 
@@ -75,18 +81,19 @@ export class ResendNotificationService implements NotificationService {
   ): Promise<void> {
     // この決済単位に紐づく明細のみを対象にする。まだ未払いの他の明細（他の決済単位・
     // 未請求のafter_order）を「支払い完了」として誤案内しないため（issue #269）
-    const lineItems = order.items
-      .filter((item) => item.settlementId === settlement.id)
-      .map((item) => ({
-        productName: item.productNameSnapshot,
-        quantity: item.quantity,
-        unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
-        isNegotiable: item.isNegotiable,
-      }));
+    const paidItems = order.itemsIn(settlement);
+    const lineItems = paidItems.map((item) => ({
+      productName: item.productNameSnapshot,
+      quantity: item.quantity,
+      unitPrice: item.isNegotiable ? null : item.unitPriceSnapshot.amount,
+      isNegotiable: item.isNegotiable,
+    }));
     await sendCheckoutPaidEmails({
       orderId: order.id,
+      orderedAt: order.createdAt,
       memberEmail: user.email,
       lineItems,
+      fixedTotal: sumFixedTotal(paidItems).amount,
     });
   }
 

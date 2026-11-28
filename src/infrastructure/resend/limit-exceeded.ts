@@ -12,12 +12,13 @@ export async function sendLimitExceededEmail({
   to,
   orderId,
 }: Params): Promise<void> {
-  const html = await render(LimitExceededMemberEmail({ orderId }));
+  const myPageUrl = `${process.env.NEXT_PUBLIC_APP_URL!}/orders/${orderId}`;
+  const html = await render(LimitExceededMemberEmail({ orderId, myPageUrl }));
 
   const { error } = await getResend().emails.send({
     from: process.env.RESEND_FROM_EMAIL!,
     to: process.env.RESEND_TEST_TO ?? to,
-    subject: `【月次仕入れ上限超過】注文番号: ${orderId}`,
+    subject: `【EQ×Mart】ご注文を保留しています（注文番号 ${orderId}）`,
     html,
   });
 
