@@ -77,6 +77,7 @@ describe("対象の層（scripts/ci/layer-coverage.config.ts）", () => {
     ["src/infrastructure/clerk/clerk-account-gateway.ts", "unit"],
     ["src/infrastructure/resend/resend-notification-service.ts", "unit"],
     ["src/infrastructure/sanity/sanity-product-repository.ts", "unit"],
+    ["src/infrastructure/slack/slack-operator-notifier.ts", "unit"],
     ["src/infrastructure/supabase/supabase-order-repository.ts", "integration"],
     // Query Service の Supabase 実装（#450）
     [

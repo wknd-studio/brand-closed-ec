@@ -63,12 +63,10 @@ function makeReturnRepo(
 function makeNotificationService(): NotificationService {
   return {
     sendOrderConfirming: vi.fn(),
-    sendOrderOperatorNotification: vi.fn(),
     sendLimitExceeded: vi.fn(),
     sendShippingNotification: vi.fn(),
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
-    sendInvoicePaid: vi.fn(),
   };
 }
 

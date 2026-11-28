@@ -5,9 +5,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/infrastructure/resend/order-confirming", () => ({
   sendOrderConfirmingEmail: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@/infrastructure/resend/order-operator-notification", () => ({
-  sendOrderOperatorNotification: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock("@/infrastructure/resend/limit-exceeded", () => ({
   sendLimitExceededEmail: vi.fn().mockResolvedValue(undefined),
 }));
@@ -18,19 +15,14 @@ vi.mock("@/infrastructure/resend/delivery-notification", () => ({
   sendDeliveryNotificationEmail: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/infrastructure/resend/checkout-paid", () => ({
-  sendCheckoutPaidEmails: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock("@/infrastructure/resend/invoice-paid", () => ({
-  sendInvoicePaidEmail: vi.fn().mockResolvedValue(undefined),
+  sendCheckoutPaidEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
-import { sendOrderOperatorNotification } from "@/infrastructure/resend/order-operator-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
-import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
-import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
+import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { reconstituteOrder } from "@/domain/entities/order";
 import { reconstituteOrderItem } from "@/domain/entities/order-item";
@@ -212,22 +204,6 @@ describe("ResendNotificationService", () => {
     });
   });
 
-  describe("sendOrderOperatorNotification", () => {
-    it("注文者のメールアドレスと、注文の数量と商品の単価（価格応談はnull）で作った明細を渡す", async () => {
-      await service.sendOrderOperatorNotification(
-        makeOrder(),
-        "customer@example.com",
-        items
-      );
-
-      expect(sendOrderOperatorNotification).toHaveBeenCalledWith({
-        orderId: "order-1",
-        customerEmail: "customer@example.com",
-        lineItems: expectedLineItems,
-      });
-    });
-  });
-
   describe("sendLimitExceeded", () => {
     it("宛先と注文IDをそのまま渡す", async () => {
       await service.sendLimitExceeded("test@example.com", "order-1");
@@ -265,7 +241,7 @@ describe("ResendNotificationService", () => {
     it("支払い済みの決済単位に紐づく明細のみをメールに含める（未払い明細は含めない）", async () => {
       await service.sendCheckoutPaid(makeOrder(), settlement, user);
 
-      expect(sendCheckoutPaidEmails).toHaveBeenCalledWith({
+      expect(sendCheckoutPaidEmail).toHaveBeenCalledWith({
         orderId: "order-1",
         memberEmail: "test@example.com",
         lineItems: [
@@ -282,17 +258,6 @@ describe("ResendNotificationService", () => {
             isNegotiable: true,
           },
         ],
-      });
-    });
-  });
-
-  describe("sendInvoicePaid", () => {
-    it("注文IDと会員のメールアドレスを渡す", async () => {
-      await service.sendInvoicePaid(makeOrder(), user);
-
-      expect(sendInvoicePaidEmail).toHaveBeenCalledWith({
-        orderId: "order-1",
-        memberEmail: "test@example.com",
       });
     });
   });

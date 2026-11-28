@@ -17,6 +17,7 @@ import {
   makeProductRepo,
   makePaymentGateway,
   makeNotificationService,
+  makeOperatorNotifier,
   fixedProduct,
   negotiableProduct,
   afterOrderFixedProduct,
@@ -46,6 +47,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -96,6 +98,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct, negotiableProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -123,9 +126,7 @@ describe("placeOrder", () => {
     expect(deps.orderRepo.save).not.toHaveBeenCalled();
     expect(deps.paymentGateway.createCheckoutSession).not.toHaveBeenCalled();
     expect(deps.notificationService.sendOrderConfirming).not.toHaveBeenCalled();
-    expect(
-      deps.notificationService.sendOrderOperatorNotification
-    ).not.toHaveBeenCalled();
+    expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
   });
 
   it("after_orderの固定価格商品のみの場合も決済単位を作らずinvoice-completeへ進む", async () => {
@@ -136,6 +137,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([afterOrderFixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -179,6 +181,7 @@ describe("placeOrder", () => {
       ]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -203,6 +206,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo,
       subscriptionRepo: makeSubscriptionRepo(),
@@ -242,6 +246,7 @@ describe("placeOrder", () => {
       ]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(MonthlyLimit.unlimited()),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -268,6 +273,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -299,6 +305,7 @@ describe("placeOrder", () => {
       ]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -336,6 +343,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -367,6 +375,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([{ ...fixedProduct, minRank: "premium" }]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -395,6 +404,7 @@ describe("placeOrder", () => {
         ]),
         paymentGateway: makePaymentGateway(),
         notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
         memberRankRepo: makeMemberRankRepo(),
         subscriptionRepo: makeSubscriptionRepo(),
@@ -427,9 +437,7 @@ describe("placeOrder", () => {
       expect(
         deps.notificationService.sendOrderConfirming
       ).not.toHaveBeenCalled();
-      expect(
-        deps.notificationService.sendOrderOperatorNotification
-      ).not.toHaveBeenCalled();
+      expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
     }
   );
 
@@ -442,6 +450,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -490,11 +499,63 @@ describe("placeOrder", () => {
       { productName: "固定商品", unitPrice: 100_000, quantity: 1 },
     ]);
 
-    // after_orderが含まれるので運営者・会員へ確認通知を送る
+    // after_orderが含まれるので運営者・会員へ確認通知を送る。運営者には種類・注文番号・
+    // 注文の金額だけをポートで1回送り、会員の情報は渡さない
     expect(deps.notificationService.sendOrderConfirming).toHaveBeenCalled();
-    expect(
-      deps.notificationService.sendOrderOperatorNotification
-    ).toHaveBeenCalled();
+    expect(deps.operatorNotifier.notify).toHaveBeenCalledTimes(1);
+    expect(deps.operatorNotifier.notify).toHaveBeenCalledWith({
+      type: "orderPlaced",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount: Money.of(200_000),
+    });
+  });
+
+  it("運営者への通知に失敗しても注文は成功させ、ErrorReporterへ送る", async () => {
+    const operatorNotifier = makeOperatorNotifier();
+    const slackError = new Error("Slack への送信に失敗しました");
+    vi.mocked(operatorNotifier.notify).mockRejectedValue(slackError);
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo: makeOrderRepo(),
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([afterOrderFixedProduct]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      operatorNotifier,
+      errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
+    };
+
+    const result = await placeOrder(
+      {
+        ...baseInput,
+        cartItems: [
+          {
+            sanityProductId: "prod-3",
+            quantity: 1,
+            productName: "後払い固定商品",
+          },
+        ],
+      },
+      deps
+    );
+
+    const saved = vi.mocked(deps.orderRepo.saveNewOrderWithLimitCheck).mock
+      .calls[0][0];
+    expect(result.redirectUrl).toBe(
+      `/order/invoice-complete?order_id=${saved.id}`
+    );
+    expect(deps.notificationService.sendOrderConfirming).toHaveBeenCalled();
+    expect(deps.orderRepo.delete).not.toHaveBeenCalled();
+    expect(deps.errorReporter.captureException).toHaveBeenCalledWith(
+      slackError,
+      {
+        tags: { useCase: "placeOrder", step: "notifyOperator" },
+        extra: { orderId: saved.id },
+      }
+    );
   });
 
   it("at_orderのみの注文ではafter_order向けの確認通知は送らない", async () => {
@@ -505,6 +566,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -513,6 +575,7 @@ describe("placeOrder", () => {
     await placeOrder(baseInput, deps);
 
     expect(deps.notificationService.sendOrderConfirming).not.toHaveBeenCalled();
+    expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
   });
 
   it("注文作成（月次上限チェック込みRPC）が失敗した場合、エラーを伝播する（DB関数のトランザクションにより何も保存されないため補償削除は不要）", async () => {
@@ -528,6 +591,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -554,6 +618,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway,
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -583,6 +648,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway,
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter,
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -606,6 +672,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]), // paymentTiming: at_order
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -637,6 +704,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -694,6 +762,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -718,6 +787,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -749,6 +819,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -792,6 +863,7 @@ describe("placeOrder", () => {
       productRepo: makeProductRepo([fixedProduct]),
       paymentGateway: makePaymentGateway(),
       notificationService: makeNotificationService(),
+      operatorNotifier: makeOperatorNotifier(),
       errorReporter: makeErrorReporter(),
       memberRankRepo: makeMemberRankRepo(),
       subscriptionRepo: makeSubscriptionRepo(),
@@ -817,6 +889,7 @@ describe("placeOrder", () => {
         productRepo: makeProductRepo([fixedProduct, afterOrderFixedProduct]),
         paymentGateway: makePaymentGateway(),
         notificationService: makeNotificationService(),
+        operatorNotifier: makeOperatorNotifier(),
         errorReporter: makeErrorReporter(),
         memberRankRepo: makeMemberRankRepo(),
         subscriptionRepo: makeSubscriptionRepo(
@@ -864,9 +937,7 @@ describe("placeOrder", () => {
         expect(
           deps.notificationService.sendOrderConfirming
         ).not.toHaveBeenCalled();
-        expect(
-          deps.notificationService.sendOrderOperatorNotification
-        ).not.toHaveBeenCalled();
+        expect(deps.operatorNotifier.notify).not.toHaveBeenCalled();
       }
     );
 
