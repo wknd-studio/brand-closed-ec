@@ -117,12 +117,12 @@ describe("SignUpPresenter", () => {
   it("Clerkの登録フォームに共通の見た目を当て、登録フォームの見出しとサインインへのリンクを隠す", () => {
     render();
 
-    // 共通の指定は残したうえで、効かないものを!付きで足す（#757）
+    // 共通の指定はそのまま使い、ページ側で打ち消さない（#757）
     for (const [element, className] of Object.entries(
       clerkAppearance.elements
     )) {
       if (element === "footerAction") continue;
-      expect(signUpAppearance?.elements[element]).toContain(className);
+      expect(signUpAppearance?.elements[element]).toBe(className);
     }
     expect(signUpAppearance?.elements).toMatchObject({
       // 隠すのは登録フォーム（signUp.continue）の見出しだけ。取り消し済みの招待で出る
