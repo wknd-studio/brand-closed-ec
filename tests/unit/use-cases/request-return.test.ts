@@ -57,6 +57,9 @@ function makeReturnRepo(
   return {
     findByOrderId: vi.fn().mockResolvedValue(existing),
     saveAll: vi.fn().mockResolvedValue(undefined),
+    findById: vi.fn(),
+    saveReview: vi.fn(),
+    updateAdminNote: vi.fn(),
   };
 }
 
@@ -220,6 +223,7 @@ describe("requestReturn", () => {
         requestedByUserId: USER_ID,
         reason: "不良品",
         items: [{ orderItemId: ITEM_ID, quantity: 2 }],
+        approvedAt: null,
       }),
     ]);
 

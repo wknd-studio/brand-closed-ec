@@ -310,6 +310,7 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
         requestedByUserId: USER_A_ID,
         reason: "不良品: 割れていた",
         items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 2 }],
+        approvedAt: null,
       }),
       reconstituteReturnRequest({
         id: afterOrderReturnId,
@@ -318,6 +319,7 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
         requestedByUserId: USER_A_ID,
         reason: "不良品: 割れていた",
         items: [{ orderItemId: ITEM_A_AFTER_ORDER_ID, quantity: 1 }],
+        approvedAt: null,
       }),
     ]);
 
@@ -365,6 +367,7 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
           requestedByUserId: USER_A_ID,
           reason: "不良品",
           items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 1 }],
+          approvedAt: null,
         }),
         // 他の会員の注文への申請は RLS で拒否される
         reconstituteReturnRequest({
@@ -374,6 +377,7 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
           requestedByUserId: USER_A_ID,
           reason: "不良品",
           items: [{ orderItemId: ITEM_B_ID, quantity: 1 }],
+          approvedAt: null,
         }),
       ])
     ).rejects.toThrow();
@@ -402,6 +406,7 @@ describe("SupabaseReturnRepository（会員Aのクライアント）", () => {
           requestedByUserId: USER_A_ID,
           reason: "不良品",
           items: [{ orderItemId: ITEM_B_ID, quantity: 1 }],
+          approvedAt: null,
         }),
       ])
     ).rejects.toThrow();
@@ -570,6 +575,7 @@ describe("返品の表の権限（ロールごと）", () => {
           requestedByUserId: USER_A_ID,
           reason: "不良品",
           items: [{ orderItemId: ITEM_A_PAID_ID, quantity: 1 }],
+          approvedAt: null,
         }),
       ])
     ).rejects.toThrow();

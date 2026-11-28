@@ -7,6 +7,7 @@ import {
 import { ReturnReason } from "@/domain/value-objects/return-reason";
 import { returnableQuantities } from "@/domain/services/returnable-quantity";
 import { InvalidReturnRequestError } from "@/domain/errors/invalid-return-request-error";
+import { InvalidStatusTransitionError } from "@/domain/errors/invalid-status-transition-error";
 import { ReturnOrderNotFoundError } from "@/domain/errors/return-order-not-found-error";
 import { reconstituteOrderItem } from "@/domain/entities/order-item";
 import { Money } from "@/domain/value-objects/money";
@@ -82,6 +83,7 @@ function existingReturn(
     requestedByUserId: USER_ID,
     reason: "不良品",
     items,
+    approvedAt: null,
   });
 }
 
@@ -425,5 +427,39 @@ describe("ReturnRequest.isActive", () => {
     ["cancelled", false],
   ])("%s の申請は返品数量の合計に含める: %s", (status, active) => {
     expect(existingReturn(status, []).isActive()).toBe(active);
+  });
+});
+
+describe("ReturnRequest.approve / reject（運営者の確認）", () => {
+  const NOW = new Date("2026-11-28T10:00:00Z");
+  const items = [{ orderItemId: AT_ORDER_ITEM, quantity: 1 }];
+
+  it("requested の申請を承認すると approved になり、承認日時を持つ。ほかの項目は変わらない", () => {
+    const approved = existingReturn("requested", items).approve(NOW);
+    expect(approved.status).toBe("approved");
+    expect(approved.approvedAt).toEqual(NOW);
+    expect(approved.id).toBe("return-requested");
+    expect(approved.items).toEqual(items);
+  });
+
+  it("requested の申請を却下すると rejected になり、承認日時は持たない", () => {
+    const rejected = existingReturn("requested", items).reject();
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.approvedAt).toBeNull();
+    expect(rejected.items).toEqual(items);
+  });
+
+  it.each<ReturnStatus>([
+    "approved",
+    "rejected",
+    "received",
+    "refunded",
+    "cancelled",
+  ])("%s の申請は承認も却下もできない", (status) => {
+    const returnRequest = existingReturn(status, items);
+    expect(() => returnRequest.approve(NOW)).toThrow(
+      InvalidStatusTransitionError
+    );
+    expect(() => returnRequest.reject()).toThrow(InvalidStatusTransitionError);
   });
 });
