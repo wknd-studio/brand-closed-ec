@@ -1,5 +1,6 @@
 import type { Money } from "./money";
 import type { MemberRankValue } from "./member-rank";
+import type { FulfillmentLocationCode } from "./fulfillment-location";
 
 export type ProductAvailability = "available" | "out_of_stock" | "discontinued";
 
@@ -13,4 +14,5 @@ export interface ProductSnapshot {
   minRank: MemberRankValue;
   availability: ProductAvailability;
   paymentTiming: "at_order" | "after_order";
+  fulfillmentLocationCode: FulfillmentLocationCode;
 }

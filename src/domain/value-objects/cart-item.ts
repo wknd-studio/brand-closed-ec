@@ -1,6 +1,7 @@
 import { Money } from "./money";
 import { MemberRank } from "./member-rank";
 import type { ProductSnapshot } from "./product-snapshot";
+import type { FulfillmentLocationCode } from "./fulfillment-location";
 import { ProductNotAccessibleError } from "@/domain/errors/product-not-accessible-error";
 import { ProductUnavailableError } from "@/domain/errors/product-unavailable-error";
 
@@ -11,6 +12,7 @@ interface CartItemProps {
   unitPrice: Money;
   isNegotiable: boolean;
   paymentTiming: "at_order" | "after_order";
+  fulfillmentLocationCode: FulfillmentLocationCode;
 }
 
 export class CartItem {
@@ -20,6 +22,7 @@ export class CartItem {
   readonly unitPrice: Money;
   readonly isNegotiable: boolean;
   readonly paymentTiming: "at_order" | "after_order";
+  readonly fulfillmentLocationCode: FulfillmentLocationCode;
 
   private constructor(props: CartItemProps) {
     this.sanityProductId = props.sanityProductId;
@@ -28,6 +31,7 @@ export class CartItem {
     this.unitPrice = props.unitPrice;
     this.isNegotiable = props.isNegotiable;
     this.paymentTiming = props.paymentTiming;
+    this.fulfillmentLocationCode = props.fulfillmentLocationCode;
   }
 
   static of(props: CartItemProps): CartItem {
@@ -40,7 +44,7 @@ export class CartItem {
   /**
    * サーバー側の商品情報とカートの数量から明細を作る。
    * カート情報は会員のブラウザ側で保持・改竄されうるため、カートからは商品IDと数量だけを使い、
-   * 商品名・単価・支払いタイミングはサーバー側の商品情報の値だけを根拠にする（研究文書 決定9）。
+   * 商品名・単価・支払いタイミング・発送拠点はサーバー側の商品情報の値だけを根拠にする（研究文書 決定9）。
    * 商品情報に無い商品・会員のランクでアクセスできない商品・在庫切れ／取り扱い終了の商品はエラーにする
    */
   static fromProducts(
@@ -73,6 +77,7 @@ export class CartItem {
         unitPrice: product.isNegotiable ? Money.zero() : product.unitPrice,
         isNegotiable: product.isNegotiable,
         paymentTiming: product.paymentTiming,
+        fulfillmentLocationCode: product.fulfillmentLocationCode,
       });
     });
   }
@@ -93,6 +98,7 @@ export class CartItem {
       unitPrice: this.unitPrice,
       isNegotiable: this.isNegotiable,
       paymentTiming: this.paymentTiming,
+      fulfillmentLocationCode: this.fulfillmentLocationCode,
     };
   }
 }

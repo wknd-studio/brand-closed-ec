@@ -93,7 +93,7 @@ BEGIN
   INSERT INTO public.order_items (
     id, order_id, sanity_product_id, product_name_snapshot,
     unit_price_snapshot, quantity, is_negotiable, negotiated_unit_price,
-    payment_timing, settlement_id
+    payment_timing, fulfillment_location_code, settlement_id
   )
   SELECT
     (item->>'id')::uuid,
@@ -105,8 +105,10 @@ BEGIN
     (item->>'is_negotiable')::boolean,
     (item->>'negotiated_unit_price')::bigint,
     item->>'payment_timing',
+    item->>'fulfillment_location_code',
     (item->>'settlement_id')::uuid
   FROM jsonb_array_elements(p_items) AS item
+  -- 発送拠点は注文確定時点のスナップショットのため、保存し直しでは書き換えない（#357）
   ON CONFLICT (id) DO UPDATE SET
     order_id = EXCLUDED.order_id,
     sanity_product_id = EXCLUDED.sanity_product_id,
