@@ -4,6 +4,7 @@ import Link from "next/link";
 const NAV_LINKS = [
   { href: "/admin/orders", label: "注文管理" },
   { href: "/admin/procurement/queue", label: "対応待ちキュー" },
+  { href: "/admin/procurement/tasks", label: "発注タスク" },
   { href: "/admin/waitlist", label: "Waitlist管理" },
 ];
 
