@@ -58,7 +58,7 @@ function contrastRatio(a: string, b: string): number {
 const memberEmails = {
   CheckoutPaidMemberEmail: () => (
     <CheckoutPaidMemberEmail
-      orderId="ORDER-001"
+      orderNumber="K7Q2-M9XD"
       orderedAt={orderedAt}
       lineItems={[fixedItem]}
       fixedTotal={10_000}
@@ -67,7 +67,7 @@ const memberEmails = {
   ),
   OrderConfirmingEmail: () => (
     <OrderConfirmingEmail
-      orderId="ORDER-001"
+      orderNumber="K7Q2-M9XD"
       orderedAt={orderedAt}
       lineItems={[fixedItem]}
       fixedTotal={10_000}
@@ -75,13 +75,13 @@ const memberEmails = {
     />
   ),
   ShippingNotificationEmail: () => (
-    <ShippingNotificationEmail orderId="ORDER-001" myPageUrl={myPageUrl} />
+    <ShippingNotificationEmail orderNumber="K7Q2-M9XD" myPageUrl={myPageUrl} />
   ),
   DeliveryNotificationEmail: () => (
-    <DeliveryNotificationEmail orderId="ORDER-001" myPageUrl={myPageUrl} />
+    <DeliveryNotificationEmail orderNumber="K7Q2-M9XD" myPageUrl={myPageUrl} />
   ),
   LimitExceededMemberEmail: () => (
-    <LimitExceededMemberEmail orderId="ORDER-001" myPageUrl={myPageUrl} />
+    <LimitExceededMemberEmail orderNumber="K7Q2-M9XD" myPageUrl={myPageUrl} />
   ),
 };
 
@@ -90,7 +90,7 @@ describe.each(Object.entries(memberEmails))(
   (_, email) => {
     it("注文番号とボタンのリンク先（注文詳細）が出る", async () => {
       const html = await render(email());
-      expect(html).toContain("ORDER-001");
+      expect(html).toContain("K7Q2-M9XD");
       expect(html).toContain(`href="${myPageUrl}"`);
       expect(html).toContain("注文の状況を見る");
     });
@@ -132,7 +132,7 @@ describe("CheckoutPaidMemberEmail", () => {
   it("要相談の商品があると「要相談」と、合計に含まれないことを出す", async () => {
     const html = await render(
       <CheckoutPaidMemberEmail
-        orderId="ORDER-001"
+        orderNumber="K7Q2-M9XD"
         orderedAt={orderedAt}
         lineItems={[fixedItem, negotiableItem]}
         fixedTotal={10_000}
@@ -166,7 +166,7 @@ describe("OrderConfirmingEmail", () => {
   it("要相談商品は「要相談」と表示される", async () => {
     const html = await render(
       <OrderConfirmingEmail
-        orderId="ORDER-001"
+        orderNumber="K7Q2-M9XD"
         orderedAt={orderedAt}
         lineItems={[negotiableItem]}
         fixedTotal={0}

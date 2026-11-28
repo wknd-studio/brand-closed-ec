@@ -35,6 +35,9 @@ import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
+import { OrderNumber } from "@/domain/value-objects/order-number";
+
+const orderNumber = OrderNumber.of("K7Q2M9XD");
 
 const resendError = { name: "application_error", message: "送信失敗" };
 
@@ -48,6 +51,7 @@ describe("メール送信失敗時のSentry送信", () => {
     await sendOrderConfirmingEmail({
       to: "test@example.com",
       orderId: "order-1",
+      orderNumber,
       orderedAt: new Date(),
       lineItems: [],
       fixedTotal: 0,
@@ -64,6 +68,7 @@ describe("メール送信失敗時のSentry送信", () => {
   it("sendCheckoutPaidEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
     await sendCheckoutPaidEmail({
       orderId: "order-1",
+      orderNumber,
       orderedAt: new Date(),
       memberEmail: "member@example.com",
       lineItems: [],
@@ -83,6 +88,7 @@ describe("メール送信失敗時のSentry送信", () => {
 
     await sendCheckoutPaidEmail({
       orderId: "order-1",
+      orderNumber,
       orderedAt: new Date(),
       memberEmail: "member@example.com",
       lineItems: [],
@@ -98,6 +104,7 @@ describe("メール送信失敗時のSentry送信", () => {
   it("sendDeliveryNotificationEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
     await sendDeliveryNotificationEmail({
       orderId: "order-1",
+      orderNumber,
       memberEmail: "member@example.com",
     });
 
@@ -112,6 +119,7 @@ describe("メール送信失敗時のSentry送信", () => {
   it("sendShippingNotificationEmail失敗時にSentry.captureExceptionを呼ぶ", async () => {
     await sendShippingNotificationEmail({
       orderId: "order-1",
+      orderNumber,
       memberEmail: "member@example.com",
     });
 
@@ -127,6 +135,7 @@ describe("メール送信失敗時のSentry送信", () => {
     await sendLimitExceededEmail({
       to: "member@example.com",
       orderId: "order-1",
+      orderNumber,
     });
 
     expect(Sentry.captureException).toHaveBeenCalledWith(

@@ -502,6 +502,11 @@ describe("placeOrder", () => {
     // after_orderが含まれるので運営者・会員へ確認通知を送る。運営者には種類・注文番号・
     // 注文の金額だけをポートで1回送り、会員の情報は渡さない
     expect(deps.notificationService.sendOrderConfirming).toHaveBeenCalled();
+    // 会員へのメールの注文番号は、保存した注文と同じ注文番号から作る（#756）
+    const [mailedOrder] = vi.mocked(
+      deps.notificationService.sendOrderConfirming
+    ).mock.calls[0];
+    expect(mailedOrder.orderNumber).toEqual(order.orderNumber);
     expect(deps.operatorNotifier.notify).toHaveBeenCalledTimes(1);
     expect(deps.operatorNotifier.notify).toHaveBeenCalledWith({
       type: "orderPlaced",
