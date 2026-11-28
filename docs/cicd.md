@@ -164,11 +164,11 @@ doppler configs tokens create github-actions-pr -p brand-closed-ec -c ci --acces
 PR の CI（Dependabot のセキュリティ更新の PR を含む）では、人間が見る前の新しい版の依存が secret と一緒に動く。依存が乗っ取られていても管理用のトークンが盗まれないよう、PR のジョブは `environment` を使わず、テスト・ビルドに要る値だけを入れた `ci` だけを読む（#671）。
 
 - `ci` は `stg` の branch config ではなく、別の環境（`CI`）の root config にしている（branch config は親の値を引き継ぎ、消せないため）。`stg` の値を変えても `ci` には反映されないので、テストに要る値を足すときは `ci` にも入れる
-- 入れないもの: `SUPABASE_DB_URL`・`SUPABASE_ACCESS_TOKEN`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`（ビルドでソースマップを Sentry にアップロードしない）・`SANITY_AUTH_TOKEN`・`RESEND_API_KEY`（PR の CI ではメールを送らない。`DISABLE_EMAIL_SENDING`）・`SUPABASE_SERVICE_ROLE_KEY`・`SUPABASE_PROJECT_REF`（stg の DB に触れない）
+- 入れないもの: `SUPABASE_DB_URL`・`SUPABASE_ACCESS_TOKEN`・`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`SENTRY_AUTH_TOKEN`（ビルドでソースマップを Sentry にアップロードしない）・`SANITY_AUTH_TOKEN`・`RESEND_API_KEY`（PR の CI ではメールを送らない。`DISABLE_EMAIL_SENDING`）・`SLACK_WEBHOOK_URL_*`（PR の CI では運営者向けの Slack に送らない。`DISABLE_SLACK_NOTIFICATION`）・`SUPABASE_SERVICE_ROLE_KEY`・`SUPABASE_PROJECT_REF`（stg の DB に触れない）
 - `NEXT_PUBLIC_SUPABASE_URL`・`NEXT_PUBLIC_SUPABASE_ANON_KEY` はローカルの Supabase の既定値（`http://127.0.0.1:54321` と既定の publishable key）。Integration Tests・E2E Tests (PR) はジョブ内で起動したローカルの Supabase の値で上書きし、Build (Cloudflare) はデプロイしないビルドなので埋め込まれても困らない
 - Clerk のキー（`CLERK_SECRET_KEY`・`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`・`CLERK_WEBHOOK_SECRET`）は CI 専用の Clerk 開発インスタンスのもの（#299）
 - `SANITY_API_TOKEN`・`SANITY_WRITE_TOKEN` は CI 専用の Sanity のトークン（ラベル `github-actions-pr-ci`・Editor）。E2E が `staging` データセットに商品を書き込むため Editor にしている。Sanity のトークンはプロジェクト単位で、本番の `production` データセットにも届く（プロジェクトは分けない判断。#671）
-- そのほか: `NEXT_PUBLIC_APP_URL`・`NEXT_PUBLIC_SANITY_*`・`NEXT_PUBLIC_SENTRY_*`・`RESEND_FROM_EMAIL`・`RESEND_ADMIN_EMAIL`・`RESEND_TEST_TO`・Stripe のテストモードのキーと `STRIPE_PRICE_ID_*`（`stg` と同じ値）
+- そのほか: `NEXT_PUBLIC_APP_URL`・`NEXT_PUBLIC_SANITY_*`・`NEXT_PUBLIC_SENTRY_*`・`RESEND_FROM_EMAIL`・`RESEND_TEST_TO`・Stripe のテストモードのキーと `STRIPE_PRICE_ID_*`（`stg` と同じ値）
 
 `tests/unit/deploy-workflow-pr-secrets.test.ts` が、PR のジョブが `environment` を使わず `DOPPLER_TOKEN_PR` だけを読むこと、デプロイのジョブが environment の `DOPPLER_TOKEN`（と Sync の `DOPPLER_TOKEN_WORKER`）だけを読むことを検査する。
 
@@ -421,7 +421,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` が未設定の場合、認証済みアクセス・ログインのテストは自動的にスキップされる。`E2E_USER_EMAIL` は Clerk のテスト用メール規約（`+clerk_test` を含むアドレス）で作成すること。
 
-### Resend メール送信の無効化（`DISABLE_EMAIL_SENDING`）
+### Resend メール送信・Slack 通知の無効化（`DISABLE_EMAIL_SENDING`・`DISABLE_SLACK_NOTIFICATION`）
 
 E2E テストはチェックアウト・Invoice発行等でメール送信コードパスを実際に通過するため、対策なしで実行すると Resend の送信数使用枠を消費してしまう（`e2e-pr`・`e2e`〈stg〉両方）。
 
@@ -431,6 +431,12 @@ E2E テストはチェックアウト・Invoice発行等でメール送信コー
 - `e2e`（stg）ジョブ: `deploy-stg`でデプロイ済みの実際のCloudflare Workerに対してテストするため、Doppler側の値を変えるとstg環境全体（手動QA含む）に影響してしまう。そこで「Run E2E tests」の直前に`wrangler secret put DISABLE_EMAIL_SENDING`でstg Workerのシークレットを一時的に`true`に上書きし、直後（`if: always()`でテスト失敗時も含む）に`wrangler secret delete`で削除して元の状態（未設定＝実送信）に戻す
   - `secret put`・`secret delete`は、stgを`wrangler rollback`で戻している間（最新の版が出ていない間）は失敗する。`e2e`は`deploy-stg`の直後に同じconcurrencyのグループで動き、`deploy-stg`が`wrangler deploy --secrets-file`で「最新の版 = 出ている版」に戻すため普段は通る（#708。`tests/unit/deploy-workflow-worker-env.test.ts`）。stgで`wrangler rollback`を試すのは、Deploy・E2E Tests (stg)が動いていないときにする（E2Eの途中で戻すと`secret delete`が失敗して`DISABLE_EMAIL_SENDING`が残る。直し方は`docs/runbooks/production-rollback.md`の2-1）
 - `production`環境・Doppler設定には一切触れない（本番は常に実送信する）
+
+運営者向けの Slack の通知（#830。`src/infrastructure/slack/slack-operator-notifier.ts`）も同じ形で止める。`DISABLE_SLACK_NOTIFICATION=true` なら Incoming Webhook に POST しない。`e2e-pr`・Integration Tests はステップの環境変数で、`e2e`（stg）は上と同じステップで `wrangler secret put`・`delete` する（`tests/unit/deploy-workflow-slack-notification.test.ts`）。
+
+- 送り先はチャンネルごとの環境変数 `SLACK_WEBHOOK_URL_ORDERS`（#運営-注文）・`_BILLING`（#運営-請求）・`_PROCUREMENT`（#運営-発注発送）・`_RETURNS`（#運営-返品）・`_MEMBERS`（#運営-会員）・`_GENERAL`（#運営-全体）。通知の種類からチャンネルを選ぶ対応表は同じファイルの `CHANNEL_OF`
+- stg は開発者しか見ないため、6つ全てに `#運営-通知-stg` の URL を入れる。本番は stg と違う値でなければならない（`task env:check` が検査する）
+- 送り先の環境変数が空・Slack が失敗を返したときは、注文・支払いの処理は止めずに Sentry に送る（`src/use-cases/notify-operator.ts`）
 
 ---
 
