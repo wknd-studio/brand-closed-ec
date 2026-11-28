@@ -55,6 +55,10 @@ describe("markCheckoutOrderAsPaid", () => {
     );
 
     expect(notificationService.sendCheckoutPaid).toHaveBeenCalledTimes(1);
+    // メールの注文番号は、渡した注文が持つ注文番号から作る（#756）
+    const [mailedOrder] = vi.mocked(notificationService.sendCheckoutPaid).mock
+      .calls[0];
+    expect(mailedOrder.orderNumber).toEqual(order.orderNumber);
     expect(operatorNotifier.notify).toHaveBeenCalledTimes(1);
     expect(operatorNotifier.notify).toHaveBeenCalledWith({
       type: "checkoutPaid",

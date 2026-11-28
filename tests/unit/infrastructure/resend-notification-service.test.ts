@@ -204,6 +204,7 @@ describe("ResendNotificationService", () => {
       expect(sendOrderConfirmingEmail).toHaveBeenCalledWith({
         to: "test@example.com",
         orderId: "order-1",
+        orderNumber: OrderNumber.of("K7Q2M9XD"),
         orderedAt: new Date(2026, 8, 1),
         lineItems: expectedLineItems,
         // 載せる明細（商品A ¥10,000 × 2・注文に無い商品 ¥3,000 × 1）の固定額の合計。
@@ -214,33 +215,48 @@ describe("ResendNotificationService", () => {
   });
 
   describe("sendLimitExceeded", () => {
-    it("宛先と注文IDをそのまま渡す", async () => {
-      await service.sendLimitExceeded("test@example.com", "order-1");
+    it("宛先・注文ID・注文番号をそのまま渡す", async () => {
+      await service.sendLimitExceeded(
+        "test@example.com",
+        "order-1",
+        OrderNumber.of("K7Q2M9XD")
+      );
 
       expect(sendLimitExceededEmail).toHaveBeenCalledWith({
         to: "test@example.com",
         orderId: "order-1",
+        orderNumber: OrderNumber.of("K7Q2M9XD"),
       });
     });
   });
 
   describe("sendShippingNotification", () => {
-    it("注文IDと会員のメールアドレスをそのまま渡す", async () => {
-      await service.sendShippingNotification("order-1", "test@example.com");
+    it("注文ID・注文番号・会員のメールアドレスをそのまま渡す", async () => {
+      await service.sendShippingNotification(
+        "order-1",
+        OrderNumber.of("K7Q2M9XD"),
+        "test@example.com"
+      );
 
       expect(sendShippingNotificationEmail).toHaveBeenCalledWith({
         orderId: "order-1",
+        orderNumber: OrderNumber.of("K7Q2M9XD"),
         memberEmail: "test@example.com",
       });
     });
   });
 
   describe("sendDeliveryNotification", () => {
-    it("注文IDと会員のメールアドレスをそのまま渡す", async () => {
-      await service.sendDeliveryNotification("order-1", "test@example.com");
+    it("注文ID・注文番号・会員のメールアドレスをそのまま渡す", async () => {
+      await service.sendDeliveryNotification(
+        "order-1",
+        OrderNumber.of("K7Q2M9XD"),
+        "test@example.com"
+      );
 
       expect(sendDeliveryNotificationEmail).toHaveBeenCalledWith({
         orderId: "order-1",
+        orderNumber: OrderNumber.of("K7Q2M9XD"),
         memberEmail: "test@example.com",
       });
     });
@@ -252,6 +268,7 @@ describe("ResendNotificationService", () => {
 
       expect(sendCheckoutPaidEmail).toHaveBeenCalledWith({
         orderId: "order-1",
+        orderNumber: OrderNumber.of("K7Q2M9XD"),
         orderedAt: new Date(2026, 8, 1),
         memberEmail: "test@example.com",
         // 支払い済みの決済単位の明細のうち、要相談を除いた固定額（¥10,000 × 2）

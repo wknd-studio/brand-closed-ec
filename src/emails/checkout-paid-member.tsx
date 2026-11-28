@@ -9,7 +9,8 @@ import {
 } from "./components";
 
 type Props = {
-  orderId: string;
+  /** 表示の形の注文番号（OrderNumber.display()） */
+  orderNumber: string;
   orderedAt: Date;
   lineItems: EmailLineItem[];
   fixedTotal: number;
@@ -17,7 +18,7 @@ type Props = {
 };
 
 export function CheckoutPaidMemberEmail({
-  orderId,
+  orderNumber,
   orderedAt,
   lineItems,
   fixedTotal,
@@ -33,7 +34,7 @@ export function CheckoutPaidMemberEmail({
         }
       />
       <OrderProgress current="paid" />
-      <OrderMeta orderNumber={orderId} orderedAt={orderedAt} />
+      <OrderMeta orderNumber={orderNumber} orderedAt={orderedAt} />
       <LineItemsTable
         title="ご注文の内容"
         items={lineItems}

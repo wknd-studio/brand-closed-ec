@@ -8,11 +8,12 @@ import {
 } from "./components";
 
 type Props = {
-  orderId: string;
+  /** 表示の形の注文番号（OrderNumber.display()） */
+  orderNumber: string;
   myPageUrl: string;
 };
 
-export function LimitExceededMemberEmail({ orderId, myPageUrl }: Props) {
+export function LimitExceededMemberEmail({ orderNumber, myPageUrl }: Props) {
   return (
     <MemberEmailLayout preview="今月の仕入れ上限を超えたため、ご注文を保留しています。">
       <EmailHeading
@@ -25,7 +26,7 @@ export function LimitExceededMemberEmail({ orderId, myPageUrl }: Props) {
       <Notice tone="warning">
         このご注文のお支払いは、まだ発生していません。今後の対応は、運営からご連絡します。
       </Notice>
-      <OrderMeta orderNumber={orderId} />
+      <OrderMeta orderNumber={orderNumber} />
       <EmailButton href={myPageUrl}>注文の状況を見る</EmailButton>
       <EmailNote>
         ご不明な点は、下記のお問い合わせ先までご連絡ください。

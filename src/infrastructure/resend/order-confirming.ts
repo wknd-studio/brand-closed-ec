@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { render } from "@react-email/components";
 import { OrderConfirmingEmail } from "@/emails/order-confirming";
+import type { OrderNumber } from "@/domain/value-objects/order-number";
 import { getResend } from "./client";
 
 type LineItem = {
@@ -13,6 +14,7 @@ type LineItem = {
 type SendOrderConfirmingEmailParams = {
   to: string;
   orderId: string;
+  orderNumber: OrderNumber;
   orderedAt: Date;
   lineItems: LineItem[];
   fixedTotal: number;
@@ -21,6 +23,7 @@ type SendOrderConfirmingEmailParams = {
 export async function sendOrderConfirmingEmail({
   to,
   orderId,
+  orderNumber,
   orderedAt,
   lineItems,
   fixedTotal,
@@ -28,7 +31,7 @@ export async function sendOrderConfirmingEmail({
   const myPageUrl = `${process.env.NEXT_PUBLIC_APP_URL!}/orders/${orderId}`;
   const html = await render(
     OrderConfirmingEmail({
-      orderId,
+      orderNumber: orderNumber.display(),
       orderedAt,
       lineItems,
       fixedTotal,
@@ -39,7 +42,7 @@ export async function sendOrderConfirmingEmail({
   const { error } = await getResend().emails.send({
     from: process.env.RESEND_FROM_EMAIL!,
     to: process.env.RESEND_TEST_TO ?? to,
-    subject: `【EQ×Mart】ご注文を受け付けました（注文番号 ${orderId}）`,
+    subject: `【EQ×Mart】ご注文を受け付けました（注文番号 ${orderNumber.display()}）`,
     html,
   });
 

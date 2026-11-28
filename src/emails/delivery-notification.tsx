@@ -8,11 +8,12 @@ import {
 } from "./components";
 
 type Props = {
-  orderId: string;
+  /** 表示の形の注文番号（OrderNumber.display()） */
+  orderNumber: string;
   myPageUrl: string;
 };
 
-export function DeliveryNotificationEmail({ orderId, myPageUrl }: Props) {
+export function DeliveryNotificationEmail({ orderNumber, myPageUrl }: Props) {
   return (
     <MemberEmailLayout preview="ご注文の商品のお届けが完了しました。">
       <EmailHeading
@@ -23,7 +24,7 @@ export function DeliveryNotificationEmail({ orderId, myPageUrl }: Props) {
         }
       />
       <OrderProgress current="delivered" />
-      <OrderMeta orderNumber={orderId} />
+      <OrderMeta orderNumber={orderNumber} />
       <EmailButton href={myPageUrl}>注文の状況を見る</EmailButton>
       <EmailNote>
         不良品・誤配送があった場合は、商品の到着から30日以内に、注文詳細の画面から返品・返金を申請してください。

@@ -5,6 +5,7 @@ import type { MemberRank } from "@/domain/value-objects/member-rank";
 import type { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 import type { Money } from "@/domain/value-objects/money";
 import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
+import type { OrderNumber } from "@/domain/value-objects/order-number";
 import type { ProductSnapshot } from "./product-repository";
 
 /** 入会の完了のメールに出すご契約の内容 */
@@ -25,11 +26,24 @@ export interface NotificationService {
     items: ProductSnapshot[]
   ): Promise<void>;
 
-  sendLimitExceeded(to: string, orderId: string): Promise<void>;
+  // orderId は注文詳細へのリンクに、orderNumber は件名・本文に出す注文番号に使う（#756）
+  sendLimitExceeded(
+    to: string,
+    orderId: string,
+    orderNumber: OrderNumber
+  ): Promise<void>;
 
-  sendShippingNotification(orderId: string, memberEmail: string): Promise<void>;
+  sendShippingNotification(
+    orderId: string,
+    orderNumber: OrderNumber,
+    memberEmail: string
+  ): Promise<void>;
 
-  sendDeliveryNotification(orderId: string, memberEmail: string): Promise<void>;
+  sendDeliveryNotification(
+    orderId: string,
+    orderNumber: OrderNumber,
+    memberEmail: string
+  ): Promise<void>;
 
   /**
    * 会員に「支払い完了」を通知する（運営者への通知は OperatorNotifier。#830）。
