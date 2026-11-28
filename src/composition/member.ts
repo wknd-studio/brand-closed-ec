@@ -5,6 +5,7 @@ import { SupabaseSubscriptionRepository } from "@/infrastructure/supabase/supaba
 import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
 import { SentryErrorReporter } from "@/infrastructure/sentry/sentry-error-reporter";
+import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import {
   withdraw as withdrawUseCase,
   type WithdrawInput,
@@ -24,6 +25,7 @@ export function withdraw(input: WithdrawInput) {
     subscriptionGateway: new StripeSubscriptionGateway(),
     accountGateway: new ClerkAccountGateway(),
     errorReporter: new SentryErrorReporter(),
+    notificationService: new ResendNotificationService(),
   });
 }
 

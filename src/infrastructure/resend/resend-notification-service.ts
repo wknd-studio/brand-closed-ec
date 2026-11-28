@@ -1,4 +1,5 @@
 import type {
+  MemberWithdrawal,
   MembershipWelcome,
   NotificationService,
 } from "@/repositories/notification-service";
@@ -15,6 +16,7 @@ import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
+import { sendWithdrawnEmail } from "@/infrastructure/resend/withdrawn";
 
 export class ResendNotificationService implements NotificationService {
   async sendOrderConfirming(
@@ -109,5 +111,9 @@ export class ResendNotificationService implements NotificationService {
       nextPaymentAt: membership.nextPaymentAt,
       withdrawableFrom: membership.minimumPeriod.withdrawableFrom,
     });
+  }
+
+  async sendWithdrawn(user: User, withdrawal: MemberWithdrawal): Promise<void> {
+    await sendWithdrawnEmail({ to: user.email, ...withdrawal });
   }
 }
