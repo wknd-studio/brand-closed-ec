@@ -104,6 +104,7 @@ export async function completeOnboardingCheckout(
             currentPeriodStart: subscription.currentPeriodStart,
             currentPeriodEnd: subscription.currentPeriodEnd,
             subscriptionStartedAt: subscription.startedAt,
+            stripeCheckoutSessionId,
           },
           deps
         );

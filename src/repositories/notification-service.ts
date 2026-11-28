@@ -1,7 +1,22 @@
 import type { Order } from "@/domain/entities/order";
 import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
+import type { MemberRank } from "@/domain/value-objects/member-rank";
+import type { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
+import type { Money } from "@/domain/value-objects/money";
+import type { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
 import type { ProductSnapshot } from "./product-repository";
+
+/** 入会の完了のメールに出すご契約の内容 */
+export type MembershipWelcome = {
+  rank: MemberRank;
+  monthlyLimit: MonthlyLimit;
+  // 入会のCheckoutで支払った金額（税込）。月額は次回以降の請求額にも使う
+  initialFee: Money;
+  monthlyFee: Money;
+  nextPaymentAt: Date;
+  minimumPeriod: MinimumMembershipPeriod;
+};
 
 export interface NotificationService {
   sendOrderConfirming(
@@ -34,4 +49,6 @@ export interface NotificationService {
   ): Promise<void>;
 
   sendInvoicePaid(order: Order, user: User): Promise<void>;
+
+  sendWelcome(user: User, membership: MembershipWelcome): Promise<void>;
 }

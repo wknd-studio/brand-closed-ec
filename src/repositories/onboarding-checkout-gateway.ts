@@ -1,4 +1,11 @@
 import type { SelfServiceRankValue } from "@/domain/value-objects/member-rank";
+import type { Money } from "@/domain/value-objects/money";
+
+/** 入会のCheckoutで支払った金額（税込） */
+export type OnboardingCharge = {
+  initialFee: Money;
+  monthlyFee: Money;
+};
 
 export type OnboardingCheckoutSessionInput = {
   userId: string;
@@ -22,4 +29,8 @@ export interface OnboardingCheckoutGateway {
   createCheckoutSession(
     input: OnboardingCheckoutSessionInput
   ): Promise<string | null>;
+  // 金額の正はStripeのPriceのため、入会のメールに出す金額はCheckoutの明細から取る
+  retrieveCheckoutCharge(
+    stripeCheckoutSessionId: string
+  ): Promise<OnboardingCharge>;
 }

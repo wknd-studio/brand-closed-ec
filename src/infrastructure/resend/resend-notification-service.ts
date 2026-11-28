@@ -1,4 +1,7 @@
-import type { NotificationService } from "@/repositories/notification-service";
+import type {
+  MembershipWelcome,
+  NotificationService,
+} from "@/repositories/notification-service";
 import type { Order } from "@/domain/entities/order";
 import type { OrderSettlement } from "@/domain/entities/order-settlement";
 import type { User } from "@/domain/entities/user";
@@ -12,6 +15,7 @@ import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendCheckoutPaidEmails } from "@/infrastructure/resend/checkout-paid";
 import { sendInvoicePaidEmail } from "@/infrastructure/resend/invoice-paid";
+import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
 
 export class ResendNotificationService implements NotificationService {
   async sendOrderConfirming(
@@ -109,5 +113,17 @@ export class ResendNotificationService implements NotificationService {
 
   async sendInvoicePaid(order: Order, user: User): Promise<void> {
     await sendInvoicePaidEmail({ orderId: order.id, memberEmail: user.email });
+  }
+
+  async sendWelcome(user: User, membership: MembershipWelcome): Promise<void> {
+    await sendWelcomeEmail({
+      to: user.email,
+      rank: membership.rank.value,
+      monthlyLimit: membership.monthlyLimit.amount,
+      initialFee: membership.initialFee.amount,
+      monthlyFee: membership.monthlyFee.amount,
+      nextPaymentAt: membership.nextPaymentAt,
+      withdrawableFrom: membership.minimumPeriod.withdrawableFrom,
+    });
   }
 }
