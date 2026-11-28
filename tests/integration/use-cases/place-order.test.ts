@@ -70,6 +70,7 @@ function makeDeps(
     sendShippingNotification: vi.fn(),
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
+    sendWelcome: vi.fn(),
   };
   return { productRepo, paymentGateway, notificationService };
 }

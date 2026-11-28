@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import type { Database } from "@/types/database.types";
 import { getStripe } from "@/infrastructure/stripe/client";
+import { getResend } from "@/infrastructure/resend/client";
 
 /**
  * 入会の流れ（プラン選択 → 決済画面 → 決済完了画面 → 入会確定のWebhook → ショップ）を
@@ -203,6 +204,23 @@ class FakeStripe {
     return session;
   }
 
+  /** 入会のCheckoutの明細。月額（継続課金の価格）と初期費用（1回だけの価格）の2つ */
+  listCheckoutLineItems(id: string) {
+    this.retrieveCheckoutSession(id);
+    return {
+      data: [
+        {
+          amount_total: 30_000,
+          price: { unit_amount: 30_000, recurring: { interval: "month" } },
+        },
+        {
+          amount_total: 30_000,
+          price: { unit_amount: 30_000, recurring: null },
+        },
+      ],
+    };
+  }
+
   listSubscriptions(params: { customer: string }) {
     return {
       data: [...this.subscriptions.values()].filter(
@@ -283,6 +301,9 @@ function mockStripeApi() {
   vi.spyOn(client.checkout.sessions, "retrieve").mockImplementation((async (
     id: string
   ) => stripe.retrieveCheckoutSession(id)) as never);
+  vi.spyOn(client.checkout.sessions, "listLineItems").mockImplementation(
+    (async (id: string) => stripe.listCheckoutLineItems(id)) as never
+  );
   vi.spyOn(client.subscriptions, "list").mockImplementation((async (
     params: never
   ) => stripe.listSubscriptions(params)) as never);
@@ -446,9 +467,19 @@ afterAll(async () => {
   await cleanup();
 });
 
+const WELCOME_SUBJECT = "【EQ×Mart】ご入会ありがとうございます";
+
+/** 送った入会の完了のメール（#852）の数 */
+function welcomeEmailCount(): number {
+  return vi
+    .mocked(getResend().emails.send)
+    .mock.calls.filter(([email]) => email.subject === WELCOME_SUBJECT).length;
+}
+
 beforeEach(() => {
   stripe = new FakeStripe();
   vi.mocked(Sentry.captureException).mockClear();
+  vi.mocked(getResend().emails.send).mockClear();
   clerk.publicMetadata.clear();
   clerk.updateUserMetadata.mockReset();
   clerk.updateUserMetadata.mockImplementation(
@@ -510,6 +541,7 @@ describe("入会の流れ（プラン選択 → 決済 → Webhook → ショッ
     expect(clerk.publicMetadata.get(clerkUserId)).toEqual({
       onboarding_completed: true,
     });
+    expect(welcomeEmailCount()).toBe(1);
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
@@ -572,6 +604,8 @@ describe("入会の流れ（プラン選択 → 決済 → Webhook → ショッ
       confirmedMember(sessionIdOf(successUrl), "pro")
     );
     expect(await visit(successUrl)).toEqual({ redirectTo: "/shop" });
+    // 入会の完了のメールは再送で2通目を送らない（#852）
+    expect(welcomeEmailCount()).toBe(1);
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
@@ -615,6 +649,8 @@ describe("入会の流れ（プラン選択 → 決済 → Webhook → ショッ
       expect(clerk.publicMetadata.get(clerkUserId)).toEqual({
         onboarding_completed: true,
       });
+      // 失敗と再送をまたいでも、入会の完了のメールは1通だけ（#852）
+      expect(welcomeEmailCount()).toBe(1);
     }
   );
 });

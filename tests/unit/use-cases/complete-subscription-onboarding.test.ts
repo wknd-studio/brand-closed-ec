@@ -1,7 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
 import { completeSubscriptionOnboarding } from "@/use-cases/complete-subscription-onboarding";
 import type { SubscriptionOnboardingRepository } from "@/repositories/subscription-onboarding-repository";
-import { makeUserRepo, makeAccountGateway, makeUser } from "./helpers";
+import type { OnboardingCheckoutGateway } from "@/repositories/onboarding-checkout-gateway";
+import { MemberRank } from "@/domain/value-objects/member-rank";
+import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
+import { Money } from "@/domain/value-objects/money";
+import { MonthlyLimit } from "@/domain/value-objects/monthly-limit";
+import {
+  makeUserRepo,
+  makeAccountGateway,
+  makeUser,
+  makeErrorReporter,
+  makeMemberRankRepo,
+  makeNotificationService,
+} from "./helpers";
 
 const subscriptionInput = {
   stripeCustomerId: "cus_1",
@@ -11,10 +23,33 @@ const subscriptionInput = {
   currentPeriodEnd: new Date(2026, 1, 1),
   // JST 2026-01-01 10:00
   subscriptionStartedAt: new Date("2026-01-01T01:00:00Z"),
+  stripeCheckoutSessionId: "cs_1",
 };
 
 function makeOnboardingRepo(): SubscriptionOnboardingRepository {
   return { confirm: vi.fn().mockResolvedValue("confirmed") };
+}
+
+function makeCheckoutGateway(): OnboardingCheckoutGateway {
+  return {
+    createCustomer: vi.fn(),
+    hasActiveSubscription: vi.fn(),
+    createCheckoutSession: vi.fn(),
+    retrieveCheckoutCharge: vi.fn().mockResolvedValue({
+      initialFee: Money.of(10_000),
+      monthlyFee: Money.of(10_000),
+    }),
+  };
+}
+
+// 入会の完了のメール（#852）に使う依存
+function welcomeDeps() {
+  return {
+    checkoutGateway: makeCheckoutGateway(),
+    memberRankRepo: makeMemberRankRepo(MonthlyLimit.of(1_000_000)),
+    notificationService: makeNotificationService(),
+    errorReporter: makeErrorReporter(),
+  };
 }
 
 describe("completeSubscriptionOnboarding", () => {
@@ -27,7 +62,7 @@ describe("completeSubscriptionOnboarding", () => {
     await expect(
       completeSubscriptionOnboarding(
         { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
-        { userRepo, onboardingRepo, accountGateway }
+        { userRepo, onboardingRepo, accountGateway, ...welcomeDeps() }
       )
     ).resolves.toBe("member_not_found");
     expect(onboardingRepo.confirm).not.toHaveBeenCalled();
@@ -46,6 +81,7 @@ describe("completeSubscriptionOnboarding", () => {
           userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
           onboardingRepo,
           accountGateway,
+          ...welcomeDeps(),
         }
       )
     ).resolves.toBe("member_not_found");
@@ -62,6 +98,7 @@ describe("completeSubscriptionOnboarding", () => {
         userRepo: makeUserRepo(user),
         onboardingRepo,
         accountGateway: makeAccountGateway(),
+        ...welcomeDeps(),
       }
     );
 
@@ -96,6 +133,7 @@ describe("completeSubscriptionOnboarding", () => {
           userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
           onboardingRepo,
           accountGateway: makeAccountGateway(),
+          ...welcomeDeps(),
         }
       );
 
@@ -119,6 +157,7 @@ describe("completeSubscriptionOnboarding", () => {
         ),
         onboardingRepo,
         accountGateway,
+        ...welcomeDeps(),
       }
     );
 
@@ -148,6 +187,7 @@ describe("completeSubscriptionOnboarding", () => {
           ),
           onboardingRepo,
           accountGateway,
+          ...welcomeDeps(),
         }
       )
     ).rejects.toThrow("DB error");
@@ -166,6 +206,7 @@ describe("completeSubscriptionOnboarding", () => {
         userRepo: makeUserRepo(makeUser({ onboardingCompleted: true })),
         onboardingRepo,
         accountGateway,
+        ...welcomeDeps(),
       }
     );
 
@@ -188,6 +229,7 @@ describe("completeSubscriptionOnboarding", () => {
             userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
             onboardingRepo,
             accountGateway: makeAccountGateway(),
+            ...welcomeDeps(),
           }
         )
       ).resolves.toBe(result);
@@ -208,9 +250,151 @@ describe("completeSubscriptionOnboarding", () => {
           userRepo: makeUserRepo(makeUser({ onboardingCompleted: true })),
           onboardingRepo,
           accountGateway,
+          ...welcomeDeps(),
         }
       )
     ).resolves.toBe("conflicting_subscription");
     expect(accountGateway.updateOnboardingMetadata).not.toHaveBeenCalled();
+  });
+
+  // GitHub issue #852
+  describe("入会の完了のメール", () => {
+    // users.created_at（最低利用期間の起点）: JST 2026-11-28
+    const createdAt = new Date("2026-11-28T03:00:00Z");
+
+    function setup(
+      result: Awaited<
+        ReturnType<typeof completeSubscriptionOnboarding>
+      > = "confirmed"
+    ) {
+      const user = makeUser({ onboardingCompleted: false, createdAt });
+      const onboardingRepo = makeOnboardingRepo();
+      vi.mocked(onboardingRepo.confirm).mockResolvedValue(result);
+      const deps = {
+        userRepo: makeUserRepo(user),
+        onboardingRepo,
+        accountGateway: makeAccountGateway(),
+        ...welcomeDeps(),
+      };
+      return { user, deps };
+    }
+
+    it("入会が確定したら、プラン・上限・支払った金額・次回の請求日・最低利用期間を添えて1回だけ送る", async () => {
+      const { user, deps } = setup();
+
+      await expect(
+        completeSubscriptionOnboarding(
+          { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+          deps
+        )
+      ).resolves.toBe("confirmed");
+
+      expect(deps.checkoutGateway.retrieveCheckoutCharge).toHaveBeenCalledWith(
+        "cs_1"
+      );
+      expect(deps.memberRankRepo.findMonthlyLimit).toHaveBeenCalledWith(
+        MemberRank.of("basic")
+      );
+      expect(deps.notificationService.sendWelcome).toHaveBeenCalledTimes(1);
+      expect(deps.notificationService.sendWelcome).toHaveBeenCalledWith(user, {
+        rank: MemberRank.of("basic"),
+        monthlyLimit: MonthlyLimit.of(1_000_000),
+        initialFee: Money.of(10_000),
+        monthlyFee: Money.of(10_000),
+        nextPaymentAt: subscriptionInput.currentPeriodEnd,
+        minimumPeriod: MinimumMembershipPeriod.startingAt(createdAt),
+      });
+    });
+
+    it("Clerkの更新より先に送る（Clerkの更新だけ失敗して再送されると already_confirmed になり、送る機会が無くなるため）", async () => {
+      const { deps } = setup();
+
+      await completeSubscriptionOnboarding(
+        { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+        deps
+      );
+
+      expect(
+        vi.mocked(deps.notificationService.sendWelcome).mock
+          .invocationCallOrder[0]
+      ).toBeLessThan(
+        vi.mocked(deps.accountGateway.updateOnboardingMetadata).mock
+          .invocationCallOrder[0]
+      );
+    });
+
+    it.each([
+      "already_confirmed",
+      "conflicting_subscription",
+      "member_not_found",
+    ] as const)(
+      "確定の結果が%sなら送らない（Webhookの再配信・確定しなかった入会）",
+      async (result) => {
+        const { deps } = setup(result);
+
+        await completeSubscriptionOnboarding(
+          { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+          deps
+        );
+
+        expect(deps.notificationService.sendWelcome).not.toHaveBeenCalled();
+        expect(
+          deps.checkoutGateway.retrieveCheckoutCharge
+        ).not.toHaveBeenCalled();
+      }
+    );
+
+    it("送信に失敗しても入会を取り消さず、例外を通知してClerkを更新し、confirmedを返す", async () => {
+      const { deps } = setup();
+      const error = new Error("Resend error");
+      vi.mocked(deps.notificationService.sendWelcome).mockRejectedValue(error);
+
+      await expect(
+        completeSubscriptionOnboarding(
+          { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+          deps
+        )
+      ).resolves.toBe("confirmed");
+
+      expect(deps.errorReporter.captureException).toHaveBeenCalledWith(error, {
+        tags: { useCase: "complete-subscription-onboarding", email: "welcome" },
+        extra: {
+          clerkUserId: "clerk-1",
+          stripeCheckoutSessionId: "cs_1",
+          stripeSubscriptionId: "sub_1",
+        },
+      });
+      expect(deps.accountGateway.updateOnboardingMetadata).toHaveBeenCalledWith(
+        "clerk-1",
+        true
+      );
+    });
+
+    it("支払った金額の取得に失敗しても入会を取り消さず、例外を通知して送らずにconfirmedを返す", async () => {
+      const { deps } = setup();
+      const error = new Error("Stripe API error");
+      vi.mocked(deps.checkoutGateway.retrieveCheckoutCharge).mockRejectedValue(
+        error
+      );
+
+      await expect(
+        completeSubscriptionOnboarding(
+          { clerkUserId: "clerk-1", plan: "basic", ...subscriptionInput },
+          deps
+        )
+      ).resolves.toBe("confirmed");
+
+      expect(deps.errorReporter.captureException).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({
+          tags: {
+            useCase: "complete-subscription-onboarding",
+            email: "welcome",
+          },
+        })
+      );
+      expect(deps.notificationService.sendWelcome).not.toHaveBeenCalled();
+      expect(deps.accountGateway.updateOnboardingMetadata).toHaveBeenCalled();
+    });
   });
 });

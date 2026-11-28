@@ -1,6 +1,8 @@
 import { getStripe, STRIPE_PRICE_IDS } from "@/infrastructure/stripe/client";
 import { isEndedStripeSubscription } from "@/infrastructure/stripe/stripe-subscription-mapper";
+import { Money } from "@/domain/value-objects/money";
 import type {
+  OnboardingCharge,
   OnboardingCheckoutGateway,
   OnboardingCheckoutSessionInput,
 } from "@/repositories/onboarding-checkout-gateway";
@@ -82,6 +84,26 @@ export class StripeOnboardingCheckoutGateway implements OnboardingCheckoutGatewa
       }
     );
     return session.url;
+  }
+
+  async retrieveCheckoutCharge(
+    stripeCheckoutSessionId: string
+  ): Promise<OnboardingCharge> {
+    // 入会のCheckoutの明細は、月額（継続課金の価格）と初期費用（1回だけの価格）の2つ
+    const { data } = await getStripe().checkout.sessions.listLineItems(
+      stripeCheckoutSessionId
+    );
+    const monthly = data.find((line) => line.price?.recurring);
+    const initialFee = data.find((line) => line.price && !line.price.recurring);
+    if (!monthly || !initialFee) {
+      throw new Error(
+        `入会のCheckoutの明細に月額・初期費用がありません: ${stripeCheckoutSessionId}`
+      );
+    }
+    return {
+      initialFee: Money.of(initialFee.amount_total),
+      monthlyFee: Money.of(monthly.amount_total),
+    };
   }
 }
 

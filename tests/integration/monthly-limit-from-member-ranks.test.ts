@@ -128,6 +128,7 @@ function runPlaceOrder(
     sendShippingNotification: vi.fn(),
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
+    sendWelcome: vi.fn(),
   };
 
   return placeOrder(

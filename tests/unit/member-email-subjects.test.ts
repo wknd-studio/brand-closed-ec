@@ -10,8 +10,19 @@ import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
+import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
 
 const orderedAt = new Date("2026-11-24T01:00:00Z");
+
+const WELCOME_PARAMS = {
+  to: "member@example.com",
+  rank: "standard" as const,
+  monthlyLimit: 5_000_000,
+  initialFee: 30_000,
+  monthlyFee: 30_000,
+  nextPaymentAt: new Date("2026-12-28T01:00:00Z"),
+  withdrawableFrom: new Date("2027-05-27T15:00:00Z"),
+};
 
 function subjectSentTo(to: string): string {
   const call = sendMock.mock.calls.find(([arg]) => arg.to === to);
@@ -83,6 +94,14 @@ describe("会員向けメールの件名", () => {
     });
     expect(subjectSentTo("member@example.com")).toBe(
       "【EQ×Mart】ご注文を保留しています（注文番号 order-1）"
+    );
+  });
+
+  // GitHub issue #852。注文ではないため注文番号は付けない
+  it("ご入会", async () => {
+    await sendWelcomeEmail(WELCOME_PARAMS);
+    expect(subjectSentTo("member@example.com")).toBe(
+      "【EQ×Mart】ご入会ありがとうございます"
     );
   });
 });

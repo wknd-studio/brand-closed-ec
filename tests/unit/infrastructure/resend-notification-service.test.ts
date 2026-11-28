@@ -17,12 +17,17 @@ vi.mock("@/infrastructure/resend/delivery-notification", () => ({
 vi.mock("@/infrastructure/resend/checkout-paid", () => ({
   sendCheckoutPaidEmail: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/infrastructure/resend/welcome", () => ({
+  sendWelcomeEmail: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
+import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
+import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { reconstituteOrder } from "@/domain/entities/order";
 import { reconstituteOrderItem } from "@/domain/entities/order-item";
@@ -266,6 +271,49 @@ describe("ResendNotificationService", () => {
           },
         ],
       });
+    });
+  });
+
+  // GitHub issue #852
+  describe("sendWelcome", () => {
+    it("会員のメールアドレス宛てに、ランク・上限・金額・次回の請求日・退会できる日を渡す", async () => {
+      const minimumPeriod = MinimumMembershipPeriod.startingAt(
+        new Date("2026-11-28T03:00:00Z")
+      );
+
+      await service.sendWelcome(user, {
+        rank: MemberRank.of("standard"),
+        monthlyLimit: MonthlyLimit.of(5_000_000),
+        initialFee: Money.of(30_000),
+        monthlyFee: Money.of(30_000),
+        nextPaymentAt: new Date("2026-12-28T01:00:00Z"),
+        minimumPeriod,
+      });
+
+      expect(sendWelcomeEmail).toHaveBeenCalledWith({
+        to: "test@example.com",
+        rank: "standard",
+        monthlyLimit: 5_000_000,
+        initialFee: 30_000,
+        monthlyFee: 30_000,
+        nextPaymentAt: new Date("2026-12-28T01:00:00Z"),
+        withdrawableFrom: minimumPeriod.withdrawableFrom,
+      });
+    });
+
+    it("上限が無いランクは上限を null で渡す", async () => {
+      await service.sendWelcome(user, {
+        rank: MemberRank.of("standard"),
+        monthlyLimit: MonthlyLimit.unlimited(),
+        initialFee: Money.of(30_000),
+        monthlyFee: Money.of(30_000),
+        nextPaymentAt: new Date("2026-12-28T01:00:00Z"),
+        minimumPeriod: MinimumMembershipPeriod.startingAt(new Date()),
+      });
+
+      expect(sendWelcomeEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ monthlyLimit: null })
+      );
     });
   });
 });

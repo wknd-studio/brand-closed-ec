@@ -3,12 +3,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const createCustomerMock = vi.fn();
 const listSubscriptionsMock = vi.fn();
 const createCheckoutSessionMock = vi.fn();
+const listLineItemsMock = vi.fn();
 
 vi.mock("@/infrastructure/stripe/client", () => ({
   getStripe: () => ({
     customers: { create: createCustomerMock },
     subscriptions: { list: listSubscriptionsMock },
-    checkout: { sessions: { create: createCheckoutSessionMock } },
+    checkout: {
+      sessions: {
+        create: createCheckoutSessionMock,
+        listLineItems: listLineItemsMock,
+      },
+    },
   }),
   STRIPE_PRICE_IDS: {
     premium: { monthly: "price_premium", initialFee: "price_premium_fee" },
@@ -192,6 +198,45 @@ describe("StripeOnboardingCheckoutGateway", () => {
       expect(options).toEqual({
         idempotencyKey: `onboarding-checkout-session-${USER_ID}-premium`,
       });
+    });
+  });
+
+  // GitHub issue #852
+  describe("retrieveCheckoutCharge()", () => {
+    it("Checkoutの明細から、月額（継続課金の価格）と初期費用（1回だけの価格）の支払った金額を返す", async () => {
+      listLineItemsMock.mockResolvedValue({
+        data: [
+          {
+            amount_total: 30_000,
+            price: { unit_amount: 30_000, recurring: { interval: "month" } },
+          },
+          {
+            amount_total: 25_000,
+            price: { unit_amount: 25_000, recurring: null },
+          },
+        ],
+      });
+
+      const charge = await gateway.retrieveCheckoutCharge("cs_1");
+
+      expect(listLineItemsMock).toHaveBeenCalledWith("cs_1");
+      expect(charge.monthlyFee.amount).toBe(30_000);
+      expect(charge.initialFee.amount).toBe(25_000);
+    });
+
+    it("月額・初期費用のどちらかの明細が無ければ例外にする（入会のCheckoutではない）", async () => {
+      listLineItemsMock.mockResolvedValue({
+        data: [
+          {
+            amount_total: 30_000,
+            price: { unit_amount: 30_000, recurring: { interval: "month" } },
+          },
+        ],
+      });
+
+      await expect(gateway.retrieveCheckoutCharge("cs_1")).rejects.toThrow(
+        "cs_1"
+      );
     });
   });
 });
