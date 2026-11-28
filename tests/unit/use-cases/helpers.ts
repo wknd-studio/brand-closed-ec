@@ -106,6 +106,7 @@ export function makeOrderItem(
     isNegotiable: boolean;
     negotiatedUnitPrice: Money | null;
     paymentTiming: "at_order" | "after_order";
+    fulfillmentLocationCode: "office" | "supplier_direct";
     settlementId: string | null;
   }>
 ) {
@@ -118,6 +119,7 @@ export function makeOrderItem(
     isNegotiable: overrides?.isNegotiable ?? false,
     negotiatedUnitPrice: overrides?.negotiatedUnitPrice ?? null,
     paymentTiming: overrides?.paymentTiming ?? "at_order",
+    fulfillmentLocationCode: overrides?.fulfillmentLocationCode ?? "office",
     settlementId:
       overrides?.settlementId === undefined
         ? SETTLEMENT_ID
@@ -172,6 +174,7 @@ export const fixedProduct: ProductSnapshot = {
   minRank: "starter",
   availability: "available",
   paymentTiming: "at_order",
+  fulfillmentLocationCode: "office",
 };
 
 export const negotiableProduct: ProductSnapshot = {
@@ -182,6 +185,7 @@ export const negotiableProduct: ProductSnapshot = {
   minRank: "starter",
   availability: "available",
   paymentTiming: "after_order",
+  fulfillmentLocationCode: "office",
 };
 
 export const afterOrderFixedProduct: ProductSnapshot = {
@@ -192,6 +196,7 @@ export const afterOrderFixedProduct: ProductSnapshot = {
   minRank: "starter",
   availability: "available",
   paymentTiming: "after_order",
+  fulfillmentLocationCode: "office",
 };
 
 export function makeUserRepo(user = makeUser()): UserRepository {

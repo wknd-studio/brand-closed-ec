@@ -61,6 +61,7 @@ const baseItem = {
   unit_price_snapshot: 1000,
   quantity: 1,
   payment_timing: "at_order" as const,
+  fulfillment_location_code: "office",
 };
 
 async function createOrder(): Promise<string> {
@@ -205,15 +206,15 @@ describe("locations", () => {
 });
 
 describe("order_items.fulfillment_location_code", () => {
-  it("省略するとofficeになる（#357で明示的に入れるまでの暫定の既定値）", async () => {
+  it("省略するとNOT NULL違反で拒否される（既定値は置かず、注文確定時に必ず入れる。#357）", async () => {
     const orderId = await createOrder();
-    const { data, error } = await adminClient
+    const withoutLocation: Partial<typeof baseItem> = { ...baseItem };
+    delete withoutLocation.fulfillment_location_code;
+    const { error } = await adminClient
       .from("order_items")
-      .insert({ ...baseItem, order_id: orderId })
-      .select("fulfillment_location_code")
-      .single();
-    expect(error).toBeNull();
-    expect(data?.fulfillment_location_code).toBe("office");
+      // 列を省略したときの挙動の確認のため、型を外す
+      .insert({ ...withoutLocation, order_id: orderId } as never);
+    expect(error?.code).toBe("23502");
   });
 
   it("supplier_directを設定できる", async () => {

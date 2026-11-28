@@ -629,6 +629,59 @@ describe("placeOrder", () => {
     expect(deps.paymentGateway.createCheckoutSession).toHaveBeenCalled();
   });
 
+  it("cartItemsにfulfillmentLocationCodeを注入しても、明細の発送拠点はサーバー側ProductSnapshotの値になる（カート改竄対策・#357）", async () => {
+    const orderRepo = makeOrderRepo();
+    const deps = {
+      userRepo: makeUserRepo(),
+      orderRepo,
+      addressRepo: makeAddressRepo(),
+      productRepo: makeProductRepo([
+        fixedProduct, // fulfillmentLocationCode: office
+        {
+          ...afterOrderFixedProduct,
+          fulfillmentLocationCode: "supplier_direct",
+        },
+      ]),
+      paymentGateway: makePaymentGateway(),
+      notificationService: makeNotificationService(),
+      errorReporter: makeErrorReporter(),
+      memberRankRepo: makeMemberRankRepo(),
+      subscriptionRepo: makeSubscriptionRepo(),
+    };
+
+    const tamperedInput = {
+      ...baseInput,
+      cartItems: [
+        {
+          sanityProductId: "prod-1",
+          quantity: 1,
+          productName: "固定商品",
+          fulfillmentLocationCode: "supplier_direct",
+        },
+        {
+          sanityProductId: "prod-3",
+          quantity: 1,
+          productName: "後払い固定商品",
+          fulfillmentLocationCode: "office",
+        },
+      ],
+    } as unknown as PlaceOrderInput;
+
+    await placeOrder(tamperedInput, deps);
+
+    const createdOrder = vi.mocked(orderRepo.saveNewOrderWithLimitCheck).mock
+      .calls[0][0];
+    expect(
+      createdOrder.items.map((i) => [
+        i.sanityProductId,
+        i.fulfillmentLocationCode,
+      ])
+    ).toEqual([
+      ["prod-1", "office"],
+      ["prod-3", "supplier_direct"],
+    ]);
+  });
+
   describe("注文の前提が揃っていない場合は、何も保存せずエラーにする", () => {
     const makeDeps = () => ({
       userRepo: makeUserRepo(),
