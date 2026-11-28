@@ -3,9 +3,13 @@ import { completeOnboardingCheckout } from "@/use-cases/complete-onboarding-chec
 import type { StripeWebhookEventRepository } from "@/repositories/stripe-webhook-event-repository";
 import type { SubscriptionOnboardingRepository } from "@/repositories/subscription-onboarding-repository";
 import type { ConfirmSubscriptionOnboardingResult } from "@/repositories/subscription-onboarding-repository";
+import type { OnboardingCheckoutGateway } from "@/repositories/onboarding-checkout-gateway";
+import { Money } from "@/domain/value-objects/money";
 import {
   makeAccountGateway,
   makeErrorReporter,
+  makeMemberRankRepo,
+  makeNotificationService,
   makeSubscriptionGateway,
   makeUser,
   makeUserRepo,
@@ -27,6 +31,18 @@ function makeOnboardingRepo(
   return { confirm: vi.fn().mockResolvedValue(result) };
 }
 
+function makeCheckoutGateway(): OnboardingCheckoutGateway {
+  return {
+    createCustomer: vi.fn(),
+    hasActiveSubscription: vi.fn(),
+    createCheckoutSession: vi.fn(),
+    retrieveCheckoutCharge: vi.fn().mockResolvedValue({
+      initialFee: Money.of(10_000),
+      monthlyFee: Money.of(10_000),
+    }),
+  };
+}
+
 function makeDeps(
   overrides?: Partial<{
     webhookEventRepo: StripeWebhookEventRepository;
@@ -40,6 +56,9 @@ function makeDeps(
     userRepo: makeUserRepo(makeUser({ onboardingCompleted: false })),
     onboardingRepo: overrides?.onboardingRepo ?? makeOnboardingRepo(),
     accountGateway: makeAccountGateway(),
+    checkoutGateway: makeCheckoutGateway(),
+    memberRankRepo: makeMemberRankRepo(),
+    notificationService: makeNotificationService(),
   };
 }
 
@@ -252,5 +271,38 @@ describe("completeOnboardingCheckout", () => {
       "Stripe API error"
     );
     expect(deps.onboardingRepo.confirm).not.toHaveBeenCalled();
+  });
+
+  // GitHub issue #852
+  it("入会が確定したら、このCheckoutで支払った金額を取って入会の完了のメールを1回送る", async () => {
+    const deps = makeDeps();
+
+    await completeOnboardingCheckout(INPUT, deps);
+
+    expect(deps.checkoutGateway.retrieveCheckoutCharge).toHaveBeenCalledWith(
+      "cs_1"
+    );
+    expect(deps.notificationService.sendWelcome).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["processing", "processed"] as const)(
+    "同じイベントの再送（%s）では入会の完了のメールを送らない",
+    async (claim) => {
+      const deps = makeDeps({ webhookEventRepo: makeWebhookEventRepo(claim) });
+
+      await completeOnboardingCheckout(INPUT, deps);
+
+      expect(deps.notificationService.sendWelcome).not.toHaveBeenCalled();
+    }
+  );
+
+  it("同じサブスクリプションの別のイベント（already_confirmed）では入会の完了のメールを送らない", async () => {
+    const deps = makeDeps({
+      onboardingRepo: makeOnboardingRepo("already_confirmed"),
+    });
+
+    await completeOnboardingCheckout(INPUT, deps);
+
+    expect(deps.notificationService.sendWelcome).not.toHaveBeenCalled();
   });
 });

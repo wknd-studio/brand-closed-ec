@@ -1,7 +1,16 @@
-import type { MemberRankValue } from "@/domain/value-objects/member-rank";
+import type { User } from "@/domain/entities/user";
+import {
+  MemberRank,
+  type MemberRankValue,
+} from "@/domain/value-objects/member-rank";
+import { MinimumMembershipPeriod } from "@/domain/value-objects/minimum-membership-period";
 import { MonthlyPeriod } from "@/domain/value-objects/monthly-period";
 import type { UserRepository } from "@/repositories/user-repository";
 import type { AccountGateway } from "@/repositories/account-gateway";
+import type { ErrorReporter } from "@/repositories/error-reporter";
+import type { MemberRankRepository } from "@/repositories/member-rank-repository";
+import type { NotificationService } from "@/repositories/notification-service";
+import type { OnboardingCheckoutGateway } from "@/repositories/onboarding-checkout-gateway";
 import type { SubscriptionStatusValue } from "@/domain/value-objects/subscription-status";
 import type {
   ConfirmSubscriptionOnboardingResult,
@@ -18,12 +27,18 @@ export type CompleteSubscriptionOnboardingInput = {
   currentPeriodEnd: Date;
   // サブスクリプションの開始日時（Stripeのstart_date）。課金基準日の計算に使う
   subscriptionStartedAt: Date;
+  // 入会のCheckout。入会の完了のメールに出す支払った金額を取る
+  stripeCheckoutSessionId: string;
 };
 
 export type CompleteSubscriptionOnboardingDeps = {
   userRepo: UserRepository;
   onboardingRepo: SubscriptionOnboardingRepository;
   accountGateway: AccountGateway;
+  checkoutGateway: OnboardingCheckoutGateway;
+  memberRankRepo: MemberRankRepository;
+  notificationService: NotificationService;
+  errorReporter: ErrorReporter;
 };
 
 export async function completeSubscriptionOnboarding(
@@ -59,6 +74,50 @@ export async function completeSubscriptionOnboarding(
   if (result === "conflicting_subscription" || result === "member_not_found")
     return result;
 
+  // 入会の状態が今回変わったとき（confirmed）だけ送る。Webhookの再配信は already_confirmed に
+  // なるため2通目は送らない。Clerkの更新だけ失敗して再送されたときも already_confirmed になり
+  // 送る機会が無くなるため、Clerkの更新より先に送る
+  if (result === "confirmed") await sendWelcome(user, input, deps);
+
   await accountGateway.updateOnboardingMetadata(input.clerkUserId, true);
   return result;
+}
+
+// 入会は確定済みのため、送れなくても入会は取り消さず、運営者に知らせる
+async function sendWelcome(
+  user: User,
+  input: CompleteSubscriptionOnboardingInput,
+  deps: CompleteSubscriptionOnboardingDeps
+): Promise<void> {
+  const {
+    checkoutGateway,
+    memberRankRepo,
+    notificationService,
+    errorReporter,
+  } = deps;
+  try {
+    const rank = MemberRank.of(input.plan);
+    const [charge, monthlyLimit] = await Promise.all([
+      checkoutGateway.retrieveCheckoutCharge(input.stripeCheckoutSessionId),
+      memberRankRepo.findMonthlyLimit(rank),
+    ]);
+    await notificationService.sendWelcome(user, {
+      rank,
+      monthlyLimit,
+      initialFee: charge.initialFee,
+      monthlyFee: charge.monthlyFee,
+      nextPaymentAt: input.currentPeriodEnd,
+      // 退会の可否（User.withdraw）と同じく、users.created_at から数える
+      minimumPeriod: MinimumMembershipPeriod.startingAt(user.createdAt),
+    });
+  } catch (err) {
+    errorReporter.captureException(err, {
+      tags: { useCase: "complete-subscription-onboarding", email: "welcome" },
+      extra: {
+        clerkUserId: input.clerkUserId,
+        stripeCheckoutSessionId: input.stripeCheckoutSessionId,
+        stripeSubscriptionId: input.stripeSubscriptionId,
+      },
+    });
+  }
 }

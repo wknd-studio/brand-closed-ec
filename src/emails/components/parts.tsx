@@ -12,7 +12,7 @@ function withLineBreaks(text: string): ReactNode {
   ));
 }
 
-function yen(amount: number): string {
+export function yen(amount: number): string {
   return `¥${amount.toLocaleString("ja-JP")}`;
 }
 
@@ -100,7 +100,7 @@ export function OrderMeta({
             <td style={{ ...metaCell, textAlign: "right" }}>
               ご注文日
               <br />
-              <span style={metaDate}>{formatOrderDate(orderedAt)}</span>
+              <span style={metaDate}>{formatJstDate(orderedAt)}</span>
             </td>
           )}
         </tr>
@@ -110,7 +110,7 @@ export function OrderMeta({
 }
 
 // 実行環境（WorkersはUTC）ではなくJSTの日付を「2026/11/24」の形で出す
-function formatOrderDate(date: Date): string {
+export function formatJstDate(date: Date): string {
   return date.toLocaleDateString("ja-JP", {
     timeZone: "Asia/Tokyo",
     year: "numeric",

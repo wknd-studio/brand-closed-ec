@@ -10,12 +10,23 @@ import { sendCheckoutPaidEmail } from "@/infrastructure/resend/checkout-paid";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
 import { sendDeliveryNotificationEmail } from "@/infrastructure/resend/delivery-notification";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
+import { sendWelcomeEmail } from "@/infrastructure/resend/welcome";
 import { OrderNumber } from "@/domain/value-objects/order-number";
 
 const APP_URL = "https://shop.example.com";
 const orderedAt = new Date("2026-11-24T01:00:00Z");
 const orderId = "3f1c2b8e-6d4a-4f0e-9b7c-2a5d8e1f0c3b";
 const orderNumber = OrderNumber.of("K7Q2M9XD");
+
+const WELCOME_PARAMS = {
+  to: "member@example.com",
+  rank: "standard" as const,
+  monthlyLimit: 5_000_000,
+  initialFee: 30_000,
+  monthlyFee: 30_000,
+  nextPaymentAt: new Date("2026-12-28T01:00:00Z"),
+  withdrawableFrom: new Date("2027-05-27T15:00:00Z"),
+};
 
 function sentTo(to: string): { subject: string; html: string } {
   const call = sendMock.mock.calls.find(([arg]) => arg.to === to);
@@ -110,5 +121,26 @@ describe.each(memberEmails)("会員向けメール: $name", ({ subject, send }) 
     const { html } = sentTo("member@example.com");
     expect(html).toContain(`href="${APP_URL}/orders/${orderId}"`);
     expect(html.split(orderId).length - 1).toBe(1);
+  });
+});
+
+describe("会員向けメール: ご入会", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("RESEND_TEST_TO", undefined);
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", APP_URL);
+    sendMock.mockResolvedValue({ data: { id: "id" }, error: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  // GitHub issue #852。注文ではないため注文番号は付けない
+  it("件名に注文番号を付けない", async () => {
+    await sendWelcomeEmail(WELCOME_PARAMS);
+    expect(sentTo("member@example.com").subject).toBe(
+      "【EQ×Mart】ご入会ありがとうございます"
+    );
   });
 });

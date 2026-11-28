@@ -2,6 +2,8 @@ import { createAdminClient } from "@/infrastructure/supabase/server-admin";
 import { SupabaseUserRepository } from "@/infrastructure/supabase/supabase-user-repository";
 import { SupabaseSubscriptionOnboardingRepository } from "@/infrastructure/supabase/supabase-subscription-onboarding-repository";
 import { ClerkAccountGateway } from "@/infrastructure/clerk/clerk-account-gateway";
+import { SupabaseMemberRankRepository } from "@/infrastructure/supabase/supabase-member-rank-repository";
+import { ResendNotificationService } from "@/infrastructure/resend/resend-notification-service";
 import { SupabaseStripeWebhookEventRepository } from "@/infrastructure/supabase/supabase-stripe-webhook-event-repository";
 import { StripeOnboardingCheckoutGateway } from "@/infrastructure/stripe/stripe-onboarding-checkout-gateway";
 import { StripeSubscriptionGateway } from "@/infrastructure/stripe/stripe-subscription-gateway";
@@ -58,6 +60,9 @@ export function completeOnboardingCheckout(
     onboardingRepo: new SupabaseSubscriptionOnboardingRepository(supabase),
     subscriptionGateway: new StripeSubscriptionGateway(),
     accountGateway: new ClerkAccountGateway(),
+    checkoutGateway: new StripeOnboardingCheckoutGateway(),
+    memberRankRepo: new SupabaseMemberRankRepository(supabase),
+    notificationService: new ResendNotificationService(),
     errorReporter: new SentryErrorReporter(),
   });
 }
