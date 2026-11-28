@@ -86,6 +86,7 @@ function item(
     quantity: 1,
     is_negotiable: false,
     payment_timing: "after_order",
+    fulfillment_location_code: "office",
     ...overrides,
   };
 }
@@ -141,7 +142,11 @@ beforeAll(async () => {
     order(ORDER_2_ID, "2020-01-02T00:00:00.000Z"),
   ]);
   await insert("procurement_tasks", [
-    { id: PENDING_TASK_ID, created_at: "2020-02-01T00:00:00.000Z" },
+    {
+      id: PENDING_TASK_ID,
+      status: "pending",
+      created_at: "2020-02-01T00:00:00.000Z",
+    },
     {
       id: CLAIMED_TASK_ID,
       status: "claimed",
