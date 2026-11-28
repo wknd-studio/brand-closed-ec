@@ -8,12 +8,17 @@ import { OrderConfirmingEmail } from "@/emails/order-confirming";
 import { OrderOperatorNotificationEmail } from "@/emails/order-operator-notification";
 import { ShippingNotificationEmail } from "@/emails/shipping-notification";
 import { DeliveryNotificationEmail } from "@/emails/delivery-notification";
+import { WelcomeEmail } from "@/emails/welcome";
 import {
   EMAIL_COLORS,
   MemberEmailLayout,
   SummaryTable,
 } from "@/emails/components";
-import { CONTACT } from "@/app/legal/legal-notice";
+import {
+  CONTACT,
+  MEMBERSHIP_TERMS,
+  legalNoticePlainText,
+} from "@/app/legal/legal-notice";
 
 const fixedItem = {
   productName: "テスト商品A",
@@ -308,5 +313,87 @@ describe("共通の部品", () => {
     expect(html).toContain("ご契約の内容");
     expect(html).toContain("プラン");
     expect(html).toContain("STANDARD（標準）");
+  });
+});
+
+// GitHub issue #852
+describe("WelcomeEmail", () => {
+  const welcome = (overrides?: { monthlyLimit?: number | null }) => (
+    <WelcomeEmail
+      rank="standard"
+      monthlyLimit={
+        overrides && "monthlyLimit" in overrides
+          ? (overrides.monthlyLimit ?? null)
+          : 5_000_000
+      }
+      initialFee={30_000}
+      monthlyFee={30_000}
+      // JST 2026/12/28 10:00
+      nextPaymentAt={new Date("2026-12-28T01:00:00Z")}
+      // JST 2027/05/28 0:00 から退会できる（最低利用期間は 2027/05/27 まで）
+      withdrawableFrom={new Date("2027-05-27T15:00:00Z")}
+      shopUrl={`${APP_URL}/shop`}
+    />
+  );
+
+  it("プレビュー文・見出しが出る", async () => {
+    const html = await render(welcome());
+    expect(html).toContain(
+      "会員登録とお支払いが完了しました。ご契約の内容をお知らせします。"
+    );
+    expect(html).toContain("EQ×Mart へようこそ");
+    expect(html).toContain("ご入会ありがとうございます。");
+  });
+
+  it("プラン名（料金表と同じ表記）と月間仕入れ上限が出る", async () => {
+    const html = await render(welcome());
+    expect(html).toContain("STANDARD（標準）");
+    expect(html).toContain("月間仕入れ上限");
+    expect(html).toContain("¥5,000,000");
+  });
+
+  it("上限が無いプランは「上限なし」と出す", async () => {
+    const html = await render(welcome({ monthlyLimit: null }));
+    expect(html).toContain("上限なし");
+  });
+
+  it("今回のお支払い（初期費用＋初月の月額）の合計と内訳が出る", async () => {
+    const html = await render(welcome());
+    expect(html).toContain("今回のお支払い");
+    expect(html).toContain(
+      "¥60,000（初期費用 ¥30,000＋初月の月額 ¥30,000・税込）"
+    );
+  });
+
+  it("次回のお支払い日（JST）と月額が出る", async () => {
+    const html = await render(welcome());
+    expect(html).toContain("次回のお支払い");
+    expect(html).toContain("2026/12/28 に月額 ¥30,000（税込）");
+  });
+
+  it("最低利用期間の終わる日（JST・退会できる日の前日）が出る", async () => {
+    const html = await render(welcome());
+    expect(html).toContain("最低利用期間");
+    expect(html).toContain("2027/05/27 まで");
+  });
+
+  it("期間内の退会に解約金がかかることを、画面と同じ文言（MEMBERSHIP_TERMS）で出す", async () => {
+    const html = await render(welcome());
+    expect(html).toContain(
+      legalNoticePlainText(MEMBERSHIP_TERMS.minimumPeriodSummary)
+    );
+  });
+
+  it("ボタンからショップを開ける", async () => {
+    const html = await render(welcome());
+    expect(html).toContain(`href="${APP_URL}/shop"`);
+    expect(html).toContain("ショップを見る");
+  });
+
+  it("会員向けの共通の型（ロゴ・フッター）で作る", async () => {
+    const html = await render(welcome());
+    expect(html).toContain(`src="${APP_URL}/logo.png"`);
+    expect(html).toContain("このメールは送信専用です");
+    expect(html).toContain(`href="${APP_URL}/legal/terms"`);
   });
 });

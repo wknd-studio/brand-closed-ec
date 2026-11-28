@@ -69,6 +69,7 @@ function makeNotificationService(): NotificationService {
     sendDeliveryNotification: vi.fn(),
     sendCheckoutPaid: vi.fn(),
     sendInvoicePaid: vi.fn(),
+    sendWelcome: vi.fn(),
   };
 }
 

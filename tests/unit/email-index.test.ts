@@ -48,3 +48,35 @@ describe("getResend", () => {
     expect(getResend()).toBeInstanceOf(Resend);
   });
 });
+
+// GitHub issue #852。入会の完了のメールも getResend() のガードを通る
+describe("sendWelcomeEmail", () => {
+  const ORIGINAL_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.doUnmock("resend");
+    vi.resetModules();
+  });
+
+  it("DISABLE_EMAIL_SENDING=trueの場合、Resendのクライアントを作らず・送信APIを呼ばない", async () => {
+    vi.resetModules();
+    process.env.DISABLE_EMAIL_SENDING = "true";
+    const ResendMock = vi.fn();
+    vi.doMock("resend", () => ({ Resend: ResendMock }));
+    const { sendWelcomeEmail } =
+      await import("@/infrastructure/resend/welcome");
+
+    await sendWelcomeEmail({
+      to: "member@example.com",
+      rank: "standard",
+      monthlyLimit: 5_000_000,
+      initialFee: 30_000,
+      monthlyFee: 30_000,
+      nextPaymentAt: new Date("2026-12-28T01:00:00Z"),
+      withdrawableFrom: new Date("2027-05-27T15:00:00Z"),
+    });
+
+    expect(ResendMock).not.toHaveBeenCalled();
+  });
+});

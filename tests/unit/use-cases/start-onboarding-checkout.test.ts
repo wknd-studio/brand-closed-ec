@@ -12,6 +12,7 @@ function makeCheckoutGateway(): OnboardingCheckoutGateway {
     createCustomer: vi.fn().mockResolvedValue("cus_new"),
     hasActiveSubscription: vi.fn().mockResolvedValue(false),
     createCheckoutSession: vi.fn().mockResolvedValue(CHECKOUT_URL),
+    retrieveCheckoutCharge: vi.fn(),
   };
 }
 
