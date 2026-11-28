@@ -713,6 +713,7 @@ describe("SupabaseOrderRepository", () => {
           quantity: 1,
           is_negotiable: false,
           payment_timing: "at_order",
+          fulfillment_location_code: "office",
           settlement_id: DELETE_FAIL_SETTLEMENT_ID,
         });
         if (itemError) throw itemError;

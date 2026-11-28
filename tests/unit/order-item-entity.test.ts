@@ -14,6 +14,7 @@ function makeItem(
     isNegotiable: false,
     negotiatedUnitPrice: null,
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
     settlementId: null,
     ...overrides,
   });

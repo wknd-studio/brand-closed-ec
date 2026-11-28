@@ -93,6 +93,7 @@ describe("StripePaymentGateway - 冪等性キー", () => {
           isNegotiable: false,
           negotiatedUnitPrice: null,
           paymentTiming: "after_order",
+          fulfillmentLocationCode: "office",
           settlementId: null,
         }),
         reconstituteOrderItem({
@@ -104,6 +105,7 @@ describe("StripePaymentGateway - 冪等性キー", () => {
           isNegotiable: false,
           negotiatedUnitPrice: null,
           paymentTiming: "after_order",
+          fulfillmentLocationCode: "office",
           settlementId: null,
         }),
       ],

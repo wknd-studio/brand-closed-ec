@@ -12,6 +12,7 @@ function cartItem(unitPrice: number, quantity: number, isNegotiable = false) {
     unitPrice: Money.of(unitPrice),
     isNegotiable,
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
   });
 }
 
@@ -36,6 +37,7 @@ describe("sumFixedTotal", () => {
       isNegotiable: true,
       negotiatedUnitPrice: Money.of(30_000),
       paymentTiming: "after_order",
+      fulfillmentLocationCode: "office",
       settlementId: null,
     });
     expect(sumFixedTotal([negotiated]).amount).toBe(0);

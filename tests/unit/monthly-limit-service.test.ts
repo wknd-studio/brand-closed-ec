@@ -16,6 +16,7 @@ function makeFixedItem(amount: number, quantity = 1): CartItem {
     unitPrice: Money.of(amount),
     isNegotiable: false,
     paymentTiming: "at_order",
+    fulfillmentLocationCode: "office",
   });
 }
 
@@ -27,6 +28,7 @@ function makeNegotiableItem(): CartItem {
     unitPrice: Money.zero(),
     isNegotiable: true,
     paymentTiming: "after_order",
+    fulfillmentLocationCode: "office",
   });
 }
 

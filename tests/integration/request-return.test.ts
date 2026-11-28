@@ -266,6 +266,7 @@ beforeAll(async () => {
       id: ITEM_A_PAID_ID,
       order_id: ORDER_A_ID,
       payment_timing: "at_order",
+      fulfillment_location_code: "office",
       settlement_id: SETTLEMENT_A_ID,
     },
     {
@@ -273,12 +274,14 @@ beforeAll(async () => {
       id: ITEM_A_AFTER_ORDER_ID,
       order_id: ORDER_A_ID,
       payment_timing: "after_order",
+      fulfillment_location_code: "office",
     },
     {
       ...baseItem,
       id: ITEM_A_UNPAID_ID,
       order_id: ORDER_A_UNPAID_ID,
       payment_timing: "at_order",
+      fulfillment_location_code: "office",
       settlement_id: SETTLEMENT_A_UNPAID_ID,
     },
     {
@@ -286,6 +289,7 @@ beforeAll(async () => {
       id: ITEM_B_ID,
       order_id: ORDER_B_ID,
       payment_timing: "at_order",
+      fulfillment_location_code: "office",
       settlement_id: SETTLEMENT_B_ID,
     },
   ]);

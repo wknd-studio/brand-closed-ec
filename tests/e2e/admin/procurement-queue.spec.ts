@@ -71,6 +71,7 @@ test.describe("運営者の対応待ちキュー", () => {
       quantity: 2,
       is_negotiable: false,
       payment_timing: "after_order",
+      fulfillment_location_code: "office",
     });
     if (itemError) throw itemError;
 

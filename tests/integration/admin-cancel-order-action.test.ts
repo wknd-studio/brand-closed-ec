@@ -106,6 +106,7 @@ beforeAll(async () => {
         quantity: 1,
         is_negotiable: false,
         payment_timing: "at_order",
+        fulfillment_location_code: "office",
         settlement_id: SETTLEMENT_ID,
       }),
   ]) {

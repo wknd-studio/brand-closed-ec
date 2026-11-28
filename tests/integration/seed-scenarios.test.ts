@@ -191,6 +191,7 @@ async function insertOrderWithItem({
     unit_price_snapshot: 1000,
     quantity: 1,
     payment_timing: "after_order",
+    fulfillment_location_code: "office",
     settlement_id: settlementId ?? null,
   });
   if (itemError) throw itemError;
