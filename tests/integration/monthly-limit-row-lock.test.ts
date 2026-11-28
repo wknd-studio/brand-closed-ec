@@ -58,6 +58,7 @@ function makeDeps() {
         minRank: "starter",
         availability: "available",
         paymentTiming: "at_order",
+        fulfillmentLocationCode: "office",
       },
     ]),
   };

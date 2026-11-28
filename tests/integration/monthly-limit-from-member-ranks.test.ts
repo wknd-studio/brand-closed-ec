@@ -115,6 +115,7 @@ function runPlaceOrder(
         availability: "available",
         // 決済単位を作らない（Checkout を呼ばない）注文にする
         paymentTiming: "after_order",
+        fulfillmentLocationCode: "office",
       },
     ]),
   };
