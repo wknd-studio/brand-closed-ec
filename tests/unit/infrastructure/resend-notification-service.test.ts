@@ -209,8 +209,9 @@ describe("ResendNotificationService", () => {
         orderId: "order-1",
         orderedAt: new Date(2026, 8, 1),
         lineItems: expectedLineItems,
-        // 後払いの明細（未払いの後払い商品 ¥5,000 × 1）の固定額の合計
-        fixedTotal: 5_000,
+        // 載せる明細（商品A ¥10,000 × 2・注文に無い商品 ¥3,000 × 1）の固定額の合計。
+        // 合計を明細と別のもの（注文の後払いの明細 ¥5,000）から作ると、表と合計が食い違う
+        fixedTotal: 23_000,
       });
     });
   });
