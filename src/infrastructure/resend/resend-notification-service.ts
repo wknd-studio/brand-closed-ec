@@ -5,6 +5,7 @@ import type { User } from "@/domain/entities/user";
 import type { ProductSnapshot } from "@/repositories/product-repository";
 import { sumFixedTotal } from "@/domain/services/fixed-total";
 import { Money } from "@/domain/value-objects/money";
+import type { OrderNumber } from "@/domain/value-objects/order-number";
 import { sendOrderConfirmingEmail } from "@/infrastructure/resend/order-confirming";
 import { sendLimitExceededEmail } from "@/infrastructure/resend/limit-exceeded";
 import { sendShippingNotificationEmail } from "@/infrastructure/resend/shipping-notification";
@@ -28,6 +29,7 @@ export class ResendNotificationService implements NotificationService {
     await sendOrderConfirmingEmail({
       to: user.email,
       orderId: order.id,
+      orderNumber: order.orderNumber,
       orderedAt: order.createdAt,
       lineItems: lines.map((line) => ({
         productName: line.productName,
@@ -45,22 +47,28 @@ export class ResendNotificationService implements NotificationService {
     });
   }
 
-  async sendLimitExceeded(to: string, orderId: string): Promise<void> {
-    await sendLimitExceededEmail({ to, orderId });
+  async sendLimitExceeded(
+    to: string,
+    orderId: string,
+    orderNumber: OrderNumber
+  ): Promise<void> {
+    await sendLimitExceededEmail({ to, orderId, orderNumber });
   }
 
   async sendShippingNotification(
     orderId: string,
+    orderNumber: OrderNumber,
     memberEmail: string
   ): Promise<void> {
-    await sendShippingNotificationEmail({ orderId, memberEmail });
+    await sendShippingNotificationEmail({ orderId, orderNumber, memberEmail });
   }
 
   async sendDeliveryNotification(
     orderId: string,
+    orderNumber: OrderNumber,
     memberEmail: string
   ): Promise<void> {
-    await sendDeliveryNotificationEmail({ orderId, memberEmail });
+    await sendDeliveryNotificationEmail({ orderId, orderNumber, memberEmail });
   }
 
   async sendCheckoutPaid(
@@ -79,6 +87,7 @@ export class ResendNotificationService implements NotificationService {
     }));
     await sendCheckoutPaidEmail({
       orderId: order.id,
+      orderNumber: order.orderNumber,
       orderedAt: order.createdAt,
       memberEmail: user.email,
       lineItems,

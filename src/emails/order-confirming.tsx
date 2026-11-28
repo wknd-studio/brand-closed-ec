@@ -10,7 +10,8 @@ import {
 } from "./components";
 
 type Props = {
-  orderId: string;
+  /** 表示の形の注文番号（OrderNumber.display()） */
+  orderNumber: string;
   orderedAt: Date;
   lineItems: EmailLineItem[];
   fixedTotal: number;
@@ -18,7 +19,7 @@ type Props = {
 };
 
 export function OrderConfirmingEmail({
-  orderId,
+  orderNumber,
   orderedAt,
   lineItems,
   fixedTotal,
@@ -37,7 +38,7 @@ export function OrderConfirmingEmail({
       <Notice tone="info">
         請求書の発行日から7日以内にお支払いください。請求書が届くまで、お支払いの必要はありません。
       </Notice>
-      <OrderMeta orderNumber={orderId} orderedAt={orderedAt} />
+      <OrderMeta orderNumber={orderNumber} orderedAt={orderedAt} />
       <LineItemsTable
         title="ご注文の内容（請求書払い）"
         items={lineItems}

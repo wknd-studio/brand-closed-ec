@@ -7,11 +7,12 @@ import {
 } from "./components";
 
 type Props = {
-  orderId: string;
+  /** 表示の形の注文番号（OrderNumber.display()） */
+  orderNumber: string;
   myPageUrl: string;
 };
 
-export function ShippingNotificationEmail({ orderId, myPageUrl }: Props) {
+export function ShippingNotificationEmail({ orderNumber, myPageUrl }: Props) {
   return (
     <MemberEmailLayout preview="ご注文の商品を発送しました。">
       <EmailHeading
@@ -22,7 +23,7 @@ export function ShippingNotificationEmail({ orderId, myPageUrl }: Props) {
         }
       />
       <OrderProgress current="shipped" />
-      <OrderMeta orderNumber={orderId} />
+      <OrderMeta orderNumber={orderNumber} />
       <EmailButton href={myPageUrl}>注文の状況を見る</EmailButton>
     </MemberEmailLayout>
   );
