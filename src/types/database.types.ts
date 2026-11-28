@@ -311,7 +311,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
-          fulfillment_location_code?: string;
+          fulfillment_location_code: string;
           id?: string;
           is_negotiable?: boolean;
           negotiated_unit_price?: number | null;
